@@ -741,19 +741,17 @@ workflow and the links' check; the 33 pages with their two test classes and the 
 locally), then five reviewers (the design, safety, the tests, the pages in two halves), a verifier
 for each major and a fixer. GuideShots' local root is `C:\demo`, which the site's builder creates
 (it did not exist). While agents build, the lead starts no heavy run and no series (ruling 23).
-**The restore order's section is drafted, reviewed and corrected** (run `wf_e8daca0e-d5c`, ended
-about 09:40; `D:/Projects/Personal/phase8-work/wave4/restore/section-14.md`), and the lead ruled on
-its 18 choices (rulings 86 to 90; Notes, "Wave 4"). **Also under way, only reading the repository
-and writing that one file:** a run that writes those rulings into the section and rechecks it after
-its fixer's rewrite, against D457 and against the code (run `wf_d117ae19-e9c`: an applier, two
-checkers, a fixer). **Left for the lead when it ends:** read what it changed and what it leaves to
-the lead; put the section into the design as section 14, with rulings 86 to 90 in 13.1, 0.4's row
-and files, 13.3's row and 0.6's line at the section's times (about 50 minutes of the desktop for the
-proof, about 60 with a trial of two at once), and CLAUDE.md's docs map; commit and push; then start
-`restore`'s builder beside §11's (the wave 3 build script is the model:
-`C:/Users/rpkha/.claude/projects/d--Projects-Personal-Visual-Git/9b135677-ae78-44f9-8ed1-d3fff497a168/workflows/scripts/phase8a-wave-3-wf_ee9f40a9-6e3.js`;
-its worktree `D:/Projects/Personal/vc-wt/p8a-restore` on `wip/p8a-restore`, made from the commit
-that holds section 14). §11's builders got with their briefs: mdBook at
+**The restore order's section is the design's section 14** (drafted, reviewed and corrected by run
+`wf_e8daca0e-d5c`; the lead's rulings 86 to 90 on its 18 choices written in and the whole section
+rechecked against D457 and the code by run `wf_d117ae19-e9c`, 17 findings, all applied; Notes, "Wave
+4"). 0.4's row and files, 13.1's rulings, 13.3's row for the proof (about 50 minutes of the rested
+desktop, about 70 with a trial of two at once, about 80 when four stays after it) and CLAUDE.md's
+docs map are brought up to it. **Next for the lead:** start `restore`'s builder beside §11's
+(worktree `D:/Projects/Personal/vc-wt/p8a-restore` on `wip/p8a-restore`, made from the commit that
+holds section 14): its tests first with the stubs, the build, three reviewers, a verifier for each
+major, a fixer (14.8 steps 1 and 2). Then, when no agent is at work, the lead's proof (14.8 steps 3
+to 7), the owner told in the chat just before each takeover, and the merge when it is proven (step
+8) or the Backlog row when it is not (step 9). §11's builders got with their briefs: mdBook at
 `D:/Projects/Personal/phase8-work/tools/mdbook-0.5.4/mdbook.exe` and the Linux archive's SHA-256 for
 `guide.yml` (Notes, "Wave 4"); the references `D:/Projects/Personal/phase8-work/references/wave3/`;
 rulings 80 (stop and report if the first-run link's frame touches its ink), 82 (the facts no check
@@ -846,12 +844,23 @@ every commit.
   three builds; 89, "the fix's M2 lies within the base's range" is read of the fix's median; 90,
   "Check again" keeps reopening failed tabs all at once in 8a and gets a Backlog row at the close.
   **The proof's time on the desktop** is about 50 minutes by the section (the probe about 9, the
-  alternated series about 30, the rests after the builds), about 60 with a trial of two at once,
-  where the owner was told about 30 for the series alone on 2026-11-23: the lead says so when it
-  announces the takeover. **For step 19's list, from the section's risk 3:**
-  `NamesRepositoryInDialogs` stays false, and a dashboard's Add open tabs leaves the waiting tabs
-  out, until the first tab's trigger (5 s at most) and a free slot. Wave 4's runs so far: 4.5M
-  tokens.
+  alternated series about 30, the rests after the builds), about 70 with a trial of two at once and
+  about 80 when four stays after it, where the owner was told about 30 for the series alone on
+  2026-11-23: the lead says so when it announces the takeover. **For step 19's list, from the
+  section's risk 3:** `NamesRepositoryInDialogs` stays false, and a dashboard's Add open tabs leaves
+  the waiting tabs out, until the first tab's trigger (5 s at most) and a free slot. **The section's
+  settle and recheck** (run `wf_d117ae19-e9c`, `phase8a-restore-design-settle`: an applier of the
+  rulings, a checker against D457 and for contradictions, a checker against the code and the
+  harness, a fixer; 4 agents, 1.15M tokens, 40 minutes): 17 findings, all held and all applied,
+  among them that a tab's disposal does not end an opening that still waits on the provider (said
+  wrongly in five places), that a shown tab opens beside the four, that the shell test's wait for a
+  real git open was capped at 10 s where the harness waits 60 (D237), and where `FirstPage`
+  completes inside the failure's catch, so that a test reads `ErrorText` set. The lead added three
+  touches: the shell test asserts that the restore clock was passed through, test 5 that its timer
+  is still armed at 4,999 ms, and the count of new tests (about 29). Section 14 went into the design
+  with 0.4's row and files, rulings 86 to 90 in 13.1, 13.3's row and CLAUDE.md's docs map. Wave 4's
+  runs so far: 5.7M tokens (part G 1.97M, the section 2.54M, its settle 1.15M), §11's build not
+  counted yet.
 - **Wave 3 is under way (2026-11-21).** The owner's word that day: "Continue", all of wave 3 now, and
   the three takeovers of the desktop (the spike, §10's first run, the "before" series) each as soon
   as it is ready. **The checks** of parts A and U were written by a writer each, reviewed by two

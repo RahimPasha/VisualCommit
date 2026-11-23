@@ -184,38 +184,41 @@ The decisions are cited, not restated (D243); each line names the mechanism and 
 | uia: screen readers | 9 | 3 | §5, §6; merges after §8 | `CommitGraphControl.cs`, `CommitGraphControl.Automation.cs`, `GraphRowSpeech.cs`, `AutomationNames.cs`, the names in ten views (9.2), `AutomationSweep.cs`, `ShellDriver.Phase8a.Uia.cs`, `CommitGraphControlTests.cs`, `StatusBarTests.cs`; part U |
 | perf | 10 | 3 | WP0 | `StartupTimeline.cs`, `RepositoryViewModel.cs`'s lines, `RealApp.cs`'s helpers, `Phase8aPerformance.cs`, `PerformanceSeries*.cs`; 10.4's test files |
 | guide | 11 | 4 | waves 1 to 3 | `docs/guide/`, `guide.yml`, `scripts/check-guide-links.py`, `tests/VisualCommit.GuideShots`, `AppShortcuts.cs`, `AppCommands.cs`'s guide case, `.gitignore`, `ci.yml`'s build line; 11.4's test files; part G |
-| restore: the restore order (ruling 76, D457) | its own, written when wave 4 starts (D457 (5)) | 4 | §10 (M2 and M3 prove it) | what its section names; D457 (5) names `SettingsEntryTests`' test of the merge-tool lookup, rewritten |
+| restore: the restore order (ruling 76, D457) | 14 | 4 | §10 (M2 and M3 prove it) | `RestoreOrder.cs`, `MainWindowViewModel.cs`, `RepositoryViewModel.cs`'s `FirstPage`, the optional `restoreClock` in `TabServices.cs`, `AppSession.cs` and `ShellDriver.cs` (ruling 87), `RestoreOrderTests.cs`, `RepositoryFirstPageTests.cs`, `RestoreOrderShellTests.cs`, `SettingsEntryTests.cs` (14.2) |
 | realwindow | 12 | 4 | every part; the review's fixes | `Phase8aRealWindowPass*.cs`, `RealApp.Phase8a.cs`, `RealApp.cs`'s `StartInfoFor`, the csproj |
 
 **Waves and merges.** Wave 0: WP0 in the main checkout. Wave 1: §2, §3, §4, any order; §2 is the
-first package that changes an earlier picture (ruling 13). Wave 2: §5, §6, §7, any order. Wave 3: §8,
-§9 and §10, built together; §9 merges after §8 and sweeps About at its merge. Wave 4: §11; the
+first package that changes an earlier picture (ruling 13). Wave 2: §5, §6, §7, any order. Wave 3:
+§8, §9 and §10, built together; §9 merges after §8 and sweeps About at its merge. Wave 4: §11; the
 review before the gate (status step 19) and its fixers; §12, built on the Windows machine at step
 18, reviewed at step 19, merges last, after the review's fixes; and `restore`, ruling 76's restore
-order (D457 (5); `wip/p8a-restore`): its design section first, written when wave 4 starts, its
-tests written first and failing on today's code, a review, and the proof by M2 and M3 with the two
-builds run alternately and by the lead's probe, subject to the week's share the owner is asked for
-before wave 4 (D241). At most three packages are built at once; one owner per file and test class,
-and a file passes only at a merge. No two packages of one wave own a file. The files that pass
-between packages, in this order: `AppCommands.Palette.cs` (WP0, §6); `AppCommands.cs` (§8, §11);
-`App.axaml.cs` (WP0, §4, §8); `Program.cs`, `AppLaunch.cs` (WP0, §4); `GitIsolation.cs` (WP0, §4);
-`AskPassBroker.cs`, `AccountsSettingsViewModel.cs`, `MainWindowViewModelTests.cs` (§3, §5);
-`MainWindowViewModel.cs` and `.Settings.cs` (WP0, §5); `IGitRunner.cs`, `GitLocator.cs`,
-`GitSetupProbe.cs`, `GitAccess.cs`, `FileLauncher.cs` (WP0, §5); `GitAccessTests.cs` (WP0, whose
-code review added it with four tests of the fixed search and of a failing listener; §5 extends the
-class and does not create it); `SettingsDialogViewModel.cs` (WP0, §5, §8);
-`SettingsDialogView.axaml` (§5, §8); `SettingsDialogViewTests.cs` (§5, §8, §11);
-`WorkingChangesView.axaml` (§2, §6, §9); `LeftPanelView.axaml`, `CompareView.axaml` (§2, §9);
-`StatusBarView.axaml`, `CommitGraphView.axaml` (§5, §9); `StatusBarTests.cs` (§6, §9);
-`MainWindow.axaml.cs` (§4, §6); `MainWindow.axaml` (§7, §9); `ActivityLogView.axaml` (§6 if needed,
-§9); the notice window (§4, §7); `App.csproj` (§7, §8); `RepositoryViewModel.cs` (WP0, §10);
-`RealApp.cs` (§10, §12); `ci.yml` (§3, §8, §11); `Phase7aExpectations.A.cs` (§3, §8);
-`Phase7bExpectations.A.cs` (§2, §8); `Phase6Expectations.K.cs`, `Phase6ExpectationTests.K.cs`,
-`PaletteEntriesTests.cs`, `CommandPaletteViewTests.cs` (§8, §11); `AppShortcutsTests.cs` (WP0, §11).
-A package adds `ShellDriver` helpers only in a new partial `ShellDriver.Phase8a.<Key>.cs`. The
-lead's throughout: `AppSession.cs` with `AppSessionTests.cs`, `TabServices.cs` (but §8's
-`SettingsSection.About`), `PromptDialogs.cs` after WP0, `VisualCommit.slnx` (each new project's line
-at its merge), `Directory.Build.props`, `CLAUDE.md`, `README.md`, `requirements.md`, `plan.md`,
+order (D457 (5); `wip/p8a-restore`): its design section first (section 14, written on 2026-11-23 as
+wave 4 started), its tests written first and failing on today's code, a review, and the proof by M2
+and M3 with the two builds run alternately and by the lead's probe, subject to the week's share the
+owner is asked for before wave 4 (D241). At most three packages are built at once; one owner per
+file and test class, and a file passes only at a merge. No two packages of one wave own a file. The
+files that pass between packages, in this order: `AppCommands.Palette.cs` (WP0, §6);
+`AppCommands.cs` (§8, §11); `App.axaml.cs` (WP0, §4, §8); `Program.cs`, `AppLaunch.cs` (WP0, §4);
+`GitIsolation.cs` (WP0, §4); `AskPassBroker.cs`, `AccountsSettingsViewModel.cs`,
+`MainWindowViewModelTests.cs` (§3, §5); `MainWindowViewModel.cs` and `.Settings.cs` (WP0, §5;
+`MainWindowViewModel.cs` then restore); `IGitRunner.cs`, `GitLocator.cs`, `GitSetupProbe.cs`,
+`GitAccess.cs`, `FileLauncher.cs` (WP0, §5); `GitAccessTests.cs` (WP0, whose code review added it
+with four tests of the fixed search and of a failing listener; §5 extends the class and does not
+create it); `SettingsDialogViewModel.cs` (WP0, §5, §8); `SettingsDialogView.axaml` (§5, §8);
+`SettingsDialogViewTests.cs` (§5, §8, §11); `WorkingChangesView.axaml` (§2, §6, §9);
+`LeftPanelView.axaml`, `CompareView.axaml` (§2, §9); `StatusBarView.axaml`, `CommitGraphView.axaml`
+(§5, §9); `StatusBarTests.cs` (§6, §9); `MainWindow.axaml.cs` (§4, §6); `MainWindow.axaml` (§7, §9);
+`ActivityLogView.axaml` (§6 if needed, §9); the notice window (§4, §7); `App.csproj` (§7, §8);
+`RepositoryViewModel.cs` (WP0, §10, restore); `RealApp.cs` (§10, §12); `ci.yml` (§3, §8, §11);
+`Phase7aExpectations.A.cs` (§3, §8); `Phase7bExpectations.A.cs` (§2, §8); `Phase6Expectations.K.cs`,
+`Phase6ExpectationTests.K.cs`, `PaletteEntriesTests.cs`, `CommandPaletteViewTests.cs` (§8, §11);
+`AppShortcutsTests.cs` (WP0, §11); `SettingsEntryTests.cs` (restore, which no earlier package of 8a
+owned). A package adds `ShellDriver` helpers only in a new partial `ShellDriver.Phase8a.<Key>.cs`;
+the one exception is ruling 87's optional `restoreClock`, which restore adds to `ShellDriver.cs`'s
+`Start` and `StartWithTabs`. The lead's throughout: `AppSession.cs` with `AppSessionTests.cs`,
+`TabServices.cs` (but §8's `SettingsSection.About` and, with `AppSession.cs`, restore's
+`restoreClock`, ruling 87), `PromptDialogs.cs` after WP0, `VisualCommit.slnx` (each new project's
+line at its merge), `Directory.Build.props`, `CLAUDE.md`, `README.md`, `requirements.md`, `plan.md`,
 `status.md`, `architecture.md`, the icon's rounds in `docs/brand/icon/` (D447). Every other doc a
 merge needs is the lead's, at that merge.
 
@@ -5427,6 +5430,34 @@ own `k3a` and `l3a` with 11.6's pictures, and holds boxes for `s14f` and `s14e`,
 builder's measure; the lead runs 8a's project whole there, besides Phase6 and Phase6Look. 85. F1 on
 a Mac goes into 8b's Mac checklist at the close; the focus frame's colour stays named by its key.
 
+**The restore order's package (the lead, 2026-11-23, before its build; section 14's choices 1 to 18
+and open points).** 86. Choices 1 to 3, 5 to 9 and 12 to 18 stand as section 14 has them: a
+`RestoreOrder` made only for a start whose active tab is a restored repository's beside another
+restored tab, living until that start has ended and keeping no closed tab;
+`RepositoryViewModel.FirstPage` as the first-page signal; the calls from `Activate`, `CloseTab`
+(before the tab's `Dispose`) and `CloseAll`; a slot held to its tab's first page, its opening's end
+or its close, never freed by a clock; a shown tab without a slot and never subscribed; the active
+tab as it is when the openings begin; tab order; the log lines; "reverted" read as "not merged", the
+proof running on the package's branch; the merge tools' lookup at `FirstLoadEnded`; the count under
+the order's lock; a waiting tab showing what an opening tab shows; the 5 s counted from the first
+opening's start; a missing git taking the order; the first tab's close releasing inside `CloseTab`.
+87. The 5 s run on a clock of the order's own, `TabServices.RestoreClock`: the session's clock
+unless the harness gives one, as `ReadClock` is for a dashboard's 10 s rule, so in the app D457's "5
+s on the session's clock" holds to the letter and no test's outcome depends on the system clock. The
+builder adds the optional `restoreClock` to the lead's `TabServices.cs` and `AppSession.cs` and to
+`ShellDriver.cs`'s `Start` and `StartWithTabs`, last in each list, and nothing else there. 88. The
+probe keeps four at once when the middle value of the longest answers of the fix's three ten-large
+launches is at or under the highest of the longest answers of the base's three one-tab launches of
+the same session; a trial of two reads the same statistic in a session of its own, and two stays
+only if it meets the rule with an active-tab clock no later than four's. One launch's longest answer
+is a maximum, and one disturbed launch must not start a trial that costs three builds. 89. "The
+fix's M2 lies within the base's range" is read of the fix's M2 median, between the lowest and the
+highest of the base's five runs: M2 runs unchanged code in both builds. 90. "Check again" keeps
+reopening the failed tabs all at once in 8a and gets a Backlog row at the close;
+`NamesRepositoryInDialogs` and Add open tabs during the wait stay on the list of the review before
+the gate; M3's bound without a merge, and a release that delays the first frame, are ruled when
+their case arises.
+
 ### 13.2 What the integration settled
 
 Beyond moving the packages' contracts into section 1: the broker's `gitVersion` goes at §3's merge,
@@ -5445,7 +5476,7 @@ activity log's splitter goes to a fixer (D427).
 | §6's merge | Told before two earlier real-window checks run alone on the laptop, phase 2's `Check_17` and phase 5's `Check_A4_real_keys` (6.8 item 5; about 2 minutes of the desktop). |
 | §9's spike and merge | Told before the spike (a minute of keys and clicks); at §9's merge, a short Narrator listen (9.3.9's steps 2 to 6 and 14, about 5 minutes; 13.4 item 13). |
 | §10's merge and the series | Told before the first run (about 5 minutes of the desktop) and the series (rested, the desktop for 12 to 18 minutes per run as estimated, about 8 as taken (10.7); M6 clicks Fetch). |
-| The restore order's proof (ruling 76, D457; wave 4) | Asked first for the week's share (D241). Told before the alternated series of M2 and M3 (the two builds five times each, taken as D457 (2) says: about half an hour of the rested desktop) and before the lead's probe (the app started by hand on a data folder of its own, a few minutes, no input). |
+| The restore order's proof (ruling 76, D457; wave 4) | Asked first for the week's share (D241; answered on 2026-11-23: all of wave 4). Told in the chat just before each takeover, with no agent at work (ruling 23; 14.7, 14.8): the lead's probe (two warm-up launches and 18 counted ones on data folders of its own, no input, about 9 minutes) and the alternated series of M2 and M3 (the two builds five times each, taken as D457 (2) says, about 30 minutes), each after a rest of at least ten minutes behind its builds: about 50 minutes of the rested desktop in all, about 70 with a trial of two at once, about 80 when four stays after that trial. |
 | §12's build (status step 18) | Told before each of its 13 methods runs alone and before phase 0's `Check_8` runs alone (12.4, 12.8 item 3): about 15 minutes of the desktop in all, never beside a heavy run (ruling 23). |
 | Before the counted round | Nothing: the owner chose the mark before §7 was built (1.17, 7.8), and §7 built with it, so nothing waits there. |
 | Before the gate | The three live tokens made again (GitHub's expires on 2026-11-29, Azure DevOps' and GitLab's on 2026-12-04), through the masked script; told before each live run (D335). Present for D246's two runs of 8a's real-window checks; told before the pass. |
@@ -5636,3 +5667,1013 @@ all minor; wave 1's reviews 11 majors (the same three faults seen through more t
 O3, winget for a git that is too old or not working, went to the owner, who answered on 2026-11-20:
 a missing and a too-old git, not one that does not work (**D453**; 0.2, 1.3, 5.3, 5.4, 5.5's F5,
 12.3.4 launch 8, 13.1's ruling 44, 13.3, 13.4 item 22).
+
+## 14. restore: the restore order (ruling 76, D457)
+
+Key `restore`, wave 4, after §10's merge (§10's measures M2 and M3 prove it); branch
+`wip/p8a-restore`, worktree `D:/Projects/Personal/vc-wt/p8a-restore`; no part of checks. Binding:
+D457 (5), ruling 76 in 13.1, with D457's reasons; D45 and D50 (a slow load in one tab does not
+touch another; Q1's clock is the tab's own); D202 (the merge tools' lookup); D207 (four at once);
+D436 and D437 as D457 (2) takes them (the same measure, the two builds run alternately); D241 (its
+cost, inside the week's share the owner gave on 2026-11-23, "All of wave 4 now"); rulings 3, 19,
+23, 65 (as D457 amends it) and 66; plan.md's risk 10. Inputs, outside the repository: the panel's
+accounts of M3 (`D:/Projects/Personal/phase8-work/wave3/perf-m3-result.json`: the analysts
+"where", "changes", "user" and "cost", then three judges), the lead's probe of the start with
+several tabs (`D:/Projects/Personal/phase8-work/wave3/startup10-probe/`: `startup_tabs_probe.ps1`,
+`run1.txt`, `run2-small.txt`) and the three "before" series (`wave3/perf-before*/`). Where D457
+leaves a choice to the package, this section makes it from the code and lists it in 14.9 with the
+lead's ruling on it (rulings 86 to 90 in 13.1, 2026-11-23). Code is cited as it stands at
+`810913e`.
+
+### 14.1 What it delivers, and what it leaves
+
+Delivers:
+- The restore order. When `InitializeAsync` finds the active tab a restored repository's tab and
+  at least one other restored tab, a `RestoreOrder` opens the active tab first and alone and the
+  others at its trigger (14.3.2), at most `RestoreOrder.OpensAtOnce` (4) at once (14.3.3); a
+  waiting tab the user shows opens at once, a waiting tab that is closed never opens (14.3.4). In
+  every other start the restored tabs open by today's code, unchanged (14.3.5).
+- `RepositoryViewModel.FirstPage`, the signal "its graph has its first page" (14.2, 14.3.2).
+- The order's log lines (14.3.8); its tests, written first and failing on today's code (14.4);
+  `SettingsEntryTests`' test of the merge-tool lookup rewritten, as D457 (5) names it, and a second
+  test of the lookup beside it (14.4).
+- The proof, the lead's (14.8): the lead's probe, which measures the window's answers and may
+  lower the four, then M2 and M3 with the two builds run alternately, five times each; then, if
+  proven, M3's bound from the fix's runs (D457 (3), 13.4 item 17).
+
+Leaves:
+- "Check again" (`MainWindowViewModel.OpenWhatWaitedForGitAsync`) reopens every tab whose restore
+  failed at once, as today, in 8a: ruling 76 orders the restore, and that reopening comes later,
+  after a search that found git. It gets a row in plan.md's Backlog at the close, beside D457's
+  rows (ruling 90; 14.9, open point 1).
+- 10.3.6's candidate, background tabs restored in summary mode and promoted when shown: plan.md's
+  Backlog with the memory it would save (D457 (5)), the lead's at the close.
+- A lower process priority for the background tabs' git calls (the panel's other candidate, over
+  `GitCommand.BelowNormalPriority`, Windows only): not ruled, not built.
+- What comes before the window opens (2.7 to 4.9 s in the probes; 8b's published build), the PATH
+  the pass and the series start the app with (the review before the gate, D457's last paragraph),
+  numbers on macOS and Linux (D50).
+- The docs a merge needs (architecture.md, plan.md's risk 10 and Backlog, the report's "The
+  performance series", CLAUDE.md's row for the alternated command): the lead's (14.8).
+
+Decisions: D457 (5) rules the order and how it is proven; the section adds no decision. Its
+choices (14.9) stand as the lead ruled them on 2026-11-23 (rulings 86 to 90 in 13.1), and the lead
+records any that changes the architecture.
+
+### 14.2 Files and contracts
+
+Paths without a project are under `src/VisualCommit.App/`. Each was read at `810913e`.
+
+| File | Change | Whose (0.4) |
+|---|---|---|
+| `ViewModels/RestoreOrder.cs` | new: the order | restore |
+| `ViewModels/MainWindowViewModel.cs` | the field `_restore`; `InitializeAsync`'s openings; `Activate`, `CloseTab` and `CloseAll` tell the order | WP0, then §5 (merged); restore's in wave 4 |
+| `ViewModels/RepositoryViewModel.cs` | `FirstPage` and its five completions (14.3.2) | WP0, then §10 (merged); restore's in wave 4 |
+| `ViewModels/TabServices.cs` | the constructor's optional `restoreClock` and the property `RestoreClock` (`restoreClock ?? Clock`), modelled on `readClock` and `ReadClock`; nothing else | the lead's; ruling 87 |
+| `AppSession.cs` | `Start`'s optional `restoreClock`, passed on to `TabServices` as `readClock` is; nothing else | the lead's; ruling 87 |
+| `tests/VisualCommit.App.Tests/RestoreOrderTests.cs` | new (14.4) | restore |
+| `tests/VisualCommit.App.Tests/RepositoryFirstPageTests.cs` | new (14.4) | restore |
+| `tests/VisualCommit.App.Tests/RestoreOrderShellTests.cs` | new (14.4) | restore |
+| `tests/VisualCommit.App.Tests/SettingsEntryTests.cs` | one test rewritten, one added; `Shell` gives `TabServices` a `ManualTimeProvider` as `restoreClock` (ruling 87); `HeldRepositories` gains a lock around `Opened` and its openings (14.4) | no package in 0.4; restore's |
+| `tests/VisualCommit.Testing/Headless/ShellDriver.cs` | `Start`'s and `StartWithTabs`' optional `restoreClock`, passed on to `AppSession.Start`; nothing else | the lead's; ruling 87 |
+
+Read and unchanged: `MainWindowViewModel.Settings.cs` (`LookUpMergeToolsAfterAsync` takes the
+order's `[FirstLoadEnded]` as it takes today's list, 14.3.6), `.Session.cs` (`RestoreTabs`, which
+makes the pending tabs), `.Workspaces.cs` (`ReadActiveDashboardAtStartAsync`, `OnOpenRequested`), `.Commands.cs`
+(`ActivateTabShowing`), `.Git.cs` (`ShowGitSetup`, `OpenWhatWaitedForGitAsync`),
+`RepoTabViewModel.cs` (`ShowPending`, `OpenAsync`, `ShowAsync`, `RepositoryOpened`); the
+harnesses `HeldGitRunner`, `ManualTimeProvider` and `FakeRepositoryBase`, and `ShellDriver`'s other
+files (`ShellDriver.Phase6.Workspaces.cs` among them, whose overloads keep their lists);
+`tests/VisualCommit.RealWindowTests/Phase8aPerformance.cs`, which both builds run as it is and in
+which the lead writes M3's bound after the proof (14.8).
+
+The lead's files stay as they are but for ruling 87 (14.9 choice 4), which has the package's
+builder add the restore clock to three files of the lead's, `TabServices.cs` and `AppSession.cs`
+(0.4) and `ShellDriver.cs`, as the table and the block below say, and nothing else there; the
+order needs no other service. In wave 4 neither §11 nor §12 owns a file of this package; the
+review's fixers (status step 19) take `MainWindowViewModel.cs`, `RepositoryViewModel.cs` or
+`SettingsEntryTests.cs` only after restore's merge, or the lead rules. If restore is not merged
+(14.8 step 9), those three pass back as they are, and the lead's three never gain the clock.
+
+```csharp
+// ViewModels/RepositoryViewModel.cs
+/// Completes once, never faulted, when the first full start's history has its first page in
+/// Graph, or when that start has ended without one: a history with no commits, a failure of its
+/// refs or its load, its cancellation, the view model closed (14.3.2). A summary-mode view
+/// model's completes at the full start that follows its promotion, or at Dispose. Over a
+/// TaskCompletionSource made with TaskCreationOptions.RunContinuationsAsynchronously.
+public Task FirstPage { get; }
+```
+
+```csharp
+// ViewModels/RestoreOrder.cs (new). Public: the app has no InternalsVisibleTo (1.12), and the
+// tests read its constants. Used by MainWindowViewModel alone; no interface.
+public sealed class RestoreOrder
+{
+    public const int OpensAtOnce = 4;                     // D207's four (14.3.3)
+    public static readonly TimeSpan LongestWait =         // on TabServices.RestoreClock (14.3.2)
+        TimeSpan.FromSeconds(5);
+    // The log lines of 14.3.8: StartedFormat, ReleasedFormat, FirstPageReason, EndedReason,
+    // ClosedReason, WaitedReason, ShownFormat, DroppedFormat, StoppedFormat.
+
+    // first: the active restored tab. restored: every restored tab, in tab order, first among
+    // them. open: the window's (tab, path) => tab.OpenAsync(path, remember: false), path being
+    // the tab's PendingPath as the order is made. clock: TabServices.RestoreClock (ruling 87).
+    // lifetime: InitializeAsync's token.
+    public RestoreOrder(
+        RepoTabViewModel first,
+        IReadOnlyList<RepoTabViewModel> restored,
+        Func<RepoTabViewModel, string, Task<bool>> open,
+        TimeProvider clock,
+        IAppLog log,
+        CancellationToken lifetime);
+
+    public IReadOnlyList<Task> Start();       // once; a task per restored tab, in order (14.3.6)
+    public Task FirstLoadEnded { get; }       // a task of any tab the order opened ended (14.3.6)
+    public void Shown(RepoTabViewModel tab);  // a waiting tab opens at once (14.3.4)
+    public void Closed(RepoTabViewModel tab); // a waiting tab never opens; the first's releases
+    public void Stop();                       // nothing more opens; the waiting are dropped
+}
+```
+
+```csharp
+// ViewModels/TabServices.cs, the lead's (ruling 87), modelled on readClock and ReadClock: the
+// constructor's last parameter TimeProvider? restoreClock = null, and RestoreClock =
+// restoreClock ?? Clock, set beside ReadClock.
+/// <summary>
+/// The clock of the 5 s the other restored tabs wait for the active one at the most:
+/// <see cref="Clock"/> unless the harness gives one, so that a test moves it or holds it still
+/// while every other time of the session runs on.
+/// </summary>
+public TimeProvider RestoreClock { get; }
+```
+
+`AppSession.Start` gains `TimeProvider? restoreClock = null`, last in its list, and passes it to
+`TabServices` as `restoreClock:`, beside `readClock:`. `ShellDriver.Start` and `StartWithTabs` gain
+the same parameter, last in each list; `StartWithTabs` passes it to `Start`, and `Start` to
+`AppSession.Start`. Last, because `StartWithTabs` and the overload of `StartWithTabs` in
+`ShellDriver.Phase6.Workspaces.cs` hand `Start` their arguments by position. The doc comments of
+`AppSession.Start` and `ShellDriver.Start` each gain a sentence for it in the form of their
+`readClock` sentence ("null: the session's clock", "without it the session's own clock"), saying
+what the clock is as the block above does, in the comment's last paragraph, which names no phase;
+no new comment names a phase, package or section. `ShellDriver` gains no property for it: its
+constructor and `ReadClock` stay as they are, and a test keeps its own reference to the clock it
+gives. In the app nothing gives either clock, so `RestoreClock` is `Clock`, `TimeProvider.System`.
+
+`MainWindowViewModel`:
+- `private RestoreOrder? _restore;`, set by `InitializeAsync` and set back to null when its start
+  has ended (14.3.1).
+- `InitializeAsync`, after `_tabServices.Startup.TabsRestored(restored.Count)`: when
+  `!cancellationToken.IsCancellationRequested && ActiveTab is { PendingPath: not null } first &&
+  restored.Count > 1`, `_restore = new RestoreOrder(first, restored, (tab, path) =>
+  tab.OpenAsync(path, remember: false), _tabServices.RestoreClock, _log, cancellationToken)`,
+  `opening = _restore.Start()`, and the lookup waits for `[_restore.FirstLoadEnded]`; otherwise
+  today's `restored.Select(tab => tab.OpenAsync(tab.PendingPath!, remember: false)).ToList<Task>()`,
+  word for word, and the lookup waits for `opening`, as today. Then `_ =
+  LookUpMergeToolsAfterAsync(...)` with that list; the `await
+  Task.WhenAll(opening.Append(ReadActiveDashboardAtStartAsync()));` inside `try { … } finally {
+  _restore = null; }`; then, unchanged, `UpdateCanClose();`. Its doc comment gains one sentence on
+  the order; "Completes when every restored tab has loaded its history." stays word for word.
+- `Activate(tab)`: right after `ActiveTab = tab;`, `_restore?.Shown(tab);`.
+- `CloseTab(tab)`: right after `tab.RepositoryOpened -= OnRepositoryOpened;` and before
+  `tab.Dispose();`, `_restore?.Closed(tab);`. The order thus hears of the close before `Dispose`
+  completes the tab's `FirstPage` or cancels its load, and before the closed active tab's neighbour
+  is activated.
+- `CloseAll()`: right after `_closed = true;`, `_restore?.Stop();`, before any tab is disposed.
+
+### 14.3 Behaviour
+
+#### 14.3.1 The order and its state
+
+The order exists only for a start whose active tab is a restored repository's tab beside at least
+one other restored tab (14.3.5); it is made once, in `InitializeAsync`, after git's search, and
+lives until that start has ended: `InitializeAsync` sets `_restore = null` in a `finally` around
+its `await Task.WhenAll(...)`, which completes only when no entry waits any more (14.3.6), so a
+later `Shown`, `Closed` or `Stop` would have nothing to do. The window keeps no closed tab alive in
+any state that lasts the session (`ForgetOpened`, `KeepUntilIdleAsync`; phase 6's design 8.11), and
+neither may the order. `RepoTabViewModel.Dispose` leaves `Repository` set and
+`RepositoryViewModel.Dispose` leaves `Graph` set, so an order kept for the session would keep every
+closed restored tab's whole history (about 58 MB of working set at 100,000 commits, by the panel's
+estimate). Its state is guarded by a `Lock`, as `BulkSlots`' is, and `open` is always called
+outside it: in the app every call comes on the UI thread (`InitializeAsync` and the window's
+commands run there, and the order's awaits resume on the UI thread's `SynchronizationContext`), and
+so do `RestoreOrderTests`, on the headless dispatcher (14.4); in `SettingsEntryTests`' two lookup
+tests, which stay `[Fact]` on the thread pool (14.4), `Closed` comes on the test's thread and the
+order's continuations, and the openings they start, run on pool threads beside it, and the lock
+guards those calls.
+
+It keeps one entry per restored tab, in tab order at the start, with the tab, its folder (its
+`PendingPath` when the order is made), its task for `Start`'s list and one of five states:
+- **Waiting**: not asked to open.
+- **Opening with a slot**: opened after the release, counted among the `OpensAtOnce`.
+- **Opening without a slot**: the first tab, or a waiting tab the user showed.
+- **Settled**: its trigger came (the first tab's, 14.3.2; a slot's, 14.3.3): its slot, if it held
+  one, is free; it may still be loading its history.
+- **Dropped**: closed while it waited, or left waiting when the order stopped; never opened.
+
+An entry forgets its tab and its `FirstPage` when `Closed` is called for its tab, and when its task
+in `Start`'s list has completed. `Shown` and `Closed` then find no entry for that tab and do
+nothing, as they do for a settled entry. So a tab closed during a long start (a share, D207's
+minutes) is let go at its close, not when the start ends. The order keeps no list of the tabs
+beside its entries (the `restored` it is given is read once), and when the last entry's task has
+completed it disposes its registration on the lifetime, so the session's token keeps no reference
+to it either.
+
+And the order's own phase: **first** (the first tab opens alone), **released** (once, at the first
+tab's trigger), **stopped** (once, at `Stop` or at the lifetime's cancellation; a stopped order
+opens nothing more). `Stop` completes the task of every entry it has not opened, the first's
+included, so a lifetime cancelled before `Start` has opened the first tab still lets
+`InitializeAsync` end.
+
+`Start` logs the started line (14.3.8), opens the first tab without a slot and watches it; the
+others stay waiting. At the first tab's trigger the order logs the release line and fills the
+slots (14.3.3). A waiting tab opens in tab order, the order fixed at the start, the first tab
+skipped.
+
+To open an entry it watches (the first tab, a slot's tab) the order subscribes, once, to the tab's
+`RepositoryOpened`, then calls `open(tab, folder)` and keeps the task it returns; a shown tab it
+watches for nothing (14.3.4), so it only calls `open` and keeps the task.
+`RepoTabViewModel.ShowAsync` raises `RepositoryOpened` after `Repository = opened` and before
+`opened.StartAsync()`; the handler takes `tab.Repository.FirstPage` and unsubscribes. It subscribes
+before the call because a provider whose task is already complete (a test's fake) reaches
+`ShowAsync` inside the call. The handler is also removed when the entry settles, when its
+opening's task ends, when its tab is closed and when the order stops: an opening that fails raises
+no `RepositoryOpened`, and the user's later opening in that tab, now an empty tab showing the
+welcome page's error, must not reach the order. An event or a `FirstPage` for an entry that has settled
+changes nothing, and an entry frees its slot at most once.
+
+#### 14.3.2 The triggers, and where the code observes them
+
+For the first tab, the others are released at the earliest of D457's four:
+
+1. **Its graph has its first page**: `RepositoryViewModel.FirstPage` of the view model the tab
+   shows, completed with a row in `Graph`. `FirstPage` is completed by `TrySetResult`, at the
+   first of five places in `RepositoryViewModel.cs`:
+   - in `LoadAsync`'s page action, posted to the UI thread through `OnUiThread`, right after
+     `data.Append(page, rows)`, when `data` is `Graph` (the first load's data; a reload's is
+     swapped in only at its end, so a reload's pages never meet the condition);
+   - in `StartFullAsync`, right after `Graph = data.Value;`, when `Graph.Count` is above 0: a
+     small history's first page can be appended before the refs' continuation sets `Graph`;
+   - in `StartFullAsync`, right after `await loading;`: the first load has ended, with or without
+     a page;
+   - in `StartFullAsync`'s two catches, cancellation and failure, last in each (in the failure's,
+     after `ErrorText` is set and `CompleteFirstRead()` is called), so that a test that awaits
+     `FirstPage` reads `ErrorText` set;
+   - in `Dispose`, beside `CompleteFirstRead()`.
+   Neither of the existing signals serves. `FirstRead` completes once the refs and the status are
+   applied, before a 100,000-commit `git log --date-order` prints its first commit (D47);
+   `OnRowsDrawn` is raised by `RepositoryGraphView`'s `RowsDrawn` handler for a drawn frame, which
+   the headless harness does not draw unless a test captures (`ShellDriver.WaitForAsync`'s "It does
+   not render"); and `OpenAsync`'s task ends after the whole history and, when the session's filter
+   named branches that are gone, after a second load (`_changedWhileStarting`).
+2. **Its opening or its first load fails or ends without a page**: the task `open` returned ends
+   before a first page (`OpenAsync` returns false when the provider's open fails, the folder is no
+   repository or the tab closed meanwhile), or `FirstPage` completes while `Graph.Count` is 0 (an
+   empty history, a failure of the refs or of the load in `StartFullAsync`, the view model closed).
+3. **Its tab is closed**: `CloseTab` calls `Closed(first)` (14.2), which releases inside the call
+   (14.3.4): at once, under the lock and on the caller's thread, before `CloseTab` disposes the tab
+   and activates its neighbour. The close is not one of the tasks the watch awaits.
+4. **5 s have passed on the session's clock**: `Task.Delay(LongestWait, clock, token)`, armed when
+   `Start` asks for the first tab's opening, where D50's clock (`OpenAsync`'s stopwatch) starts
+   too; `clock` is `TabServices.RestoreClock` (ruling 87), which is `TabServices.Clock` unless the
+   harness gives one, as `ReadClock` is for a dashboard's 10 s rule. `AppSession.Start` gives
+   `TabServices` no `clock`, and the app gives `AppSession.Start` no `restoreClock`, so in the app
+   the two are one clock, `TimeProvider.System`, and the 5 s run on the session's clock to the
+   letter of D457. A view-model test gives `TabServices` a `ManualTimeProvider` as `restoreClock`
+   and moves it; a shell test gives one through `ShellDriver.StartWithTabs` and holds it still
+   (14.4). `token` is the lifetime's, linked to a source the order cancels at the release or the
+   stop, so that no timer stays armed after either.
+
+The order awaits `Task.WhenAny` of 1, 2 and 4. Its continuation runs after the event that completed
+it, never inside the page's action (`FirstPage`'s source runs its continuations asynchronously).
+The release happens once, under the lock:
+- `Closed(first)` releases at once with `ClosedReason`.
+- Otherwise the continuation releases with the reason it finds (14.3.8): the 5 s if the delay ended
+  first, the first page if `Graph.Count` is above 0, otherwise "ended without a first page".
+- The release, whichever event brings it, cancels the watch's linked source, so its delay ends.
+- A continuation that finds the order released or stopped does nothing.
+
+A waiting tab's own opening counts its Q1 clock from its own start (`OpenAsync`'s stopwatch), so
+its `first graph rows drawn after` line keeps D50's meaning. The first tab's first-rows line and
+the start-up line are those of 14.3.6.
+
+#### 14.3.3 The four at once
+
+At the release, and each time a slot is freed, the order starts waiting tabs in tab order while
+fewer than `OpensAtOnce` entries hold a slot. A slot is taken when the order opens a waiting tab
+after the release, and freed at the earliest of that tab's own three events: its graph's first
+page; its opening's task ending, or its `FirstPage` ending without a row; its close. No clock frees
+a slot. D457 (5) gives the 5 s to the active tab alone, and both models it names hold a slot until
+the work ends: "Add repositories" until `OpenAtTopAsync` returns
+(`AddRepositoriesDialogViewModel.ConfirmAsync`, the `finally` that releases), and a dashboard read
+even past `GitCallPatience` ("it keeps its slot and ends later", `DashboardRowRead`). Each freed
+slot opens the next waiting tab; a stopped order opens none. A slot's close frees it inside
+`Closed`, synchronously, as in 14.3.4. The other two of its events reach the order through the
+slot's own `Task.WhenAny`, as the first tab's do.
+
+Four is D207's: "Add repositories" opens `AddRepositoriesDialogViewModel.OpensAtOnce` (4) at once
+through a `SemaphoreSlim`, and a dashboard reads `DashboardViewModel.MaxReads` (4) at once through
+its `ReadSlots`. The order keeps a count of its own under its lock rather than a semaphore: the
+next tab must be the next in tab order, and a shown tab leaves the line. The count is shared with
+neither a dashboard's `ReadSlots` nor `BulkSlots`: a dashboard read meanwhile takes its own four.
+
+A slot holds only until the first page, not until the whole load: the probe put the cost before
+the first page, in the processes that the openings start and the walks before git's first line
+(D457's account: the active tab's refs read after 3.2 to 6.2 s instead of 0.7 to 1.4 s), while
+after it the load is git's own walk printing the rest (D47), the app's parsing and its pages on the
+UI thread, which D457's probe did not find to be the cost ("not in the nine large walks"); the
+probe's ten-large case measures it (14.8 step 4). So more than four tabs can be loading after their
+first pages, but never more than four released tabs are opening before theirs; a tab the user shows
+opens beside them, without a slot (14.3.4). A tab on a share that does not answer (D207's
+minutes) holds its slot until its opening ends, as an "Add repositories" open does. Meanwhile the
+next tabs wait, and the user can show any waiting tab, which opens at once (14.3.4). The lead's
+probe measures the window's answers with four, and the lead may lower the constant with its
+numbers (14.8 steps 4, 5); tests are written in terms of `OpensAtOnce`, so a lower value changes no
+test.
+
+#### 14.3.4 A waiting tab shown, a waiting tab closed, and what it shows meanwhile
+
+**Shown.** Every activation passes through `MainWindowViewModel.Activate`, the one place that
+sets `ActiveTab`: the tab strip, the palette's "Go to …" rows, Ctrl+Tab and the tab keys
+(`AppCommands`), all through `ActivateTabCommand`; `ActivateTabShowing` (the welcome page's Open
+and Open repository…, which match a tab by `RepositoryPath ?? PendingPath`); a dashboard row's
+open (`OnOpenRequested`, which finds a tab by its pending folder); `ShowWorkspace`;
+`ShowGitSetup`; and `CloseTab`'s neighbour. `Shown(tab)` on a waiting entry opens it at once,
+without a slot and watching nothing for slots, and logs the shown line; the other waiting tabs
+keep waiting for the first tab's trigger and, after it, for slots. On any other entry, or a tab
+the order does not hold, `Shown` does nothing.
+
+**Closed.** `Closed(tab)` on a waiting entry drops it: it never opens, its task in `Start`'s list
+completes, and the dropped line is logged. On the first tab before the release, it releases inside
+the call (reason "its tab was closed"), under the lock with the openings outside it, before it
+returns. So a neighbour the release opened is already opening when `CloseTab`'s `Activate` shows
+it, and `Shown` finds it opening (14.3.7 race 4, 14.4 test 4). The watch then finds the order
+released. On an entry holding a slot, it
+frees the slot. The tab's own opening ends as today, after `CloseTab`'s `Dispose`: `OpenAsync`
+returns false once the provider answers, or the load stops.
+
+`Shown`, `Closed` and `Stop` act synchronously. Each decides under the lock on the caller's thread
+and calls `open` only after leaving the lock. So `Closed` on the first tab, or on a slot's tab, has
+opened the next waiting tabs before it returns, and before `CloseTab` activates the neighbour.
+
+**Meanwhile.** A waiting tab shows what a restored tab shows today before its repository opens, so
+no text is added and no texts class changes: its folder's name in the tab strip
+(`ShowPending`: `Title`, `IsOpening` true), its close button (`CanClose`, since `PendingPath` is
+set), no repository; on screen, were it shown, the graph area's empty state of an opening tab
+(`CommitGraphView`: no welcome page while `IsOpening`, no graph without a repository, no
+`TabWaitingText`), "No repository" and "Ready" in the status bar. Since a shown waiting tab opens at
+once, that state lasts as long as an opening tab's does today. It is no `IsEmpty` tab, so it cannot
+become a dashboard or take an opening from the palette (`TabForOpening`).
+
+#### 14.3.5 The cases that open every restored tab at once
+
+No order is made, and `InitializeAsync` runs today's loop word for word, when at the openings the
+active tab:
+- is a dashboard (`IsDashboard`; D207 keeps its rows' reads at four, and
+  `ReadActiveDashboardAtStartAsync` reads it beside the openings, as today);
+- holds no repository: a tab saved without a folder, which shows the welcome page or the first-run
+  screen;
+- is the only restored tab (nothing waits), or no tab is restored.
+
+Nor is one made when the lifetime is already cancelled at the openings (the window is closing):
+today's loop runs, as today.
+
+"The active tab" is `ActiveTab` when `InitializeAsync` reaches the openings, after git's search:
+`RestoreTabs` mapped the saved index to a tab, and a user who switched tabs during the search (not
+gated, `ActivateTab`) is on the tab that counts (14.9 choice 7). A start whose git is missing or
+broken takes the order too when its active tab is restored: the first opening fails at once, the
+others are released and fail as today (`FailedPath`, the welcome page's error from the missing git).
+
+#### 14.3.6 InitializeAsync, the start-up line and the merge tools' lookup
+
+`Start` returns one task per restored tab, in `restored`'s order. A tab's task completes when the
+task its `open` returned completes, with that task's outcome (the same result, fault or
+cancellation, as today's list would carry); a dropped tab's completes when it is dropped. So `await
+Task.WhenAll(opening.Append(ReadActiveDashboardAtStartAsync()))` completes when every restored tab
+has loaded its history, failed, or was closed, as today, and `InitializeAsync`'s contract and every
+wait built on it hold: `ShellDriver.WaitUntilReadyAsync` (`Session.Initialization`),
+`WaitForRepositoryAsync` and `WaitForTabOpenedAsync`, which call it, `Phase6Checks.W.Restart`'s
+assertion that `Initialization` completed, and M3's wait for ten `loaded` lines. No harness wait
+changes. A tab is waiting at most until the first tab's trigger, 5 s at the latest, and then until
+a slot frees, at a released tab's first page, the end of its opening or its close, so the start
+ends when the openings end, as today's does; a view-model test whose restore clock stands still
+ends it by the events it makes.
+
+The start-up line counts every restored tab: `TabsRestored(restored.Count)` is called before the
+order is made, unchanged, so M3's line still reads `(10 restored tabs)`. The timeline's first-rows
+line is written at the first `FirstRows` call, which is the first tab's while it is shown, as today.
+
+The merge tools' lookup still starts when the first restored load ends (D202):
+`LookUpMergeToolsAfterAsync` gets `[_restore.FirstLoadEnded]` in place of the order's tasks, and
+starts at it; `MainWindowViewModel.Settings.cs` is unchanged. `FirstLoadEnded` completes when the
+first task of a tab the order opened ends, whether it showed its graph or failed: the first tab's,
+a released tab's or a shown tab's, whichever ends first. A waiting tab that is closed never loaded,
+so its drop completes its task for `InitializeAsync` but not the lookup's wait: the lookup does not
+start while the active tab still opens alone. If the order stops before it has opened any tab
+(14.3.1), `FirstLoadEnded` completes at the stop; once it has opened one, `FirstLoadEnded`
+completes when the first such task ends: a tab's task ends when its opening ends, at the latest at
+its disposal while its history loads (`RepositoryViewModel.Dispose` cancels the load), or, while
+the provider still opens it, only when the provider answers (`RepoTabViewModel.OpenAsync` awaits it
+without a token, then returns false; 14.3.4). The lookup runs below normal priority (D202), beside
+the others' openings.
+
+#### 14.3.7 The races, each with what happens
+
+1. **First page and 5 s together**: the first handled under the lock releases; the second finds the
+   order released and does nothing. The same holds for a slot's events (its first page and its
+   opening's end together).
+2. **Shown while the release opens it**: `Shown` and the release both decide under the lock; the
+   tab opens once, by whichever comes first; the other finds it opening and does nothing.
+3. **Closed while waiting, at the release**: a tab dropped before the release reaches it never
+   opens; one already opened by the release is an opening tab that closes: its close frees its slot,
+   and its opening ends as today (14.3.4).
+4. **The active tab closed while it opens**: `CloseTab` calls `Closed` before it disposes the tab.
+   `Closed` releases ("its tab was closed") and opens waiting tabs in tab order into the free slots.
+   Then `CloseTab` disposes the tab; its `FirstPage`, or its opening's end when the provider
+   answers, finds the order released. Last, `CloseTab` activates the neighbour.
+   - A neighbour the release opened is already opening, so `Shown` does nothing (14.4 test 4:
+     `[b, a, c]`).
+   - A neighbour still waiting (one beyond the `OpensAtOnce` the release opened) is shown and opens
+     at once, without a slot.
+5. **The window closes while tabs wait**: `CloseAll` calls `Stop` before it disposes the tabs, and
+   `AppSession.Dispose` cancels the lifetime first, which stops the order too. A stopped order
+   opens nothing more, drops every waiting tab (the stopped line, 14.3.8) and cancels its delay;
+   `InitializeAsync` completes once the opened tabs' tasks end: their disposal ends a load, and an
+   opening that still waits on the provider ends when the provider answers (14.3.6; 14.4 test 10's
+   `Fail(b)`).
+   Today the real-window pass closes a three-tab start while the large tab still loads (phase 1's
+   check 15, its restart). Under the order `graph`, the active tab there, opens first, and its
+   first page (13 commits) releases `linear` and the 100,000-commit tab within moments; the pass
+   waits for `graph`'s `loaded` line, which comes after that first page, so both are opening when
+   the close comes, and the window still closes while the large tab loads, as today.
+6. **A tab shown before the release**: it opens at once; its first page releases nobody; the others
+   wait for the first tab's trigger.
+7. **The user leaves the first tab before its trigger** (another tab, a dashboard): nothing
+   changes; the first tab's trigger still releases the others, 5 s at the latest.
+8. **A dashboard read meanwhile**: a background dashboard starts no read of its own (D207); shown,
+   it reads its rows, and a row whose folder is a waiting tab's finds no registered tab
+   (`OpenRepositories.TabForFolder` knows view models only), so it reads through a summary-mode
+   view model, which the tab adopts when it opens (`TryAdopt`, `Promote`): phase 6's protocol, as
+   today for a row read while a restored tab is still opening. A row's open request for a waiting
+   tab's folder shows that tab, which opens at once (14.3.4).
+9. **"Check again" while tabs wait**: it reopens only tabs with a `FailedPath` that are not opening
+   (`OpenWhatWaitedForGitAsync`); a waiting tab has a `PendingPath` and `IsOpening`, so it is left
+   to the order.
+10. **Two restored tabs on one worktree**: they open one after the other when one of them is the
+    first tab, side by side at the release otherwise; `ShowAsync`'s registry rules (D209, 3.3 of
+    phase 6's design) hold either way, and when one of them is the first tab, the first registered
+    tab now is the active one.
+11. **A slot's tab that does not answer** (a share): its slot stays taken until its opening ends or
+    the tab is closed; the next tabs wait, as behind an "Add repositories" open; a waiting tab the
+    user shows opens at once (14.3.4).
+12. **Dialogs' names during the wait**: `NamesRepositoryInDialogs` counts tabs with a repository,
+    so while only the first tab has one, a dialog that its own operation opens names its repository
+    only if a dashboard is open; today that holds in the first moments of every start with several
+    tabs, and the order lengthens it to the first tab's trigger, 5 s at most (14.9 risk 3).
+13. **Add open tabs during the wait**: `OpenRepositoryFolders` lists tabs with a repository, so a
+    dashboard's Add open tabs leaves out the waiting tabs until they open
+    (`WorkspaceCommands.AddOpenTabs`), as today for a tab still opening; until the first tab's
+    trigger, 5 s at most, and then a free slot (14.9 risk 3).
+
+#### 14.3.8 What the app logs
+
+Through the session's log, as constants of `RestoreOrder` (each line says only what happened,
+D438; `{N}` on the order's clock, `TabServices.RestoreClock`, the session's in the app, since the
+first tab began opening, in whole milliseconds rounded down, invariant culture, no group
+separator, as `StartupTimeline`'s):
+- Info, once, at `Start`: `StartedFormat`, `Restore order: {first} opens first; the other restored
+  tabs ({k}) wait for its first page, at most 5 s, then open at most {OpensAtOnce} at once (a tab
+  shown meanwhile opens at once).`
+- Info, once, at the release: `ReleasedFormat`, `Restore order: {first}: {reason}, {N} ms after it
+  began opening; the other restored tabs ({k}) start opening, at most {OpensAtOnce} at once.`, with
+  `{k}` the count still waiting at the release, the reason one of `FirstPageReason` `its graph has
+  its first page`, `EndedReason` `its opening ended without a first page`, `ClosedReason` `its tab
+  was closed`, `WaitedReason` `5 s passed without a first page`.
+- Debug: `ShownFormat` `Restore order: {tab} was shown while it waited and opens now.`;
+  `DroppedFormat` `Restore order: {tab} was closed while it waited and does not open.`;
+  `StoppedFormat` `Restore order: the window closed with {k} restored tabs still waiting; they do
+  not open.` (only when one waits).
+
+`{first}` and `{tab}` are the tab's folder name as `ShowPending` shows it
+(`WorkspaceTexts.FolderName`). The lines name no path. No earlier test or measure reads them: the
+patterns of Q1's, the `loaded`, the first-rows and the start-up lines (`Phase8aPerformance`,
+`Phase1RealWindowPass`, `AppLogFile`) match none, and the lead's probe adds `Restore order:` to the
+lines it keeps (14.8 step 4).
+
+### 14.4 Tests
+
+The builder runs these classes and methods only, with plain `dotnet test` (D245). The first
+commit holds the tests and stubs of 14.2's members (`FirstPage` a task that never completes,
+`RestoreOrder` with its constants and a `Start` that opens every tab at once; `InitializeAsync`
+not yet calling it) and ruling 87's `restoreClock` in its three files, complete, since the tests
+give it; every test below marked "fails first" fails on that commit, `SettingsEntryTests`'
+two among them; the merge note names that commit. Every wait on a task in the view-model classes
+below (`FirstPage`, `InitializeAsync`, `lookups.Started`) is bounded
+(`WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken)`), so that on the stub
+commit each test fails on its own timeout, not through the hang watchdog. The fakes' commits are by `Demo Author <demo@example.com>`;
+folders are under `Path.GetTempPath()`'s `restored`, never made, as `SettingsEntryTests` has them,
+and the real repositories are `TempRepo`s.
+
+**`RestoreOrderTests`** (App.Tests, new, `[AvaloniaFact]`, no session, no git). The lab is a window
+over fakes on the headless dispatcher, as `CheckGitAgainTests`' `Lab` and
+`DashboardTestSupport.Window` make one. The order's continuations, the tabs' openings (`ShowAsync`,
+`OpenRepositories`, which is used on the UI thread only) and the window's handlers then run on one
+thread, as in the app, and never on two at once. Its `TabServices` is made as
+`SettingsEntryTests.Shell` makes it, given the lab's provider, a `ManualTimeProvider` as
+`restoreClock` (ruling 87; not as `clock`, which stays the system's, as in `CheckGitAgainTests`'
+`Lab`), a `RecordingLog` given both to `TabServices` (`log`) and to the `MainWindowViewModel`
+(`log:`), since the order writes through the window's `_log` (`MainWindowViewModel.cs:68`), and,
+where a test names one, an `InMemoryWorkspaceStore`; git found at once
+(`_ => Task.FromResult(GitFound)`), so `InitializeAsync` reaches the openings before it returns, as
+`SettingsEntryTests` relies on. The provider, `HeldRestores : IRepositoryProvider`, records each
+`OpenAsync` path in `Opened`, in call order, and holds it until the test answers:
+`Answer(path, history)` completes it with a `RestoreFake : FakeRepositoryBase` over that folder,
+`Fail(path)` with an `IOException`; `HeldRestores` keeps `Opened` and its openings under a lock.
+After each `Answer`, `Fail`, `SendFirstPage`, `End`, `Advance` and command the test runs the
+dispatcher's jobs.
+`WaitForOpenedAsync(count)` and every wait for a positive result go through
+`DashboardTestSupport.WaitUntilAsync`, which runs the dispatcher's jobs and fails after 60 s. A
+`RestoreFake`'s `ReadRefsAsync` gives `main` at its one commit, or throws when its history says so;
+its `LoadCommitsAsync(refs, onPage, …)` hands its commit at `SendFirstPage()` and ends at `End()`
+(with no page for a history without commits, or throwing for one whose load fails);
+`CreateWatcher()` a quiet watcher, as `RepositoryViewModelFilterTests.PagedRepository`'s.
+`Task.Delay(TimeSpan, TimeProvider, CancellationToken)` over `ManualTimeProvider` fires inside
+`Advance`, as `SearchViewModel`'s delay does under `SearchViewModelTests`; what it resumes is posted
+to the context the await captured, so the test pumps after each `Advance`. A negative assertion is
+made after `DashboardTestSupport.SettleAsync`, which runs what was posted, at a sync point that the
+manual clock keeps true: with the restore clock unmoved and no page sent, nothing but the test can
+release. Timers: the restore clock carries the order's timers alone, since auto-fetch's timer and
+every other time of the window run on `TabServices.Clock`. So the tests' statements about timers
+are about the restore clock's `ArmedTimers`: one armed while the first tab is watched before the
+release (test 2), none after the release (test 2) or the stop (test 10), and none at all in a start
+that makes no order (test 12).
+
+Fail first:
+1. `Behind_an_active_restored_tab_only_its_opening_is_asked_for_at_first`: tabs `a`, `b`, `c`, `b`
+   active; `InitializeAsync` started; `Opened` is `[b]`. (Today `[a, b, c]`.)
+2. `The_others_open_in_tab_order_once_the_active_tabs_graph_has_its_first_page`: as 1; `b`
+   answered; once `b`'s `Refs` are read, `Opened` is still `[b]` and the restore clock's
+   `ArmedTimers` is 1; `b`'s first page; `Opened` becomes `[b, a, c]` and `ArmedTimers` is 0 (the
+   release cancelled the delay); `InitializeAsync` is not complete until all three loads have
+   ended, and completes when they have, every tab with its graph; the log has the started line with
+   `(2)` and the release line with `FirstPageReason` and `0 ms` (the restore clock stood still).
+3. `When_the_active_tabs_opening_or_first_load_fails_or_ends_without_a_page_the_others_open`
+   (theory: the provider's open fails; the history has no commits and its load ends; the refs read
+   throws; the load throws): `[b, a, c]`, the reason `EndedReason`.
+4. `Closing_the_active_tab_while_it_opens_opens_the_others`: `CloseTabCommand` on `b` before its
+   opening is answered; `[b, a, c]`, the reason `ClosedReason`; `c`, the neighbour now active,
+   opened once (released before `Activate` shows it); `Fail(b)` ends `b`'s opening;
+   `InitializeAsync` completes once `a`'s and `c`'s loads end. `Closed` releases synchronously
+   inside `CloseTab` (14.3.2 item 3), so the order is deterministic.
+5. `After_5_s_on_the_restore_clock_the_others_open_without_a_first_page`: `b` answered, no page;
+   `Advance` 4,999 ms: `[b]`, and the restore clock's `ArmedTimers` is still 1; 1 ms more: `[b, a,
+   c]`, the reason `WaitedReason`, `5000 ms`; then `b`'s page changes nothing.
+6. `At_most_OpensAtOnce_open_at_once_and_each_freed_slot_opens_the_next_in_tab_order`: the active
+   tab first, then `OpensAtOnce + 2` waiting; after its first page exactly the first `OpensAtOnce`
+   waiting are asked; one of them sends its first page: the next opens; another fails: the last
+   opens; a third is closed, and its held opening is then failed (`Fail`), since a closed tab's
+   opening ends only when the provider answers: nothing more opens (none waits); all end and
+   `InitializeAsync` completes.
+7. `No_slot_is_freed_by_the_clock`: the active tab and `OpensAtOnce + 1` waiting; after its first
+   page the first `OpensAtOnce` waiting are asked; `Advance` 10 s (twice `LongestWait`): `Opened`
+   still holds `OpensAtOnce + 1` paths; one of the asked sends its first page: the last opens. It
+   fails first, because the stub opens every tab at once.
+8. `A_waiting_tab_that_is_shown_opens_at_once_and_the_others_still_wait`: `a`, `b`, `c`, `b`
+   active, answered, no page; `ActivateTabCommand` on `c`: `[b, c]` and the shown line; once
+   `c`'s refs are read, still `[b, c]`; `c`'s first page sent before `b`'s: still `[b, c]` and no
+   release line; `b`'s first page: `[b, c, a]`.
+9. `A_waiting_tab_that_is_closed_never_opens_and_the_start_still_ends`: `CloseTabCommand` on `a`
+   while it waits: the dropped line; `b`'s first page: `[b, c]`, never `a`; `InitializeAsync`
+   completes once `b`'s and `c`'s loads end; the session's tabs are `b` and `c`.
+10. `Closing_the_window_while_tabs_wait_opens_none_of_them` (theory: `CloseAll`; the lifetime's
+    token cancelled): `[b]`; the stopped line with `2`; `InitializeAsync` completes once `b`'s
+    opening ends (`Fail(b)`); no timer is left armed on the restore clock.
+
+Pass on today's code by design, as guards of "as today":
+11. `With_a_dashboard_or_an_empty_tab_active_every_restored_tab_is_asked_for_at_once` (theory: a
+    dashboard active, with a workspace store; an empty tab active): six restored tabs, all six in
+    `Opened` as soon as `InitializeAsync` has started; no `Restore order:` line.
+12. `A_lone_restored_tab_opens_as_today`: one restored tab, active: asked at once; no `Restore
+    order:` line; no timer armed on the restore clock.
+13. `The_start_up_timeline_counts_every_restored_tab_before_any_opens`: a recording
+    `IStartupTimeline` given to `TabServices` (`startup`): `TabsRestored(3)` is recorded while
+    `Opened` is empty.
+14. `A_restored_tab_that_is_closed_is_let_go` (theory: closed while it waits; answered, loaded and
+    closed after `InitializeAsync` has completed). The tab is closed through `CloseTabCommand` in a
+    `[MethodImpl(MethodImplOptions.NoInlining)]` helper that returns only a `WeakReference` to it,
+    as `DashboardTabTests.CloseSecondTab` does. The test fails each opening the provider holds, as
+    they come, until `InitializeAsync` completes, except, in the second case, the opening of the tab
+    it closes, which it answers and loads (on today's code and on the stub the first case's closed
+    tab is among those failed, since they ask for it at once). Once `InitializeAsync` has completed,
+    after at most five rounds of `GC.Collect()`, `GC.WaitForPendingFinalizers()` and `SettleAsync`,
+    the reference is no longer alive, as
+    `DashboardTabTests.A_tab_a_dashboard_opened_is_let_go_when_it_closes` asserts. It passes on
+    today's code and on the first commit's stub; it fails on an order that keeps its entries' tabs
+    for the session (14.3.1).
+
+**`RepositoryFirstPageTests`** (App.Tests, new, `[Fact]`, a `RepositoryViewModel` over a fake,
+made as `RepositoryViewModelFilterTests`' test
+`A_comparisons_link_follows_the_pages_of_a_graph_that_still_loads` makes one, with
+`MainWindowViewModelTests.FakeSettings`). Fail first (the stub never completes; each wait on
+`FirstPage` is bounded, as above, so on the stub each test fails with a timeout):
+1. `FirstPage_completes_when_the_first_page_is_in_the_graph_and_not_before`: `StartAsync`; once
+   `Refs` is read, `FirstPage` is not complete; the first page: it completes, `Graph.Count` is 1
+   and `Graph.IsComplete` false.
+2. `FirstPage_completes_when_the_first_load_ends_without_a_page` (theory: no commits; the refs
+   read throws; the load throws): it completes, never faulted; `HasNoCommits`, or `ErrorText` set.
+3. `FirstPage_completes_when_the_view_model_closes_before_a_page`: `Dispose` after the refs read.
+4. `A_summary_view_models_FirstPage_waits_for_its_promoted_start`: `ForSummary` over a
+   `TabServices` with a fake provider; its summary `StartAsync` completes `FirstRead`, not
+   `FirstPage`; `Promote` and `StartAsync`, then the first page: `FirstPage` completes.
+
+**`RestoreOrderShellTests`** (App.Tests, new, `[AvaloniaFact]`, real git, `ShellDriver`). Fail
+first (today no `Restore order:` line is written). Both start with `restoreClock:` a
+`ManualTimeProvider` they never move (ruling 87, 14.9 choice 4), so no release can come from the
+clock between their steps, while the session's own clock runs on as in any shell test:
+1. `Behind_an_active_repository_tab_the_others_open_after_the_release_and_every_history_loads`:
+   three `TempRepo`s `first`, `second`, `third` of one commit each; `StartWithTabs(data, [first,
+   second, third], activeTab: 1, restoreClock: clock)`; `WaitUntilReadyAsync`: each tab's graph
+   complete, `second` active; `app.Session.Services.RestoreClock` is that clock (`Assert.Same`, as
+   `ShellTests` asserts the read clock's), so a driver or a session that did not pass it on fails
+   here; in `LogLines()`, one started line naming `second` with `(2)`, one release line, its reason
+   `FirstPageReason` (each repository has one commit, and the clock stands still); the `first:
+   opened after` and `third: opened after` Debug lines come after the release line. The release line
+   is written before any waiting tab is opened, so the order of lines holds on a slow machine too.
+2. `A_restored_tab_shown_while_it_waits_opens_at_once`: as 1, with `held.HoldNext("rev-parse")`
+   called before `StartWithTabs`, on a `HeldGitRunner` given as `gitProbe: held.Probe` (`Start`
+   pumps the UI thread before it returns, so a hold set after it would miss `second`'s call);
+   `held.Started`, awaited with `WaitAsync(ShellDriver.DefaultWaitTimeout, …)` as
+   `KeyboardPassTests` awaits it, is `second`'s opening (the held command's folder is `second`'s);
+   at once `ActivateTabCommand` on the third tab; the shown line for `third` in `LogLines()` at
+   once (`Shown` writes it inside the command); then, before `held.Release()`,
+   `WaitForLogLineAsync` for `third: opened after` within `ShellDriver.DefaultWaitTimeout` (60 s,
+   D237), which in `LogLines()` comes after the shown line and before any release line (second's
+   first git call is still held, so only an at-once open writes it there);
+   `held.Release()`; `WaitUntilReadyAsync`: every graph complete; `first: opened after` after the
+   release line. The hold is the order's first git call; while it holds, `second` can neither
+   show a page nor end its opening, and the clock stands still, so nothing can release the others
+   before `third`'s `opened after` line, however slow the machine. Today the held call may be any
+   tab's, and no shown line comes.
+These join 0.4's lagged list at restore's merge, beside the App.Tests classes 8a extends with
+real git (14.7).
+
+**The earlier test that changes** (its reason once in 8a's report, "Changes to expected
+results"):
+`SettingsEntryTests.The_merge_tool_lookup_starts_once_when_the_first_restored_tabs_load_ends`
+asserts `Assert.Equal([first, second], repositories.Opened)` right after `InitializeAsync` starts
+and fails `second` first. Rewritten, same name, in the first commit with the new tests; it fails
+there, since `Opened` is `[first, second]` on that commit: `first` active; `Opened` is `[first]`
+and no lookup has started; `Fail(first)`: the lookup starts (`lookups.Started`), and `second` is
+asked (a poll of at most 30 s until `Opened` is `[first, second]`); `Fail(second)`:
+`InitializeAsync` completes; `lookups.Count` is 1. Its comment names the active tab's load as the
+first that ends and ruling 76 for the second's later opening. The reason: ruling 76 opens the
+active restored tab first and alone (D457 (5)). The class stays `[Fact]`: its tabs' openings only
+fail, as today's test's do on the thread pool, and `HeldRepositories` gains a lock around `Opened`
+and its openings (today a plain `List` and `Dictionary`), since the order now asks for `second`
+from its continuation.
+
+Beside it, new and in the same first commit,
+`Behind_a_closed_active_restored_tab_the_lookup_waits_for_a_load_to_end`, which proves that the
+lookup follows the first load to end, whichever tab's (D202), and not a waiting tab's drop (14.3.6):
+three tabs `first`, `second`, `third`, `first` active; `Opened` is `[first]`; `CloseTabCommand` on
+`third` while it waits: no lookup has started; `CloseTabCommand` on `first` while its opening is
+held: `second` is asked (`Opened` is `[first, second]`, never `third`) and no lookup has started;
+`Fail(second)`: the lookup starts (`lookups.Started`) while `first`'s opening is still held;
+`Fail(first)`: `InitializeAsync` completes; `lookups.Count` is 1. It fails first, since `Opened` is
+`[first, second, third]` at the start on that commit. For both, `Shell` gives `TabServices` a
+`ManualTimeProvider` as `restoreClock` (ruling 87), which the tests never move, so the 5 s cannot
+come between their steps. The class's third test of the lookup,
+`Without_a_restored_repository_the_lookup_starts_once_git_has_been_looked_for`, is unchanged.
+
+**Earlier tests that restore tabs and stay unchanged**, each read for this section, with why it
+holds:
+- Behind an active repository tab, each waiting on `InitializeAsync` (directly, or through
+  `WaitUntilReadyAsync`, `WaitForRepositoryAsync` or `WaitForTabOpenedAsync`) before anything it
+  asserts or captures:
+  - App.Tests: `ActivityLogViewTests`' two starts of two repositories
+    (`A_rows_menu_copies_and_each_tab_shows_its_own_log_with_its_rows_left_open`;
+    `A_repository_opened_through_a_link_shows_its_openings_reads_under_Show_reads`, whose order
+    of reads is within one worktree); `DialogRepositoryNameTests`; `TabKeysTests`'
+    `In_the_resolvers_result_Ctrl_Tab_leaves_it_and_Ctrl_PageDown_switches`; `ShellDriverTests`'
+    `StartWithTabs_writes_a_session_file_with_those_tabs_before_the_app_starts`.
+  - Hosting.Tests: `RequestOperationsProvidersTests`'
+    `Open_copy_and_refresh_ask_only_the_listed_fake_per_provider` and
+    `Signed_out_nothing_is_asked_of_either_provider`.
+  - Phase 1: `Phase1Checks.Check_15_three_tabs_restored_after_a_restart`.
+  - Phase 6: `Check_K13_keys_in_the_conflict_resolver`; part L:
+    `Check_L33_tab_strip_shrinks_then_scrolls` (scratch active, six repository tabs and the
+    dashboard behind).
+  - Phase 7a: `Check_P2_P11_P4_P3_P1_signed_out_failed_loading_and_not_github` and
+    `Check_P13_P6_checkout_and_a_forks_tab` (P13 waits for the background tab's pull requests
+    after the sign-in, which comes after `WaitForRepositoryAsync`).
+  - Phase 7b: `Check_P2_P10_P13_P4_P3_P8_azure_signed_out_failed_loading_and_other_organization`.
+  - Phase 8a: `KeyboardPassTests`'
+    `A_keyboard_Stage_held_while_the_user_goes_to_another_tab_leaves_that_tabs_lists_alone` and
+    `CtrlTabFromAsync`'s four callers.
+- With a dashboard or an empty tab active, so no order is made: `SettingsEntryTests`' toolbar
+  test, `ActivityLogViewTests`, `CommandPaletteViewTests` and `ToolbarTests`' starts with an empty
+  second tab active, `DashboardSessionTests`, `DashboardTabTests`, phase 6's
+  `Check_W1_add_open_tabs_rename_and_delete` and `Phase6SupportTests`' tab restored behind the
+  dashboard, 8a's `AboutEntryTests`.
+- With one restored tab: `RepoTabsTests`, `CheckGitAgainTests`, `MainWindowViewModelTests`,
+  `AppSessionTests` (a repository tab and a dashboard), `Phase6Checks.W.Restart` (W9) and every
+  other walk-through's start.
+- The real window:
+  `Phase1RealWindowPass.Checks_15_and_16_tabs_window_and_panels_across_a_real_restart` waits for
+  the three `loaded` lines, then on the restart for `graph`'s, and its captures show the tab
+  strip's folder names whether the others still wait or have opened; `Phase8aPerformance`'s M3
+  waits for its first-rows line and the ten `loaded` lines (both builds alike).
+
+### 14.5 Visual checks
+
+None: the package has no part (0.5). The order changes when restored tabs open, not what a screen
+shows once the start has ended or while it runs: a waiting tab shows what an opening restored tab
+shows today (14.3.4), and no text, control or state is added. The gate's existing checks that
+restore several tabs behind an active repository tab cover it, each with its pictures unchanged:
+the scripted checks take them after `InitializeAsync` (14.4's first list), and the real window's
+check 15 takes 15c after `graph`'s `loaded` line, while the other two tabs may still wait or open,
+which the tab strip shows as it shows opened tabs (14.4's last item): phase 1's check 15 in both
+harnesses, whose real-window captures are compared with the scripted ones; part L's L33; phase 6's
+K13; 7a's P2 and P13; 7b's P2 on Azure DevOps. The order itself is proven by 14.4's tests, by M2 and
+M3 and by the lead's probe (14.8).
+
+### 14.6 Earlier pictures
+
+None may change, and none should (14.5). The builder proves it against the references that are
+current, wave 3's (`D:/Projects/Personal/phase8-work/references/wave3/`): each command below, then
+`python scripts/compare-pictures.py D:/Projects/Personal/phase8-work/references/wave3 artifacts/visual <folder>`
+with `<folder>` outside the repository (`D:/Projects/Personal/phase8-work/wave4/restore/compare/`),
+before the next command, since a run empties its phase's folder:
+- `dotnet test --project tests/VisualCommit.VisualTests --filter-method "*Phase1Checks.Check_15*"`
+- `dotnet test --project tests/VisualCommit.VisualTests.Phase6 --filter-method "*Check_K13_keys_in_the_conflict_resolver*"`
+- `dotnet test --project tests/VisualCommit.VisualTests.Phase6Look --filter-method "*Check_L33*"`
+- `dotnet test --project tests/VisualCommit.VisualTests.Phase7a --filter-method "*Check_P2_P11*" --filter-method "*Check_P13_P6*"`
+- `dotnet test --project tests/VisualCommit.VisualTests.Phase7b --filter-method "*Check_P2_P10_P13_P4_P3_P8_azure*"`
+
+Of the pictures each run wrote, none may be listed as changed; a difference stops the builder,
+who asks the lead (ruling 3). The lagged list at the merge (14.7), which runs phase 7a's, 7b's and
+8a's walk-throughs whole and phase 6's K13 among its checks, and the whole default run at wave 4's
+close confirm it for every phase.
+
+### 14.7 Lagged list, time, real window
+
+**Lagged list.** The order is on the start path of six classes of 0.4's list (phase 6's K13, 7a's
+P2 and P13, 7b's P checks, `RequestOperationsProvidersTests`, 8a's `KeyboardPassTests`), so the
+lead runs 0.4's list at restore's merge, with the App.Tests command gaining
+`--filter-class "*RestoreOrderShellTests"`, no builder at work (ruling 23). The watcher's lag holds
+file-system events; the order reads none, so the lag moves only what a tab does after it opened.
+`RestoreOrderShellTests` hold their restore clock still (ruling 87), so no lag can bring the 5 s
+between their steps.
+
+**Default run.** App.Tests gains about 29 tests: `RestoreOrderTests` (on the headless dispatcher),
+`RepositoryFirstPageTests` and `SettingsEntryTests`' new test without git or a window, seconds in
+all; `RestoreOrderShellTests`, two starts with real git, about 10 to 20 s. Each start of the
+default run with several restored tabs behind an active repository tab (about 20 in 14.4's first
+list, with phase 1's restart and `CtrlTabFromAsync`'s callers) opens the others after the active tab's first page instead of beside it: a fraction of a second
+each on small repositories, an estimate; phase 1's check 15 opens the 100,000-commit tab after
+`linear`'s first page.
+
+**Real-window pass.** Nothing new; phase 1's check 15 changes only in the order of its openings.
+
+**The proof's cost on the desktop** (14.8; the owner told in the chat just before each, as the
+owner asked on 2026-11-23 for wave 4's takeovers): the two builds made at least ten minutes
+before; the probe, two warm-up launches and 18 counted ones of about 10 to 30 s with no input,
+about 9 minutes; if two is tried, two builds (two's in the fix's worktree, four's in the third,
+14.8 step 5), ten minutes and a session of its own of 12 launches (three warm-ups and nine
+counted), about 6 minutes, and, if four then stays, a revert, a build and ten minutes more; the
+alternated series, ten runs of M2 and M3 at one run each, about 2.5 to 3 minutes per run with the
+clones, about 30 minutes, more for each pair a scheduled task makes the lead take again (14.8 step
+6); about 50 minutes of the desktop in all without the trial of two, about 70 with it, about 80
+when four stays after it, nothing beside it (ruling 23), so §11's builder pauses or has ended.
+13.3's row for the proof named about half an hour for the series alone. The lead brings that row
+and 0.6's series line to these times in the commit that puts the section into the design, as
+ruling 90 has it.
+
+### 14.8 Done when
+
+1. **The builder.** 14.4's tests committed first with 14.2's stubs, failing on that commit as 14.4
+   marks, `SettingsEntryTests`' rewritten test and its new one among them; then 14.3 built; 14.4's
+   classes and `SettingsEntryTests` pass (`dotnet test --project tests/VisualCommit.App.Tests
+   --filter-class "*RestoreOrderTests" --filter-class "*RepositoryFirstPageTests" --filter-class
+   "*RestoreOrderShellTests" --filter-class "*SettingsEntryTests"`), and so do, run by class or method, the App.Tests and 8a's tests of
+   14.4's first list; no warning; 14.6's comparisons as named; the reason for the report's "Changes
+   to expected results" drafted.
+2. **The review.** An independent review of the branch's diff, started by the lead, each finding
+   verified, the confirmed fixed with a test, before the proof, so that the proven build is the one
+   that merges.
+3. **The lead: two builds.** The base, the commit `wip/p8a-restore` was made from
+   (`git merge-base phase/8a-release-readiness wip/p8a-restore`), detached in
+   `D:/Projects/Personal/vc-wt/p8a-restore-base`; the fix, the branch's last commit, in
+   `D:/Projects/Personal/vc-wt/p8a-restore`. In each,
+   `dotnet build tests/VisualCommit.RealWindowTests -c Release`, which builds the app's Release;
+   at least ten minutes before step 4; no agent at work (ruling 23); nothing committed in either
+   worktree until step 6 ends but step 5's commits, after which this step is taken again for the
+   fix; Windows' Task Scheduler read for what is due in the next ten minutes (CLAUDE.md's note),
+   again before each later step that starts more than ten minutes after the last reading, before
+   and after each run of step 6, and at the end for what ran.
+4. **The lead: the probe** (D457's, by hand, outside any test). A copy of
+   `startup_tabs_probe.ps1` in `D:/Projects/Personal/phase8-work/wave4/restore/probe/`, its runs
+   written there, its clones those of `wave3/startup10-probe/clones/` (its `-Prepare` reports any
+   commit-graph first), `Restore order:` added to the lines it keeps, `-Exe` each build's
+   `VisualCommit.exe` in its worktree's Release output. Each build first makes one uncounted
+   warm-up launch (`-Label warm`, as wave 3's probe did), since a first start after a build is the
+   coldest (D437); then three rounds of the three cases, `-Tabs 1` (one large), `-Tabs 10` (ten
+   large), `-Tabs 10 -Background small` (one large and nine of 2,000 commits), with the builds'
+   order alternating per round (base then fix, fix then base, base then fix), since the laptop's
+   warmth spreads the numbers (D436); 18 counted launches. Noted per launch: the active tab's own
+   clock (`large-clone-0: first graph rows drawn after {N} ms`, D50's), the window's answers
+   (median, 95th percentile, longest, the count of 50 ms or more), when every `loaded` line was
+   seen, and the fix's two `Restore order:` lines.
+5. **The lead: the four** (ruling 88). Four stays when the middle value of the longest answers of
+   the fix's three ten-large launches is at or under the highest of the longest answers of the
+   base's three one-tab launches of step 4's session. The middle value, because a launch's longest
+   answer is a maximum, which one scheduled task or one collection can make, and one disturbed
+   launch must not start a trial that costs three builds and their rests. Otherwise the lead first
+   detaches a third worktree, `D:/Projects/Personal/vc-wt/p8a-restore-four`, at the fix's commit,
+   which keeps four's build; a fixer makes a commit of `OpensAtOnce = 2` alone on
+   `wip/p8a-restore`; the lead builds it in the fix's worktree, and four's in the third, as step 3
+   says. A trial of two is a session of its own: one uncounted warm-up launch of each of the three
+   builds, then three rounds of the base's one-tab case, four's ten-large case and two's ten-large
+   case, the three builds' order rotating per round; the rule reads all of them from that session.
+   The trial reads the same statistic for two's and four's ten-large launches against the base's
+   one-tab launches of that session, and two stays only if it meets the rule above and the median
+   of its active tab's own clock is no later than four's; else four stays. When four stays after
+   two was tried, a second commit reverts the first on `wip/p8a-restore`, and step 3 is taken again
+   for the fix (built, ten minutes, the Task Scheduler read) before step 6. The numbers go into the
+   report either way (14.9 choice 10).
+6. **The lead: the alternated series.** Ten counted runs, base first, alternating, five per build,
+   each in its worktree. Before each run the lead reads what is due in the next ten minutes and
+   waits out anything due; after each run, what ran since it began. A run that met a scheduled task, or
+   failed other than by M2's bound, is taken again together with the other build's run beside it,
+   so that each build keeps five undisturbed counted values; the dropped runs' files go to
+   `D:/Projects/Personal/phase8-work/wave4/restore/series/dropped/` and the report names them. The
+   command:
+   `VISUALCOMMIT_PERF_RUNS=1 bash scripts/heavy-run.sh --project tests/VisualCommit.RealWindowTests -c Release --filter-method "*Phase8aPerformance.M2_*" --filter-method "*Phase8aPerformance.M3_*"`.
+   Each run writes one M2 and one M3 counted value (after a warm-up each) into its own
+   `artifacts/perf/phase-8a/series-<date>-<commit>.txt`; the first run checks that the file holds
+   M2's and M3's lines alone (a new form of the command; CLAUDE.md gains its row once it works).
+   The ten counted runs' files are copied to `D:/Projects/Personal/phase8-work/wave4/restore/series/`. A counted
+   M2 above 6,100 ms fails its fact after its value is written; it still counts, and on the base it
+   means the bound was drawn too tight (D457 (3)), which the lead raises by a ruling with the
+   numbers.
+7. **The rule** (D457 (5)'s): from each build's five M2 and five M3 values, the medians and the
+   ranges. Proven when the fix's M3 median is at or under 1.25 times the fix's M2 median, the
+   base's M3 median is above 1.25 times the base's M2 median, and the fix's M2 median lies between
+   the lowest and the highest of the base's five M2 runs (ruling 89, 14.9 choice 11).
+8. **Proven: the merge.** The lead merges `wip/p8a-restore` (the lagged list of 14.7; CI's run on
+   the push green in all six jobs, the floor's included); writes M3's bound in a commit of its own,
+   the fix's slowest counted M3 run times 1.25, rounded up to 100 ms (`PerformanceSeries.Bound`),
+   in `Phase8aPerformance.M3BoundMilliseconds` (D457 (3), 13.4 item 17); and fills the report's
+   table (M3's "after", the alternation's ten values, the probe's numbers, the four as kept),
+   plan.md's risk 10 (the medians), architecture.md and 1.17's "as built".
+9. **Not proven: no merge.** The phase branch never holds the change, so nothing is reverted there;
+   `wip/p8a-restore` stays local (D396); the lead writes plan.md's Backlog row "The restore order
+   (ruling 76)" with both builds' medians and ranges and the probe's numbers, and the report's table
+   says so; the section stays as history with an "as built: not merged" line. M3's bound is then the
+   lead's to rule (14.9 open point 4).
+10. **CI.** The merge's push runs green in all six jobs; `RestoreOrderShellTests` runs on Windows,
+    macOS and Linux there (the order's code is the same on each; its times are measured on the
+    laptop alone, D50).
+
+### 14.9 Risks, unverified, open points
+
+**The choices this section makes for the package, with the lead's rulings of 2026-11-23 (rulings
+86 to 90 in 13.1):**
+1. **Where the order lives**: a new public `RestoreOrder`, made by `InitializeAsync` only when the
+   active tab is a restored repository's tab beside another restored tab and the lifetime is not
+   cancelled; every other start keeps today's loop word for word. So M2's start (one tab) and a
+   dashboard's start run today's code, which keeps "as today" literal and the alternation's M2 a
+   measure of nothing new; `MainWindowViewModel.cs` changes in four places; the tests reach its
+   constants. It lives only until its start has ended, and an entry forgets a closed tab at once
+   (14.3.1), so the order keeps no closed tab or its graph. It keeps no list of the tabs beside its
+   entries, and once every entry's task has completed it disposes its registration on the lifetime.
+   **Confirmed (ruling 86).**
+2. **The first-page signal**: `RepositoryViewModel.FirstPage`, completed at the first page in
+   `Graph` or at the first start's end, failure, cancellation or the view model's close. `FirstRead`
+   is too early, `OpenAsync`'s task too late, `OnRowsDrawn` needs a drawn frame (14.3.2).
+   **Confirmed (ruling 86).**
+3. **How "shown" and "closed" reach the order**: calls from `Activate`, through which every
+   activation passes, from `CloseTab` before the tab's `Dispose` and before its neighbour is
+   activated, and from `CloseAll` before any tab is disposed; no new event.
+   **Confirmed (ruling 86).**
+4. **The clock**: `TabServices.RestoreClock`, a clock of the order's own, as `ReadClock` is for a
+   dashboard's 10 s rule: `TabServices.Clock` unless the harness gives one. `TabServices` gains the
+   optional constructor parameter `restoreClock` and the property, and `AppSession.Start`,
+   `ShellDriver.Start` and `StartWithTabs` the optional `restoreClock`, which they pass on; the
+   builder adds that and nothing else to those three files of the lead's (14.2). In the app the two
+   are one clock, `TimeProvider.System`, so D457's "5 s on the session's clock" holds to the letter.
+   A view-model test gives a `ManualTimeProvider` as `restoreClock` and moves it, and that clock
+   carries the order's timers alone; the shell tests give one they never move, so no release comes
+   from the clock between their steps; `SettingsEntryTests`' `Shell` gives one for its two lookup
+   tests (14.4). **Changed (ruling 87): the order's own clock, `TabServices.RestoreClock`, given
+   through the three files as `readClock` is, in place of `TabServices.Clock` with no harness
+   parameter.**
+5. **The slot**: held from a released tab's opening to the earliest of its own first page, its end
+   without one, or its close (14.3.3). No clock frees it: D457 gives the 5 s to the first tab alone,
+   and its models, "Add repositories" and a dashboard's reads, hold a slot until the work ends. The
+   probe put the cost before the first page. More than four loads may run after their first pages,
+   but never more than four released tabs' openings before theirs (a shown tab opens beside them,
+   without a slot). **Confirmed (ruling 86).**
+6. **A shown waiting tab** opens at once, takes no slot and frees none, and the order never
+   subscribes to its `RepositoryOpened` (14.3.1); the others keep their slots and their wait for
+   the first tab. **Confirmed (ruling 86).**
+7. **"The active tab"** is `ActiveTab` when the openings begin, after git's search, so a user who
+   switched tabs during the search is on the tab that opens first. **Confirmed (ruling 86).**
+8. **The waiting tabs' order**: tab order at the start, the first tab skipped.
+   **Confirmed (ruling 86).**
+9. **The log lines** of 14.3.8, two at Info per start that has the order, the rest at Debug.
+   **Confirmed (ruling 86).**
+10. **The probe's rule for the four** (14.8 step 5): kept while the middle value of the longest
+    answers of the fix's three ten-large launches is at or under the highest of the longest answers
+    of the base's three one-tab launches in the same session; else two is tried once, in a session
+    of its own in which a third worktree keeps four's build, so that the base's one-tab case, four's
+    ten-large case and two's ten-large case alternate and the rule reads all three from that
+    session, since only builds run alternately in one session can be told apart from the laptop's
+    warmth (D436); each build makes one uncounted warm-up launch first (D437). The trial reads the
+    same statistic for two's and four's ten-large launches, and two stays only if it meets the rule
+    and the median of its active tab's own clock is no later than four's. The middle value, because
+    a launch's longest answer is a maximum, which one scheduled task or one collection can make,
+    and one disturbed launch must not start a trial that costs three builds and their rests.
+    **Changed in its statistic (ruling 88): the middle value of the fix's three longest answers,
+    where the section had each of the three, against the highest of the base's three.**
+11. **The reading of "the fix's M2 lies within the base's range"**: (a) the fix's M2 median between
+    the lowest and the highest of the base's five M2 runs, the reading taken; (b) each of the fix's
+    five M2 runs within that range, the reading not taken. The section proposed (a), because M2
+    runs today's code in both builds (choice 1), so the clause checks that the two builds were
+    measured alike, which their medians show; under (b) one warm run of unchanged code, which says
+    nothing about the order, would fail the proof. D457 writes "median" in its other two clauses
+    and not in this one, so (b) was the stricter reading open to the lead; 14.8 step 7 states (a)
+    as the rule. **Ruled (ruling 89): reading (a).**
+12. **"Reverted"** read as "not merged": the proof runs on the branch before the merge.
+    **Confirmed (ruling 86).**
+13. **The merge tools' lookup** waits for `RestoreOrder.FirstLoadEnded`, the first task of a tab the
+    order opened to end (14.3.6): a waiting tab's drop completes its task for `InitializeAsync`, but
+    not the lookup's wait, since a tab that never opened has no load to end (D457 (5): "when the
+    first restored load ends"). **Confirmed (ruling 86).**
+14. **The four kept as a count of the order's own**, under its `Lock`, in tab order, rather than a
+    `SemaphoreSlim` as "Add repositories" has: the next tab must be the next in tab order and a
+    shown tab leaves the line, which a semaphore's waiters do not give; shared with neither a
+    dashboard's `ReadSlots` nor `BulkSlots`, whose reads and runs take their own four (14.3.3).
+    **Confirmed (ruling 86).**
+15. **What a waiting tab shows**: `ShowPending`'s state, as a restored tab shows today before its
+    repository opens, with no new text and no texts class changed, because a shown waiting tab opens
+    at once, so that state lasts as long as an opening tab's does today (14.3.4).
+    **Confirmed (ruling 86).**
+16. **The 5 s counted from the moment `Start` asks for the first tab's opening**, where D50's clock,
+    `OpenAsync`'s stopwatch, starts too, so the release line's `{N}` and the tab's own Q1 clock
+    count from the same moment (14.3.2 item 4). **Confirmed (ruling 86).**
+17. **A start whose git is missing takes the order** when its active tab is restored: the first
+    opening fails at once and releases the others, which fail as today, so 14.3.5 adds no case for
+    it (14.3.5). **Confirmed (ruling 86).**
+18. **`Closed(first)` releases synchronously inside `CloseTab`, before the neighbour's
+    activation**: `CloseTab` calls it before `Dispose`, and the release opens the waiting tabs in
+    tab order into the slots before `Activate` shows the neighbour, so a neighbour the release
+    reached takes its slot in turn rather than opening as shown, and the order is the same on any
+    thread (14.3.2 item 3, 14.3.7 race 4, 14.4 test 4). **Confirmed (ruling 86).**
+
+**Risks and what is unverified:**
+1. The release opens up to four tabs on the UI thread right after the first page is appended; the
+   release runs in its own continuation, after the page's action, but whether the four openings'
+   first steps on the UI thread (the provider's call, then each continuation's view model, session
+   write and watcher) come before the first frame with rows is drawn, and so push back the
+   first-rows line, the code does not settle; only M3 shows it. If they do, the lead rules (a
+   release posted after the first frame is one way; ruling 76 needs no change for it).
+2. The time until every restored tab has loaded grows, since the others no longer all start at
+   once; nothing but tests waits on `InitializeAsync` (`WaitUntilReadyAsync` has no limit but the
+   hang watchdog's 3 minutes, the other waits `ShellDriver.DefaultWaitTimeout`'s 60 s, M3's 300 s);
+   the probe's "all loaded lines seen by" shows it, unmeasured until then.
+3. `NamesRepositoryInDialogs` stays false longer while only the first tab has a repository
+   (14.3.7 race 12); no check opens a dialog in a start's first seconds. Likewise
+   `OpenRepositoryFolders` lists tabs with a repository, so a dashboard's Add open tabs leaves out
+   the waiting tabs until they open (`WorkspaceCommands.AddOpenTabs`), as today for a tab still
+   opening; until the first tab's trigger, 5 s at most, and then a free slot (race 13). For the list
+   of the review before the gate, where ruling 90 keeps both.
+4. D289's pull-request reads of a background tab come at its first refs read, now later by the
+   first tab's trigger and a slot; D289's letter holds, and P13 waits for them after the start.
+5. The probe starts the app from PowerShell, whose PATH finds `cmd\git.exe`, the series from Git
+   Bash, whose PATH finds git itself (D457's last paragraph): each compares the two builds within
+   itself, never with the other.
+6. macOS and Linux: the same code, run by CI's jobs, measured nowhere (D50).
+7. A fix after the merge that touches the order's code (a CI failure on another system, the
+   review's) changes what the series proved; whether the proof is taken again is the lead's.
+8. A share that does not answer holds a slot for minutes, as in "Add repositories". Four such tabs
+   hold every slot, and the rest wait until one ends or the user shows a tab, which opens at once
+   (14.3.4). `InitializeAsync` ends when the openings end, as today; only the waiting tabs'
+   openings come later.
+
+**Open points, each with who settles it and the lead's ruling on it (ruling 90):**
+1. Whether "Check again" reopens failed tabs through the order (today all at once): the lead,
+   before the review before the gate, or a Backlog row. **Ruled (ruling 90): it keeps reopening
+   the failed tabs all at once in 8a; it gets a row in plan.md's Backlog at the close, beside
+   D457's rows, and is not on the list of the review before the gate. Risk 3's two items
+   (`NamesRepositoryInDialogs`, Add open tabs) stay on that list.**
+2. Choices 1 to 18 above: the lead, before the builder starts. **Settled by rulings 86 to 89.**
+3. The probe's rule for the four (choice 10) and its numbers: the lead, at step 5. **Ruled
+   (ruling 90): the rule is ruling 88's; its numbers come at 14.8 step 5.**
+4. M3's bound when the change is not merged (unset, or drawn from the base's alternated runs): the
+   lead, at step 9. **Ruled when the case arises (ruling 90).**
+5. A release that delays the first frame (risk 1): the lead, on the alternation's numbers.
+   **Ruled when the case arises (ruling 90).**
+6. 13.3's row "The restore order's proof" and 0.6's series line take 14.7's times: the lead, when
+   the section enters the design. **Ruled (ruling 90): the lead brings them to 14.7's times in the
+   commit that puts the section into the design.**
