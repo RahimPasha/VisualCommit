@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The user guide's pictures (D439, ruling 61; docs/phase-8a-design.md 11.3.5): every picture the
+       guide's pages show, taken in both themes at a render scaling of 2 from demo data in Avalonia's
+       headless mode, by the same harness as the scripted walk-through (ShellDriver). It is left out
+       of the solution, so "dotnet test" at the root never runs it: the guide's workflow
+       (.github/workflows/guide.yml) runs it on Linux before it builds the site, and CI's Windows job
+       only builds it. It needs VISUALCOMMIT_GUIDE_ROOT, the demo's root (/home/demo in the
+       workflow), an empty folder outside the repository and the temp folder, because the pictures
+       show its paths; VISUALCOMMIT_GUIDE_PICTURES names where the pictures go
+       (artifacts/guide/pictures/ when unset). The pictures are never committed. -->
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia.Headless.XUnit" />
+    <PackageReference Include="xunit.v3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\VisualCommit.App\VisualCommit.App.csproj" />
+    <ProjectReference Include="..\..\src\VisualCommit.Core\VisualCommit.Core.csproj" />
+    <ProjectReference Include="..\..\src\VisualCommit.Git\VisualCommit.Git.csproj" />
+    <ProjectReference Include="..\..\src\VisualCommit.Hosting\VisualCommit.Hosting.csproj" />
+    <ProjectReference Include="..\VisualCommit.Testing\VisualCommit.Testing.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The repository's root: the default pictures' folder (artifacts/guide/pictures/), the guide's
+         pages that GuideCatalogueTests read (docs/guide/src/), and a path no picture may show. -->
+    <AssemblyMetadata Include="RepoRoot" Value="$(RepoRoot)" />
+  </ItemGroup>
+
+</Project>
