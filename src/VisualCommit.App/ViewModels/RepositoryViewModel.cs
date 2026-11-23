@@ -42,6 +42,7 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
     private readonly IDialogService? _dialogs;
     private readonly TabServices? _services;
     private TaskCompletionSource _firstRead = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private readonly TaskCompletionSource _firstPage = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly Lock _watcherGate = new();
     private Stopwatch _sinceOpening;
     private readonly List<double> _frameTimes = [];
@@ -213,6 +214,16 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
     public bool HasFirstRead => _firstRead.Task.IsCompleted;
 
     /// <summary>
+    /// Completes once, never faulted, when the first full start's history has its first page in
+    /// <see cref="Graph"/>, or when that start has ended without one: a history with no commits, a
+    /// failure of its refs or its load, its cancellation, the view model closed. A summary-mode
+    /// view model's completes at the full start that follows its promotion, or at
+    /// <see cref="Dispose"/>. Its continuations run asynchronously, so that what waits for it never
+    /// runs inside the page's action on the UI thread.
+    /// </summary>
+    public Task FirstPage => _firstPage.Task;
+
+    /// <summary>
     /// A tab adopts this summary-mode view model (3.3): it leaves summary mode, a summary read still
     /// running applies nothing when it ends (the read generation), and <paramref name="sinceOpening"/>,
     /// the tab's stopwatch, becomes the opening's, so that Q1's lines and auto-fetch's first interval
@@ -313,6 +324,8 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
             OnPropertyChanged(nameof(HasFirstRead));
         }
     }
+
+    private void CompleteFirstPage() => _firstPage.TrySetResult();
 
     /// <summary>One operation's watcher pause; disposing it twice gives it back once.</summary>
     private sealed class WatcherPause(RepositoryViewModel owner) : IDisposable
@@ -563,8 +576,18 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
             ApplyRefs(refs);
             _loadedFilterKey = filter?.Key;
             Graph = data.Value;
+
+            // A small history's first page can be appended before the refs are applied.
+            if (Graph.Count > 0)
+            {
+                CompleteFirstPage();
+            }
+
             var statusShown = ShowStatusAsync(status, firstRead: true);
             await loading;
+
+            // The first load has ended, with or without a page.
+            CompleteFirstPage();
             await statusShown;
             await watching;
             OnPropertyChanged(nameof(HasNoCommits));
@@ -581,6 +604,7 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             // The tab was closed.
+            CompleteFirstPage();
         }
         catch (Exception ex)
         {
@@ -589,6 +613,7 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
             OnPropertyChanged(nameof(HasNoCommits));
             _promoted = false;
             CompleteFirstRead();
+            CompleteFirstPage();
         }
     }
 
@@ -1023,8 +1048,10 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
         OperationStatus.Dispose();
         _lifetime.Cancel();
 
-        // Nothing waits for a first read that will never come (a dashboard row, a bulk run).
+        // Nothing waits for a first read or a first page that will never come (a dashboard row, a
+        // bulk run, the restored tabs that wait for this one).
         CompleteFirstRead();
+        CompleteFirstPage();
         _watcher?.Dispose();
         DisposeHosting();
         Diff?.Dispose();
@@ -1737,6 +1764,14 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
                     if (!cancellationToken.IsCancellationRequested)
                     {
                         data.Append(page, rows);
+
+                        // Only the first load's data is the graph while it loads; a reload's is
+                        // swapped in at its end.
+                        if (ReferenceEquals(data, Graph) && data.Count > 0)
+                        {
+                            CompleteFirstPage();
+                        }
+
                         ApplyPendingSelection(data);
                     }
                 });
