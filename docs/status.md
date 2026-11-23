@@ -788,8 +788,10 @@ every commit.
   `ffa917c9b6b608aa8b6189dcb38a548ff2615832113ad6c6e26f6ef9c8d77a44`; it prints `mdbook v0.5.4`),
   for §11's builder and the lead's local builds; nothing of it is in the repository. For §12's runs
   on the desktop (each of its 13 methods alone) and for the restore order's series the owner is told
-  first each time; the owner's "start each when ready" of 2026-11-21 was for wave 3's three
-  takeovers and is asked again for wave 4's.
+  first each time; asked on 2026-11-23 for wave 4's takeovers (the restore order's series, about 30
+  minutes of the laptop left alone; §12's 13 methods, about 15 minutes in all, and their repeats
+  after fixes), the owner said, as for wave 3: start each when ready. The lead announces each in the
+  chat just before it starts and does not wait for a reply.
 - **Wave 3 is under way (2026-11-21).** The owner's word that day: "Continue", all of wave 3 now, and
   the three takeovers of the desktop (the spike, §10's first run, the "before" series) each as soon
   as it is ready. **The checks** of parts A and U were written by a writer each, reviewed by two
