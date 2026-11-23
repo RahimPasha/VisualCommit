@@ -327,6 +327,26 @@ public class RowCollectionTests
     }
 
     [Fact]
+    public void Rows_that_change_themselves_right_beside_a_run_of_rows_that_only_shift_keep_their_objects_and_the_view_is_told_of_the_run_alone()
+    {
+        // r02 is gone and x is new after r04: rows 2 to 4 only shift. r01 (row 1, right above them)
+        // and r05 (row 5, right below them) show a new version, which they show themselves.
+        var list = Updatable(10);
+        var before = list.ToList();
+        List<Changing> rebuilt = [Same(before[0]), Next(before[1]), Same(before[3]), Same(before[4]), new Changing("x", 0, 0), Next(before[5]), .. before.Skip(6).Select(Same)];
+        var changes = Record(list);
+
+        list.ReplaceAll(rebuilt, Changing.ShowSame, Changing.SameItem);
+
+        Assert.Equal([.. Removed(2, 4), .. Added(2, 4)], changes);
+        AssertKept(before, list, changed: [2, 3, 4]);
+        Assert.Equal(1, list[1].Version);
+        Assert.Equal(1, list[5].Version);
+        Assert.All(Enumerable.Range(2, 3), i => Assert.Same(rebuilt[i], list[i]));
+        Assert.All(Enumerable.Range(0, rebuilt.Count), i => Assert.True(Changing.ShowSame(list[i], rebuilt[i]), $"Row {i} does not show what its rebuilt row shows."));
+    }
+
+    [Fact]
     public void Runs_of_rows_that_only_shift_with_only_rows_that_show_the_same_between_them_are_removed_and_inserted_as_one()
     {
         // Rows 2 and 3 only shift (r02 gone, x new after r03), rows 6 and 7 too (r06 gone, y new after
@@ -434,6 +454,14 @@ public class RowCollectionTests
 
         Assert.Equal([(NotifyCollectionChangedAction.Reset, -1)], resets);
         Assert.All(Enumerable.Range(0, more.Count), i => Assert.Same(more[i], longer[i]));
+    }
+
+    [Fact]
+    public void The_form_for_rows_of_mixed_heights_is_told_what_the_same_item_is()
+    {
+        var list = Rows(3);
+
+        Assert.Throws<ArgumentNullException>(() => list.ReplaceAll([.. list.Select(Copy)], Row.ShowSame, sameItem: null!));
     }
 
     [Fact]
