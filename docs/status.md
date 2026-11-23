@@ -704,7 +704,7 @@ All three packages of wave 3 are merged: §10 (`86ecb3a`), §8 (`f014b2b`, its f
 `85e2884`) and §9 (`769f459`), with the fetch hold's fix (`eba3717`), the wave's docs (`b593097`),
 the link frame's fix (`fcf8c1e`), the two fixes of what CI's run on that merge found (`70a8fc0`,
 `809b77f`) and the performance bounds (`0bfbe92`). **Step 16 is under way**; what is done and what
-is left, as of 2026-11-22 22:00 (the details in Notes, "Wave 3's close"). Done: the lagged list and
+is left, as of 2026-11-23 00:55 (the details in Notes, "Wave 3's close"). Done: the lagged list and
 the whole default run on `85e2884`'s code; the pictures compared with wave 2's references and
 inspected; the fault they showed (`a1b-about-link-focus`) fixed and merged; the new references
 (`D:/Projects/Personal/phase8-work/references/wave3/`, 1,235 scripted pictures); three "before"
@@ -729,30 +729,33 @@ did not do. A fourth round (run `wf_1c642ecd-da4`, two tries; head `e30d208`, 13
 two trade-offs, which **the lead settled on 2026-11-22** (Notes, "The row list's fix", the final
 rule): runs of shifted rows are never joined, and the offset that ends off where rows are left in
 place between them, nothing moving in the window, is a known limit that `RowCollection`'s comment
-states. **A closing round applies that** (run `wf_d5a9ed01-a48`: a fixer and a verifier with a
-closed list of fault kinds, at most two rounds, in the same worktree; notes under
-`D:/Projects/Personal/phase8-work/wave3/ci-fixes/rows-scroll/`, `three-rounds.txt` and
-`round4-two-rounds.txt` first; the review's under
-`D:/Projects/Personal/phase8-work/wave3/ci-fixes/rows-review/`). Left for the lead, in this order:
-when the closing round is sound, the diff read, its merge, its classes on the merged tree, the push,
-CI's run read and recorded, and `docs/architecture.md`'s sentences on `RowCollection` rewritten
-(they describe `48f403c`). (b) **The whole default run** through `scripts/heavy-run.sh` on the
-merged code, no agent building beside it, and every scripted picture against wave 3's references
-(the list `D:/Projects/Personal/phase8-work/references/wave3-pictures.sha256`, its `/scripted/`
-lines checked with `sha256sum -c --quiet` at the repo root), because `RowCollection` serves the left
-panel and the stage lists of every walk-through. A first such run, on `cb31275`, was stopped after
-49 minutes when the review's finding came, and counts for nothing. (c) The docs: in the report a
-subsection on CI's two failures, their fixes, the review and the row list's fix, part A's convention
-on the underline's rule (a piece's faint end beside a letter), and U2/U3's step 9, which now waits
-for the solo's graph reload, with its entry under "Changed in this report after its first commit";
-in the design 1.17's note on `LinkFrame`'s rule and the row list (what its checkers left for the
-lead is done, `3a78882`). (d) The last worktree removed (`p8a-rows-scroll`; the three merged ones
-are gone). Then step 16 is ticked and **the owner is asked for the week's share before wave 4**
-("Waiting on the owner"), which holds the restore order's package (ruling 76: a design section, the
-build with its tests first, a review, the alternated series, about half an hour of the desktop, and
-the probe) beside §11, §12 and the review. The owner's Narrator listen can come at any time before
-the review of step 19; it is best not taken beside a test run. Two timeouts of older tests are open
-and are step 19's to look at unless one comes again sooner (Notes, "Two timeouts").
+states. The closing round (run `wf_d5a9ed01-a48`, two passes) applied that; its verifiers found the
+code doing the rule and gaps in the tests, the last two of which the lead closed (`a9a7847`). **The
+fix is merged at `bad98b1`** (18 commits of `wip/p8a-rows-scroll`); the lead's checks on the merged
+tree passed (the root build and the real-window project's Release build without a warning, 208 of
+208 in fifteen App.Tests classes, 30 of 30 and 17 of 17 in phase 7a's and 8a's classes round the
+rows; `D:/Projects/Personal/phase8-work/wave3/ci-fixes/rows-merge/summary.txt`);
+`docs/architecture.md`'s passage on `RowCollection` and the design's 1.17 are written (`c1bc69b`),
+and the push of 00:45 started **CI's run 45133434382, to be read and recorded**. (b) **The whole
+default run** through `scripts/heavy-run.sh` on `c1bc69b`, whose code is the merge's, **started at
+00:46** with no agent building beside it
+(`D:/Projects/Personal/phase8-work/wave3/ci-fixes/default-run-rows/`: `default-run.log`, then
+`summary.txt` with the result and every scripted picture that is not the file of wave 3's
+references, the list `D:/Projects/Personal/phase8-work/references/wave3-pictures.sha256`); each
+differing picture is to be explained (`u20c` and `u20e` will differ, Notes). If the session ended
+before it did, look whether the lock is still held (CLAUDE.md, Commands) and read `summary.txt`; run
+it again only if it did not end. (c) The docs: in the report the subsection on CI's two failures,
+their fixes, the review and the row list's fix, with the lead's checks, CI's run and the default
+run's comparison (the lead's draft is ready; the entries on the underline's rule and on U2/U3's step
+9 are in, `e402e58`), and an independent check of it, of the design's new bullet and of
+architecture.md's passage. (d) The last worktree removed
+(`D:/Projects/Personal/vc-wt/p8a-rows-scroll`; its branch stays local, as the other `wip/` branches
+do). Then step 16 is ticked and **the owner is asked for the week's share before wave 4** ("Waiting
+on the owner"), which holds the restore order's package (ruling 76: a design section, the build with
+its tests first, a review, the alternated series, about half an hour of the desktop, and the probe)
+beside §11, §12 and the review. The owner's Narrator listen can come at any time before the review
+of step 19; it is best not taken beside a test run. Two timeouts of older tests are open and are
+step 19's to look at unless one comes again sooner (Notes, "Two timeouts").
 The [phase 7b handoff](handoffs/phase-7b.md), "For the next phase", says what to reuse, what to do
 first and which risks to watch.
 
@@ -1232,6 +1235,20 @@ every commit.
   and the bytes of wave 1's and wave 2's references: the reference run of wave 3 caught the
   variation the report's comparison names for these two, so they will differ at the whole default
   run's comparison and are explained.
+  **The closing round and the merge** (run `wf_d5a9ed01-a48`: two passes, 4 agents, 1.04M tokens;
+  `D:/Projects/Personal/phase8-work/wave3/rows-final-result.json`, readable in
+  `wave3/ci-fixes/rows-scroll/round5-two-rounds.txt`). The fixer dropped the join (`1f239c2`, its
+  tests first in `7b4e888`): near the top of the list two renames a few rows apart now keep the rows
+  between them, their controls and the click under a press on one (98 for 100), where the join and
+  the code before `48f403c` lost it. The first verifier found the code doing the rule, one gap in
+  the tests and two sentences of the comments (limit B's span is the one the code before `48f403c`
+  removed, from the first to the last row that shows something new); the second, after their repair
+  (`5c13692`, `2f4f153`), two more gaps: of 20 wrong forms of `RowCollection` two passed every test.
+  The lead added a fact for each (`a9a7847`), each passing on the code and failing on its wrong
+  form, and merged the branch at `bad98b1`. In the 105 pairs of cases on record no row moves and no
+  click is lost against the code before `48f403c` but in limit A's own case (a pull request row
+  replaced as the top row in view). The row list's whole cost: the review 1.24M tokens, the five
+  rounds 4.41M.
 - **Two timeouts of older tests on 2026-11-20, each seen once, neither explained.** (1) CI's first
   attempt on the merge (44851353430), macOS:
   `PaletteEntriesTests.An_empty_tab_lists_the_windows_commands_and_a_dashboard_its_own` waited 60 s
