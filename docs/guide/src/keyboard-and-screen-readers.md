@@ -12,7 +12,7 @@ keys are listed in [Keyboard shortcuts](reference/shortcuts.md) and in Settings,
 | F1 | Opens this guide in your browser |
 | F6, Shift+F6 | Moves the focus to the next or the previous region: the left panel, the graph area, the right panel, and the activity log when it is open |
 | Shift+F10, or the Menu key | Opens the menu of what has the focus, as a right-click does |
-| Esc | Closes the diff, a page (file history, blame, reflog) or the search bar; in a dialog or a menu, cancels or closes it |
+| Esc | Closes the diff (unless a text box has the focus), a page (file history, blame, reflog) or the search bar (while the focus is in it); in a dialog or a menu, cancels or closes it |
 | Enter | In a dialog, confirms it; Ctrl+Enter (Cmd+Enter on macOS) confirms from a box of several lines |
 | Tab, Shift+Tab | Moves between the controls of a region or a dialog |
 

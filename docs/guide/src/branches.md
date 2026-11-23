@@ -26,8 +26,9 @@ allowed or is taken.
 Double-click a branch in the left panel or its label in the graph, or choose **Check out** and its
 name in its menu. A remote branch with no local branch of its name gets one that tracks it.
 
-When your uncommitted changes are in the way, the checkout does not start, and VisualCommit offers
-to stash them first: see [How your work is protected](protection.md).
+When your uncommitted changes are in the way, the checkout does not start. When they are files you
+changed, not untracked files, VisualCommit offers to stash them first: see
+[How your work is protected](protection.md).
 
 ## Rename or delete a branch
 
