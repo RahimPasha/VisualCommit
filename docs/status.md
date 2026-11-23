@@ -730,22 +730,26 @@ checks and the restore order's design section first; then §11 (the guide) and `
 by side in worktrees of their own, reviewed, fixed and merged; then §12 (the real-window part),
 built after §11's merge, each of its 13 methods run alone with the owner told; then the review
 before the gate (step 19) and its fixes, §12's merge last, the lagged list and the whole default
-run. **Under way since 08:05, both only reading the repository and writing outside it:** part G's
-checks (run `wf_05b26e3f-45e`: a writer, two reviewers, a verifier per major, a fixer; into
-`D:/Projects/Personal/phase8-work/wave4/checks/part-G.md`) and the restore order's section (run
-`wf_e8daca0e-d5c`: a drafter, three reviewers, verifiers, a fixer; into
-`wave4/restore/section-14.md`). **Left for the lead when they end:** read both; put part G into the
-report (its subsection, the Checks rows, the hand check, the Delivers rows, the changes to expected
-results, with mdBook's pinned hashes of Notes, "Wave 4") and the section into the design as section
-14, with 0.4's row and what the fixers list for the design; confirm or change the choices the
-section makes for the package; commit and push both; then start the two builders (the wave 3 build
-script is the model:
+run. **Part G's checks are written and in the report** (2026-11-23, before §11's build, D244): G1 to
+G3 in four methods with four pictures, no real window; the lead settled its open points 99 to 113 as
+rulings 77 to 85 (design 13.1), and the design's 11.4 to 11.6 say what they changed (Notes, "Wave
+4"). **Still under way, only reading the repository and writing outside it:** the restore order's
+section (run `wf_e8daca0e-d5c`: a drafter, three reviewers, verifiers, a fixer; into
+`D:/Projects/Personal/phase8-work/wave4/restore/section-14.md`). **Left for the lead when it ends:**
+read it; put it into the design as section 14, with 0.4's row and what the fixer lists for the
+design; confirm or change the choices the section makes for the package; commit and push; then start
+the two builders (the wave 3 build script is the model:
 `C:/Users/rpkha/.claude/projects/d--Projects-Personal-Visual-Git/9b135677-ae78-44f9-8ed1-d3fff497a168/workflows/scripts/phase8a-wave-3-wf_ee9f40a9-6e3.js`;
 worktrees `D:/Projects/Personal/vc-wt/p8a-guide` and `p8a-restore` on `wip/p8a-guide` and
-`wip/p8a-restore`, made from the commit that holds part G and section 14). What step 16 ended with:
-the three packages merged, §10 (`86ecb3a`), §8 (`f014b2b`, its fixes after the merge `85e2884`) and
-§9 (`769f459`); the lagged list, the whole default run and the pictures on `85e2884`, whose one
-fault (`a1b-about-link-focus`) is fixed (`fcf8c1e`); the references of the later merges,
+`wip/p8a-restore`, made from the commit that holds part G and section 14). §11's builder gets with
+its brief: mdBook at `D:/Projects/Personal/phase8-work/tools/mdbook-0.5.4/mdbook.exe` and the Linux
+archive's SHA-256 for `guide.yml` (Notes, "Wave 4"); the references
+`D:/Projects/Personal/phase8-work/references/wave3/`; rulings 80 (stop and report if the first-run
+link's frame touches its ink), 82 (the facts no check shows) and 83 (the rename, the comments); and
+what part G's open point 103 leaves for it to report. What step 16 ended with: the three packages
+merged, §10 (`86ecb3a`), §8 (`f014b2b`, its fixes after the merge `85e2884`) and §9 (`769f459`); the
+lagged list, the whole default run and the pictures on `85e2884`, whose one fault
+(`a1b-about-link-focus`) is fixed (`fcf8c1e`); the references of the later merges,
 `D:/Projects/Personal/phase8-work/references/wave3/` (1,235 scripted pictures); three "before"
 series, two probes, two panels and **D457** (the bounds `0bfbe92`, two backlog rows, the restore
 order as ruling 76, a change in wave 4); CI's two failures on the link frame's merge fixed
@@ -762,9 +766,9 @@ and committed before its package is built: §11 (the guide), §12 (the real-wind
 order's package (ruling 76: a design section written from D457 (5), the build with its tests first,
 a review, the alternated series of M2 and M3, about half an hour of the rested desktop with the
 owner told, and the probe), then the review before the gate (step 19) with its list, which the Notes
-hold in their paragraphs "More for step 19's list" and in "Timeouts of older tests". The owner's
-Narrator listen: asked a third time on 2026-11-23, the owner chose "Later, before the review"; the
-lead asks again before step 19's review, which needs the answer.
+hold in their paragraphs "More for step 19's list", in "Timeouts of older tests" and in "Wave 4".
+The owner's Narrator listen: asked a third time on 2026-11-23, the owner chose "Later, before the
+review"; the lead asks again before step 19's review, which needs the answer.
 The [phase 7b handoff](handoffs/phase-7b.md), "For the next phase", says what to reuse, what to do
 first and which risks to watch.
 
@@ -791,7 +795,26 @@ every commit.
   first each time; asked on 2026-11-23 for wave 4's takeovers (the restore order's series, about 30
   minutes of the laptop left alone; §12's 13 methods, about 15 minutes in all, and their repeats
   after fixes), the owner said, as for wave 3: start each when ready. The lead announces each in the
-  chat just before it starts and does not wait for a reply.
+  chat just before it starts and does not wait for a reply. **Part G's checks** (run
+  `wf_05b26e3f-45e`, `phase8a-wave4-checks`: a writer, a reviewer against the design and one against
+  the code, a verifier for the one major, a fixer; 5 agents, 1.97M tokens, 69 minutes; the part as
+  they left it in `D:/Projects/Personal/phase8-work/wave4/checks/part-G.md`). The one major,
+  confirmed: G1 and G3 counted git calls on a tab with a live watcher by plain counts, which D280
+  forbids; the part now takes the quiet marks. Eleven minors; 13 corrections applied, none left. The
+  reviewers found the design at odds with itself in four places (0.7 against 11.6 on 8a's own `k3a`
+  and `l3a`; 11.5's "the ops scenario" against 5.3 for G2; 11.5's one start against 1.17's
+  `ChosenMissing`; 11.5's "no git call" against the palette's and the settings screen's own reads):
+  the lead ruled on each and on the part's fifteen open points, **rulings 77 to 85** (design 13.1),
+  and put the part into the report by script with those rulings in its text: G2 also reads its
+  link's frame against a capture taken before the focus moved (ruling 80), a change to the part as its fixer left it, made before the part's first commit. The design's 11.4 names the rename of phase
+  6's fact and the comments that change, and gains the facts for what no check shows (ruling 82);
+  11.5 and 11.6 say what the part settled. **For step 19's list (ruling 81):** the first-run
+  screen's launching buttons and links (`Download Git for Windows`, the two links, `Show the file`,
+  `Install the Command Line Tools`) have commands that allow no concurrent runs
+  (`GitSetupViewModel`'s plain `[RelayCommand]`s over `OpenAsync` and `StartAsync`), so each button
+  is disabled while its launch runs, which may drop the keyboard focus as About's links did before
+  8.3.1: measure with a launcher that answers late, fix with a test where the focus is lost. At the
+  close: F1 on a Mac into 8b's Mac checklist (ruling 85).
 - **Wave 3 is under way (2026-11-21).** The owner's word that day: "Continue", all of wave 3 now, and
   the three takeovers of the desktop (the spike, §10's first run, the "before" series) each as soon
   as it is ready. **The checks** of parts A and U were written by a writer each, reviewed by two

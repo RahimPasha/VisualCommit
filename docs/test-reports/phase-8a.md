@@ -44,7 +44,13 @@ the checks only pass through, its steps filling part B's launch 3 (A1 and A4); U
 D49, D411, D435, D445 and D450, with the code as it stands on `d2318ba` for the texts the checks only
 pass through. Their open points are numbered on from part B's: A 56 to 74, U 75 to 92.
 
-The last part, G (3), is added just before its package is built (D244), as design 0.5 lists it.
+Part G (3 checks), the last, was added on 2026-11-23, just before wave 4 builds §11 (design 0.4),
+written, reviewed and corrected on its own, then settled by the lead's rulings 77 to 85 of that day:
+from the design's sections 0 (0.1, 0.3, 0.5, 0.7), 1 (1.2, 1.3, 1.7, 1.8, 1.10, 1.13, 1.15, 1.17), 5.3,
+8.3.1, 8.3.5, 9.3.8, 11 and 13 (rulings 18, 54 and 60 to 64; 13.2; 13.4 items 19 to 21), decisions D408,
+D417, D434, D439 to D441, D451 and D452, and D280 for the counts of git calls beside a live watcher,
+with the code as it stands on `810913e` for the texts, ids and routes the checks only pass through. Its
+open points are numbered on from the report's last, 98: G 99 to 113.
 
 ## Run
 
@@ -3450,11 +3456,489 @@ this launch's own run, on the stopped merge and the merged code (its events and 
 run.txt; a LiveRegionChanged asserted per move, ruling 32 and D450; the scripted run asserts one Name
 change), and the row's bounds under per-monitor DPI at 200 %, which the spike did not record.
 
+### Part G: the user guide's links: F1, the palette row, the first-run links and About's link
+
+Part G covers the app's links to the user guide (D408; D417 as D452 amends it; design 1.7, 1.8,
+11.1, 11.3.1): the palette's command `Open the user guide` with its key F1, which opens the guide's
+start page on every tab and nothing while a dialog is open; the shortcuts list's last group `Help`
+(ruling 62); the first-run screen's link, which opens its state's section of
+`troubleshooting/git.html` (D417); and About's `User guide` link, which opens the start page (1.13,
+8.3.1). Checks G1 to G3, design 11.5's list, with its four pictures. Part G has no R step: no real
+window opens a browser (0.5, 11.5, 11.7). The guide itself, its 33 pages, its site and its pictures,
+is no part of these checks: the guide's workflow builds and checks it (11.3.4 to 11.3.6), the lead
+reads it at §11's merge (11.8), and the gate reads its site by hand from the `guide-site` artifact
+("Checks by hand").
+
+#### Conventions of part G
+
+- **Code** (11.2, 1.15): `Phase8aChecks.G.cs` (`Phase8aChecksG : Phase8aChecks`, with its
+  `Phase8aChecks.G.Helpers.cs`, which holds at least G3's reading of the link frame and the section's
+  scroll to its end, since the helpers they copy are private to part A's class and to phase 6's
+  project: "The links' look", "Routes"); `Phase8aExpectations.G.cs` (`Phase8aExpectations.G`: every
+  text below as a literal, word for word, the addresses as literals, the ids, the query `guide`, the counts of
+  the shortcuts list (12 groups, 51 rows), phase 6's click point (484, 207), the fakes' answers and
+  the picture names; the made-up values part F already holds, `{chosen}`, the helper's path and git's
+  path, are read from `Phase8aExpectations.F`); `Phase8aExpectationTests.G.cs` (every picture name
+  matches 0.3's pattern and is used once in the project; the literals equal
+  `AppCommands.OpenUserGuideText`, `GitSetupTexts.HowVisualCommitFindsGit`,
+  `GitSetupTexts.WhatTheHelperDoes`, `OperationTexts.AboutTexts.OpenUserGuide`, `.GuideTip` and the
+  label `User guide`'s constant; each address equals `AppLinks.Guide(page).AbsoluteUri` of its page,
+  and the start page's `AppLinks.GuideBase`; the `Help` group and its row equal the last group of
+  `AppShortcuts.Groups(CommandKey.Ctrl)`). Part G has no launch, but the real-window project links
+  every `Phase8aExpectations*.cs` (0.3), so `Phase8aExpectations.G` uses nothing of the 8a project
+  and only the BCL, Avalonia and Core, as `Phase8aExpectations.F` does (1.17). A helper of the
+  driver goes only into a new partial `ShellDriver.Phase8a.Guide.cs` (0.4). The tests that prove
+  what no picture shows are not checks: App.Tests' `AppLinksTests`, `GuideShortcutsPageTests`,
+  `AppShortcutsTests`, `SettingsDialogViewTests`, `PaletteEntriesTests` and
+  `CommandPaletteViewTests`, and GuideShots' `GuideCatalogueTests` and `LeakGuardTests` (11.4); the
+  report names them under "What proves each Delivers item".
+- **Starts and sessions** (0.5, 11.5; the report's "One test method per app start"). Four methods,
+  four starts, each on a fresh data folder; dark and 1100×700 everywhere (11.5). G1 and G3: one tab
+  on a fresh "ops" (`Scenarios.OperationsAsync()`, phase 3's, as phase 6's K10 has it: HEAD on a
+  clean `main` at "Main work"), opened through 8a's `OpenAsync`, which writes no `settings.json` for
+  the dark theme. G2: two starts, one empty tab each (8a's `StartEmptyAsync(data, gitProbe:,
+  askPassHelper:)`, 1.17's first-run harness), as the sweep's states 10 and 13 (9.3.8) and part F's
+  F11 start (open point 101: the second cannot restore "ops", whose repository would open with git
+  working; the first could, its restore failing while git is missing, as part F's F1): the first
+  with `gitExecutable` `{chosen}` written before the start
+  (`JsonSettingsStore.Update(settings => settings with { GitExecutable = {chosen} })`, as part F's
+  method 3 writes it), since `FakeGitAnswer.ChosenMissing` throws for a lookup without a
+  `ChosenPath` (1.17; open point 102); the second with `askPassHelper` a path without a file (1.10,
+  ruling 43). `{chosen}` and the helper's path are part F's (its conventions' table: the running
+  platform's column). Every start gets `TestIdentity.Pinned` (1.15).
+- **What a fake stands for.** `FakeFileLauncher` (`app.Launcher`) stands for the browser, as in part
+  A: an address the app opens is recorded in `Requests` as an `OpenUrl` whose `FileLaunch.FullPath`
+  is the address's `AbsoluteUri`, its fragment included, and nothing opens. No request leaves the
+  test process, so that the site answers "not found" until GitHub Pages is turned on at the merge
+  (1.7, ruling 64) meets no check. `FakeGitSetupProbe` stands for the machine's search for git and
+  for the screen's guidance facts, as in part F (its conventions' "The seam and the fakes": a queue of
+  answers, the first for the start's search and the next for each "Check again", the last repeated;
+  every lookup recorded in `Lookups`; the guidance fixed for the start). In G2's second start
+  `RealAt(C:\Program Files\Git\cmd\git.exe, Path)` is the machine's git reported at that made-up
+  path (part F's conventions). No test opens a browser, starts a program or reads the machine's
+  `PATH` (1.3; section 1's rules).
+- **Where things are read.** The palette's `CommandPaletteBox`, `CommandPaletteList`, its rows
+  `CommandPaletteItem` with `CommandPaletteItemLabel`, `CommandPaletteItemDetail` and
+  `CommandPaletteItemKey`, each row's UI Automation as phase 6's K10 reads it (Name the label,
+  ItemStatus the detail, HelpText a disabled entry's reason, `AcceleratorKey` the key, selected while
+  highlighted; phase 6's design 5.11) and `CommandPaletteEmpty`; the graph's `GraphRows`; the
+  settings screen's `SettingsDialog`, `SettingsNavGeneral`, `SettingsNavShortcuts`,
+  `SettingsNavAbout`, the section's scroll viewer, the `ScrollViewer` named `SectionScroller`
+  (automation id `SettingsSection`; found by its name as phase 6's part S does, or by
+  `SettingsSection` as part A does), with its offset, extent and viewport, the Keyboard shortcuts
+  section's `ShortcutList` with its headings `ShortcutGroup` and its rows `ShortcutRow` (a `Grid` of two `TextBlock`s, the action at its left and the keys at its
+  right, its automation name `{action}: {keys}`), as phase 6's part S reads them (S14 step 7); About's
+  ids (1.13) and the rows' labels, which have no id, by their text in the form's first column (part
+  A); the first-run screen's ids (1.2), `GitSetup`, `GitSetupTitle`, `GitSetupGuidance`, the buttons
+  of `GitSetupButtons` and the links `GitSetupMoreLink` and `GitSetupGuideLink`, as part F reads them.
+  The keyboard focus is the focused element in the tree (`FocusedAutomationId()`), "framed" its
+  `:focus-visible`, as part K reads them. A link is "underlined" when the `TextBlock` it shows has
+  `TextDecorations` Underline (part A). Beside the tree: the launcher's `Requests`, in order; the
+  probe's `Lookups`; `settings.json` in the data folder (its bytes); the log (`LogMark`,
+  `LogLinesSince`); and the git calls (`GitCalls()`: presence and order, and on G2's empty tabs,
+  which have no watcher, their count; on G1's and G3's "ops" tab, whose watcher is live, a count only
+  through `ShellDriver.Budget.cs`'s quiet marks, D280).
+- **The links' look** (13.2, 1.17, 5.3, 8.3.1). About's `AboutGuideLink` is a `VcLinkButton`: focused by
+  the keyboard it is underlined and framed outside its text (1.17, "At wave 3's close"), and G3 reads
+  that frame in its picture as A1's step 9 reads the repository link's (part A's "Where things are
+  read"): by `LinkFrame.Problems` (Testing), as part A's private `AssertFramedLink` calls it, in part
+  G's own helper (`Phase8aChecks.G.Helpers.cs`; `AssertFramedLink` is a private static of
+  `Phase8aChecksA`, in §8's file, 0.4), given the bounds of `AboutGuideLink`'s `TextBlock`,
+  `VcAccentBrush`, `VcPanelBackgroundBrush` and the colour `SystemControlFocusVisualPrimaryBrush`
+  resolves to in the active theme: against a frame of the same window with the link not focused, no
+  problem reported, that is, the text's pixels unchanged but for the underline's rows, the underline
+  shown across the text, a whole frame in that colour on four sides outside the text, and the background
+  between the frame and the ink. The first-run screen's links are not `VcLinkButton`s: they stay
+  `VcFlatButton`s of class `gitSetupLink` (13.2; 1.17, "First run: the screen"), their text in
+  `VcAccentBrush`, `VcAccentOnRowBrush` on hover, with no underline; focused by the keyboard they show
+  the frame Fluent draws for a focused button. `LinkFrame` asks for an underline, which they do not
+  have, so G2 asserts `:focus-visible` in the tree and reads the frame with a helper of its own in
+  `Phase8aChecks.G.Helpers.cs` (ruling 80; open point 99): against a capture of the same state taken
+  before the focus moved, the pointer at the neutral point in both, no pixel differs inside the tight
+  box of the link text's ink (the pixels inside the bounds of the link's `TextBlock` that are not the
+  screen's background in the earlier capture), and some pixel differs inside the button's bounds outside
+  that box, where the frame is drawn. The gate inspects the frame in `g2a` besides.
+- **Colours** (tokens no package of 8a changes again, 1.5), each asserted as the brush read in the
+  tree resolving to the token's colour in the dark theme, and, for About's link, as its ink
+  (`TextInk.Problems`) on the background named: `VcAccentBrush` `#7C8CFF` (both links' text, not
+  hovered); `VcPanelBackgroundBrush` `#1A1D24` (the settings card, behind About's link);
+  `VcTextSecondaryBrush` `#9BA3B0` (About's row label `User guide`, the shortcut row's keys);
+  `VcTextPrimaryBrush` `#E4E7EC` (the palette row's label); `VcSelectionBrush` `#2A3150` (the
+  palette's highlighted row, at a point clear of text). The focus frame's colour is named by its
+  key, as part A names it (open point 112).
+- **Routes** are those earlier checks use: the graph's focus by a click on "Main work" in its Message
+  column (phase 6's K10 step 1, on the same scenario); the palette by `Ctrl+Shift+P` with the pointer
+  at the neutral point (phase 6's L31, parts L and A); the settings screen by `Ctrl+,`
+  (`OpenSettingsAsync(SettingsOpening.Key)`), which opens on General with the focus on
+  `SettingsNavGeneral`, framed, and waiting for its reads (`WaitForSettingsReadsAsync`); a section by a
+  click on its button (phase 6's part S), or by Down, which moves the focus only, and Enter (part A's
+  A3); a section scrolled to its end with the wheel over it (phase 6's S14 step 7:
+  `Phase6Checks.S`' `ScrollSectionToEndAsync`, private to phase 6's project, so its loop is written
+  again in part G's helper: three notches down at the section's centre a turn, at most 60 turns,
+  until the offset is within 0.5 of its extent less its viewport, then the pointer at rest); Esc
+  closes the screen unsaved; the first-run screen's first button by F6 (part F's F13 step 4) and
+  "Check again" by a click (part F's F4 step 9). F1 is
+  pressed as `PressKey(Key.F1)`, Shift+F1 and Ctrl+F1 with the Shift or the Control modifier.
+- **Waiting for the screen** is part F's: a wait until `GitSetup` shows with its guidance applied
+  (`GitSetupGuidance` the state's, `GitSetupChooseButton` `Choose git.exe…` where the state shows it
+  (every Windows state but the helper's, 5.3's table; part F's "Waiting for the screen"), and
+  `GitSetupWingetButton` shown where the state has it), never on `GitSetup`'s visibility alone.
+- **Pictures.** Four, dark, 1100×700, under `artifacts/visual/phase-8a/scripted/`, in the gate's
+  list of pictures: `g1a-palette-guide`, `g1b-shortcuts-help`, `g2a-first-run-guide-link`,
+  `g3a-about-guide-link` (11.5). The pointer rests at the neutral point (760, 687) before each (no
+  part G picture keeps it); each passes `AssertNoClippedText`, and in each no tooltip is open. `g1a`
+  shows the palette box's caret, which varies from run to run by nature (as `a6a`, `k10a` and `k10f`
+  do). The guide's own pictures (`GuideShots`, D439) are no part G picture: they go to
+  `artifacts/guide/pictures/` (`docs/guide/src/pictures/` in the workflow), outside every list of
+  pictures (0.3, 11.6), and the gate looks at them in the `guide-site` artifact.
+- **Nothing written, nothing started.** Each method asserts at its end that `settings.json` is as
+  the start left it (absent in methods 1, 3 and 4; method 2's bytes, read after the start, unchanged);
+  that the launcher holds exactly the requests its steps name, all `OpenUrl`, with no `Start` and no
+  `Revealed`; that no link and no F1 started a search (in methods 2 and 3 `Lookups` unchanged across
+  each key; methods 1 and 4 give no probe, and a search there would run `git --version` through the
+  session's call log (`GitAccess`, `GitLocator`) and show as a git call that is no whole refresh,
+  which the marks below catch); and that no git call came from the palette's row, a link or F1. On
+  G2's empty tabs (no repository, so no watcher) the count of `GitCalls()` read before each key equals
+  the count after it. On G1's and G3's "ops" tab each such key is marked with `QuietStepMarkAsync()`
+  before it and asserted with `AssertNoStepCallsAsync(mark, what)` once its request is there and the
+  app is idle (`WaitForIdleAsync`). Only whole refreshes the watchers asked for are set aside, and no
+  operation ends (D280; phase 7a's design 5.3, S8) (open point 103). G1 and G3 take the scenario's
+  `ExactStateAsync()` before their first step and assert it unchanged at their end.
+- **Keys** are written as Windows shows them; the headless platform's command key is Ctrl on every
+  platform, CI's macOS job included, so the shortcuts list the checks read is Windows' and Linux's,
+  with no macOS note (11.3.1).
+- **Shown by no check.** The `Help` group's note on macOS, `On a Mac keyboard F1 needs Fn unless "Use
+  F1, F2, etc. keys as standard function keys" is on.` (`AppShortcutsTests`' `MacShortcutTable`,
+  `GuideShortcutsPageTests`' Cmd table; open point 109). The palette's row on a dashboard tab
+  (`PaletteEntriesTests`' dashboard list, phase 6's K10 method 2). F1 on a dashboard tab and on an
+  empty tab with the welcome page (11.3.1, D417): no part G check and no test 11.4 names;
+  `AppCommands.Resolve`'s case is `Always`, which does not read the tab (open point 105). F1 with a
+  menu open or during a drag (11.3.1; open point 105). The Info `Open the user guide: there is no
+  launcher.` and the Error `Open the user guide failed.` (11.3.1; open point 105). `GuidePage.FirstRun`
+  (`https://rahimpasha.github.io/VisualCommit/first-run.html`) and `GuidePage.Shortcuts`
+  (`https://rahimpasha.github.io/VisualCommit/reference/shortcuts.html`), which no control opens
+  (1.7): `AppLinksTests` alone holds that their pages exist. That each page and anchor the app links
+  to exists in `docs/guide/src` (`AppLinksTests`, 11.4) and that the shortcuts page's tables are the
+  app's (`GuideShortcutsPageTests`). Everything of the site: its pages, pictures, search and hosts
+  (the guide's workflow, `check-guide-links.py`, the hand check).
+- **The lagged list** (11.7): nothing new; part G runs in 8a's project, which the list runs whole.
+- **CI**: part G runs in CI's six jobs, with 8a's project; the macOS and Linux jobs' pictures are
+  read under the report's "Other platforms".
+- **Time** (11.7): part G under a minute alone; each method under about 40 s alone (`bash
+  scripts/time-scripted-check.sh "<method>" 8a`).
+
+#### Test methods and app starts (part G)
+
+Four methods, four starts. None has a real-window twin.
+
+| # | Test method | Checks | Start and what is set before it | Window, theme | Pictures |
+|---|---|---|---|---|---|
+| 1 | `Check_G1_palette_row_f1_and_the_help_group` | G1 | one tab on a fresh "ops" (`Scenarios.OperationsAsync()`), through 8a's `OpenAsync` | 1100×700, dark | `g1a`, `g1b` |
+| 2 | `Check_G2_first_run_links_from_missing_through_check_again` | G2: Missing, the chosen Git gone, too old, not working | one empty tab; `gitExecutable` `{chosen}` written before the start; the probe: Windows, `WingetPath` winget's (`FakeGitSetupProbe.Windows()`, `C:\Users\demo\AppData\Local\Microsoft\WindowsApps\winget.exe`); answers `Missing`, `ChosenMissing` with the candidate `C:\Program Files\Git\cmd\git.exe`, `TooOld` at `C:\Program Files\Git\cmd\git.exe`, `Path`, `2.29.0`, and `ConfigFault`: not working at `C:\Program Files\Git\cmd\git.exe`, `Path`, exit 128, git's words `fatal: bad config line 1 in file C:/Users/demo/.gitconfig`, `ConfigFault("C:/Users/demo/.gitconfig", 1)` (part F's method 5's answer) | 1100×700, dark | `g2a` |
+| 3 | `Check_G2_first_run_link_with_the_helper_missing` | G2: the helper missing | one empty tab; the probe: Windows (`FakeGitSetupProbe.Windows()`); answers `RealAt(C:\Program Files\Git\cmd\git.exe, Path)`; `askPassHelper` the helper's path of part F's conventions' table (no file there) | 1100×700, dark | none |
+| 4 | `Check_G3_about_guide_link` | G3 | one tab on a fresh "ops", through 8a's `OpenAsync` | 1100×700, dark | `g3a` |
+
+#### Steps and expected results (part G)
+
+**G1. "Open the user guide" in the palette, F1, and the shortcuts list's "Help"** (not R; D417,
+ruling 62; design 1.7, 1.8, 11.3.1, 11.5). Method 1.
+
+Steps:
+1. Open the tab on the fresh "ops"; wait until it is ready and the graph drawn. Take
+   `ExactStateAsync()`. Click the graph row "Main work" (display row 3) in its Message column, (484,
+   207), as phase 6's K10 step 1 does; wait until it is the graph's one selected row, the right panel
+   shows its details and `GraphRows` has the keyboard focus. Rest the pointer at the neutral point.
+2. Take `QuietCallMarkAsync()` and the operation log's count (`Session.Operations.Snapshot().Count`),
+   as phase 6's K10 step 2 takes them (`Phase6Checks.K.cs:76-77`). Press `Ctrl+Shift+P`; wait until
+   the palette is open, `CommandPaletteBox` has the focus and the call log holds
+   `git worktree list --porcelain` since that mark (the palette's worktree read, which the opening
+   starts on the thread pool, phase 6's K10); await `PaletteWorktreeRead`. Type `guide`; wait until
+   the list holds one row. Screenshot (`g1a-palette-guide`). Read the calls since the mark with the
+   watchers quiet (`QuietCallsSinceAsync`). Take `QuietStepMarkAsync()`.
+3. Press F1; wait until the app is idle (`WaitForIdleAsync`).
+4. Press Enter; wait until the palette has closed and the launcher holds one request, then until the
+   app is idle.
+5. Press F1; wait until the launcher holds two requests, then until the app is idle.
+6. Press Shift+F1; wait until the app is idle. Press Ctrl+F1; wait until the app is idle.
+7. Press `Ctrl+,`; wait until the settings screen shows, its reads have ended and
+   `SettingsNavGeneral` has the focus. Take `QuietStepMarkAsync()`. Press F1; wait until the app is
+   idle.
+8. Click `SettingsNavShortcuts`; wait until the Keyboard shortcuts section shows. Scroll the section
+   to its end with the wheel over it, as phase 6's S14 step 7 does (the conventions' "Routes"), and
+   wait until the offset of the section's scroll viewer (`SectionScroller`, automation id
+   `SettingsSection`) is its extent less its viewport, within 0.5; rest the pointer at the neutral
+   point. Screenshot (`g1b-shortcuts-help`).
+9. Press Esc; wait until the screen has closed, then until the app is idle. Take `ExactStateAsync()`
+   again.
+
+Expected:
+- After step 1: "Main work" the one selected row; `FocusedAutomationId()` `GraphRows`; the launcher
+  has no request.
+- After step 2 (`g1a`): the palette over the graph, `CommandPaletteBox` holding `guide` with the
+  keyboard focus. The list holds exactly one row (no other command and no item of "ops" holds `guide`
+  in its label or its detail: the palette matches every word in a label or a detail, phase 6's design
+  5.6): `CommandPaletteItem` named `Open the user guide`, highlighted (selected; its background
+  `#2A3150` at a point clear of text), enabled, its label `#E4E7EC` and not `danger`; its
+  `CommandPaletteItemDetail` empty and its ItemStatus empty (no detail, 11.3.1); its
+  `CommandPaletteItemKey` shown, reading `F1`, and its `AcceleratorKey` `F1`; no HelpText;
+  `CommandPaletteEmpty` not shown; the card 84 high (phase 6's design 5.3: 2 + 16 + 32 + 6 + 28 for
+  one row). The launcher has no request. Since the mark, read with the watchers quiet
+  (`QuietCallsSinceAsync`), git ran `git worktree list --porcelain` exactly once outside every
+  operation; besides it there are only whole refreshes (`GitCallBudget.AssertOnlyWholeRefreshes`), and
+  no operation ended (the operation log's count as taken with the mark), as phase 6's K10 step 2
+  asserts (`AssertOnlyTheWorktreeReadAsync`, `Phase6Checks.K.Helpers.cs:330-341`, and its
+  `AssertNoWrite` with the operations' count, `Phase6Checks.K.cs:95`).
+- After step 3: F1 opened nothing (the palette is a dialog, `Dialogs.IsOpen`; with a dialog open F1
+  goes on and opens nothing, 11.3.1): the launcher has no request; the palette still open,
+  `CommandPaletteBox` holding `guide` with the focus, its one row highlighted; no git call of the
+  step's own since step 2's mark (`AssertNoStepCallsAsync`; open point 104).
+- After step 4: the palette closed; the launcher's `Requests` holds exactly one request, an `OpenUrl`
+  of `https://rahimpasha.github.io/VisualCommit/` (`AppLinks.Guide(GuidePage.Start)`, 1.7, 11.3.1);
+  the keyboard focus back in `GraphRows` (phase 6's K10: an entry run by Enter closes the palette and
+  gives the focus back); no dialog; no git call of the step's own since step 2's mark
+  (`AssertNoStepCallsAsync`); the log has neither `Open the user guide failed.` nor `Open the user
+  guide: there is no launcher.`.
+- After step 5: `Requests` holds exactly two, both `OpenUrl`s of
+  `https://rahimpasha.github.io/VisualCommit/` (F1 on a repository tab opens the start page, D417);
+  no dialog and no menu; "Main work" still the one selected row; the focus still in `GraphRows`; no
+  git call of the step's own since step 2's mark (`AssertNoStepCallsAsync`).
+- After step 6: still exactly two requests (Shift+F1 and Ctrl+F1 route nowhere, 11.3.1, D213); no
+  dialog and no menu; the selection and the focus as after step 5; no git call of the step's own
+  since step 2's mark (`AssertNoStepCallsAsync`; open point 104).
+- After step 7: the settings screen open on General; F1 opened nothing (a dialog is open, 11.3.1):
+  still exactly two requests; the screen still open on General, `SettingsNavGeneral` focused; no git
+  call of the step's own since this step's mark (`AssertNoStepCallsAsync`; the screen's own reads
+  come before the mark).
+- After step 8 (`g1b`): `SettingsNavShortcuts` selected, the Keyboard shortcuts section shown and no
+  other. `ShortcutList` holds 12 `ShortcutGroup` headings and 51 `ShortcutRow`s (11.3.1); its last
+  heading is `Help` (font size 12.5, `SemiBold`, as every heading, phase 6's S14), after `Dialogs and
+  menus`; under `Help` exactly one `ShortcutRow`, the list's last, named `Open the user guide: F1`, its
+  action `Open the user guide` at the row's left and its keys `F1` at its right, in the code font
+  (`VcCodeFontFamily`) and `#9BA3B0`, each on one line, the row at least 22 high (phase 6's S14). No
+  note under `Help` (11.3.1: the note is macOS's alone, and the headless command key is Ctrl); in the
+  whole list the one note is still the Repository group's, `On a dashboard, Fetch and Pull fetch and
+  pull every repository of its workspace.` (phase 6's S14). The section scrolled to its end: its
+  offset its extent less its viewport, within 0.5; the `Help` heading and its row lie wholly inside
+  the bounds of the section's scroll viewer (`SectionScroller`, automation id `SettingsSection`).
+  Nothing clipped. The launcher still holds exactly two requests.
+- After step 9: no dialog; `Requests` still the two `OpenUrl`s of the start page, in order, and
+  nothing else; no git call of steps 7 to 9's own since step 7's mark (`AssertNoStepCallsAsync`);
+  `ExactStateAsync()` unchanged; no `settings.json` in the data folder.
+
+**G2. The first-run screen's link in each state** (not R; D417, ruling 43; design 1.7, 5.3, 11.5).
+Methods 2 and 3.
+
+Each state, how it is reached, its screen as part F shows it, the Tab stops to its link, and the
+addresses the link and F1 open:
+
+| State (method) | Reached by | Its screen as part F has it | The Tab stops, from where the focus starts | `GitSetupGuideLink` | Enter on the link opens | F1 opens |
+|---|---|---|---|---|---|---|
+| Missing on Windows, winget found (2) | the start (`Lookups` one) | F1 after its step 1: `VisualCommit needs Git`; `Install with winget…`, `Download Git for Windows`, `Choose git.exe…`, `Check again` | F6 to `GitSetupWingetButton`; then Tab to `GitSetupDownloadButton`, `GitSetupChooseButton`, `GitSetupCheckAgainButton`, `GitSetupGuideLink` | `How VisualCommit finds Git` | `https://rahimpasha.github.io/VisualCommit/troubleshooting/git.html#git-missing` | `https://rahimpasha.github.io/VisualCommit/` |
+| The chosen Git gone, another found (2) | "Check again" (`Lookups` two) | F3 after its step 1: `The chosen Git is gone`; `Choose git.exe…`, `Use the Git it found`, `Check again` | from `GitSetupCheckAgainButton`, Tab to `GitSetupGuideLink` | `How VisualCommit finds Git` | `https://rahimpasha.github.io/VisualCommit/troubleshooting/git.html#git-chosen-missing` | the start page |
+| Too old (the fake's answer: the PATH's git, source `Path`) (2) | "Check again" (`Lookups` three) | F5 after its step 1: `Git 2.29.0 is too old`; `Update with winget…`, `Download Git for Windows`, `Choose git.exe…`, `Check again` | from `GitSetupCheckAgainButton`, Tab to `GitSetupGuideLink` | `How VisualCommit finds Git` | `https://rahimpasha.github.io/VisualCommit/troubleshooting/git.html#git-too-old` | the start page |
+| Not working, a broken configuration (2) | "Check again" (`Lookups` four) | F6 (method 5) after its step 1: `Git is not working`; `Download Git for Windows`, `Show the file`, `Choose git.exe…`, `Check again` | from `GitSetupCheckAgainButton`, Tab to `GitSetupGuideLink` | `How VisualCommit finds Git` | `https://rahimpasha.github.io/VisualCommit/troubleshooting/git.html#git-not-working` | the start page |
+| The helper missing, git working (3) | the start (`Lookups` one) | F11 after its step 1: `Part of VisualCommit is missing`; `Check again`, `Continue without it` | F6 to `GitSetupCheckAgainButton`; then Tab to `GitSetupContinueButton`, `GitSetupGuideLink` | `What the helper does` | `https://rahimpasha.github.io/VisualCommit/troubleshooting/git.html#helper-missing` | the start page |
+
+The addresses are `AppLinks.Guide` of `GuidePage.GitMissing`, `GitChosenMissing`, `GitTooOld`,
+`GitNotWorking` and `HelperMissing`, and of `GuidePage.Start` for F1 (1.7). On Windows no state shows
+`GitSetupMoreLink` (5.3, 5.9), so `GitSetupGuideLink` comes right after the last shown button.
+
+Steps, method 2:
+1. Start; wait for the screen, Missing on Windows (part F's "Waiting for the screen": `GitSetupGuidance`
+   `Install Git for Windows, then press Check again. VisualCommit does not need to restart.`,
+   `GitSetupChooseButton` `Choose git.exe…`, `GitSetupWingetButton` shown). Read `settings.json`'s
+   bytes. Rest the pointer at the neutral point and capture a frame (`app.Capture()`, not saved).
+2. Press F6 as part F's F13 step 4 does: once without looking, then again while `GitSetupWingetButton`
+   does not have the keyboard focus, at most four presses in all; if the button does not have the focus
+   after the fourth, the check fails. Press Tab three times, one at a time, each waited on by the focus
+   moving to the next stop of the table's first row. Press Tab; wait until `GitSetupGuideLink` has the
+   focus. Screenshot (`g2a-first-run-guide-link`).
+3. Press Enter; wait until the launcher holds one request.
+4. Press F1; wait until the launcher holds two requests.
+5. Click `GitSetupCheckAgainButton`; rest the pointer at the neutral point. Wait until the command has
+   ended (`Lookups` two, `CheckGitAgainCommand.IsRunning` false, `GitSetupCheckAgainButton` reading
+   `Check again`, enabled) and the screen shows the chosen Git gone (`GitSetupGuidance` `VisualCommit
+   found another Git at C:\Program Files\Git\cmd\git.exe.`, `GitSetupChooseButton` `Choose git.exe…`).
+   Once the dispatcher has settled, `GitSetupCheckAgainButton` has the keyboard focus (5.3: it takes the
+   focus again when the search ends). Press Tab; wait until `GitSetupGuideLink` has the focus.
+6. Press Enter; wait until the launcher holds three requests. Press F1; wait until it holds four.
+7. As step 5, to too old: `Lookups` three; `GitSetupGuidance` `Update Git for Windows, then press Check
+   again. Its installer updates it in place.`, `GitSetupChooseButton` `Choose git.exe…`,
+   `GitSetupWingetButton` shown. Then Tab to `GitSetupGuideLink`.
+8. Press Enter; wait until the launcher holds five requests. Press F1; wait until it holds six.
+9. As step 5, to not working: `Lookups` four; `GitSetupGuidance` `Git cannot read line 1 of
+   C:/Users/demo/.gitconfig. Correct that line, or rename the file, then press Check again.`,
+   `GitSetupChooseButton` `Choose git.exe…`. Then Tab to `GitSetupGuideLink`.
+10. Press Enter; wait until the launcher holds seven requests. Press F1; wait until it holds eight.
+11. Rest the pointer at the neutral point. Press `Ctrl+Shift+P`; wait until the palette is open and
+    `CommandPaletteBox` has the focus. Type `guide`; wait until the list holds one row. Press Esc; wait
+    until the palette has closed.
+
+Steps, method 3:
+1. Start; wait for the screen, the helper missing (`GitSetupGuidance` `Without it, git and ssh cannot
+   ask for a password, a passphrase or a host key here, and a signed-in account cannot be used for git.
+   Install VisualCommit again to restore it.`). Rest the pointer at the neutral point and capture a
+   frame (`app.Capture()`, not saved).
+2. Press F6 as method 2's step 2 does, until `GitSetupCheckAgainButton`, the screen's first button in
+   this state, has the keyboard focus. Press Tab; wait until `GitSetupContinueButton` has the focus.
+   Press Tab; wait until `GitSetupGuideLink` has the focus. Capture a second frame (not saved). Read the
+   count of `GitCalls()`.
+3. Press Enter; wait until the launcher holds one request.
+4. Press F1; wait until the launcher holds two requests.
+
+Expected, method 2:
+- After step 1: `Lookups` holds one search, its `ChosenPath` `{chosen}` and its `StandIn` null. The
+  screen as part F's F1 after its step 1 (the title, the body, the guidance, the four buttons in that
+  order and the one link; this check reads no status bar). `GitSetupGuideLink` shown, reading `How
+  VisualCommit finds Git`, named by its text, its text's brush `VcAccentBrush` `#7C8CFF`;
+  `GitSetupMoreLink` not shown. The launcher has no request; no git call (`GitCalls()` empty).
+- After step 2 (`g2a`): each stop of the table's first row had the focus in turn, framed
+  (`:focus-visible`); now `GitSetupGuideLink` has the keyboard focus, framed; its text's brush still
+  `VcAccentBrush` (not hovered: the pointer at the neutral point; `VcAccentOnRowBrush` is the hover's,
+  5.3); no tooltip open. No key acted: no dialog, no launcher request, `Lookups` one. The frame, read in
+  `g2a` against step 1's capture (the conventions' "The links' look"; ruling 80): no pixel differs
+  inside the tight box of the ink of `How VisualCommit finds Git`, and some pixel differs inside
+  `GitSetupGuideLink`'s bounds outside that box.
+- After each Enter on the link (steps 3, 6, 8 and 10): the launcher's `Requests` gained exactly one
+  request, an `OpenUrl` of the state's address in the table (D417: the screen's own link opens its
+  state's section), and no `Start` and no `Revealed`; `Lookups` unchanged (the link starts no search);
+  the screen still the state's (its `GitSetupTitle` unchanged), no `GitSetupError`. This check asserts
+  nothing about the keyboard focus after the Enter (ruling 81; open point 100).
+- After each F1 (steps 4, 6, 8 and 10): `Requests` gained exactly one more, an `OpenUrl` of
+  `https://rahimpasha.github.io/VisualCommit/`: F1 opens the start page on every tab, the first-run
+  screen's included, not the state's page (D417, 11.3.1); the screen and `Lookups` unchanged.
+- After steps 5, 7 and 9: the state of the table's row, its screen as part F's check of that state
+  shows it, from the fake's answer (open point 102): the title, the buttons in that order,
+  `GitSetupCheckAgainButton` the last, and the one link after them; `GitSetupGuideLink` has the keyboard focus, framed, after the step's Tab; the
+  launcher's requests as after the step before.
+- After step 11: the palette's one row `Open the user guide`, highlighted, enabled, no detail, its key
+  `F1` (11.3.1: listed on every tab, the first-run screen's included, always enabled); Esc ran nothing:
+  the launcher still holds eight requests.
+- At the method's end: `Requests` holds exactly eight `OpenUrl`s, in this order:
+  `…/troubleshooting/git.html#git-missing`, the start page, `…#git-chosen-missing`, the start page,
+  `…#git-too-old`, the start page, `…#git-not-working`, the start page (each address whole as the table
+  gives it); `Lookups` holds four, each with `ChosenPath` `{chosen}` and `StandIn` null (the start's
+  search and three "Check again"s; no link and no F1 started one); `settings.json` holds the bytes step
+  1 read; no git call since the start (`GitCalls()` empty: every answer is the fake's).
+
+Expected, method 3:
+- After step 1: the screen as part F's F11 after its step 1 (`Part of VisualCommit is missing`, the
+  helper's path, the guidance, the buttons `Check again` and `Continue without it` in that order);
+  `GitSetupGuideLink` reading `What the helper does`, named by its text; `GitStatus` `Git {v} (helper
+  missing)`; `Lookups` one; the launcher has no request.
+- After step 2: `GitSetupCheckAgainButton`, `GitSetupContinueButton` and `GitSetupGuideLink` had the
+  focus in turn, each framed; no key acted: the screen still shown (Continue was not pressed), no
+  launcher request. The frame, read in step 2's capture against step 1's (ruling 80): no pixel differs
+  inside the tight box of the ink of `What the helper does`, whose `p` reaches below the line, and some
+  pixel differs inside `GitSetupGuideLink`'s bounds outside that box.
+- After step 3: `Requests` holds exactly one, an `OpenUrl` of
+  `https://rahimpasha.github.io/VisualCommit/troubleshooting/git.html#helper-missing`; the screen
+  unchanged; `Lookups` one; the call log's count as read in step 2.
+- After step 4: exactly two, the second an `OpenUrl` of `https://rahimpasha.github.io/VisualCommit/`;
+  the screen unchanged; the call log's count unchanged.
+- At the method's end: no `settings.json` in the data folder; `Requests` those two and nothing else.
+
+Inspected (`g2a`): the first-run screen, Missing on Windows, as `f1a-missing-windows` shows it but for
+the focus: `How VisualCommit finds Git` with the frame Fluent draws on a focused button round it, and
+that frame covering none of the link's letters (the fault `a1b-about-link-focus` had before the link
+frame's fix, 1.17; open point 99).
+
+**G3. About's guide link** (not R; D409, D417; design 1.7, 1.13, 8.3.1, 11.5). Method 4.
+
+Steps:
+1. Open the tab on the fresh "ops"; wait until it is ready. Take `ExactStateAsync()`. Rest the pointer
+   at the neutral point.
+2. Press `Ctrl+,`; wait until the settings screen shows, its reads have ended and `SettingsNavGeneral`
+   has the focus. Press Down five times, each waited on by the focus moving to the next button:
+   `SettingsNavGit`, `SettingsNavTools`, `SettingsNavShortcuts`, `SettingsNavAccounts`,
+   `SettingsNavAbout` (part A's A3 route, at 1100×700). Press Enter; wait until `SettingsAbout` shows.
+   Capture a frame with the pointer at the neutral point (`app.Capture()`, not saved). Take
+   `QuietStepMarkAsync()`.
+3. Press Tab four times, one at a time, each waited on by the focus moving: `AboutShowLicenseButton`,
+   `AboutShowNoticesButton`, `AboutRepositoryLink`, `AboutGuideLink`. Screenshot
+   (`g3a-about-guide-link`).
+4. Press Enter; wait until the launcher holds one request, then until the app is idle.
+5. Press Esc; wait until the screen has closed. Take `ExactStateAsync()` again.
+
+Expected:
+- After step 2: About as part A's A1 after its step 3 (8.3.1's rows with the pinned identity, their
+  places and colours; nothing clipped; no `@`), over the "ops" tab; `SettingsNavAbout` selected,
+  focused and framed (as part A's A3 after its step 4). The row `User guide` (1.13, 13.2): its label
+  `User guide` (`settingsLabel`, `#9BA3B0`) in the form's first column, at x 336 within 2; in its third
+  column `AboutGuideLink` `Open the user guide`, at x 480 within 2, named by its text, enabled (the
+  session has a launcher), not underlined, its text `#7C8CFF` (`VcAccentBrush`), ink `#7C8CFF` on the
+  card's `#1A1D24`; its tooltip text `Opens the user guide in your browser.` (8.3.5; not open). The
+  launcher has no request.
+- After step 3 (`g3a`): each of the four had the focus in turn, framed; now `AboutGuideLink` is
+  focused, framed and underlined (8.3.1: the links underline while focused); `AboutRepositoryLink`
+  neither focused nor underlined; no tooltip open; no Tab opened anything: the launcher has no
+  request. The link read in `g3a` against step 2's frame by `LinkFrame.Problems` (Testing), as part
+  A's private `AssertFramedLink` calls it, in part G's own helper (`Phase8aChecks.G.Helpers.cs`; the
+  conventions' "The links' look"), given the bounds of `AboutGuideLink`'s `TextBlock`,
+  `VcAccentBrush` (`#7C8CFF`), `VcPanelBackgroundBrush` (the card's `#1A1D24`) and the colour
+  `SystemControlFocusVisualPrimaryBrush` resolves to in the active theme, dark: no problem reported,
+  that is, the text's pixels unchanged but for the underline's rows, the underline across the text, a
+  whole frame on four sides outside the text, and the card's background between the frame and the
+  ink.
+- After step 4: the launcher's `Requests` holds exactly one request, an `OpenUrl` of
+  `https://rahimpasha.github.io/VisualCommit/` (`AppLinks.Guide(GuidePage.Start)`, 1.7, 8.3.1; the
+  address `AboutSettingsViewModelTests` reads as `AppLinks.GuideBase`), and nothing else; the screen
+  still open on About; `AboutGuideLink` still focused and framed (8.3.1: About's link commands allow
+  concurrent runs, so their buttons keep the focus, as A1's step 10 reads the repository link); the
+  log has no `Opening the user guide failed.`; no git call of the steps' own since step 2's mark
+  (`AssertNoStepCallsAsync`).
+- After step 5: no dialog; the launcher still holds the one request; no `settings.json` in the data
+  folder (8.3.1: About saves nothing); `ExactStateAsync()` unchanged.
+
+Inspected (`g3a`): About with `Open the user guide` underlined inside its frame, the frame clear of
+the letters and the underline, as `a1b-about-link-focus` shows the repository link since the fix.
+
+#### Texts these checks rely on (part G)
+
+The palette and the key (1.8, 11.3.1): `Open the user guide` (`AppCommands.OpenUserGuideText`, shared
+by the palette and the shortcuts list), its key `F1`, no detail; the query `guide` (this report's).
+The shortcuts list (1.8, 11.3.1): the last group `Help`, its one row `Open the user guide` with the
+keys `F1`, the row named `Open the user guide: F1` (phase 6's form `{action}: {keys}`); on macOS alone
+the note `On a Mac keyboard F1 needs Fn unless "Use F1, F2, etc. keys as standard function keys" is
+on.`, which no check shows. The log lines (11.3.1), which no check shows; G1 asserts their absence:
+the Info `Open the user guide: there is no launcher.` and the Error `Open the user guide failed.`.
+
+The first-run screen's links (5.3): `How VisualCommit finds Git` in every state but the helper's,
+`What the helper does` in the helper's; `Other ways to install Git` (`GitSetupMoreLink`), which no
+Windows state shows and no part G check meets. The states' titles, guidance and buttons the steps
+pass through are part F's, word for word ("Texts these checks rely on (part F)").
+
+About (8.3.5): the label `User guide`, the link `Open the user guide`, its tooltip `Opens the user guide
+in your browser.`; the Warning `Opening the user guide failed.`, whose absence G3 asserts. About's
+other texts, which G3 passes through, are part A's.
+
+The addresses (1.7): the start page `https://rahimpasha.github.io/VisualCommit/` (`AppLinks.GuideBase`,
+`AppLinks.Guide(GuidePage.Start)`), which the palette's row, F1 and About's link open; the first-run
+states' `https://rahimpasha.github.io/VisualCommit/troubleshooting/git.html#git-missing`,
+`…#git-chosen-missing`, `…#git-too-old`, `…#git-not-working` and `…#helper-missing`; and
+`https://rahimpasha.github.io/VisualCommit/first-run.html` and
+`https://rahimpasha.github.io/VisualCommit/reference/shortcuts.html`, which no control opens
+(`AppLinksTests` alone). No address has a query string (1.7).
+
+Today's texts the steps pass through: `New tab`; the settings screen's `Settings`, `General`, `Git`,
+`Tools`, `Keyboard shortcuts`, `Accounts`, `About`, `Cancel`, `Save`; the Keyboard shortcuts
+section's `These keys are fixed.`, the group `Dialogs and menus` and the Repository group's note `On a
+dashboard, Fetch and Pull fetch and pull every repository of its workspace.` (phase 6's part S); the
+palette's placeholder `Search commands, branches, tags, stashes, remotes, repositories and workspaces`,
+hidden once `guide` is typed.
+
+#### The real window (part G)
+
+Part G has no launch in the real window: no real window opens a browser (design 0.5, 11.5, 11.7), and
+no real-window step presses a link or sends F1 (12.3.2; parts A and F say so for their launches). The
+real-window pass gains nothing from §11 (11.7).
+
 ## Checks
 
 Result values: Pass, Fail, Not run (with the reason in Notes). Each check is named by its part's letter
 and its place in its part's design list (2.5 for part L, 4.6 for part I, 5.5 for part F, 6.5 for part K,
-7.5 for part B, 8.5 for part A, 9.5 for part U). Its steps and expected results are in its part's
+7.5 for part B, 8.5 for part A, 9.5 for part U, 11.5
+for part G). Its steps and expected results are in its part's
 section above, its methods and starts in the part's methods table. "R" in Notes marks the steps the
 real-window pass repeats (design 2.5, 4.6, 5.5, 6.5, 7.5, 8.5, 9.5, 12.3.4, 12.5; part B's are steps of
 its own, with no scripted twin); "Real window" says "n/a" for a check the pass does not repeat.
@@ -3504,6 +3988,9 @@ its own, with no scripted twin); "Real window" says "n/a" for a check the pass d
 | U1 | The graph's selected row in UI Automation: `GraphRows` a List with one child, the ListItem `GraphSelectedRow`, named by its subject, author, date and refs (`Main work, Test Author, 2026-01-01 12:04, current branch main, remote branch origin/main, tag v1.1`; `Stash: On main: Experiment, …, stash@{0}`; `Working changes`), its help text `Commit {short SHA}` with `, 3 commits selected` on the focus row, live setting Polite; one Name change per move (Down, Up, Shift+Down twice, Up through the stash to the working-changes row, a branch clicked in the left panel); the focus on `GraphRows`, on `RefItem` after the click; the peer changes no pixel; the stopped merge's working row and next two rows (D411, D435, D450, D49); "ops" with README.md changed and the stopped merge, dark, 1100×700 | Not run yet | Not run yet | `u1a-graph-row-head`, `u1b-graph-rows-three-selected`, `u1c-graph-working-row`; real window none | R: on the stopped merge with `u-untracked.txt` (launch 13): real Up and Down twice, each raising a LiveRegionChanged from `GraphSelectedRow` within 5 s, a Name change alone failing (D450); no capture. Methods 1 and 2. Open points 76, 77 and 78 |
 | U2 | The sweep: `AccessibleNameSweepTests` reports nothing in its 14 states (the first-run screen's name and help text its title and body in states 10 to 13); the busiest state of the ops tab, the activity log, a selected and a hovered stage row, two hidden branches, swept with nothing reported (D411, D435); "ops" with three changes, dark, 1100×700 | Not run yet | n/a | `u2a-sweep-ops-tab` | Not R. Method 3 and `AccessibleNameSweepTests`; the first run's findings, on the code before, listed under U2 at §9's merge. Open points 79, 80, 81 and 90 |
 | U3 | The names of 1.12's table with every tooltip, help text and key as before: the resolver's five, the search bar's three, the comparison's two, `Close the diff`, `Activity log` and `Close the activity log`, the three splitters, `Stage README.md`, `Discard README.md`, `Unstage src/core.txt`, `Show feature/alpha in the graph`, `Stop soloing feature/ff`, `Dismiss the restore offer` (D411, D435; ruling 34); the two `alpha` rows' help texts `feature/alpha` and `origin/feature/alpha` (D456); the stopped merge and "ops", dark, 1100×700 | Not run yet | Not run yet | `u3a-resolver-names`, `u3b-stage-row-names`; real window none | R: in launch 13, the resolver's five, the activity log's two, the three splitters, the search bar's three and `u-untracked.txt`'s three, each with its `AcceleratorKey` in run.txt; no capture. Methods 2 and 3; method 3 confirms a discard (D67's backup ref). Open points 75, 82, 83 and 84 |
+| G1 | "Open the user guide" and F1: `Ctrl+Shift+P`, `guide`: one row `Open the user guide` with the key `F1`, no detail; F1 with the palette open opens nothing; Enter closes the palette and opens `https://rahimpasha.github.io/VisualCommit/` once; F1 on the graph opens it again, Shift+F1 and Ctrl+F1 nothing; F1 over the settings screen nothing; Keyboard shortcuts ends with the group `Help`, its one row `Open the user guide` · `F1` wholly in view, no note; 12 groups, 51 rows; no git call by the command or the key, nothing written (D417, ruling 62); "ops", dark, 1100×700 | Not run yet | n/a: no real window opens a browser (design 0.5, 11.5) | `g1a-palette-guide`, `g1b-shortcuts-help` | Not R. Method 1. `g1a` shows the palette box's caret, which varies by nature. Steps 3 and 6 are this report's additions from 11.3.1 (open point 104). Open points 103 to 105, settled |
+| G2 | The first-run screen's link: Tab to `GitSetupGuideLink` (`How VisualCommit finds Git`) in Missing, the chosen Git gone, too old and not working, each after the one before by "Check again", and to `What the helper does` with the helper missing; each Enter opens only its state's address (`https://rahimpasha.github.io/VisualCommit/troubleshooting/git.html#git-missing`, `#git-chosen-missing`, `#git-too-old`, `#git-not-working`, `#helper-missing`), each F1 the start page; the palette's row listed on the first-run screen; no search started, no git call, nothing written (D417; design 1.7, 5.3); one empty tab per start, Windows' guidance, dark, 1100×700 | Not run yet | n/a: no real window opens a browser (design 0.5, 11.5) | `g2a-first-run-guide-link` | Not R. Methods 2 and 3. Method 2's last step is this report's addition from 11.3.1 (open point 104). The link's frame is Fluent's, read against a capture taken before the focus moved (ruling 80) and inspected in `g2a`. Open points 99 to 102, settled |
+| G3 | About's guide link: `Ctrl+,`, five Downs and Enter to About, four Tabs to `Open the user guide` beside the label `User guide`, underlined and framed outside its text (`LinkFrame`); Enter opens `https://rahimpasha.github.io/VisualCommit/` once, the link keeping the focus (D409, D417; design 1.13, 8.3.1); "ops", dark, 1100×700 | Not run yet | n/a: no real window opens a browser (design 0.5, 11.5) | `g3a-about-guide-link` | Not R. Method 4 |
 
 ## Checks by hand
 
@@ -3517,31 +4004,34 @@ owner; each is recorded here when the gate runs. Result values as under "Checks"
 | The taskbar button's icon, if B2 could not find the button: the owner's mark, not .NET's default icon | Part B (B2; design 7.5, 12.3.4; open point 51) | Not yet | Only if B2's taskbar step is "Not run" |
 | The Narrator walk-through, 21 steps, by the owner (about 20 minutes): the graph's row, the names, About, and, started with `VISUALCOMMIT_GIT_STAND_IN=none` after the first app has closed (D421), the first-run screen | Part U (D411, D450; design 9.3.9, 13.3, 13.4 item 16) | Not yet | The steps and the words expected at each: part U's "The Narrator walk-through by hand". Each step "as expected", or the words heard. Started on two tabs (the ops copy active, the stopped merge second) with `VISUALCOMMIT_TIME_ZONE=UTC`. Silence where a row's name is expected (step 3's rows, step 5's Home and End) is a finding that reopens the route (9.9 item 1); step 2's "Commit graph, list" alone, no row being selected, is none. Open points 85 and 86 |
 | Phase 6's System step: with System chosen in the settings screen, Windows' app mode switched while the app runs; the window, its title bar and the open views follow within a second | Phase 6 (D224; phase 6's report, "By hand on Windows at acceptance") | Not yet | |
-| The guide's site, from the gate commit's artifact | Part G | Not yet | Its steps are added with part G |
+| The guide's site, from the `guide-site` artifact of `guide.yml`'s run on the gate commit, or of a `workflow_dispatch` run of it on that commit (`gh run download <id> -n guide-site`, the downloaded folder served by `python -m http.server`), by the lead: every picture of the catalogue (42 shots, 84 files, 11.3.2, less any the lead dropped during §11, 13.4 item 21), the Light and the Navy theme each showing its own image of each picture (D440); the text drawn in them (the graph, the diffs) the demo's alone, which `LeakGuard` does not see (11.9); search finds "rebase"; the browser's network panel shows no request to another host (ruling 18, D441); every `SUMMARY.md` link opens its page; and the five addresses the first-run links open each reach its section of `troubleshooting/git.html` (`#git-missing`, `#git-chosen-missing`, `#git-too-old`, `#git-not-working`, `#helper-missing`; this report's addition, open point 108) | Part G (design 0.5, 11.5, 11.9; rulings 18, 61; D439 to D441, D451) | Not yet | The run's id, its head commit and the date it was downloaded go here. The artifact is kept 14 days (11.3.4), and a gate commit that changes only the real-window project starts no guide run (D451): then a `workflow_dispatch` run on it makes the artifact. Open points 108, 110 |
+| After the merge (ruling 64; D408, D451): at "Phase 8a accepted", before `master` is pushed, GitHub Pages' source set to "GitHub Actions" (the owner, or the lead through `gh api` at the owner's word); after the push, the guide's run on `master` read, and run again by `workflow_dispatch` if it ran before the setting; the live address `https://rahimpasha.github.io/VisualCommit/` answers; the `github-pages` environment's branch rule read, and if it admits more than `master`, the owner's leave asked to set it | Part G (design 0.5, 11.5, 11.9, 13.3) | Not yet | At "Phase 8a accepted", not at the gate; the guide's run is recorded beside CI's in `status.md` (11.3.4, D451). Until then the app's links answer "not found" (1.7, 11.9) |
 
 ## What proves each Delivers item
 
-The rows of the Delivers items of parts L, I, F, K, B, A and U, and of the performance pass, which has
-no part (design 0.1, 10.5); the other items' rows are added with their parts.
+The rows of the Delivers items of parts L, I, F, K, B, A, U and G, and of the performance pass, which
+has no part (design 0.1, 10.5). Where a row names a page of the guide, the page is read in the
+`guide-site` artifact by hand ("Checks by hand").
 
 | Delivers item | Checks | Elsewhere |
 |---|---|---|
 | The contrast fixes in one round (D410; plan.md's items from phase 6, 768 and 769) | L1 to L6; real window L1, L2, L4 a, L5 dark, L6 a to c | `ThemeTokensTests` (`Every_text_reaches_4_5_to_1_on_every_background_it_lies_on`, `The_contrast_rounds_values_are_the_designs`, `The_placeholder_has_its_own_token_at_full_opacity`, `Both_themes_hold_the_same_keys`); `PanelViewTests`' three tests; `Phase8aExpectationTests.L`; wave 1's masked comparison against phase 7b's references with the scan's boxes, and the scan's eight lists in `docs/test-reports/phase-8a-contrast/` (design 0.7, 2.6) |
 | Two instances; the macOS data folder (plan.md 778) | I1 (real window), I2 (and real window), I3; by hand: a second start behind another window | `SingleInstanceGuardTests`, `InstanceNoticeViewModelTests`, `MainWindowBringForwardTests`; `AppPathsTests.The_default_data_folder_is_the_platforms_documented_one`, read in CI's macOS job's log; `Phase8aExpectationTests.I` |
-| First-run experience (R4, D405; plan.md 757; D423, D449, D453): git missing, too old or not working, each state with its own text; "Check again" without a restart; "Choose git.exe"; winget on Windows after a confirm, in a visible terminal, where winget exists; the Command Line Tools or Homebrew on macOS, the distribution's package on Linux; the missing askpass helper; with plan.md 781's visual check (missing, too old, not working, found again by "Check again") | F1 to F13; real window F1, F2, F4, F5, F6, F6b, F13 | `GitSetupShellTests` (each state: no clipped text at 1100×700 and 1000×560; the view's name and help text); Git.Tests' `GitLocatorTests`, `OsReleaseTests`, `GitStandInTests`, `GitConfigurationForgetTests`; App.Tests' `GitAccessTests`, `CheckGitAgainTests`, `GitSetupTextsTests`, `GitSetupViewModelTests`, `GitProgramViewModelTests`, `FileLauncherTests` (`ResolveStart`, `ToStartInfo` of the winget command, the one real `StartAsync`), `JsonSettingsStoreTests`, `MainWindowViewModelTests`, `SettingsDialogViewTests`; `Phase8aExpectationTests.F`; §9's sweep in the states (10) to (13) and the Narrator walk-through's steps 20 and 21 (part U, by hand); the guide's troubleshooting page and the first-run links (§11, part G); the lead's by-hand `cmd.exe /S /K ""<the path found>" --version"` before §5's merge (13.4 item 7; done on 2026-11-20: the console's window stays open where Windows Terminal is the default console) |
+| First-run experience (R4, D405; plan.md 757; D423, D449, D453): git missing, too old or not working, each state with its own text; "Check again" without a restart; "Choose git.exe"; winget on Windows after a confirm, in a visible terminal, where winget exists; the Command Line Tools or Homebrew on macOS, the distribution's package on Linux; the missing askpass helper; with plan.md 781's visual check (missing, too old, not working, found again by "Check again") | F1 to F13, G2 (the first-run links' five addresses); real window F1, F2, F4, F5, F6, F6b, F13 | `GitSetupShellTests` (each state: no clipped text at 1100×700 and 1000×560; the view's name and help text); Git.Tests' `GitLocatorTests`, `OsReleaseTests`, `GitStandInTests`, `GitConfigurationForgetTests`; App.Tests' `GitAccessTests`, `CheckGitAgainTests`, `GitSetupTextsTests`, `GitSetupViewModelTests`, `GitProgramViewModelTests`, `FileLauncherTests` (`ResolveStart`, `ToStartInfo` of the winget command, the one real `StartAsync`), `JsonSettingsStoreTests`, `MainWindowViewModelTests`, `SettingsDialogViewTests`; `Phase8aExpectationTests.F`; §9's sweep in the states (10) to (13) and the Narrator walk-through's steps 20 and 21 (part U, by hand); the guide's `first-run.md` and `troubleshooting/git.md` with its five anchors (`AppLinksTests`; 11.3.2); the lead's by-hand `cmd.exe /S /K ""<the path found>" --version"` before §5's merge (13.4 item 7; done on 2026-11-20: the console's window stays open where Windows Terminal is the default console) |
 | A broken `~/.gitconfig` shows its own message (plan.md 767, from phase 6's design 8.5) | F6 (the fake), F6b (real git, also in CI's floor job on 2.34.1); real window F6 (the stand-in), F6b (real git) | `GitLocatorTests`: real git with `[user` in `GIT_CONFIG_GLOBAL` gives `ConfigFault(file, 1)`, on every CI job |
-| OpenSSH older than 8.4 ignores `SSH_ASKPASS_REQUIRE` (plan.md 766, risk 15; ruling 7, D424) | none: a log line, nothing on screen | `AskPassBrokerHelperTests` (the Info line `Git and ssh get SSH_ASKPASS_REQUIRE=force, so that ssh asks through VisualCommit; OpenSSH older than 8.4 ignores it and asks in the terminal VisualCommit was started from, if there is one.` once per session, at the first Ask or Deny scope); the guide's page (§11), whose proof is added with part G |
-| The netrc note (plan.md 773, risk 35; ruling 8, D424) | F14 | `AccountsNetrcNoteTests` |
-| Keyboard gaps (R7; plan.md 759, 784 and "Done when" 786: every main action reached by keyboard): a hunk and chosen lines from the diff, a blame run and its menu, "Cancel {title}" in the palette, the stage rows' buttons on keyboard focus; Tab out of every read-only text view; a panel resized by the keys (design 0.1, 6.1, 6.3.9) | K1, K2, K3, K4, K8; real window K1, K2 | `KeyboardPassTests` (among them `Tab_and_Enter_on_Discard_hunk_confirmed_leave_the_focus_in_the_text`, `A_keyboard_Stage_held_while_the_user_moves_to_the_summary_leaves_the_focus_there`, `A_keyboard_Stage_held_while_the_user_goes_to_another_tab_leaves_that_tabs_lists_alone` `A_rows_Discard_by_the_keys_cancelled_in_its_question_gives_the_focus_to_the_rows_own_button_with_the_frame` and, for the activity log's splitter, `Up_on_the_activity_logs_splitter_reached_by_Tab_heightens_the_log_by_10_and_keeps_it`; four tests state where Ctrl+Tab leaves the focus, which from a stage row is on nothing until step 19's fix); `DiffTextViewTests`, `ConflictPanesTests`, `BlameViewTests` (`An_arrow_with_Cmd_or_Option_picks_the_carets_run` among them), `WorkingChangesTests` (`Tab_walks_every_row_of_a_list_longer_than_its_view_and_Shift_Tab_walks_back` among them), `StatusBarTests` (6.4's fail-first tests); `RegionKeysTests`, `CommandPaletteViewTests`, `PaletteEntriesTests`, `AppShortcutsTests` passing alone (6.8 item 1); phase 2's `Check_17` and phase 5's `Check_A4_real_keys` alone in the real window at §6's merge (6.8 item 5); the inventory of main actions (design 6.3.9) in the report, from §6's merge report, with its rows "Inline or side by side", proven by K1 (its scripted-only step 11: Tab and Shift+Tab to `SideBySideDiffButton`, Enter), and "Amend", proven by K7 (disabled while committing) and `KeyboardPassTests` (focused by Tab, the focus given back), as the lead settled open point 40 |
+| OpenSSH older than 8.4 ignores `SSH_ASKPASS_REQUIRE` (plan.md 766, risk 15; ruling 7, D424) | none: a log line, nothing on screen | `AskPassBrokerHelperTests` (the Info line `Git and ssh get SSH_ASKPASS_REQUIRE=force, so that ssh asks through VisualCommit; OpenSSH older than 8.4 ignores it and asks in the terminal VisualCommit was started from, if there is one.` once per session, at the first Ask or Deny scope); the guide's `troubleshooting/sign-in-and-ssh.md`, with ruling 7's sentence word for word (11.3.2) |
+| The netrc note (plan.md 773, risk 35; ruling 8, D424) | F14 | `AccountsNetrcNoteTests`; the guide's `accounts.md` and `troubleshooting/sign-in-and-ssh.md` (ruling 8; 11.3.2) |
+| Keyboard gaps (R7; plan.md 759, 784 and "Done when" 786: every main action reached by keyboard): a hunk and chosen lines from the diff, a blame run and its menu, "Cancel {title}" in the palette, the stage rows' buttons on keyboard focus; Tab out of every read-only text view; a panel resized by the keys (design 0.1, 6.1, 6.3.9) | K1, K2, K3, K4, K8, G1 (F1 and the shortcuts list's `Help`, D417); real window K1, K2 | `KeyboardPassTests` (among them `Tab_and_Enter_on_Discard_hunk_confirmed_leave_the_focus_in_the_text`, `A_keyboard_Stage_held_while_the_user_moves_to_the_summary_leaves_the_focus_there`, `A_keyboard_Stage_held_while_the_user_goes_to_another_tab_leaves_that_tabs_lists_alone` `A_rows_Discard_by_the_keys_cancelled_in_its_question_gives_the_focus_to_the_rows_own_button_with_the_frame` and, for the activity log's splitter, `Up_on_the_activity_logs_splitter_reached_by_Tab_heightens_the_log_by_10_and_keeps_it`; four tests state where Ctrl+Tab leaves the focus, which from a stage row is on nothing until step 19's fix); `DiffTextViewTests`, `ConflictPanesTests`, `BlameViewTests` (`An_arrow_with_Cmd_or_Option_picks_the_carets_run` among them), `WorkingChangesTests` (`Tab_walks_every_row_of_a_list_longer_than_its_view_and_Shift_Tab_walks_back` among them), `StatusBarTests` (6.4's fail-first tests); `RegionKeysTests`, `CommandPaletteViewTests`, `PaletteEntriesTests`, `AppShortcutsTests` passing alone (6.8 item 1); phase 2's `Check_17` and phase 5's `Check_A4_real_keys` alone in the real window at §6's merge (6.8 item 5); the inventory of main actions (design 6.3.9) in the report, from §6's merge report, with its rows "Inline or side by side", proven by K1 (its scripted-only step 11: Tab and Shift+Tab to `SideBySideDiffButton`, Enter), and "Amend", proven by K7 (disabled while committing) and `KeyboardPassTests` (focused by Tab, the focus given back), as the lead settled open point 40; the guide's `keyboard-and-screen-readers.md` with each item of 6.3.10 (ruling 53; 1.17's "For the guide") |
 | Focus after "Choose" (plan.md 771; phase 7a's design 17 item 5) | K5 | `KeyboardPassTests` (after Choose, reached by Home and Enter in the list, and after Esc in the browser; `Enter_in_the_repository_browsers_list_with_no_row_selected_chooses_nothing`; D454's Enter in the other dialogs' lists: `Enter_on_a_selected_row_of_a_pick_list_confirms_it_as_its_button_does`, `Enter_on_a_choice_dialogs_checked_option_confirms_it_as_its_button_does`, `Enter_on_the_push_dialogs_checked_remote_pushes_as_its_button_does`; the create form's Pick, ruling 51) |
 | The loading diff (plan.md 772; phase 7a's design 17 item 11) | K6 | `DiffTextViewTests` (`FocusBody(() => false)`), `KeyboardPassTests` (a held read, an `Empty` body turning to `Text`, a diff opened by Enter still taking the focus) |
 | The commit boxes (plan.md 774; D392) | K7 | `WorkingChangesTests` (a held `CommitAsync`, `CanToggleAmend`), `KeyboardPassTests` (Amend focused by Tab gets the focus back; `Amend_focused_by_Tab_leaves_the_focus_the_user_moved_while_the_commit_ran`) |
 | Icons and branding (R5, D407; plan.md 764): the icon's SVG, the tool that makes the `.ico`, the `.icns` and the PNG files, the window's and the executable's icon; with plan.md 782's visual check, the icon in the window and the taskbar | B1, B2; real window B1 (a) to (c) and B2 (the executable's icon, the window's two icons, the title bar dark and light, the taskbar button) | `IconFilesTests` (items 1 to 8: the masters' rules, the manifest's hashes, the `.ico`, the `.iconset`, `png/`, `Assets/Icon`, the `.icns` (item 7, D447) and `iconutil` both ways (item 8, in CI's macOS job, whose log shows it passed, not skipped)); `WindowIconTests` (the main window's and the notice window's `Icon`, `AppIcon`'s three URIs); `Phase8aExpectationTests.B`; the files: the masters in `assets/brand/`, the generated files, `tools/VisualCommit.IconBuilder` (built in CI's six jobs; a second run of it leaves `git status` clean, 7.8 item 2); the owner's choice recorded in `docs/brand/icon/round-1/` and `round-2/` (D447); the look-alike check by eye, with the checks by hand |
 | The README's "Name" note names the icon (D412; plan.md 764) | none | The README's "Name" note, design 7.3's text, written by the lead at §7's merge: proven by the file (design 0.1). No check of part B proves it; it stands here because it lands at §7's merge |
 | Third-party notices, complete for what the app ships and reachable from the app (plan.md 762; R6; D431, D433, D434; design 0.1, 8.1, 8.3.4) | A5 (the notices file and the vendors' files in the app's text dialog); A4 (the license) | `ThirdPartyNoticesTests` (`Every_shipped_package_is_named_with_its_version`, `Every_shipped_file_is_named`, `Every_named_package_ships`, `Every_grammar_and_theme_is_listed`, `Every_license_named_has_its_text`, `The_app_embeds_the_texts_word_for_word`, `The_identity_matches_LICENSE`, `The_notices_files_only_addresses_are_its_copyright_lines`), red on the base first and green in CI's six jobs (8.8; the macOS and Linux natives proven only in CI's macOS and Linux jobs, 8.9 item 5); `TextDocumentDialogViewModelTests`, `DocumentTextViewTests` (the text's keys, part A's "Shown by no check": `The_copy_key_copies_a_selection_and_nothing_without_one`, `The_select_all_key_selects_the_whole_text_and_leaves_the_view_where_it_is`, `Keys_that_would_move_extend_or_use_the_hidden_caret_or_type_do_nothing`, `Cut_paste_undo_and_redo_change_nothing_and_leave_the_view_where_it_is`, `Enter_with_or_without_modifiers_leaves_the_view_where_it_is_and_plain_Enter_goes_on_unhandled`, `Another_editor_still_takes_its_keys_line_breaks_typing_deleting_and_moving_its_caret`, `A_wheel_up_after_End_leaves_the_end_though_the_lines_it_brings_in_wrap` among them); `AboutSectionTests` (the notices' switch shows Avalonia's file; `Enter_in_the_licenses_text_closes_the_dialog_as_Close_does_and_gives_the_focus_back`); the files `THIRD-PARTY-NOTICES.md` and `notices/` (the vendors' files byte for byte as the vendors ship them, `notices/** -text` in `.gitattributes`: two with CRLF, two with LF; 8.2, 8.8); `ci.yml`'s `paths`, which take the notices and `LICENSE` as build inputs (D433; unverified until a push changes only the notices, 8.9 item 6) |
-| The About screen (plan.md 763 and 776; R6, D398, D409; with plan.md 782's visual check "The About screen") | A1 to A6; real window A1 (with a 1920×1080 capture where it fits) and A4 | `AboutSettingsViewModelTests` (the texts, the dialogs, the links' addresses, no launcher, a throwing launcher; `The_texts_are_read_off_the_callers_thread_and_a_second_press_meanwhile_opens_nothing_more`, `A_screen_closed_while_the_texts_are_read_shows_no_dialog`); `AboutSectionTests` (`Enter_in_the_licenses_text_closes_the_dialog_as_Close_does_and_gives_the_focus_back` among them); `LinkFocusFrameTests` (App.Tests, 12 cases: a link focused by the keyboard shows its whole text and its underline inside the frame, not under it, in About, dark and light, and in GitLab's sign-in dialog, `An_About_link_focused_by_Tab_shows_its_text_and_underline_inside_the_frame` and `A_sign_in_link_focused_by_Shift_Tab_shows_its_text_and_underline_inside_the_frame`; the frame moves nothing and a link draws outside its bounds only while focused, `The_frame_moves_nothing_and_a_link_draws_outside_its_bounds_only_while_focused`; the frame takes no pointer, `A_pointer_on_the_frame_reaches_what_lies_under_it_not_the_link`; a link focused by a click is underlined without the frame, `An_About_link_focused_by_a_click_is_underlined_without_the_frame` and `A_sign_in_link_focused_by_a_click_is_underlined_without_the_frame`); `AboutEntryTests` (the palette on a welcome, a repository and a dashboard tab; the macOS menu's one item `About VisualCommit`, no `Avalonia`, its `Command` with and without a dialog open); `SettingsDialogViewTests` (Down from Accounts reaches About, Down stays); `PaletteEntriesTests`, `CommandPaletteViewTests` and phase 6's K10 (the entry after `Follow the system's theme`); `AppVersionInfoTests` (WP0) and `The_identity_matches_LICENSE`; `Phase8aExpectationTests.A`; §9's sweep over About (part U); part G's G3 (About's guide link); About in macOS's application menu, 8b's Mac checklist (8.9 item 2) |
-| An accessible name on every control and the graph's selected row exposed to UI Automation, with one Narrator walk-through by hand (R7, D411, D49 as D435 amends it, D450; plan.md 759's "an accessible name on every control; the graph's selected row exposed to UI Automation (D49); and one walk-through with Windows Narrator by hand", 770's icon buttons without a name, 784's visual check "the accessible names read through UI Automation in the real window", and "Done when" 786's "every control has an accessible name"; design 0.1) | U1, U2, U3; real window U1 and U3 (launch 13); by hand: the Narrator walk-through | `AccessibleNameSweepTests` (14 states; on the code before §9's names 12 of the first 13 failed, the notice's had nothing to find, and About's came at the merge: U2); `AutomationSweepTests`; `GraphRowSpeechTests`; `CommitGraphControlAutomationTests` (no peer without a client, one row peer for 100,000 rows, one Name change per move, bounds, the request's words, the same bytes after ten moves back); `CommitGraphControlTests.The_graph_is_a_ui_automation_list_with_its_name`; `StatusBarTests.The_operation_text_is_a_polite_live_region` (the status bar's live region, ruling 36); `Phase8aExpectationTests.U`; the spike's events in §9's merge notes (9.3.1); 9.6's grep (only `AutomationProperties.*` and `xmlns` lines in the `.axaml` hunks; no `Render`, `AffectsRender`, `InvalidateVisual`, measure or arrange in the graph's diff; no `IEmbeddedRootProvider`, `[PrivateApi]` or window peer in `src/` without a decision); the guide's sentence on Narrator (§11, ruling 39), whose proof is added with part G; to the Backlog at the close, an item status on the left panel's rows (ruling 36) and the hunk bars' repeated names (13.4 item 15) |
-| Performance pass (plan.md's Delivers list; D436 to D438, D457; design 0.1, 10.5) | none: §10 has no part (design 0.5, 10.5) | This report's section "The performance series" and its table (design 10.3.6's step 5); `PerformanceSeriesTests` (RealWindowTests, no window: the median of odd and even counts, the range, the bound's rounding, `ParseRuns`, the summary line); App.Tests' `StartupTimelineTests` (the start-up lines), `RepositoryViewModelTests` and `RepositoryViewModelFilterTests` (the reload's and the heap's log lines) and `RepositoryOperationsPullTests` (a Pull's git calls held to their budgets), design 10.4's classes; Q1 in phase 1's real-window pass (`Phase1RealWindowPass.Checks_8_and_9_the_100k_commit_repo_and_Q1`; D50, D436); still to come in wave 4, ruling 76's package `restore`, proven by its alternated series and the lead's probe (D457) |
+| The About screen (plan.md 763 and 776; R6, D398, D409; with plan.md 782's visual check "The About screen") | A1 to A6, G3 (About's guide link); real window A1 (with a 1920×1080 capture where it fits) and A4 | `AboutSettingsViewModelTests` (the texts, the dialogs, the links' addresses, no launcher, a throwing launcher; `The_texts_are_read_off_the_callers_thread_and_a_second_press_meanwhile_opens_nothing_more`, `A_screen_closed_while_the_texts_are_read_shows_no_dialog`); `AboutSectionTests` (`Enter_in_the_licenses_text_closes_the_dialog_as_Close_does_and_gives_the_focus_back` among them); `LinkFocusFrameTests` (App.Tests, 12 cases: a link focused by the keyboard shows its whole text and its underline inside the frame, not under it, in About, dark and light, and in GitLab's sign-in dialog, `An_About_link_focused_by_Tab_shows_its_text_and_underline_inside_the_frame` and `A_sign_in_link_focused_by_Shift_Tab_shows_its_text_and_underline_inside_the_frame`; the frame moves nothing and a link draws outside its bounds only while focused, `The_frame_moves_nothing_and_a_link_draws_outside_its_bounds_only_while_focused`; the frame takes no pointer, `A_pointer_on_the_frame_reaches_what_lies_under_it_not_the_link`; a link focused by a click is underlined without the frame, `An_About_link_focused_by_a_click_is_underlined_without_the_frame` and `A_sign_in_link_focused_by_a_click_is_underlined_without_the_frame`); `AboutEntryTests` (the palette on a welcome, a repository and a dashboard tab; the macOS menu's one item `About VisualCommit`, no `Avalonia`, its `Command` with and without a dialog open); `SettingsDialogViewTests` (Down from Accounts reaches About, Down stays); `PaletteEntriesTests`, `CommandPaletteViewTests` and phase 6's K10 (the entry after `Follow the system's theme`); `AppVersionInfoTests` (WP0) and `The_identity_matches_LICENSE`; `Phase8aExpectationTests.A`; §9's sweep over About (part U); About in macOS's application menu, 8b's Mac checklist (8.9 item 2) |
+| An accessible name on every control and the graph's selected row exposed to UI Automation, with one Narrator walk-through by hand (R7, D411, D49 as D435 amends it, D450; plan.md 759's "an accessible name on every control; the graph's selected row exposed to UI Automation (D49); and one walk-through with Windows Narrator by hand", 770's icon buttons without a name, 784's visual check "the accessible names read through UI Automation in the real window", and "Done when" 786's "every control has an accessible name"; design 0.1) | U1, U2, U3; real window U1 and U3 (launch 13); by hand: the Narrator walk-through | `AccessibleNameSweepTests` (14 states; on the code before §9's names 12 of the first 13 failed, the notice's had nothing to find, and About's came at the merge: U2); `AutomationSweepTests`; `GraphRowSpeechTests`; `CommitGraphControlAutomationTests` (no peer without a client, one row peer for 100,000 rows, one Name change per move, bounds, the request's words, the same bytes after ten moves back); `CommitGraphControlTests.The_graph_is_a_ui_automation_list_with_its_name`; `StatusBarTests.The_operation_text_is_a_polite_live_region` (the status bar's live region, ruling 36); `Phase8aExpectationTests.U`; the spike's events in §9's merge notes (9.3.1); 9.6's grep (only `AutomationProperties.*` and `xmlns` lines in the `.axaml` hunks; no `Render`, `AffectsRender`, `InvalidateVisual`, measure or arrange in the graph's diff; no `IEmbeddedRootProvider`, `[PrivateApi]` or window peer in `src/` without a decision); the guide's `keyboard-and-screen-readers.md` (ruling 39, D411; 11.3.2); to the Backlog at the close, an item status on the left panel's rows (ruling 36) and the hunk bars' repeated names (13.4 item 15) |
+| User guide (D408; plan.md's Delivers item "Markdown pages in the repository, a site on GitHub Pages built by a workflow, pictures in both themes from the walk-through's harness, and the app's links to it", and "Done when"'s "the user guide exist[s]"; D417, D434, D439 to D441, D451; design 0.1, 11.1) | G1, G2, G3 (the app's links: the palette's row and F1, the shortcuts list's `Help`, the first-run links, About's link); by hand: the guide's site from the `guide-site` artifact, and after the merge the live site and the environment's branch rule | The files: `docs/guide/book.toml`, `docs/guide/guide.css`, `docs/guide/src/SUMMARY.md` and its 33 pages in 11.3.2's order, each saying its row, those of rulings 7, 8, 19, 39, 46, 50, 53 and D411 among them (11.8 item 1, read by the lead at §11's merge), in American spelling (D434); `.github/workflows/guide.yml` (its run green after the merge's push, its step "App's links" included, no deploy job off `master`, `guide-site` looked at, 11.8 item 4) with mdBook 0.5.4 pinned by its Linux archive's SHA-256 `3f28de05dafca9d0f2eab99c662116b0e37b89b1d96a08f8f430b9eeae958cd7`, the digest GitHub shows for release `v0.5.4`, downloaded and checked on 2026-11-23 (13.4 item 20); `scripts/check-guide-links.py` with its `--self-test` (D441, D451); `tests/VisualCommit.GuideShots` (built by CI's Windows job; `GuideCatalogueTests`, `LeakGuardTests`; the lead's run on the laptop through `scripts/heavy-run.sh`, `LeakGuard` silent and every picture looked at, 11.8 item 3); App.Tests' `AppLinksTests` (each `GuidePage`'s page under `docs/guide/src`, linked from `SUMMARY.md`, its anchor once) and `GuideShortcutsPageTests` (the shortcuts page's tables made from `AppShortcuts.Groups`), also run by the guide's workflow (D451); `AppShortcutsTests` (F1 bound, routed on Ctrl and Cmd; `Help` with its note on a Mac), `SettingsDialogViewTests`, `PaletteEntriesTests`, `CommandPaletteViewTests`, phase 6's part S and K10 (the earlier tests 11.4 changes); `Phase8aExpectationTests.G`; `compare-pictures.py` at §11's merge showing only 11.6's changes (11.8 item 3) |
+| Performance pass (plan.md's Delivers list; D436 to D438, D457; design 0.1, 10.5) | none: §10 has no part (design 0.5, 10.5) | This report's section "The performance series" and its table (design 10.3.6's step 5); `PerformanceSeriesTests` (RealWindowTests, no window: the median of odd and even counts, the range, the bound's rounding, `ParseRuns`, the summary line); App.Tests' `StartupTimelineTests` (the start-up lines), `RepositoryViewModelTests` and `RepositoryViewModelFilterTests` (the reload's and the heap's log lines) and `RepositoryOperationsPullTests` (a Pull's git calls held to their budgets), design 10.4's classes; Q1 in phase 1's real-window pass (`Phase1RealWindowPass.Checks_8_and_9_the_100k_commit_repo_and_Q1`; D50, D436); still to come in wave 4, ruling 76's package `restore`, proven by its alternated series and the lead's probe (D457); the guide's `troubleshooting/large-repositories.md`, with the report's numbers as indications (10.3.6 step 5; 1.17, "At wave 3's close") |
 
 Plan.md 786's "Done when" ("the About screen … the complete notices … exist") rests on the rows of the
 third-party notices and the About screen.
@@ -3881,6 +4371,115 @@ returns). `ActivityLogView.axaml` changes only if 6.3.8's test fails. K10's four
   Part F's controls keep the names of their own texts (1.17), which the sweep's states 10 to 13 read;
   the real-window helpers that find a row's button by id (`Phase2RealWindowPass.ClickRowButton`,
   `Phase5RealWindowPass.ClickFileRowButton`) find it by id, which §9 keeps.
+
+### Part G: the palette's scroll thumb, the shortcuts list's end, six earlier tests (one renamed) and two earlier report texts (design 0.7, 11.4, 11.6; rulings 54, 62; D417, D452)
+
+- **Earlier pictures: the palette's scroll thumb** (ruling 54, D417; 0.7's row "Two palette commands";
+  11.6). With `Open the user guide` the empty palette's list is one row longer again (§8's `About
+  VisualCommit…` lengthened it first): `k10a-palette-commands`, `k10f-palette-names-repository`,
+  `l31c-palette-dark` and `l31c-palette-light`, and at the gate their two real-window twins, `k10a` and
+  `l31c-palette-light`, change in the scroll thumb, x 837–838 at 1100×700.
+- **Earlier pictures: the shortcuts list's end** (ruling 62; 0.7's row "The shortcuts list's 'Help'
+  group"; 11.6). `s14f-shortcuts-end` shows the list's end with the group `Help` and its row
+  `Open the user guide` · `F1` below `Dialogs and menus`: the section's column changes (11.6: confirmed).
+  `s14e-shortcuts-top` changes at most in the section's scroll bar, whose thumb the longer list
+  shortens; §11's builder measures that region and the lead adds it to 0.7 at §11's merge (13.4 item
+  19; open point 107). The list's top keeps its look: no settings row links to the guide (11.3.1).
+- **8a's own pictures** (0.7). `k3a-palette-cancel` and `l3a-palette-placeholder` change in the
+  palette's scroll thumb, x 837–838, at §11's merge, their second move after §8's; the lead's
+  `--expected` file for §11's merge names them (open point 106, since 11.6 names neither). No other
+  picture of 8a changes: `a6a-palette-about`, `l4b-delete-entry-palette` and part G's own `g1a` show a
+  typed query of one or two rows and no scroll bar; part A's pictures show About and part F's the
+  first-run screen, neither of which §11 changes; part G's four pictures are new.
+- **Nothing else.** The guide's own pictures lie outside `artifacts/visual` and in no list (0.3,
+  11.6). Proof (11.6): §11's builder runs, besides 11.4's classes and part G, only `--filter-method
+  "*Phase6ChecksS.*" --filter-method "*Check_K10_*"` in `VisualCommit.VisualTests.Phase6` (one command)
+  and `--filter-method "*Check_L31_overlays*"` in `VisualCommit.VisualTests.Phase6Look`, never a whole
+  project; at the merge the lead runs Phase6 and Phase6Look whole, one after the other, through
+  `scripts/heavy-run.sh` (D245), then `scripts/compare-pictures.py --expected` against the references
+  current at the merge, wave 3's (`D:/Projects/Personal/phase8-work/references/wave3/`, 1.17), with
+  the regions above; any other difference stops the merge.
+- **Earlier tests** (11.4; each reason once here):
+  1. `AppShortcutsTests`: `OpenUserGuide` leaves the keyless list (WP0 put it there with `About`, 1.17;
+     its comment, "Open the user guide has none until F1 is bound to it", goes with it); the router
+     table gains `("Open the user guide", true)`; `MacShortcutTable` gains `Help` with its note; a fact
+     routes F1 on Ctrl and on Cmd. Reason: F1 is bound to the command, and the shortcuts list gains its
+     last group (D417, ruling 62; 1.8, 11.3.1).
+  2. `SettingsDialogViewTests.ShortcutTable` gains `new("Help", [new("Open the user guide", "F1")],
+     null)` after `Dialogs and menus`. Its comment at `:308` (on `810913e`), "the last group's three
+     rows wholly in view once scrolled down", is false from §11's merge, the last group having one row
+     (the code, `rows.TakeLast(3)`, still holds the list's last three rows in view: `Help`'s and two
+     of `Dialogs and menus`); §11's builder corrects it (open point 111). Reason: ruling 62.
+  3. `PaletteEntriesTests`' two lists end `"About VisualCommit…", "Open the user guide · F1"` (`:159`,
+     `:340` at `27c5109`); the comment "About VisualCommit… last (D417)" is corrected with them, and so
+     are the two that count the commands, `:147` ("K10 step 2's 34 commands") and `:211` ("the 34
+     commands above"), which say 35 (`:147`, `:148` and `:211` on `810913e`). Reason: ruling 54, D417.
+  4. Phase 6's part S (`Phase6Expectations.S.cs`, `Phase6ExpectationTests.S.cs`, `Phase6Checks.S.cs`):
+     `PartS.ShortcutGroups` gains `Help` with its one row; `LastGroup` becomes `Help`; the eleven groups
+     and 50 rows become 12 and 51 (`Phase6ExpectationTests.S.cs:363`, `:364` and `:369`, the last the
+     count of distinct actions); `AssertLastGroupInView` takes the last group's row count, not 3. The
+     texts that state the old counts or the old last group say the new ones (lines on `810913e`):
+     `Phase6Checks.S.cs:341-342` (`AssertShortcuts`' summary: eleven groups, 50 rows) and `:409`
+     (`AssertLastGroupInView`'s: `Dialogs and menus` with its three rows), `Phase6Expectations.S.cs:805`
+     (`ShortcutGroups`' summary: eleven groups, 50 rows) and `Phase6ExpectationTests.S.cs:359` (the
+     fact's summary: eleven groups, 50 rows). The fact
+     `The_shortcut_list_has_eleven_groups_and_fifty_rows` (`Phase6ExpectationTests.S.cs:361`) is
+     renamed `The_shortcut_list_has_twelve_groups_and_fifty_one_rows`, since its name states the counts
+     that change, as part U renames the test whose name §9 made false; 11.4 names no rename, so this is
+     the report's reading (open point 111). Reason: ruling 62.
+  5. Phase 6's K10 (`Phase6Expectations.K.cs`, `Phase6ExpectationTests.K.cs`): `OpsCommands` and
+     `DashboardCommands` gain `Open the user guide` with the key `F1` as their last row;
+     `OpsCommandCount` 34 becomes 35, `DashboardCommandCount` 23 becomes 24, `WebAppCommandCount` 35
+     becomes 36, `PageDownRows` [11, 22, 33] becomes [11, 22, 33, 34], `FirstRowInViewAtEnd` 22 becomes
+     23, `WheelRow` 27 becomes 28. The identities `Phase6ExpectationTests.K` asserts hold, with §8's
+     `Assert.Equal(PartK.OpsCommandCount - 1, PartK.PageDownRows[^1])`; its literal at `:318`
+     (`[11, 22, 33]`) becomes `[11, 22, 33, 34]`. The comments that name the PageDowns and their rows,
+     `Phase6Checks.K.cs:97`, `Phase6RealWindowPass.K.cs:73` and `Phase6Expectations.K.cs:277` (lines at
+     `27c5109`), say four PageDowns and rows 11, 22, 33 and 34 (open point 111); both loops read the
+     constant and change no more. So do the texts that state §8's numbers (lines on `810913e`): the
+     summary of `OpsCommandCount` (`Phase6Expectations.K.cs:271-272`: 34 on "ops", 23 on "Web"'s
+     dashboard, 35 on web-app, "About VisualCommit…" the last of each), which says 35, 24 and 36 and
+     "Open the user guide" the last; those of `WheelRow` and `FirstRowInViewAtEnd` (`:283`, `:286`: rows
+     22 to 33 showing), which say rows 23 to 34; and the summary of the real-window twin
+     (`Phase6RealWindowPass.K.cs:23`: "PageDown three times"), which says four. Reason: ruling 54 and
+     D452: with rows 0 to 34 the third PageDown lands on 33, one row short of the last, and the step's
+     Down must wrap from the last row, so the walk takes a fourth PageDown, in the scripted check, its
+     real-window twin and `CommandPaletteViewTests`.
+  6. `CommandPaletteViewTests.The_keys_move_the_highlight_into_view_and_typing_filters` (`:99-116` at
+     `27c5109`, "ops"): 35 commands; PageDown to rows 11, 22, 33 and 34 (a fourth PageDown: `:111-112`
+     press Down and expect row 0); Up from row 0 wraps to 34, then 33; its comment "PageDown three
+     times" says four. Reason: ruling 54, D452.
+
+  `AppLinksTests` (WP0's) is extended, not changed (11.4): per `GuidePage`, its `.md` exists under
+  `docs/guide/src`, `SUMMARY.md` links it, and its anchor stands once as `{ #anchor }`; its earlier
+  assertions stand. Not changed: 8a's `AboutEntryTests`, which asserts the row before `About
+  VisualCommit…` (`Follow the system's theme`), not that About is last (8.4: from §11's merge `Open the
+  user guide` follows it); and no expectation of parts L, I, F, K, B, A or U, none of which asserts a
+  palette count, the shortcuts list or a guide address.
+- **Earlier report texts** (11.4, D452), stated here and not edited in phase 6's report, as part A
+  states its change 6:
+  1. Phase 6's K10, method 1's step 2 and its expected results: "Press PageDown three times, then
+     Down, then Up" reads four times. Its "`Shown` 33 commands" on "ops" reads 35 (34 from §8's merge,
+     part A's change 6), and its numbered list of rows 0 to 32 gains 33 `About VisualCommit…` (from
+     §8's merge) and 34 `Open the user guide` · `F1` (`OpsCommands`' order). After the PageDowns the
+     highlight is on row 11 `Show backups`, row 22 `Previous tab`, row 33 `About VisualCommit…`, no
+     longer clamped (in place of "row 32 `Follow the system's theme` (clamped at the end)": 33 is
+     reached exactly), and after the fourth on row 34 `Open the user guide`, the last (clamped at the
+     end); Down wraps to row 0 and Up back to row 34 (not 32), which leaves rows 23 to 34 in view (not
+     21 to 32; `FirstRowInViewAtEnd` 23). The wheel's row, the sixth in view, is row 28 `Open
+     settings…` (`HighlightedIndex` 28; `WheelRow`), not row 26 `New workspace…`, and after the notch
+     "a row before 21 is now in view" reads "before 23". Step 6's "`Shown` 33" (the empty palette after
+     the runs) reads 35. Its "`Shown` 22 commands" on "Web"'s dashboard reads 24, its list gaining
+     `About VisualCommit…` and `Open the user guide` · `F1` after `Follow the system's theme`, and
+     `k10f`'s "`Shown` 34" reads 36 (`DashboardCommandCount`, `WebAppCommandCount`; 23 and 35 from §8's
+     merge). Reason: ruling 54, D452.
+  2. Phase 6's S14 step 7: "`ShortcutList`'s eleven groups", "exactly the 50 rows" and "the last group
+     `Dialogs and menus` with its three rows wholly in view" read twelve groups, 51 rows and "the last
+     group `Help` with its one row wholly in view"; "no Moving around note (it is macOS's)" holds, and
+     no `Help` note shows either (macOS's too); its "Texts these checks rely on (part S)" gains the row
+     `Open the user guide` · `F1` under `Help`. Reason: ruling 62 (this report's reading of 11.4's part
+     S change; open point 111).
+- **8a's own expectations.** None changes.
 
 ### Changed in this report after its first commit
 
@@ -4696,7 +5295,7 @@ macOS's application menu there (`About VisualCommit` opening About, no `About Av
 ## Open points
 
 What the lead settled, then where the design is silent or leaves a value to its builder about parts L
-and I, with the reading this report takes; then parts F, K, B, A and U, each under its own heading,
+and I, with the reading this report takes; then parts F, K, B, A, U and G, each under its own heading,
 their points numbered on. The builder of the part, or the lead, settles each open point before the
 part's merge.
 
@@ -5732,3 +6331,174 @@ verifiers, 98 by the performance pass.
 98. **Q1 and the launcher.** The real-window pass measures Q1 with git itself on the PATH (Git Bash's
     `ucrt64\bin\git.exe`), not through `cmd\git.exe`, the launcher an installed user's PATH finds
     (D457; "The performance series"): for the review before the gate (status.md's step 19).
+
+### Part G: the user guide's links: F1, the palette row, the first-run links and About's link
+
+Numbered on from the report's last, 98: G 99 to 113. The lead settled them on 2026-11-23, before §11's
+build, as rulings 77 to 85 of the design's 13.1; each point says how. What a ruling leaves to §11's
+builder or to the merge is named with it.
+
+Settled before this part was written: F1, the palette's `Open the user guide` at the list's end and
+the shortcuts list's last group `Help` (D417, ruling 62); K10's fourth PageDown from §11's merge
+(D452); §5's links stay `VcFlatButton`s, so `VcLinkButton` stays §8's, and About's guide link reads
+`Open the user guide` beside the label `User guide` (13.2); `VcLinkButton`'s keyboard frame outside
+the text, and `LinkFrame` to read it (1.17, "At wave 3's close"); mdBook 0.5.4's archives hashed and
+pinned on 2026-11-23 (13.4 item 20, settled); no real window opens a browser (0.5, 11.5).
+
+Where the design's sections differ about this part, with the reading this report takes (the lead
+confirms):
+- **8a's own pictures at §11's merge.** 0.7 says `k3a-palette-cancel` and `l3a-palette-placeholder`
+  change in the palette's scroll thumb at §8's and §11's merges; 11.6 names only the earlier pictures,
+  and its proof runs no class of 8a's project: open point 106. **Settled (the lead, 2026-11-23; design
+  13.1, ruling 84):** 11.6 names them now, and the lead runs 8a's project whole at §11's merge.
+- **G2's tab.** 11.5 puts part G on "the ops scenario", but 5.3 shows the first-run screen only on a tab
+  with no repository (`ShowsGitSetup`: `Repository is null`), and G2's second start has a working git
+  (`RealAt`), with which a restored "ops" would open; its first start could restore "ops", whose restore
+  fails while git is missing: open point 101. **Settled (the lead, 2026-11-23; design 13.1, ruling
+  78):** one empty tab for each start, as this part has it; 11.5 says so now.
+- **G2's one start.** 11.5 reaches ChosenMissing by "Check again" from Missing, but `FakeGitAnswer.ChosenMissing` throws for a lookup without a `ChosenPath` (1.17, "First run: the harness"), so the
+  start writes `gitExecutable` first, which 11.5 does not say: open point 102. **Settled (the lead,
+  2026-11-23; design 13.1, ruling 78):** as this part has it; 11.5 says so now.
+- **"No git call" in G1 and G3.** 11.5 expects no git call, but the palette's opening reads the
+  worktrees (phase 6's K10), the settings screen's opening reads git's settings (phase 6's part S), and
+  on the "ops" tab a refresh the live watcher starts for a write the system reports late can land in any
+  step (D280): open point 103. **Settled (the lead, 2026-11-23; design 13.1, ruling 77):** read with the
+  quiet marks, as this part has it.
+
+The points, each with the reading this report takes and how it was settled:
+
+99. **The first-run link's frame.** The first-run screen's links are `VcFlatButton`s (13.2, 5.3; 1.17,
+    "First run: the screen"), not `VcLinkButton`s, so the link frame of wave 3's close (1.17) is not
+    theirs: a focused `GitSetupGuideLink` shows Fluent's own frame for a focused button, which lies on
+    the button's bounds (wave 3's comparison measured that frame on the bounds of the link that `a1b`
+    showed: a 2 px outer line and a 1 px inner one). As built (`GitSetupView.axaml` on `810913e`) the
+    links have a padding of 6 left and right and 2 above and below, so the frame's inner line lies on
+    the text's line box's first and last rows; whether it touches the ink is unverified until `g2a`
+    exists. G2 asserts `:focus-visible` only, since `LinkFrame` asks for an underline these links do not
+    have; whether G2 also reads the frame in its picture, with a reading of `LinkFrame` without the
+    underline, is the lead's. If `g2a` shows `a1b`'s fault, the lead rules; a change of the first-run
+    links' theme would change part F's pictures of the screen (ruling 3). The brief of this part said
+    that G2 meets `VcLinkButton`'s frame; the design says otherwise, and this report follows the design.
+    **Settled (the lead, 2026-11-23; design 13.1, ruling 80):** G2 reads the frame in its picture, and
+    in an unsaved capture for the helper's link, by a helper of part G's own: against a capture taken
+    before the focus moved, no pixel differs inside the tight box of the link text's ink, and some pixel
+    differs in the button's bounds outside it. `LinkFrame` stays `VcLinkButton`'s. If the frame touches
+    the ink in either text, §11's builder stops and reports it, and the lead rules before the merge (a
+    change of the links' theme changes part F's pictures).
+100. **The focus after Enter on a first-run link.** 5.3 does not say where the focus is after a link is
+     pressed. As built (`GitSetupViewModel.cs` on `810913e`) `GuideLinkCommand` is a `[RelayCommand]`
+     that does not allow concurrent runs, so its button is disabled while it runs, which can drop the
+     keyboard focus, as 8.3.1 avoided for About's links by allowing concurrent runs. G2 asserts nothing
+     about the focus after the Enter and reaches the next state by a click on "Check again". Whether the
+     first-run links keep the focus, with a test, is the lead's (no picture would change). **Settled
+     (the lead, 2026-11-23; design 13.1, ruling 81):** not part G's. G2 asserts nothing about the focus
+     after the Enter. The first-run screen's launching buttons and links (`Download Git for Windows`,
+     the two links, `Show the file`, `Install the Command Line Tools`), whose commands allow no
+     concurrent runs, go on the list of the review before the gate (status.md's step 19): measured with
+     a launcher that answers late, and fixed with a test where the focus is lost.
+101. **G2's starts.** 11.5's "the ops scenario" is read as G1's and G3's. Method 3 cannot restore "ops":
+     with git working (`RealAt`) the tab would open its repository and no screen would show. Method 2
+     could restore "ops" as 11.5 says, since its restore fails while git is missing (5.3, as part F's
+     F1). This report gives it one empty tab, as the sweep's state 10 does, which changes no address.
+     The lead confirms, or has method 2 restore "ops" through `StartWithTabs`; then the tab reads `New
+     tab`, `session.json` keeps the path, and the scenario's `ExactStateAsync()` is asserted unchanged
+     at the method's end. **Settled (the lead, 2026-11-23; design 13.1, ruling 78):** one empty tab, as
+     written.
+102. **G2's answers.** `gitExecutable` `{chosen}` is written before method 2's start, as the sweep's
+     state 10 and part F's F3 write it (1.17). The not-working state is part F's broken configuration
+     (method 5's answer), since 11.3.2's `#git-not-working` names the broken `~/.gitconfig` and the
+     report already holds its words; any not-working answer opens the same page. States 1, 3 and 4 of
+     method 2 are answers of the fake to lookups whose `ChosenPath` is `{chosen}`. The app's own lookup
+     never gives them while the setting names a path (5.3, ruling 41). They are chosen so that the
+     screens equal part F's F1, F5 and F6; the link's address depends on the state alone
+     (`GitSetupContent.Page`), so the check proves what it is for. **Settled (the lead, 2026-11-23;
+     design 13.1, ruling 78):** confirmed.
+103. **"No git call" in G1 and G3** is read as none made by the palette's row, F1 or a link. On the
+     "ops" tab the watcher is live, so each such key is marked with `QuietStepMarkAsync()` and asserted
+     with `AssertNoStepCallsAsync` (D280; phase 7a's design 5.3). Only whole refreshes the watchers
+     asked for are set aside. The palette's opening is held as phase 6's K10 holds it: its worktree read
+     once, and besides it only whole refreshes. The settings screen's reads come before the step's mark.
+     On G2's empty tabs, which have no watcher, the plain count of `GitCalls()` stands. **Settled (the
+     lead, 2026-11-23; design 13.1, ruling 77):** confirmed. What the note of this part's review left
+     unverified until the build stays §11's builder's to report: a read of the settings screen that
+     lands after step 7's mark, a git call from typing `guide`, and whether `ExactStateAsync()`'s own
+     git shows in the session's call log.
+104. **This report's additions from 11.3.1**, beyond 11.5's outline: F1 with the palette open (G1 step
+     3, the palette being a dialog), Shift+F1 and Ctrl+F1 on the graph (G1 step 6), and the palette's
+     row on the first-run screen (method 2's step 11). Each is a rule 11.3.1 states. **Settled (the
+     lead, 2026-11-23; design 13.1, ruling 79):** all three stay.
+105. **What no check and no named test shows.** 11.3.1's Info `Open the user guide: there is no
+     launcher.` and Error `Open the user guide failed.`: 11.4 names no test for either, and every
+     session of both harnesses has a launcher. §11's builder adds a test (an App.Tests class beside
+     `AppShortcutsTests`), or the lead rules. F1 with a menu open or during a drag (11.3.1): no check of
+     part G shows them; the lead, if G1 should add a step (Shift+F10 on the graph, F1, Esc). F1 on a
+     dashboard tab and on an empty tab with the welcome page (11.3.1, D417): no check of part G and no
+     test 11.4 names runs it there (11.4's `AppShortcutsTests` fact routes F1 on Ctrl and Cmd); §11's
+     builder adds a fact that runs the command by F1's route on a dashboard and on a welcome tab and
+     finds the start page in `FakeFileLauncher.Requests`, or the lead rules. **Settled (the lead,
+     2026-11-23; design 13.1, ruling 82):** §11's builder adds the facts in App.Tests: the Info line and
+     no request without a launcher; the Error line when the launcher throws; F1's route on a dashboard
+     tab and on a welcome tab, each opening the start page. F1 with a menu open or during a drag gets no
+     step of G1: it is the router's rule for every binding, which the router's table in
+     `AppShortcutsTests` holds, and the builder says in its report whether that table runs F1 under a
+     menu and during a drag, adding the fact if it does not.
+106. **8a's own `k3a` and `l3a` at §11's merge** (0.7; 11.6 silent). The lead's `--expected` file for
+     §11's merge names them in the thumb's region, x 837–838, and the lead runs at the merge the methods
+     that take them (part K's method 3, `*Check_K3_K8*`, and part L's method 3 in 8a's project), or the
+     project whole, since 11.6's proof runs none of 8a's project. **Settled (the lead, 2026-11-23;
+     design 13.1, ruling 84):** the project whole, at §11's merge.
+107. **The regions of `s14f` and `s14e`** for the lead's `--expected` file: 0.7 gives "the list's end"
+     and "the scroll bar", 11.6 "the section's column", and neither gives a box; 13.4 item 19 has §11's
+     builder measure `s14e`'s scroll bar and the lead add it to 0.7. **Settled (the lead, 2026-11-23;
+     design 13.1, ruling 84):** the lead writes both boxes at §11's merge, `s14e`'s from the builder's
+     measure.
+108. **The anchors in the built site.** `AppLinksTests` reads the Markdown (`{ #anchor }` once), and
+     `check-guide-links.py` checks the fragments of the site's own links, not the app's addresses; that
+     mdBook turns `{ #id }` into the ids the five first-run addresses need is unverified until §11's
+     first local build (11.9). This report adds to the hand check that each of the five addresses
+     reaches its section in the artifact's site. **Settled (the lead, 2026-11-23; design 13.1, ruling
+     79):** kept; and §11's builder says in its report what the first local build made of the five ids,
+     and stops if one is missing.
+109. **F1 on a Mac.** No check shows the `Help` note or F1 with Fn on a real Mac (the headless command
+     key is Ctrl); `AppShortcutsTests`' `MacShortcutTable` and `GuideShortcutsPageTests` hold the note's
+     text. Whether 8b's Mac checklist gains F1 (0.5 lists About's menu, the Command Line Tools and a
+     second start) is the lead's, at the close. **Settled (the lead, 2026-11-23; design 13.1, ruling
+     85):** it does; the lead adds it to the report's "macOS checklist for the owner" and to plan.md at
+     the close.
+110. **Who takes the site's hand check, and on which run.** 0.5 and 11.5 do not say who; 13.3 lists it
+     under no step of the owner's, so this report gives it to the lead. The run is `guide.yml`'s on the
+     gate commit or a `workflow_dispatch` run on it (D451), its artifact kept 14 days (11.3.4); "every
+     picture" is the catalogue's as §11 leaves it (13.4 item 21: the lead may drop a shot and keep its
+     page's text). Whether the hand check also reads each page against 11.3.2's table, or the lead's
+     reading at §11's merge (11.8 item 1) stands, is the lead's; `reference/about.md`'s fonts' licences
+     "as the first build shows them" (11.3.2) are unverified until §11's first build. **Settled (the
+     lead, 2026-11-23; design 13.1, ruling 79):** the lead takes the hand check, on the gate commit's
+     `guide-site`; the pages are read against 11.3.2's table once, at §11's merge (11.8 item 1), and at
+     the gate only those changed since; the builder's report says what the first build shows of the
+     fonts' licences.
+111. **Earlier texts 11.4 does not name.** Besides 11.4's three comments, these texts (lines on
+     `810913e`) state what §11 changes, each listed with its reason under "Changes to expected results",
+     earlier tests 2 to 6 (ruling 62 for the shortcuts list, ruling 54 and D452 for the palette): the
+     summary of `Phase6RealWindowPass.K.cs:23` ("PageDown three times"); the comment
+     `CommandPaletteViewTests.cs:101` ("PageDown three times: rows 11, 22 and 33");
+     `PaletteEntriesTests.cs:147` and `:211` ("34 commands", 35 from §11's merge) and `:148` ("About
+     VisualCommit… last"); `Phase6Expectations.K.cs:271-272` (34, 23 and 35 commands, About the last of
+     each), `:283` and `:286` (rows 22 to 33 showing); part S's `Phase6Checks.S.cs:341-342`,
+     `Phase6Expectations.S.cs:805` and `Phase6ExpectationTests.S.cs:359` (eleven groups and 50 rows:
+     twelve and 51) and `Phase6Checks.S.cs:409` (the last group `Dialogs and menus` with its three rows:
+     `Help` with its one); `SettingsDialogViewTests.cs:308` ("the last group's three rows", whose code
+     holds the list's last three rows); and the name of the fact `Phase6ExpectationTests.S.cs:361`,
+     `The_shortcut_list_has_eleven_groups_and_fifty_rows`, which this report reads as renamed
+     `The_shortcut_list_has_twelve_groups_and_fifty_one_rows`, as part U's changes rename theirs. Phase
+     6's report's S14 text changes with part S (this report's reading, under "Changes to expected
+     results"). §11's builder corrects the comments with the constants, renames the fact, and names any
+     other here; the lead confirms the rename, or keeps the name and corrects only its summary.
+     **Settled (the lead, 2026-11-23; design 13.1, ruling 83):** renamed; 11.4 names the rename and
+     these texts now.
+112. **The focus frame's colour by value.** Part A names Fluent's `SystemControlFocusVisualPrimaryBrush`
+     by its key, and so does this part; `LinkFrame` takes the colour the key resolves to in the active
+     theme. No value is written here. **Settled (the lead, 2026-11-23; design 13.1, ruling 85):** by its
+     key; `Phase8aExpectations.G` holds no value of it.
+113. **13.4 items 19 to 21** stay as the design has them: `s14e`'s scroll-bar region (§11's builder
+     measures it, the lead adds it to 0.7 at §11's merge; open point 107); item 20 is settled (the
+     Delivers row's hash); the shots the lead may drop during §11 (item 21; open point 110).

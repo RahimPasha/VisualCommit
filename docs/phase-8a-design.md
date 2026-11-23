@@ -4662,23 +4662,38 @@ Fail first: `AppShortcutsTests`' F1 and Help, `GuideShortcutsPageTests`, AppLink
   `| Action | Windows and Linux | macOS |`, a note once when both agree, else each on its own line;
   on failure it prints the expected region.
 - Earlier tests that change, each reason once in the report's "Changes to expected results":
-  `AppShortcutsTests` (`OpenUserGuide` leaves the keyless list; the router table gains
-  `("Open the user guide", true)`; `MacShortcutTable` gains Help with its note; a fact routes F1 on
-  Ctrl and Cmd); `SettingsDialogViewTests.ShortcutTable` gains `new("Help", [new("Open the user guide", "F1")], null)`;
-  `PaletteEntriesTests`' two lists end `"About VisualCommit…", "Open the user guide · F1"`; part S
-  (ruling 62): `PartS.ShortcutGroups` gains Help, `LastGroup = "Help"`, 11 and 50 become 12 and 51,
-  `AssertLastGroupInView` takes the last group's row count, not 3; K10 (ruling 54, D452): from §8's
-  34, 23 and 35 to 35, 24 and 36, `PageDownRows` [11, 22, 33, 34] (a fourth PageDown: with rows 0 to
-  34 the third lands on 33, and Down must wrap from the last row), `FirstRowInViewAtEnd` 23, `WheelRow`
-  28 (the identities `Phase6ExpectationTests.K` asserts, with §8's
-  `Assert.Equal(PartK.OpsCommandCount - 1, PartK.PageDownRows[^1])`), the new literal at
+  `AppShortcutsTests` (`OpenUserGuide` leaves the keyless list; the router table gains `("Open the
+  user guide", true)`; `MacShortcutTable` gains Help with its note; a fact routes F1 on Ctrl and
+  Cmd); `SettingsDialogViewTests.ShortcutTable` gains `new("Help", [new("Open the user guide",
+  "F1")], null)`; `PaletteEntriesTests`' two lists end `"About VisualCommit…", "Open the user guide
+  · F1"`; part S (ruling 62): `PartS.ShortcutGroups` gains Help, `LastGroup = "Help"`, 11 and 50
+  become 12 and 51, `AssertLastGroupInView` takes the last group's row count, not 3; the fact
+  `Phase6ExpectationTests.S.The_shortcut_list_has_eleven_groups_and_fifty_rows` is renamed
+  `The_shortcut_list_has_twelve_groups_and_fifty_one_rows`, and the summaries that state eleven
+  groups and 50 rows, or `Dialogs and menus` with its three rows, are corrected
+  (`Phase6Checks.S.cs:341-342` and `:409`, `Phase6Expectations.S.cs:805`,
+  `Phase6ExpectationTests.S.cs:359`, `SettingsDialogViewTests.cs:308` on `810913e`; ruling 83); K10
+  (ruling 54, D452): from §8's 34, 23 and 35 to 35, 24 and 36, `PageDownRows` [11, 22, 33, 34] (a
+  fourth PageDown: with rows 0 to 34 the third lands on 33, and Down must wrap from the last row),
+  `FirstRowInViewAtEnd` 23, `WheelRow` 28 (the identities `Phase6ExpectationTests.K` asserts, with
+  §8's `Assert.Equal(PartK.OpsCommandCount - 1, PartK.PageDownRows[^1])`), the new literal at
   `Phase6ExpectationTests.K.cs:318`, four PageDowns and their rows in the comments at
   `Phase6Checks.K.cs:97`, `Phase6RealWindowPass.K.cs:73` and `Phase6Expectations.K.cs:277` (both
-  loops read the constant and change no more), `OpsCommands` and `DashboardCommands` gain the row,
-  and the report's K10 "PageDown three times" becomes four; `CommandPaletteViewTests.cs:99-116`
+  loops read the constant and change no more), and the summaries that state §8's numbers
+  (`Phase6Expectations.K.cs:271-272`, `:283`, `:286` and `Phase6RealWindowPass.K.cs:23` on
+  `810913e`; `PaletteEntriesTests.cs:147`, `:148` and `:211`; ruling 83), `OpsCommands` and
+  `DashboardCommands` gain the row, and the report's K10 "PageDown three times" becomes four, with
+  its list of rows, the PageDowns' rows, the wheel's row (28, `Open settings…`) and its `Shown`
+  counts (35, 24, 36); `CommandPaletteViewTests.cs:99-116`
   (`The_keys_move_the_highlight_into_view_and_typing_filters`, ops scenario): 35 commands, PageDown
   rows 11, 22, 33 and 34 (a fourth PageDown for the same reason: `:111-112` presses Down and expects
   row 0), Up from row 0 wraps to 34, then 33 (ruling 54).
+- What no check shows (ruling 82, 2026-11-23), as facts of a class of §11's own in App.Tests:
+  without a launcher the command logs the Info line and opens nothing; a launcher that throws gives
+  `Start`'s Error line; F1's route on a dashboard tab and on a welcome tab opens the start page
+  (`FakeFileLauncher.Requests`). F1 with a menu open or during a drag is the router's rule for every
+  binding: the builder reports whether the router's table in `AppShortcutsTests` runs F1 there, and
+  adds the fact if it does not.
 - GuideShots: `GuideCatalogueTests` (every picture a page names is in the catalogue and every name is
   used; each `<img>` has `alt`, light before dark, `srcset` "`<src>` 2x" exactly when `Scale` is 2);
   `LeakGuardTests` (one made-up text per rule caught; the demo's texts and About's
@@ -4686,7 +4701,9 @@ Fail first: `AppShortcutsTests`' F1 and Help, `GuideShortcutsPageTests`, AppLink
 
 ### 11.5 Part G's checks (outline)
 
-Dark, 1100×700, the ops scenario; none in the real window, which opens no browser.
+Dark, 1100×700; G1 and G3 on the ops scenario, G2 on one empty tab for each of its two starts
+(ruling 78: 5.3 shows the screen only on a tab with no repository); none in the real window, which
+opens no browser.
 
 | Id | Steps | Expected |
 |---|---|---|
@@ -4703,17 +4720,35 @@ push, the guide's run on `master` is read, and run again by `workflow_dispatch` 
 setting; the live address answers; the `github-pages` environment's branch rule is read, and if it
 admits more than `master`, the owner's leave is asked to set it.
 
+**As the report wrote part G (2026-11-23; rulings 77 to 85, 13.1).** "No git call" is read as none
+made by the palette's row, F1 or a link: on the ops tab, whose watcher is live, each key is marked
+and read with the watchers quiet (D280), the palette's opening held as phase 6's K10 holds it (its
+worktree read once, and besides it only whole refreshes); on G2's empty tabs the plain count stands.
+G2's first start writes `gitExecutable` before it, since `FakeGitAnswer.ChosenMissing` throws for a
+lookup without a `ChosenPath` (1.17); its four states are the fake's answers, the not-working one
+part F's broken configuration. The report adds from 11.3.1: F1 with the palette open, Shift+F1 and
+Ctrl+F1 on the graph, and the palette's row on the first-run screen. G2 reads its link's frame,
+Fluent's on a `VcFlatButton`, by a helper of part G's own and not by `LinkFrame`: against a capture
+taken before the focus moved, no pixel differs inside the tight box of the link text's ink, and some
+pixel differs in the button's bounds outside it, for both link texts (ruling 80). Where the focus is
+after Enter on a first-run link is not part G's: the screen's launching buttons and links go on step
+19's list (ruling 81). The hand check also follows the five first-run addresses to their sections in
+the built site, and is the lead's, on the gate commit's `guide-site` (ruling 79).
+
 ### 11.6 Earlier pictures
 
-As rulings 54 and 62 name: `k10a`, `k10f`, `l31c-palette` dark and light (the scroll thumb,
-x 837–838) and their 2 real-window twins at the gate; `s14f-shortcuts-end`, confirmed: the list's
-end shows Help, so the section's column changes; `s14e-shortcuts-top` at most in the section's scroll
-bar, which the builder measures. Proof: the builder runs, besides 11.4's classes, only
-`--filter-method "*Phase6ChecksS.*" --filter-method "*Check_K10_*"` in Phase6 (one command, as 0.4
-writes them) and `--filter-method "*Check_L31_overlays*"` in Phase6Look, never a whole project; at the merge the lead
-runs Phase6 and Phase6Look whole, one after the other, through `scripts/heavy-run.sh` (D245), then
-`scripts/compare-pictures.py` against the references current at the merge; any other difference
-stops the merge. The guide's pictures are outside `artifacts/visual` and in no list.
+As rulings 54 and 62 name: `k10a`, `k10f`, `l31c-palette` dark and light (the scroll thumb, x
+837–838) and their 2 real-window twins at the gate, and 8a's own `k3a-palette-cancel` and
+`l3a-palette-placeholder` in the same thumb (0.7; ruling 84); `s14f-shortcuts-end`, confirmed: the
+list's end shows Help, so the section's column changes; `s14e-shortcuts-top` at most in the
+section's scroll bar, which the builder measures. Proof: the builder runs, besides 11.4's classes,
+only `--filter-method "*Phase6ChecksS.*" --filter-method "*Check_K10_*"` in Phase6 (one command, as
+0.4 writes them) and `--filter-method "*Check_L31_overlays*"` in Phase6Look, never a whole project;
+at the merge the lead runs Phase6, Phase6Look and 8a's project whole, one after the other, through
+`scripts/heavy-run.sh` (D245), then `scripts/compare-pictures.py --expected` against the references
+current at the merge, with the boxes of these pictures, `s14e`'s from the builder's measure (ruling
+84); any other difference stops the merge. The guide's pictures are outside `artifacts/visual` and
+in no list.
 
 ### 11.7 Lagged list, time, real window
 
@@ -5368,6 +5403,29 @@ active tab is a dashboard or holds no repository, every restored tab opens at on
 `InitializeAsync` keeps its contract, so no harness wait changes; the start-up line still counts
 every restored tab; the merge tools' lookup still starts when the first restored load ends (D202).
 D457 also amends ruling 65: M3's bound comes from its change's "after" series (13.4 item 17).
+
+**Part G's checks (the lead, 2026-11-23, before §11's build; the report's open points 99 to 113).**
+77. "No git call" in G1 and G3 means none made by the palette's row, F1 or a link, read with the
+quiet marks beside the live watcher (D280); G2's empty tabs keep the plain count. 78. G2 runs on one
+empty tab for each start, `gitExecutable` written before the first, its four states the fake's
+answers. 79. The report's additions from 11.3.1 stay (F1 with the palette open, Shift+F1 and
+Ctrl+F1, the palette's row on the first-run screen); the site's hand check gains the five first-run
+addresses and is the lead's, on the gate commit's `guide-site`; the pages are read against 11.3.2
+once, at §11's merge, and at the gate only those changed since. 80. G2 reads its link's frame by a
+helper of its own: against a capture taken before the focus moved, no pixel differs inside the tight
+box of the link text's ink and some pixel differs in the button's bounds outside it, for both link
+texts; `LinkFrame` stays `VcLinkButton`'s; a frame that touches the ink stops the builder, and the
+lead rules before the merge. 81. Where the focus is after Enter on a first-run link is not part G's:
+the first-run screen's launching buttons and links, whose commands allow no concurrent runs, go on
+the list of the review before the gate, measured with a launcher that answers late. 82. §11's
+builder adds facts for what no check shows: the Info line without a launcher, the Error line when
+the launcher throws, F1's route on a dashboard tab and on a welcome tab; F1 under a menu and during
+a drag stay the router's table's. 83. Phase 6's fact is renamed
+`The_shortcut_list_has_twelve_groups_and_fifty_one_rows`, and the builder corrects the comments and
+summaries 11.4 lists and names any other. 84. The lead's `--expected` file at §11's merge names 8a's
+own `k3a` and `l3a` with 11.6's pictures, and holds boxes for `s14f` and `s14e`, the second from the
+builder's measure; the lead runs 8a's project whole there, besides Phase6 and Phase6Look. 85. F1 on
+a Mac goes into 8b's Mac checklist at the close; the focus frame's colour stays named by its key.
 
 ### 13.2 What the integration settled
 
