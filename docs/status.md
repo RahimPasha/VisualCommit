@@ -718,30 +718,33 @@ and 85 picture names; §10 has no part (Notes, "Wave 3 is under way"). For the t
 (the spike, §10's first run, the "before" series) the owner said on 2026-11-21: start each when it is
 ready, without asking again; §9's Narrator listen needs the owner in person and is asked for at
 its merge.
-**Wave 3 is closed (step 16, 2026-11-23). The next step is the owner's: the week's share before wave
-4** (D241; "Waiting on the owner" has the figures). Nothing of wave 4 starts before the owner
-answers. What step 16 ended with: the three packages merged, §10 (`86ecb3a`), §8 (`f014b2b`, its
-fixes after the merge `85e2884`) and §9 (`769f459`); the lagged list, the whole default run and the
-pictures on `85e2884`, whose one fault (`a1b-about-link-focus`) is fixed (`fcf8c1e`); the references
-of the later merges, `D:/Projects/Personal/phase8-work/references/wave3/` (1,235 scripted pictures);
-three "before" series, two probes, two panels and **D457** (the bounds `0bfbe92`, two backlog rows,
-the restore order as ruling 76, a change in wave 4); CI's two failures on the link frame's merge
-fixed (`70a8fc0`, `809b77f`); and, after a review of the second of those fixes, **the row list's
-fix, merged at `bad98b1`**: CI's run 45133434382 on it is green in all six jobs, the whole default
-run on `c1bc69b`, whose code is the merge's, passed with 8,514 tests and none failed, and each of
-its 54 scripted pictures that are not the files of wave 3's references was read and varies from run
-to run, none in a row of a list. The report's subsection "CI's two failures after the link frame's
-merge, and the row list", the design's 1.17 and architecture.md's "Working changes and writes" hold
-it; four independent readers checked the three passages and the lead corrected them. Notes, from
-"The two CI fixes" to "The merge's runs and the docs", have each run. The last worktree is removed;
-the `wip/p8a-*` branches stay local (D396). **When the owner has answered**, wave 4 starts as waves
-1 to 3 did, each part's checks written and committed before its package is built: §11 (the guide),
-§12 (the real-window part), the restore order's package (ruling 76: a design section written from
-D457 (5), the build with its tests first, a review, the alternated series of M2 and M3, about half
-an hour of the rested desktop with the owner told, and the probe), then the review before the gate
-(step 19) with its list, which the Notes hold in their paragraphs "More for step 19's list" and in
-"Timeouts of older tests". The owner's Narrator listen can come at any time before that review; it
-is best not taken beside a test run.
+**Wave 3 is closed (step 16, 2026-11-23), and the owner said on 2026-11-23, asked for the week's
+share: "All of wave 4 now"** (D241; "Waiting on the owner"). **Wave 4 is the next step** (steps 17
+to 19), begun that day: first the lead reads the design's sections 11 and 12, 0.4 and 0.5 and D457
+(5), writes the restore order's design section and has each part's checks written and committed
+before its package is built (D244). What step 16 ended with: the three packages merged, §10
+(`86ecb3a`), §8 (`f014b2b`, its fixes after the merge `85e2884`) and §9 (`769f459`); the lagged
+list, the whole default run and the pictures on `85e2884`, whose one fault (`a1b-about-link-focus`)
+is fixed (`fcf8c1e`); the references of the later merges,
+`D:/Projects/Personal/phase8-work/references/wave3/` (1,235 scripted pictures); three "before"
+series, two probes, two panels and **D457** (the bounds `0bfbe92`, two backlog rows, the restore
+order as ruling 76, a change in wave 4); CI's two failures on the link frame's merge fixed
+(`70a8fc0`, `809b77f`); and, after a review of the second of those fixes, **the row list's fix,
+merged at `bad98b1`**: CI's run 45133434382 on it is green in all six jobs, the whole default run on
+`c1bc69b`, whose code is the merge's, passed with 8,514 tests and none failed, and each of its 54
+scripted pictures that are not the files of wave 3's references was read and varies from run to run,
+none in a row of a list. The report's subsection "CI's two failures after the link frame's merge,
+and the row list", the design's 1.17 and architecture.md's "Working changes and writes" hold it;
+four independent readers checked the three passages and the lead corrected them. Notes, from "The
+two CI fixes" to "The merge's runs and the docs", have each run. The last worktree is removed; the
+`wip/p8a-*` branches stay local (D396). Wave 4 goes as waves 1 to 3 did, each part's checks written
+and committed before its package is built: §11 (the guide), §12 (the real-window part), the restore
+order's package (ruling 76: a design section written from D457 (5), the build with its tests first,
+a review, the alternated series of M2 and M3, about half an hour of the rested desktop with the
+owner told, and the probe), then the review before the gate (step 19) with its list, which the Notes
+hold in their paragraphs "More for step 19's list" and in "Timeouts of older tests". The owner's
+Narrator listen: asked a third time on 2026-11-23, the owner chose "Later, before the review"; the
+lead asks again before step 19's review, which needs the answer.
 The [phase 7b handoff](handoffs/phase-7b.md), "For the next phase", says what to reuse, what to do
 first and which risks to watch.
 
@@ -1636,6 +1639,9 @@ every commit.
     lists jump and took five rounds to put right (Notes, "The merge's runs and the docs"). Wave 4 is
     expected to need 15 to 25M: the guide, the real-window part, the restore order and the review
     before the gate with the fixes it brings.
+    **Answered on 2026-11-23: "All of wave 4 now"** (the owner chose it over wave 4 without the
+    review, the restore order alone, and a stop until the reset). The Narrator listen, asked with
+    it: "Later, before the review".
         - **The week's allowance: "all of wave 3 now"** (the owner, 2026-11-21; D241). The owner said
     "Continue" and, told that wave 3 needs 15 to 18M tokens and could reach the week's limit before
     Thursday's reset, chose all of it now over the picture check alone or the checks alone. The
