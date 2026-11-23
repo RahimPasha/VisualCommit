@@ -3,7 +3,10 @@
 ## Tabs
 
 Each tab holds one repository, a workspace's dashboard, or the welcome page. The tabs you leave
-open, and the one that was active, come back when VisualCommit starts again.
+open, and the one that was active, come back when VisualCommit starts again. When several repository
+tabs come back and the tab in front is one of them, it opens first; the others open once its
+history shows its first rows, or after 5 seconds at the latest, at most four at a time. A tab you
+switch to meanwhile opens at once, and a tab you close before its turn does not open.
 
 | To | Press |
 |---|---|
