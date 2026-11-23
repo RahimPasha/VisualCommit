@@ -48,6 +48,12 @@ public partial class MainWindowViewModel : ObservableObject
     /// </summary>
     private readonly List<RepositoryViewModel> _closedButRunning = [];
     private bool _restoring;
+
+    /// <summary>
+    /// The order of the restored tabs' openings while the start that made it runs, null otherwise:
+    /// it hears of every shown and closed tab and of the window's close, and keeps no closed tab.
+    /// </summary>
+    private RestoreOrder? _restore;
     private bool _closeConfirmed;
     private FinishingDialogViewModel? _finishing;
 
@@ -172,6 +178,8 @@ public partial class MainWindowViewModel : ObservableObject
     /// Start-up work that needs the window to exist first: finds git and reports it in the status
     /// bar and, when git cannot be used, on the first-run screen with its guidance (the refresh of
     /// "Check again"), then opens the repositories of the tabs restored from the last session.
+    /// When the active tab is one of several restored repositories' tabs, a <see cref="RestoreOrder"/>
+    /// opens it first and alone and the others after it (D457).
     /// Completes when every restored tab has loaded its history.
     /// </summary>
     public async Task InitializeAsync(CancellationToken cancellationToken = default)
@@ -202,14 +210,37 @@ public partial class MainWindowViewModel : ObservableObject
         // repository before they open.
         var restored = Tabs.Where(tab => tab.PendingPath is not null).ToList();
         _tabServices.Startup.TabsRestored(restored.Count);
-        var opening = restored
-            .Select(tab => tab.OpenAsync(tab.PendingPath!, remember: false))
-            .ToList<Task>();
+
+        // The active restored tab beside others opens first and alone (D457); any other start
+        // opens every restored tab at once.
+        IReadOnlyList<Task> opening;
+        IReadOnlyList<Task> firstLoads;
+        if (!cancellationToken.IsCancellationRequested && ActiveTab is { PendingPath: not null } first && restored.Count > 1)
+        {
+            _restore = new RestoreOrder(first, restored, (tab, path) => tab.OpenAsync(path, remember: false), _tabServices.RestoreClock, _log, cancellationToken);
+            opening = _restore.Start();
+            firstLoads = [_restore.FirstLoadEnded];
+        }
+        else
+        {
+            opening = restored
+                .Select(tab => tab.OpenAsync(tab.PendingPath!, remember: false))
+                .ToList<Task>();
+            firstLoads = opening;
+        }
 
         // The merge tools git knows are looked up once start-up has settled: when the first
         // restored tab's load ends, or at once without one (docs/phase-6-design.md 8.10).
-        _ = LookUpMergeToolsAfterAsync(opening);
-        await Task.WhenAll(opening.Append(ReadActiveDashboardAtStartAsync()));
+        _ = LookUpMergeToolsAfterAsync(firstLoads);
+        try
+        {
+            await Task.WhenAll(opening.Append(ReadActiveDashboardAtStartAsync()));
+        }
+        finally
+        {
+            // The order has nothing left to do, and keeps nothing.
+            _restore = null;
+        }
 
         // A restored tab that could not be opened is a "New tab" now; a lone one has no close button.
         UpdateCanClose();
@@ -245,6 +276,10 @@ public partial class MainWindowViewModel : ObservableObject
         var index = Tabs.IndexOf(tab);
         Tabs.RemoveAt(index);
         tab.RepositoryOpened -= OnRepositoryOpened;
+
+        // Before the tab stops its work and before its neighbour is shown: a waiting tab never
+        // opens, and the active tab's close lets the others open.
+        _restore?.Closed(tab);
         tab.Dispose();
         if (tab.Repository is { } repository && repository.Queue.Current is { IsBackground: false })
         {
@@ -274,6 +309,9 @@ public partial class MainWindowViewModel : ObservableObject
     public void CloseAll()
     {
         _closed = true;
+
+        // No restored tab that still waits opens now.
+        _restore?.Stop();
         Dialogs.CancelAll();
         AutoFetch.Dispose();
         ActivityLog.Dispose();
@@ -455,6 +493,9 @@ public partial class MainWindowViewModel : ObservableObject
         }
 
         ActiveTab = tab;
+
+        // A restored tab that waits for its turn opens once it is shown.
+        _restore?.Shown(tab);
         if (!_restoring)
         {
             // A dashboard reads its rows when it becomes the active tab (docs/phase-6-design.md 2.10).
