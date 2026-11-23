@@ -1384,37 +1384,41 @@ wave adds to it. What wave 2 tells §12's launches is in 12.3.5.
   request changed, a message row whose text changes, a ref row whose name, tooltip, level or opening
   changes) is replaced: when it is the top row in view, the offset and the extent end short by the
   heights of the consecutive replaced rows from it down, and a list scrolled by less goes to its top
-  and makes every control again; and a press on a replaced row itself loses its click wherever the
-  row is, as before phase 8a. And a row left in place between the first and the last row that shows
-  something new stays in the panel's estimate, so deep in a long list the offset and the extent can
-  end further off than before phase 8a; in the 105 pairs of cases on record no row moved in the
-  window there and no click was lost that the code before kept, though deep in the list kept rows in
-  view may get new controls, as they did before. The lead chose that over joining two runs, which a
-  round of the fix had tried: a join brought the offset 1 to 47 px nearer in the cases measured (47
-  for two renames at the bottom of 60 branches, 6 for a fetch), in a list where it is off already,
-  and took the controls, and the click under a press, of the rows between the runs, also where it
-  gains nothing, and could reset the whole list. For whoever adds a list of rows or a row: use the
-  form that fits the rows' heights; a row's `ShowsSameAs` compares everything the row holds that its
-  actions use, not only what it shows, because a row that shows the same is kept as the old object
-  (`PullRequestRow` compares its whole record since `e40c9ae`); a row that implements
-  `IUpdatableRow` raises a change for every property a template binds, the derived ones too, and its
-  `CanUpdateTo` says yes only when all that `UpdateTo` does not copy is the same; and a walk-through
-  that hides or solos a branch waits for the graph's reload (`WaitForGraphReloadAsync`) before it
-  goes on, as the sweep's state 05 and U2/U3's step 9 now do, because no wait for the operations
-  queue covers it. `RowCollectionTests`, `LeftPanelScrollTests`, `LeftPanelViewModelTests` and
-  `StageListScrollTests` (App.Tests) hold the rule: each of the closing round's 20 wrong forms of
-  `RowCollection`, tried against the first three, fails one of them, two of the 20 only since the
-  lead's two facts (`a9a7847`). What is older than the phase went to the list of the review before
-  the gate (status step 19): Avalonia's estimate after a remove at or above the first row it has
-  made, or an insert above it, which near the top of the left panel misses by pixels and deep in it
-  can give rows in view new controls, lose a press on one or draw them elsewhere (87 px lower after
-  a fetch that drops the top remote branch in view, by up to 131 px at the undo of a rename); a
-  rebuild that changes the list's length; the row that itself shows something new, which still loses
-  its press, its focus and its tooltip; the keyboard focus that Enter or Space on a section header,
-  a folder or a file list's tree folder, or Space on a hidden row's eye, drops; the other phases'
-  walk-throughs, not yet searched for a hide or a solo followed only by `WaitForIdleAsync`; a solo's
-  cost with thousands of branches, not measured; and one more timeout of an older test, seen once
-  (the report has it).
+  and makes every control again, the click under a press lost with them; and a press on a replaced
+  row itself loses its click wherever the row is, as before phase 8a. And a row left in place
+  between the first and the last row that shows something new stays in the panel's estimate, so deep
+  in a long list the offset and the extent can end further off than before phase 8a. In the 105
+  pairs of cases on record no row moved in the window and no click was lost that the code before
+  kept, except in the first limit's own case (seven pull request rows replaced at the top under an
+  offset of 172 px); deep in the list, kept rows in view may get new controls, as they did before.
+  The lead chose that over joining two runs, which a round of the fix had tried: where a join
+  gained, it brought the offset 1 to 47 px nearer (47 for two renames at the bottom of 60 branches,
+  6 for a fetch), in a list where it is off already; where both runs lay below the top row in view
+  it gained nothing, and where it reset the whole list (two renames far apart at the bottom of 100
+  branches) it ended 7 px further off; and it took the controls, and the click under a press, of the
+  rows between the runs. For whoever adds a list of rows or a row: use the form that fits the rows'
+  heights; a row's `ShowsSameAs` compares everything the row holds that its actions use, not only
+  what it shows, because a row that shows the same is kept as the old object (`PullRequestRow`
+  compares its whole record since `e40c9ae`); a row that implements `IUpdatableRow` raises a change
+  for every property a template binds, the derived ones too, and its `CanUpdateTo` says yes only
+  when all that `UpdateTo` does not copy is the same; and a walk-through that hides or solos a
+  branch waits for the graph's reload (`WaitForGraphReloadAsync`) before it goes on, as the sweep's
+  state 05 and U2/U3's step 9 now do, because no wait for the operations queue covers it.
+  `RowCollectionTests`, `LeftPanelScrollTests`, `LeftPanelViewModelTests` and `StageListScrollTests`
+  (App.Tests) hold the rule: each of the closing round's 20 wrong forms of `RowCollection`, tried
+  against the first three, fails one of them, two of the 20 only since the lead's two facts
+  (`a9a7847`). What is older than the phase, and what the fix's rounds left open, went to the list
+  of the review before the gate (status step 19): Avalonia's estimate after a remove at or above the
+  first row it has made, or an insert above it, which near the top of the left panel misses by
+  pixels and deep in it can give rows in view new controls, lose a press on one or draw them
+  elsewhere (87 px lower after a fetch that drops the top remote branch in view, by up to 131 px at
+  the undo of a rename); a rebuild that changes the list's length; the row that itself shows
+  something new, which still loses its press, its focus and its tooltip; the keyboard focus that
+  Enter or Space on a section header, a folder or a file list's tree folder, or Space on a hidden
+  row's eye, drops; the other phases' walk-throughs, not yet searched for a hide or a solo followed
+  only by `WaitForIdleAsync`; the cost of a solo with thousands of branches now that each row
+  changes itself in place, not measured; and one more timeout of an older test, seen once (the
+  report has it).
 
 ## 2. colours: the contrast round (D410)
 

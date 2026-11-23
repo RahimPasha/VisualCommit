@@ -4395,15 +4395,15 @@ change, and its release comes after the refresh. "For" gives the value before th
 
 - Round 4 took the rows the view is told of by runs of consecutive rows: a run of same-key rows is replaced
   row by row, any other run removed and inserted. A rename of the top row in view near the top of the list,
-  made outside the app or through the app's rename, the undo of one there, and a rename at the bottom of 60
-  branches then give the numbers of the code before phase 8a, 105 for 100 near the top and 1335 for 1356 at
-  the bottom, no row moved in the window and the click kept. Its first verifier (47 cases, each on three
-  versions) found that two runs with kept rows between them leave the offset further off than before phase 8a;
-  its second pass joined such runs, and its second verifier (48 cases) showed what the join costs, the
-  controls and the click of the rows between the runs, also where both runs lie below the top row in view, and
-  a reset of the whole list past 64 rows, and that a row that changes itself in place anywhere between the
-  first and the last row that shows something new, also below the last shifted row, leaves the offset further
-  off in any case.
+  made outside the app or through the app's rename, the undo of one there, and a rename of the top row in view
+  at the bottom of 60 branches, outside the app or through the app's rename, then give the numbers of the code
+  before phase 8a, 105 for 100 near the top and 1335 for 1356 at the bottom, no row moved in the window and
+  the click kept. Its first verifier (47 cases, each on three versions) found that two runs with kept rows
+  between them leave the offset further off than before phase 8a; its second pass joined such runs, and its
+  second verifier (48 cases) showed what the join costs, the controls and the click of the rows between the
+  runs, also where both runs lie below the top row in view, and a reset of the whole list past 64 rows, and
+  that a row that changes itself in place anywhere between the first and the last row that shows something
+  new, also below the last shifted row, leaves the offset further off in any case.
 
 - **The lead's rule, 2026-11-22**, which the closing round applied, for a rebuild whose changed part keeps its
   number of rows: (1) the stage lists remove and insert each row the view is told of; (2) a row that shows the
@@ -4427,8 +4427,10 @@ change, and its release comes after the refresh. "For" gives the value before th
   in the list kept rows in view may get new controls, as they did before. The reason for not joining:
   `48f403c` exists so that a press on a row a rebuild need not tell the view of stays a click; near the top of
   the list two renames a few rows apart now keep the rows between them, their controls and the click (98 for
-  100), where the code before phase 8a lost it (99 for 100), and a join brought the offset 1 to 47 px nearer
-  in the cases measured, in a list where it is off already.
+  100), where the code before phase 8a lost it (99 for 100), and where a join brought the offset nearer, it
+  was by 1 to 47 px (47 for two renames at the bottom of 60 branches, 6 for the fetch), in a list where it is
+  off already; it gained nothing where both runs lie below the top row in view, and in a list of 100 branches
+  it reset the whole list and ended 7 px further off.
 
 - The closing round's two verifiers judged by a closed list of fault kinds (the rule not done as worded; a
   behaviour no test pins; an untrue comment; a row moved or a click lost where the code before phase 8a kept

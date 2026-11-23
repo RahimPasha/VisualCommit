@@ -1207,21 +1207,21 @@ every commit.
   something new stays in Avalonia's estimate, so deep in the list the offset and the extent can end
   further off than before phase 8a, with no row moved in the window and no click lost that the code
   before kept. The reason: `48f403c` exists so that a press on a row a rebuild need not tell the
-  view of stays a click; a join gives that up for an offset 1 to 47 px nearer, in the cases
-  measured, in a list where it is off already, and (B) has to be accepted for the rows that change
-  themselves anyway. **The closing round** (run `wf_d5a9ed01-a48`) drops the join, pins the rule
-  with tests and rewrites the comments; its verifier judges by a closed list of fault kinds (the
-  rule not done as worded, a behaviour no test pins, an untrue comment, a row moved or a click lost
-  where the code before kept both, hygiene), so an offset that ends off is no fault there. More for
-  step 19's list, older than the phase: a run removed far above the view deep in the list gives rows
-  in view new controls and loses a press on one (a rename of b01 at the bottom of 60 branches: 1226
-  for 1356), where a replace would have touched nothing, and `RowCollection` cannot see the view to
-  choose; a fetch that drops the top remote branch in view draws the rows 87 px lower; the undo of a
-  rename at the bottom of 60 branches moves rows by up to 131 px. Both rounds' class runs wrote
-  `u20c` and `u20e` of phase 5's part U with other bytes than wave 3's references, the same bytes
-  from every source and the bytes of wave 1's and wave 2's references: the reference run of wave 3
-  caught the variation the report's comparison names for these two, so they will differ at the whole
-  default run's comparison and are explained.
+  view of stays a click; a join gives that up for an offset that is, where the join gains at all, 1
+  to 47 px nearer in a list where it is off already, and (B) has to be accepted for the rows that
+  change themselves anyway. **The closing round** (run `wf_d5a9ed01-a48`) drops the join, pins the
+  rule with tests and rewrites the comments; its verifier judges by a closed list of fault kinds
+  (the rule not done as worded, a behaviour no test pins, an untrue comment, a row moved or a click
+  lost where the code before kept both, hygiene), so an offset that ends off is no fault there. More
+  for step 19's list, older than the phase: a run removed far above the view deep in the list gives
+  rows in view new controls and loses a press on one (a rename of b01 at the bottom of 60 branches:
+  1226 for 1356), where a replace would have touched nothing, and `RowCollection` cannot see the
+  view to choose; a fetch that drops the top remote branch in view draws the rows 87 px lower; the
+  undo of a rename at the bottom of 60 branches moves rows by up to 131 px. Both rounds' class runs
+  wrote `u20c` and `u20e` of phase 5's part U with other bytes than wave 3's references, the same
+  bytes from every source and the bytes of wave 1's and wave 2's references: the reference run of
+  wave 3 caught the variation the report's comparison names for these two, so they will differ at
+  the whole default run's comparison and are explained.
   **The closing round and the merge** (run `wf_d5a9ed01-a48`: two passes, 4 agents, 1.04M tokens;
   `D:/Projects/Personal/phase8-work/wave3/rows-final-result.json`, readable in
   `wave3/ci-fixes/rows-scroll/round5-two-rounds.txt`). The fixer dropped the join (`1f239c2`, its
@@ -1260,10 +1260,17 @@ every commit.
   second limit, how the reset counts, what is older than the phase), some wrong details (the `y`'s
   columns on macOS, `State_05`'s one hide, round four's count), and one thing the lead had not seen:
   the watchdog's stop in the default run of 2026-11-22 ("Timeouts of older tests", (3)). The lead
-  corrected the three passages on them; they were not checked a second time. Wave 3 with its close:
-  about 27M tokens in the runs these notes record, where 15 to 18M were expected (the three packages
-  with their merge fixes 8.7M; the close's pictures, link frame, panels, CI fixes and docs 10.7M;
-  the row list with its review, five rounds, pictures and docs' check 7.5M).
+  corrected the three passages on them (`dd89cda`), and two readers checked the corrections (run
+  `wf_55b0def6-374`: 2 agents, 0.45M tokens; `wave3/rows-docs-recheck-result.json`): the points
+  resolved, but for seven sentences, which are corrected in turn: a join's gain of 1 to 47 px holds
+  only where it gains at all; the rename that keeps its numbers at the bottom of 60 branches is the
+  top row in view's; the design's 105 pairs have the first limit's case as their one exception; a
+  solo's cost with thousands of branches is the fix's own open point, not an older one;
+  architecture.md no longer gives what happened on CI's runner as known, and says that a removed run
+  costs where it lies at or above the top row in view. Wave 3 with its close: about 27M tokens in
+  the runs these notes record (27.3M by their sum), where 15 to 18M were expected (the three
+  packages with their merge fixes 8.7M; the close's pictures, link frame, panels, CI fixes and docs
+  10.7M; the row list with its review, five rounds, pictures and the two checks of its docs 7.9M).
 - **Timeouts of older tests: two on 2026-11-20 and one on 2026-11-22, each seen once, none
   explained.** (1) CI's first
   attempt on the merge (44851353430), macOS:
