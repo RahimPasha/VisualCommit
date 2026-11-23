@@ -5476,6 +5476,21 @@ closed after it was let in): 33 new tests by xUnit's count where 14.7 said about
 `AboutEntryTests` and `RequestOperationsProvidersTests`, which the package did not run, are the
 merge's lagged list's. Nothing of this touches the proof's rule (rulings 88 and 89).
 
+**The proof and the Task Scheduler (the lead, 2026-11-23 at 13:31, before the proof's first launch;
+14.8 steps 3, 4 and 6).** 92. The laptop has a task every 15 minutes (`ActionCenterDeferralTask`),
+hourly ones (`EasyDuplicateFinder`, Zoom's updater) and Office's, so "waits out anything due" is
+carried out by the scripts. The probe's session reads once what is due in its next 40 minutes and,
+before a launch, waits out a task due within the next 45 seconds (its time, 15 s more, and its end).
+The series reads what is due in the next ten minutes before each run and waits out what is due
+within five, a run's own length (about 3 minutes) with a margin; a task due later than that falls
+after the run. A run has met a scheduled task when the reading after it shows a task's last run
+between its begin and its end; it is then taken again with its pair's other run, as step 6 says. One
+task is left out of that: `\Microsoft\Windows\Location\Notifications`, which runs every few minutes
+on an event (13:24:00 and 13:29:05 today), shows no next time, so it cannot be waited out, and ends
+at once with 0x80070002, its program missing on this Windows build: it starts nothing, the report
+names it, and it voids no run. Any other task without a next time that a run meets voids it. The
+waits lengthen the series from about 30 minutes to about 55; the owner is told.
+
 ### 13.2 What the integration settled
 
 Beyond moving the packages' contracts into section 1: the broker's `gitVersion` goes at §3's merge,

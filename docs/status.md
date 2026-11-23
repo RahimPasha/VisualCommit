@@ -912,7 +912,15 @@ every commit.
   through `FirstPage`'s asynchronous completion and then asks for up to four openings on the UI
   thread, comes before or after the first frame with rows (the section's risk 1). The lead made the
   base's worktree and both Release builds at once after the run (12:10 and 12:11), while §11's third
-  builder worked; a build is no heavy run (D245).
+  builder worked; a build is no heavy run (D245). **§11's run ended at 13:25** (run
+  `wf_7dddbd2e-deb`, 18 agents, 5.42M tokens, 4 h 4 min; 18 commits on `wip/p8a-guide`, the last
+  `982f5e5`; nine majors and 20 minors, all fixed but the page's ten-tab row, which waits for the
+  restore order's numbers; its result is kept in
+  `D:/Projects/Personal/phase8-work/wave4/guide/build-result.json`). No agent is at work from then
+  on, so **the restore order's proof begins at 13:36**, the owner told in the chat at 13:26: the
+  probe's session first (`…/wave4/restore/probe/session-1.txt`), then the series. **Ruling 92**
+  (design 13.1), made at 13:31 before the first launch, says how the scripts wait out the Task
+  Scheduler and which task voids no run; the series takes about 55 minutes with those waits.
 - **Wave 3 is under way (2026-11-21).** The owner's word that day: "Continue", all of wave 3 now, and
   the three takeovers of the desktop (the spike, §10's first run, the "before" series) each as soon
   as it is ready. **The checks** of parts A and U were written by a writer each, reviewed by two
