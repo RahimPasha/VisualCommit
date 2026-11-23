@@ -130,19 +130,20 @@ public sealed class RowCollection<T> : ObservableCollection<T>
     /// A remove at or above the first row the panel has made, and an insert above it, make it forget
     /// that row's place and estimate the top row in view as the offset divided by the mean height of
     /// the rows it has made; a run removed and inserted below that row leaves the rows above it where
-    /// they are, and its own rows, other items, get new controls in any case. The estimate is exact when every
-    /// row has one height, as in the stage lists, so a remove and an insert leave them where they
-    /// were in each case tried. Where the heights differ, as in the left panel, whose 30 px headers
-    /// sit among 26 px rows, the estimate misses, as it did before phase 8a: by pixels near the top
-    /// of the list (the rename above leaves the offset at 105 for 100 and the extent 5 px longer,
-    /// the rows where they were, the click kept), and by rows deep in a list with headers in view,
-    /// where the panel makes the controls of rows in view again and a press on one of them loses its
-    /// click, or draws the rows in view somewhere else. So, at the bottom of 60 branches, a rename of
-    /// b01, far above the view, leaves the offset at 1226 for 1356 and five rows in view with new
-    /// controls, where a replace of the two rows it shifts would have touched nothing; and with 20
-    /// local and 20 remote branches scrolled down to origin/r03 at the top of the view, a fetch that
-    /// drops r03 and brings r99 moves the rows in view 87 px down. A rebuild that changes the number
-    /// of rows removes and inserts its changed part in the same way.
+    /// they are, and its own rows, other items, get new controls in any case. The estimate is exact
+    /// when every row has one height, as in the stage lists, so a remove and an insert leave them
+    /// where they were in each case tried. Where the heights differ, as in the left panel, whose 30 px
+    /// headers sit among 26 px rows, the estimate misses, as it did before phase 8a: by pixels near
+    /// the top of the list (the rename above leaves the offset at 105 for 100 and the extent 5 px
+    /// longer, the rows where they were, the click kept), and by rows deep in a list with headers in
+    /// view, where the panel makes the controls of rows in view again and a press on one of them
+    /// loses its click, or draws the rows in view somewhere else. So, at the bottom of 60 branches, a
+    /// rename of b01, far above the view, leaves the offset at 1226 for 1356 and five rows in view
+    /// with new controls, where a replace of the two rows it shifts would have touched nothing; and
+    /// with 21 local and 21 remote branches, each side's main among them, scrolled down to origin/r03
+    /// at the top of the view, a fetch that drops r03 and brings r99 moves the rows in view 87 px
+    /// down. A rebuild that changes the number of rows removes and inserts its changed part in the
+    /// same way.
     /// </para>
     /// <para>
     /// How far the estimate misses depends on which of the rows the panel has made are left for its

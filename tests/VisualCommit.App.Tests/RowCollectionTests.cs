@@ -272,6 +272,25 @@ public class RowCollectionTests
     }
 
     [Fact]
+    public void A_run_whose_last_row_shows_a_new_version_of_its_item_after_rows_that_only_shift_is_removed_and_inserted_whole()
+    {
+        // r04 is gone and n is new after r05, so rows 4 and 5 hold other items; r06, right below
+        // them and the run's last row, shows a new version of itself: one row of another item
+        // anywhere in a run has the whole run removed and inserted, not its last or first row alone.
+        var list = Rows(10);
+        var before = list.ToList();
+        List<Row> rebuilt = [.. before.Take(4).Select(Copy), Copy(before[5]), new Row("n", 0), before[6] with { Version = 1 }, .. before.Skip(7).Select(Copy)];
+        Assert.Equal(before.Count, rebuilt.Count);
+        var changes = Record(list);
+
+        list.ReplaceAll(rebuilt, Row.ShowSame, Row.SameItem);
+
+        Assert.Equal([.. Removed(4, 6), .. Added(4, 6)], changes);
+        AssertKept(before, list, changed: [4, 5, 6]);
+        Assert.Equal(rebuilt, list);
+    }
+
+    [Fact]
     public void Two_runs_with_kept_rows_and_a_row_that_changes_itself_between_them_are_each_told_of_by_their_own_kind()
     {
         // Rows 2 to 4 only shift (r02 gone, x new after r04); row 5 stays, row 6 shows a new version
@@ -375,6 +394,30 @@ public class RowCollectionTests
 
         Assert.Equal(Told(rowsOfOneHeight: true, 2, 3, 6, 7, 10, 11), told);
         AssertKept(shown, stage, changed: [2, 3, 6, 7, 10, 11]);
+    }
+
+    [Fact]
+    public void Two_runs_of_rows_that_only_shift_with_one_row_that_shows_the_same_between_them_are_each_removed_and_inserted_and_that_row_stays()
+    {
+        // Rows 2 and 3 only shift (r02 gone, x new after r03), and rows 5 and 6 (r05 gone, y new after
+        // r06); row 4 alone lies between them and shows the same, as between two renames a row apart.
+        var list = Rows(10);
+        var before = list.ToList();
+        List<Row> rebuilt =
+        [
+            Copy(before[0]), Copy(before[1]), Copy(before[3]), new Row("x", 0),
+            Copy(before[4]),
+            Copy(before[6]), new Row("y", 0), Copy(before[7]), Copy(before[8]), Copy(before[9]),
+        ];
+        var changes = Record(list);
+
+        list.ReplaceAll(rebuilt, Row.ShowSame, Row.SameItem);
+
+        Assert.Equal([.. Removed(2, 3), .. Added(2, 3), .. Removed(5, 6), .. Added(5, 6)], changes);
+        AssertKept(before, list, changed: [2, 3, 5, 6]);
+        Assert.Same(before[4], list[4]);
+        Assert.All(new[] { 2, 3, 5, 6 }, i => Assert.Same(rebuilt[i], list[i]));
+        Assert.Equal(rebuilt, list);
     }
 
     [Fact]
