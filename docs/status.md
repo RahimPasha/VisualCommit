@@ -704,7 +704,7 @@ All three packages of wave 3 are merged: §10 (`86ecb3a`), §8 (`f014b2b`, its f
 `85e2884`) and §9 (`769f459`), with the fetch hold's fix (`eba3717`), the wave's docs (`b593097`),
 the link frame's fix (`fcf8c1e`), the two fixes of what CI's run on that merge found (`70a8fc0`,
 `809b77f`) and the performance bounds (`0bfbe92`). **Step 16 is under way**; what is done and what
-is left, as of 2026-11-22 14:55 (the details in Notes, "Wave 3's close"). Done: the lagged list and
+is left, as of 2026-11-22 22:00 (the details in Notes, "Wave 3's close"). Done: the lagged list and
 the whole default run on `85e2884`'s code; the pictures compared with wave 2's references and
 inspected; the fault they showed (`a1b-about-link-focus`) fixed and merged; the new references
 (`D:/Projects/Personal/phase8-work/references/wave3/`, 1,235 scripted pictures); three "before"
@@ -721,17 +721,23 @@ head `ab2cbb2` after round 3, not merged): the fault shows in headless tests of 
 stage lists now remove and insert a changed row, which held in every case tried; the left panel's
 ref rows and section headers now change themselves in place, so a hide, a solo and a refresh tell
 the view nothing of the list; a pull request row compares its whole record. The third verifier left
-one fault: left-panel rows that only shift (a branch renamed) are still replaced, and a list
-scrolled by less than their height goes to its top and loses a click, which the code before
-`48f403c` did not do. **A fourth round runs on that alone** (run `wf_1c642ecd-da4`, a fixer and a
-verifier, up to two rounds, in the same worktree; the lead's rule for it and the criterion it is
-judged by are in Notes, "The row list's fix"; notes under
-`D:/Projects/Personal/phase8-work/wave3/ci-fixes/rows-scroll/`, `three-rounds.txt` first; the
-review's under `D:/Projects/Personal/phase8-work/wave3/ci-fixes/rows-review/`). Left for the lead,
-in this order: when the fix is sound, the diff read, its merge, its classes on the merged tree, the
-push, CI's run read and recorded, and `docs/architecture.md`'s sentences on `RowCollection`
-rewritten (they describe `48f403c`). (b) **The whole default run** through `scripts/heavy-run.sh` on
-the merged code, no agent building beside it, and every scripted picture against wave 3's references
+one fault: left-panel rows that only shift (a branch renamed) were still replaced, and a list
+scrolled by less than their height went to its top and lost a click, which the code before `48f403c`
+did not do. A fourth round (run `wf_1c642ecd-da4`, two tries; head `e30d208`, 13 commits on
+`b6c9e7b`) removes and inserts such rows by runs, which gives the numbers of the code before
+`48f403c` in every rename, undo and fetch tried, with the click kept. Its verifiers left no bug but
+two trade-offs, which **the lead settled on 2026-11-22** (Notes, "The row list's fix", the final
+rule): runs of shifted rows are never joined, and the offset that ends off where rows are left in
+place between them, nothing moving in the window, is a known limit that `RowCollection`'s comment
+states. **A closing round applies that** (run `wf_d5a9ed01-a48`: a fixer and a verifier with a
+closed list of fault kinds, at most two rounds, in the same worktree; notes under
+`D:/Projects/Personal/phase8-work/wave3/ci-fixes/rows-scroll/`, `three-rounds.txt` and
+`round4-two-rounds.txt` first; the review's under
+`D:/Projects/Personal/phase8-work/wave3/ci-fixes/rows-review/`). Left for the lead, in this order:
+when the closing round is sound, the diff read, its merge, its classes on the merged tree, the push,
+CI's run read and recorded, and `docs/architecture.md`'s sentences on `RowCollection` rewritten
+(they describe `48f403c`). (b) **The whole default run** through `scripts/heavy-run.sh` on the
+merged code, no agent building beside it, and every scripted picture against wave 3's references
 (the list `D:/Projects/Personal/phase8-work/references/wave3-pictures.sha256`, its `/scripted/`
 lines checked with `sha256sum -c --quiet` at the repo root), because `RowCollection` serves the left
 panel and the stage lists of every walk-through. A first such run, on `cb31275`, was stopped after
@@ -1184,6 +1190,48 @@ every commit.
   the phase and goes on step 19's list, with two more: Space on the focused eye of a hidden row
   shows the branch and drops the focus ((D)'s kind), and a solo's cost with thousands of branches is
   not measured.
+  **Round four and the lead's final rule** (run `wf_1c642ecd-da4`: two tries, 4 agents, 1.66M
+  tokens, seven hours; `D:/Projects/Personal/phase8-work/wave3/rows-shift-result.json`, readable in
+  `wave3/ci-fixes/rows-scroll/round4-two-rounds.txt`; head `e30d208`). Its first try (`86c168d`)
+  takes the rows the view is told of by runs of consecutive rows: a run of same-key rows is replaced
+  row by row, any other run removed and inserted. The five rename cases (outside the app, in it, its
+  undo; near the top and at the bottom) then give the numbers of the code before `48f403c`: 105 for
+  100 near the top, 1335 for 1356 at the bottom of 60 branches, no row moved, the click kept, where
+  round 3's head gave 0 for 100 with the click lost. Its verifier (47 cases, each on three versions)
+  found one thing: two runs with kept rows between them leave the offset further off than the code
+  before did (two renames at the bottom of 60 branches: 1248 for 1356 where it was 1295; a fetch
+  that drops two remote branches and brings two: 1544 for 1716 where 1550), nothing moving and no
+  click lost. The second try (`9619dc4`) joined such runs, the rows between them removed and
+  inserted too: the old numbers again, at the cost of those rows' controls and the click under a
+  press on one, also where both runs lie below the top row in view and the join gains nothing, and
+  with a reset of the whole list when the joined span passes 64 rows. Its verifier (48 cases) also
+  showed that a row that changes itself in place anywhere between the first and the last shifted row
+  leaves the offset further off than before in any case (1241 for 1356 where it was 1368), which no
+  rule that keeps such rows in place avoids. **The lead's final rule (2026-11-22):** (1) the stage
+  lists remove and insert each row the view is told of; (2) a row that shows the same stays, and a
+  row that can change itself does; (3) in the left panel the other rows go by runs, a run of
+  same-key rows replaced row by row, any other removed and inserted, and runs are never joined; (4)
+  the list is reset above 64 rows told of. Two known limits, to be stated in `RowCollection`'s
+  comment: (A) a same-key row that cannot change itself is replaced, with a replace's cost when it
+  is the top row in view; (B) a row left in place between the first and the last row told of stays
+  in Avalonia's estimate, so deep in the list the offset and the extent can end further off than
+  before phase 8a, with no row moved in the window and no click lost that the code before kept. The
+  reason: `48f403c` exists so that a press on a row a rebuild need not tell the view of stays a
+  click; a join gives that up for an offset some tens of pixels nearer in a list where it is off
+  already, and (B) has to be accepted for the rows that change themselves anyway. **The closing
+  round** (run `wf_d5a9ed01-a48`) drops the join, pins the rule with tests and rewrites the
+  comments; its verifier judges by a closed list of fault kinds (the rule not done as worded, a
+  behaviour no test pins, an untrue comment, a row moved or a click lost where the code before kept
+  both, hygiene), so an offset that ends off is no fault there. More for step 19's list, older than
+  the phase: a run removed far above the view deep in the list gives rows in view new controls and
+  loses a press on one (a rename of b01 at the bottom of 60 branches: 1226 for 1356), where a
+  replace would have touched nothing, and `RowCollection` cannot see the view to choose; a fetch
+  that drops the top remote branch in view draws the rows 87 px lower; the undo of a rename at the
+  bottom of 60 branches moves rows by up to 131 px. Both rounds' class runs wrote `u20c` and `u20e`
+  of phase 5's part U with other bytes than wave 3's references, the same bytes from every source
+  and the bytes of wave 1's and wave 2's references: the reference run of wave 3 caught the
+  variation the report's comparison names for these two, so they will differ at the whole default
+  run's comparison and are explained.
 - **Two timeouts of older tests on 2026-11-20, each seen once, neither explained.** (1) CI's first
   attempt on the merge (44851353430), macOS:
   `PaletteEntriesTests.An_empty_tab_lists_the_windows_commands_and_a_dashboard_its_own` waited 60 s
