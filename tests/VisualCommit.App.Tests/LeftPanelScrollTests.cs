@@ -16,7 +16,8 @@ namespace VisualCommit.App.Tests;
 /// <summary>
 /// The left panel's analogue of <see cref="StageListScrollTests"/>. The list holds the section
 /// headers, 30 px high, and 26 px rows: the local branches b01 on and main, and in one fact the
-/// remote origin's branches. A press on a row in view comes before each change and its release after
+/// remote origin's branches. Every fact but the one that hides the top row in view near the top of
+/// the list presses a row in view before the change, or while git makes it, and releases it after
 /// the refresh.
 /// <para>
 /// A hide, a solo or its end, whose rebuild keeps the number of rows of the scrolled branch list and
@@ -36,21 +37,25 @@ namespace VisualCommit.App.Tests;
 /// too, but every row between the branch's old place and its new one shifts by a row: other branches
 /// at those indexes, which the list is told of by removing that run of rows and inserting the rebuilt
 /// ones, as before phase 8a. Two renames in one refresh, or a fetch that drops two remote branches
-/// and brings two others, shift two runs with rows kept between them; with only such rows between
-/// them the two runs are removed and inserted as one, the kept rows between them with them, as the
-/// whole changed part was before phase 8a. When the shifted rows were replaced, a rename of the top
-/// row in view under an offset smaller than their heights sent the list to its top and lost the
-/// click, and deeper in the list left the offset and the extent short by those heights. The remove
-/// makes the panel estimate where the top row in view is, which with headers among the rows is not
-/// exact: the facts allow the offset and the extent to move by as much as that estimate moved them
-/// before phase 8a, each stating its numbers (5 px near the top of the list; at the bottom of 60
-/// branches about 20 px for one run and 61 px for two; 166 px for the fetch at the bottom of 40 local
-/// and 31 remote branches), and assert that nothing moves in the window, that the rows outside the
-/// span from the first shifted row to the last keep their objects and controls, and that the press
-/// is a click. The rows kept between two runs removed as one get new objects and controls, as before
-/// phase 8a, so a press on one of them would lose its click; that is not asserted. Told of as two
-/// runs apart, with those rows left in place, the estimate missed by more: 108 px for 61 and 172
-/// for 166.
+/// and brings two others, shift two runs with rows that show the same between them: each run is
+/// removed and inserted on its own, and the rows between them stay, the objects they were, so that
+/// near the top of the list a press on one of them is still a click; before phase 8a they were
+/// removed and inserted with the runs, and that press lost its click. A row the list need not tell
+/// of is never told of. When the shifted rows were replaced, a rename of the top row in view under
+/// an offset smaller than their heights sent the list to its top and lost the click, and deeper in
+/// the list left the offset and the extent short by those heights; a row that keeps its item but
+/// cannot show its rebuilt row itself is still replaced so, a known limit that these facts do not
+/// meet. The remove makes the panel estimate where the top row in view is, from the mean height of
+/// the rows it has made, which with headers among the rows is not exact. The facts allow the offset
+/// and the extent to move by as much as that gives, each stating its numbers and those before phase
+/// 8a's change: one run, 5 px near the top of the list and about 20 px at the bottom of 60
+/// branches, as before; two runs, 2 px near the top of the list where it was 1, and deep in the list
+/// more than before, a known limit, because the rows left in place between the runs stay in the
+/// panel's mean: 108 px at the bottom of 60 branches where it was 61, and 172 px for the fetch at
+/// the bottom of 40 local and 31 remote branches where it was 166. They assert that nothing moves
+/// in the window, that every row the list is not told of keeps its object, that the rows outside
+/// the span from the first shifted row to the last keep their controls too, as do the rows between
+/// the runs where the fact says so, and that the press is a click.
 /// </para>
 /// <para>
 /// Not asserted here, because the estimate does worse there, as it did before phase 8a: a rename
@@ -58,13 +63,14 @@ namespace VisualCommit.App.Tests;
 /// after which the panel makes five controls in view again, and the press on one of them loses its
 /// click, where a replace of the two rows it shifts touched nothing; and a fetch that drops the top
 /// remote branch in view and brings another, after which the rows in view are drawn 87 px lower than
-/// before. Nor, because the estimate does worse there than it did before phase 8a: two runs kept
-/// apart by a row that changes itself between them, or a run with such a row right beside it, whose
-/// height stays in the estimate where it was removed before phase 8a (b50 moved to another commit by
-/// the refresh of the two renames above: the offset 1248 for 1356, 108 px off where it was 61; b61
-/// moved by the refresh of a rename of the top row in view whose run ends right above it, at the
-/// bottom of 61 branches: 1342 for 1386, 44 px off where it was 22); nothing moves in the window
-/// there, and the click is kept (<c>RowCollection.ReplaceChanged</c>).
+/// before. Nor the other cases of the known limit above, where a row left in place, one that shows
+/// the same or one that changes itself, lies between the first and the last row a rebuild tells the
+/// view of: at the bottom of 60 branches, b45 renamed b50x with main, HEAD's branch, moved to another
+/// commit by the same refresh, ten rows below the run, leaves the offset at 1241 for 1356, where it
+/// was 1368; at the bottom of 61 branches, b46 renamed b60x with b61, right below the run, moved by
+/// the same refresh leaves 1342 for 1386, where it was 1364. Nothing moves in the window there and
+/// no press loses a click that the code before phase 8a kept; deep in the list, kept rows in view
+/// may get new controls, as they did before phase 8a (<c>RowCollection.ReplaceChanged</c>).
 /// </para>
 /// </summary>
 public class LeftPanelScrollTests
@@ -202,19 +208,42 @@ public class LeftPanelScrollTests
     }
 
     [AvaloniaFact]
+    public async Task Renaming_two_branches_of_a_left_panel_scrolled_near_its_top_so_that_two_runs_of_rows_shift_keeps_the_rows_between_them_and_the_click_under_a_press_on_one_of_them()
+    {
+        // b03, the top row in view under an offset of 100, becomes b05x and b08 becomes b10x in one
+        // refresh: b04, b05 and b05x take rows 3 to 5, b09, b10 and b10x rows 8 to 10, two runs told
+        // of; b06, pressed, and b07 between them stay, their rows and their controls. The bounds are
+        // what this gives, 98 for 100 and 691 for 693. Before phase 8a's change (48f403c), which
+        // removed and inserted the rows from b03 to b10 as one, the estimate gave 99 and 692, but b06
+        // and b07 were new rows with new controls, and the press on b06 lost its click.
+        await AssertShiftKeepsTheListAsync(
+            branches: 20,
+            offset: 100,
+            shift: Outside(("b03", "b05x"), ("b08", "b10x")),
+            topInView: "b03",
+            bounds: new ShiftBounds(Offset: 2, Extent: 2),
+            pressed: "ref:refs/heads/b06",
+            between: ["ref:refs/heads/b06", "ref:refs/heads/b07"],
+            betweenButtons: true);
+    }
+
+    [AvaloniaFact]
     public async Task Renaming_two_branches_of_a_left_panel_scrolled_to_its_bottom_so_that_two_runs_of_rows_shift_with_rows_kept_between_them_keeps_the_rows_in_view_and_the_click_under_a_press()
     {
         // At the bottom of 60 branches, b45 (the top row in view) becomes b48x and b55 becomes b58x in
-        // one refresh: b46 to b48 and b56 to b58 move up a row, b49 to b54 between them stay. The
-        // bounds are what the estimate gave before phase 8a's change, which removed and inserted the
-        // rows from b45 to b58 as one: 1295 for 1356 and 1840 for 1900. Told of as two runs apart,
-        // the six kept rows between them still made, the estimate missed by more: 1248 and 1793.
+        // one refresh: b46 to b48 and b56 to b58 move up a row, two runs told of; b49 to b54 between
+        // them stay, their rows and their controls. The bounds are what this gives, 1248 for 1356 and
+        // 1793 for 1900, a known limit: the rows left in place stay in the panel's estimate of the top
+        // row's place. Before phase 8a's change, which removed and inserted the rows from b45 to b58
+        // as one, the estimate gave 1295 and 1840, and b49 to b54 were new rows.
         await AssertShiftKeepsTheListAsync(
             branches: 60,
             offset: null,
             shift: Outside(("b45", "b48x"), ("b55", "b58x")),
             topInView: "b45",
-            bounds: new ShiftBounds(Offset: 61, Extent: 60));
+            bounds: new ShiftBounds(Offset: 108, Extent: 107),
+            between: [.. Enumerable.Range(49, 6).Select(number => string.Create(CultureInfo.InvariantCulture, $"ref:refs/heads/b{number}"))],
+            betweenButtons: true);
     }
 
     [AvaloniaFact]
@@ -223,16 +252,19 @@ public class LeftPanelScrollTests
         // b01 to b40 and main, then origin's main and r01 to r30, scrolled to the bottom: origin/r13
         // is the top row in view. The app's fetch, with fetch.prune set, drops r10 and r16 and brings
         // r13a and r19a: r11 to r13a and r17 to r19a are other branches than before at their rows,
-        // r14 and r15 between them stay. The bounds are what the estimate gave before phase 8a's
-        // change, 1550 for 1716 and 2094 for 2260; told of as two runs apart, 1544 and 2088.
+        // two runs told of; r14 and r15 between them stay, the same rows, which the panel gives new
+        // controls (not asserted). The bounds are what this gives, 1544 for 1716 and 2088 for 2260, a
+        // known limit as in the fact above; before phase 8a's change, which removed and inserted the
+        // rows from r11 to r19a as one, 1550 and 2094, and r14 and r15 were new rows.
         await AssertShiftKeepsTheListAsync(
             branches: 40,
             offset: null,
             shift: Fetch(drop: ["r10", "r16"], bring: ["r13a", "r19a"]),
             topInView: "r13",
-            bounds: new ShiftBounds(Offset: 166, Extent: 166),
+            bounds: new ShiftBounds(Offset: 172, Extent: 172),
             remoteBranches: 30,
-            pressed: "ref:refs/remotes/origin/r25");
+            pressed: "ref:refs/remotes/origin/r25",
+            between: ["ref:refs/remotes/origin/r14", "ref:refs/remotes/origin/r15"]);
     }
 
     [AvaloniaFact]
@@ -273,9 +305,13 @@ public class LeftPanelScrollTests
     /// which the list is told of. The press comes where <paramref name="shift"/> says, its release
     /// after the refresh. Asserts that the offset and the extent moved by no more than
     /// <paramref name="bounds"/> says; that each row in view before has, at its index, a row in view
-    /// at its place in the window, nothing moving on screen; that each row outside the span from the
-    /// first moved row to the last (main and the headers below them, the rows above them) is the same
-    /// object with the same button; and that the release selected the pressed row.
+    /// at its place in the window, nothing moving on screen; that every row whose item stays at its
+    /// index, which the list is not told of, is the same object; that each row in view outside the
+    /// span from the first moved row to the last (main and the headers below them, the rows above
+    /// them) has the same button; that the rows whose keys <paramref name="between"/> names, in view
+    /// between two runs of moved rows, are the same objects and, with
+    /// <paramref name="betweenButtons"/>, have the same buttons; and that the release selected the
+    /// pressed row.
     /// </summary>
     private static async Task AssertShiftKeepsTheListAsync(
         int branches,
@@ -284,7 +320,9 @@ public class LeftPanelScrollTests
         string topInView,
         ShiftBounds bounds,
         int remoteBranches = 0,
-        string pressed = "ref:refs/heads/main")
+        string pressed = "ref:refs/heads/main",
+        string[]? between = null,
+        bool betweenButtons = false)
     {
         using var repo = await ManyBranchesAsync(branches);
         using var remote = remoteBranches > 0 ? await RemoteAsync(repo, remoteBranches) : null;
@@ -351,6 +389,16 @@ public class LeftPanelScrollTests
             problems.Add(string.Create(CultureInfo.InvariantCulture, $"extent {extentAfter} for {extent}, more than {bounds.Extent} off"));
         }
 
+        // The list is told of the moved rows alone: every other row stays the object it was.
+        var otherRows = Enumerable.Range(0, rowsBefore.Count)
+            .Where(index => !movedRows.Contains(index) && !ReferenceEquals(rowsBefore[index], rowsAfter[index]))
+            .Select(index => rowsBefore[index].Text)
+            .ToList();
+        if (otherRows.Count > 0)
+        {
+            problems.Add($"rows whose items stay at their indexes are other rows: {string.Join(", ", otherRows)}");
+        }
+
         var afterByIndex = after.ToDictionary(entry => rowsAfter.IndexOf(entry.Row));
         foreach (var (shown, y, button) in before)
         {
@@ -366,17 +414,26 @@ public class LeftPanelScrollTests
                 problems.Add(string.Create(CultureInfo.InvariantCulture, $"row {index} ({now.Row.Text}) at y {now.Y} for {y}"));
             }
 
-            if (index < firstMoved || index > lastMoved)
+            if ((index < firstMoved || index > lastMoved) && !ReferenceEquals(now.Button, button))
             {
-                if (!ReferenceEquals(now.Row, shown))
-                {
-                    problems.Add($"{shown.Text} is another row");
-                }
+                problems.Add($"{shown.Text} has another button");
+            }
+        }
 
-                if (!ReferenceEquals(now.Button, button))
-                {
-                    problems.Add($"{shown.Text} has another button");
-                }
+        foreach (var key in between ?? [])
+        {
+            var index = rowsBefore.FindIndex(row => row.Key == key);
+            Assert.True(index > firstMoved && index < lastMoved && !movedRows.Contains(index), $"{key} is not between two runs of moved rows: row {index}, moved rows {string.Join(", ", movedRows)}.");
+            var shown = before.SingleOrDefault(entry => ReferenceEquals(entry.Row, rowsBefore[index]));
+            Assert.True(shown.Row is not null, $"{key} is not in view.");
+            if (!ReferenceEquals(rowsAfter[index], shown.Row))
+            {
+                problems.Add($"{shown.Row.Text}, between the runs, is another row");
+            }
+
+            if (betweenButtons && (!afterByIndex.TryGetValue(index, out var now) || !ReferenceEquals(now.Button, shown.Button)))
+            {
+                problems.Add($"{shown.Row.Text}, between the runs, has another button");
             }
         }
 
@@ -393,7 +450,7 @@ public class LeftPanelScrollTests
             string.Create(CultureInfo.InvariantCulture, $"After {shift.Description}: {string.Join("; ", problems)}. Offset {offsetAfter} for {offsetBefore}, extent {extentAfter} for {extent}. In view before: {Describe(before)}; after: {Describe(after)}."));
     }
 
-    /// <summary>How far a shift may move the offset and the extent: no further than Avalonia's estimate moved them before phase 8a.</summary>
+    /// <summary>How far a shift may move the offset and the extent: no further than Avalonia's estimate moves them, which each fact states with what it was before phase 8a's change.</summary>
     private sealed record ShiftBounds(double Offset, double Extent);
 
     /// <summary>The app, its repository, the repository on disk, its remote origin if it has one, and the git runner that can hold a call.</summary>

@@ -17,10 +17,10 @@ namespace VisualCommit.App.Tests;
 /// taken by runs of consecutive rows: a run whose rows are all the same items as their rebuilt rows
 /// (here the same name, there the same key) is replaced row by row, and a run that holds another
 /// item (rows that only shift) is removed, last to first, and its rebuilt rows inserted, first to
-/// last; two such runs with only rows that show the same between them go as one, those rows with
-/// them, and a row that changes itself or a replaced run between them keeps them apart. A rebuild
-/// that changes the number of rows keeps the rows before and after the part that changed, for
-/// either form.
+/// last. Each run is told of on its own: a row between two runs that shows the same, or that changes
+/// itself, stays the object it was, and only the rows told of count toward the reset. A rebuild that
+/// changes the number of rows keeps the rows before and after the part that changed, for either
+/// form.
 /// </summary>
 public class RowCollectionTests
 {
@@ -347,7 +347,7 @@ public class RowCollectionTests
     }
 
     [Fact]
-    public void Runs_of_rows_that_only_shift_with_only_rows_that_show_the_same_between_them_are_removed_and_inserted_as_one()
+    public void Runs_of_rows_that_only_shift_with_rows_that_show_the_same_between_them_are_each_removed_and_inserted_and_the_rows_between_them_stay()
     {
         // Rows 2 and 3 only shift (r02 gone, x new after r03), rows 6 and 7 too (r06 gone, y new after
         // r07), and rows 10 and 11 (r10 gone, z new after r11); rows 4, 5, 8 and 9 show the same.
@@ -358,10 +358,11 @@ public class RowCollectionTests
 
         list.ReplaceAll(rebuilt, Row.ShowSame, Row.SameItem);
 
-        // As the whole changed part went before phase 8a: the rows between the runs with them.
-        Assert.Equal([.. Removed(2, 11), .. Added(2, 11)], changes);
-        AssertKept(before, list, changed: [.. Enumerable.Range(2, 10)]);
-        Assert.All(Enumerable.Range(2, 10), i => Assert.Same(rebuilt[i], list[i]));
+        // Each run on its own, first to last; the rows between them are the objects they were.
+        Assert.Equal([.. Removed(2, 3), .. Added(2, 3), .. Removed(6, 7), .. Added(6, 7), .. Removed(10, 11), .. Added(10, 11)], changes);
+        AssertKept(before, list, changed: [2, 3, 6, 7, 10, 11]);
+        Assert.All(new[] { 4, 5, 8, 9 }, i => Assert.Same(before[i], list[i]));
+        Assert.All(new[] { 2, 3, 6, 7, 10, 11 }, i => Assert.Same(rebuilt[i], list[i]));
         Assert.Equal(rebuilt, list);
 
         // The form for rows of one height tells of each row that shows something new on its own,
@@ -377,7 +378,7 @@ public class RowCollectionTests
     }
 
     [Fact]
-    public void A_row_that_changes_itself_between_two_runs_of_rows_that_only_shift_keeps_them_apart()
+    public void Two_runs_of_rows_that_only_shift_are_each_removed_and_inserted_and_a_row_that_changes_itself_between_them_is_not_told_of()
     {
         // Rows 2 to 4 only shift (r02 gone, x new after r04), and rows 8 and 9 (r08 gone, y new after
         // r09); between them rows 5 and 7 show the same and row 6 shows a new version itself.
@@ -400,7 +401,7 @@ public class RowCollectionTests
     }
 
     [Fact]
-    public void A_run_replaced_row_by_row_between_two_runs_of_rows_that_only_shift_keeps_them_apart()
+    public void Two_runs_of_rows_that_only_shift_are_each_removed_and_inserted_and_a_run_between_them_that_shows_new_versions_of_its_items_is_replaced_row_by_row()
     {
         // Rows 2 to 4 only shift (r02 gone, x new after r04), and rows 9 and 10 (r09 gone, y new after
         // r10); between them rows 5 and 8 show the same, and rows 6 and 7 show a new version of their
@@ -429,25 +430,39 @@ public class RowCollectionTests
     }
 
     [Fact]
-    public void Runs_removed_as_one_count_every_row_between_them_toward_the_reset()
+    public void Rows_that_stay_between_two_runs_of_rows_that_only_shift_count_for_no_reset_and_the_rows_told_of_in_all_runs_count_together()
     {
-        // Rows 1 and 2 only shift (r01 gone, n new after r02), and rows 63 and 64 (r63 gone, m new
-        // after r64): four rows that show something new, removed and inserted with the sixty rows
-        // between them, sixty-four in all.
+        // Rows 1 and 2 only shift (r01 gone, a new row after r02), and rows 64 and 65 (r64 gone, a new
+        // row after r65): four rows told of, in two runs, with the sixty-one rows between them, which
+        // show the same, left as they are.
         var list = Rows(70);
         var before = list.ToList();
-        var rebuilt = ShiftedAt(before, 1, 63);
+        var rebuilt = Shifted(before, (1, 2), (64, 65));
         var changes = Record(list);
 
         list.ReplaceAll(rebuilt, Row.ShowSame, Row.SameItem);
 
-        Assert.Equal([.. Removed(1, 64), .. Added(1, 64)], changes);
-        AssertKept(before, list, changed: [.. Enumerable.Range(1, 64)]);
+        Assert.Equal([.. Removed(1, 2), .. Added(1, 2), .. Removed(64, 65), .. Added(64, 65)], changes);
+        AssertKept(before, list, changed: [1, 2, 64, 65]);
         Assert.Equal(rebuilt, list);
 
-        // Rows 64 and 65 instead: sixty-five rows, which reset the list.
-        var longer = Rows(70);
-        var more = ShiftedAt(longer.ToList(), 1, 64);
+        // Rows 1 to 32 and rows 40 to 71: sixty-four rows told of, in two runs with seven rows that
+        // show the same between them, each run removed and inserted on its own.
+        var two = Rows(80);
+        var shown = two.ToList();
+        var rebuiltTwo = Shifted(shown, (1, 32), (40, 71));
+        var told = Record(two);
+
+        two.ReplaceAll(rebuiltTwo, Row.ShowSame, Row.SameItem);
+
+        Assert.Equal([.. Removed(1, 32), .. Added(1, 32), .. Removed(40, 71), .. Added(40, 71)], told);
+        AssertKept(shown, two, changed: [.. Enumerable.Range(1, 32), .. Enumerable.Range(40, 32)]);
+        Assert.Equal(rebuiltTwo, two);
+
+        // The second run a row longer, rows 40 to 72: sixty-five rows told of, which reset the list,
+        // though neither run has more than sixty-four.
+        var longer = Rows(80);
+        var more = Shifted(longer.ToList(), (1, 32), (40, 72));
         var resets = Record(longer);
 
         longer.ReplaceAll(more, Row.ShowSame, Row.SameItem);
@@ -503,16 +518,20 @@ public class RowCollectionTests
     ];
 
     /// <summary>
-    /// The rows rebuilt with the rows at <paramref name="first"/> and the one after it shifted by a row
-    /// (its row gone, a new row after the next), and the same at <paramref name="second"/>.
+    /// The rows rebuilt with each of <paramref name="runs"/> shifted by a row: the row at its first
+    /// index gone, the rows after it up to its last each a row higher, and a new row at its last.
     /// </summary>
-    private static List<Row> ShiftedAt(IReadOnlyList<Row> before, int first, int second)
+    private static List<Row> Shifted(IReadOnlyList<Row> before, params (int First, int Last)[] runs)
     {
         var rebuilt = before.Select(Copy).ToList();
-        foreach (var (at, name) in new[] { (first, "n"), (second, "m") })
+        foreach (var (first, last) in runs)
         {
-            rebuilt[at] = Copy(before[at + 1]);
-            rebuilt[at + 1] = new Row(name, 0);
+            for (var at = first; at < last; at++)
+            {
+                rebuilt[at] = Copy(before[at + 1]);
+            }
+
+            rebuilt[last] = new Row(string.Create(System.Globalization.CultureInfo.InvariantCulture, $"n{first:D2}"), 0);
         }
 
         return rebuilt;
