@@ -19,6 +19,6 @@ public sealed class ReferenceShots
             await app.WaitForAsync(() => app.FindByAutomationId("SettingsAbout").IsEffectivelyVisible, "the About section");
             app.Settle();
             app.MoveToNeutral();
-            return GuideFrame.Of(GuideSteps.DialogCard(app));
+            return GuideFrame.Card(GuideSteps.DialogCard(app));
         });
 }

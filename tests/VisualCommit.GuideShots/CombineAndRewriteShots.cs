@@ -63,7 +63,7 @@ public sealed class CombineAndRewriteShots
             app.ClickMenuItem("Reset main to this commit…");
             await app.WaitForDialogAsync<ResetDialogViewModel>();
             app.MoveToNeutral();
-            return GuideFrame.Of(GuideSteps.DialogCard(app));
+            return GuideFrame.Card(GuideSteps.DialogCard(app));
         });
 
     /// <summary>A merge of fix/rounding stopped on a conflict in units.py: the resolver with both sides and the result.</summary>

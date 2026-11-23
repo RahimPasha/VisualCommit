@@ -23,7 +23,7 @@ public sealed class HostingAccountsShots
             await app.OpenAccountsAsync();
             await app.WaitForIdleAsync();
             app.MoveToNeutral();
-            return GuideFrame.Of(GuideSteps.DialogCard(app));
+            return GuideFrame.Card(GuideSteps.DialogCard(app));
         });
 
     /// <summary>The dialog that signs in to GitHub with a token, before one is typed.</summary>
@@ -36,7 +36,7 @@ public sealed class HostingAccountsShots
             await app.OpenAccountsAsync();
             await app.OpenSignInDialogAsync();
             app.MoveToNeutral();
-            return GuideFrame.Of(GuideSteps.DialogCard(app));
+            return GuideFrame.Card(GuideSteps.DialogCard(app));
         });
 
     /// <summary>The left panel's pull requests of the weather station on GitHub, with the branch the open one comes from.</summary>

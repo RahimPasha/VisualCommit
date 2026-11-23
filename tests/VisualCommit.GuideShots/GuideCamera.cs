@@ -17,8 +17,8 @@ namespace VisualCommit.GuideShots;
 /// session's own <c>UseTheme</c> and waited for before the shot's state is set up, so that no theme
 /// switch closes a menu, and the window's render scaling set to <see cref="Scale"/> before the
 /// pointer first moves; then the shot's state, a capture, a crop to the shot's frame times the
-/// scale plus <see cref="Margin"/> pixels on each side, the <see cref="LeakGuard"/>'s look, and the
-/// picture saved as
+/// scale (a card's frame holds <see cref="Margin"/> pixels round the card, <see cref="GuideFrame.Card"/>),
+/// the <see cref="LeakGuard"/>'s look, and the picture saved as
 /// <see cref="GuideShotCatalogue.FileName"/> in <see cref="GuideSettings.PicturesFolder"/>.
 /// </summary>
 public static class GuideCamera
@@ -26,7 +26,11 @@ public static class GuideCamera
     /// <summary>The render scaling of every picture; 1 is ruling 61's fallback, under which the pages' <c>srcset</c>s go (D440).</summary>
     public const double Scale = 2;
 
-    /// <summary>The pixels kept around a shot's frame on each side, within the window.</summary>
+    /// <summary>
+    /// The pixels kept round a card on each side, within the window (<see cref="GuideFrame.Card"/>):
+    /// a dialog's card or a menu shows a strip of what lies under it. A panel's, a page's or an
+    /// area's frame keeps none, so that no strip of a neighbouring panel shows.
+    /// </summary>
     public const int Margin = 8;
 
     /// <summary>Every shot's two cases.</summary>
@@ -75,7 +79,7 @@ public static class GuideCamera
 
     /// <summary>
     /// The window's frame at <see cref="Scale"/>, cut to <paramref name="bounds"/> (in the window's
-    /// logical pixels) times the scale plus <see cref="Margin"/> pixels on each side, within the frame.
+    /// logical pixels) times the scale, within the frame.
     /// </summary>
     private static WriteableBitmap Capture(ShellDriver app, Rect bounds)
     {
@@ -89,10 +93,10 @@ public static class GuideCamera
                 $"The frame is {frame.PixelSize.Width}x{frame.PixelSize.Height} pixels; at a scaling of {Scale} the {app.Window.ClientSize.Width}x{app.Window.ClientSize.Height} window gives {expected.Width}x{expected.Height}."));
         }
 
-        var left = Math.Max(0, (int)Math.Floor(bounds.Left * Scale) - Margin);
-        var top = Math.Max(0, (int)Math.Floor(bounds.Top * Scale) - Margin);
-        var right = Math.Min(frame.PixelSize.Width, (int)Math.Ceiling(bounds.Right * Scale) + Margin);
-        var bottom = Math.Min(frame.PixelSize.Height, (int)Math.Ceiling(bounds.Bottom * Scale) + Margin);
+        var left = Math.Max(0, (int)Math.Floor(bounds.Left * Scale));
+        var top = Math.Max(0, (int)Math.Floor(bounds.Top * Scale));
+        var right = Math.Min(frame.PixelSize.Width, (int)Math.Ceiling(bounds.Right * Scale));
+        var bottom = Math.Min(frame.PixelSize.Height, (int)Math.Ceiling(bounds.Bottom * Scale));
         if (right <= left || bottom <= top)
         {
             throw new InvalidOperationException($"The shot's frame {bounds} lies outside the window.");
@@ -123,7 +127,10 @@ public static class GuideCamera
     }
 }
 
-/// <summary>What a shot's picture shows: a region of the window, in its logical pixels, read after the scaling is set.</summary>
+/// <summary>
+/// What a shot's picture shows: a region of the window, in its logical pixels, read after the
+/// scaling is set. A panel, a page or an area is taken to its own edges; a card keeps a margin.
+/// </summary>
 public sealed class GuideFrame
 {
     private readonly Func<ShellDriver, Rect> _bounds;
@@ -136,7 +143,10 @@ public sealed class GuideFrame
     /// <summary>The whole window.</summary>
     public static GuideFrame Window { get; } = new(app => new Rect(app.Window.ClientSize));
 
-    /// <summary>The smallest region that holds every one of <paramref name="visuals"/>.</summary>
+    /// <summary>
+    /// The smallest region that holds every one of <paramref name="visuals"/>, a panel or a page,
+    /// and nothing round it: its edges are the controls' own, so no strip of a neighbour shows.
+    /// </summary>
     public static GuideFrame Of(params Visual[] visuals)
     {
         ArgumentNullException.ThrowIfNull(visuals);
@@ -148,7 +158,17 @@ public sealed class GuideFrame
         return new(app => visuals.Select(app.BoundsOf).Aggregate((one, other) => one.Union(other)));
     }
 
-    /// <summary>A region given in the window's logical pixels.</summary>
+    /// <summary>
+    /// A card that floats over the window, a dialog's card or a menu, with
+    /// <see cref="GuideCamera.Margin"/> pixels of what lies under it on each side.
+    /// </summary>
+    public static GuideFrame Card(Visual card)
+    {
+        ArgumentNullException.ThrowIfNull(card);
+        return new(app => app.BoundsOf(card).Inflate(GuideCamera.Margin / GuideCamera.Scale));
+    }
+
+    /// <summary>A region given in the window's logical pixels, and nothing round it.</summary>
     public static GuideFrame Area(Rect area) => new(_ => area);
 
     /// <summary>This frame grown by <paramref name="pixels"/> logical pixels on each side.</summary>

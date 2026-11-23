@@ -26,6 +26,6 @@ public sealed class ManyRepositoriesShots
 
                 // The tabs, the toolbar, the dashboard's header and its rows, without the empty list below them.
                 var last = app.BoundsOf(app.DashboardRowControl(GuideScenario.RecipeBoxName));
-                return Task.FromResult(GuideFrame.Area(GuideSteps.Band(app, 0, last.Bottom + 24)));
+                return Task.FromResult(GuideFrame.Area(GuideSteps.Band(app, 0, last.Bottom + 28)));
             });
 }

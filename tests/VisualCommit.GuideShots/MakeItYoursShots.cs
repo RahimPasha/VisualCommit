@@ -19,7 +19,7 @@ public sealed class MakeItYoursShots
             var app = run.App;
             await app.OpenSettingsAsync();
             app.MoveToNeutral();
-            return GuideFrame.Of(GuideSteps.DialogCard(app));
+            return GuideFrame.Card(GuideSteps.DialogCard(app));
         });
 
     /// <summary>Settings, Git: the identity and pull's settings, global and this repository's, and the Git program row.</summary>
@@ -33,7 +33,7 @@ public sealed class MakeItYoursShots
             app.ChooseSection(SettingsSection.Git);
             await app.WaitForSettingsReadsAsync();
             app.MoveToNeutral();
-            return GuideFrame.Of(GuideSteps.DialogCard(app));
+            return GuideFrame.Card(GuideSteps.DialogCard(app));
         });
 
     /// <summary>The command palette with "branch" typed: the commands and the branches that match.</summary>

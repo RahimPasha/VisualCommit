@@ -110,7 +110,7 @@ public sealed class EverydayWorkShots
             await app.WaitForDialogAsync<NameDialogViewModel>();
             app.TypeInto("NameBox", "feature/alerts");
             app.MoveToNeutral();
-            return GuideFrame.Of(GuideSteps.DialogCard(app));
+            return GuideFrame.Card(GuideSteps.DialogCard(app));
         });
 
     /// <summary>main one commit ahead of origin/main and one behind it: the left panel's arrows beside main, and origin's branches below.</summary>
@@ -139,7 +139,7 @@ public sealed class EverydayWorkShots
             await app.WaitForDialogAsync<RemotesDialogViewModel>();
             await app.WaitForIdleAsync();
             app.MoveToNeutral();
-            return GuideFrame.Of(GuideSteps.DialogCard(app));
+            return GuideFrame.Card(GuideSteps.DialogCard(app));
         });
 
     /// <summary>The stash in the graph, on the commit it was made on, selected, with its details.</summary>
@@ -170,6 +170,6 @@ public sealed class EverydayWorkShots
             await app.WaitForDialogAsync<NameDialogViewModel>();
             app.TypeInto("NameBox", "v1.2");
             app.MoveToNeutral();
-            return GuideFrame.Of(GuideSteps.DialogCard(app));
+            return GuideFrame.Card(GuideSteps.DialogCard(app));
         });
 }
