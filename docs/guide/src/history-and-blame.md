@@ -11,7 +11,8 @@ To see every commit that changed a file:
 The page **History of** *file* takes the graph's place. It lists the commits that changed the
 file, newest first, each with its change's letter (`A` added, `M` modified, and so on), short SHA
 and subject, and it follows the file across renames. Click a commit to see what it changed in the
-file, on the right; **Inline** and **Side by side** work as in any diff.
+file, beside the list (below it when the page is narrow); **Inline** and **Side by side** work as
+in any diff.
 
 <img src="pictures/file-history-light.png" srcset="pictures/file-history-light.png 2x" alt="The page History of units.py in the folder station, listing five commits from 25aded4 Round to the configured digits down to 29cf672 Add unit conversions, the first selected, with its diff of units.py on the right changing the function round_reading; the page's Blame button and close button at the top right.">
 <img src="pictures/file-history-dark.png" srcset="pictures/file-history-dark.png 2x" alt="The page History of units.py in the folder station, listing five commits from 25aded4 Round to the configured digits down to 29cf672 Add unit conversions, the first selected, with its diff of units.py on the right changing the function round_reading; the page's Blame button and close button at the top right.">

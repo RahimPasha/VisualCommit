@@ -42,7 +42,9 @@ its upstream. A branch with no upstream opens the dialog **Push** and the branch
 remote under **To**, the **Branch on the remote**, and whether to **Set as upstream**.
 
 If the remote has commits your branch does not have, the push is refused with
-**Push rejected**: pull first, then push again. The dialog's **Pull** button does that.
+**Push rejected**: pull first, then push again. The dialog's **Pull** button does the pull. When
+the push was of another branch than the one you are on, or not to its upstream, the button is
+**Fetch** and the remote's name, such as `Fetch origin`, instead.
 
 You can also drag a local branch onto a remote branch: the menu offers to push it there, and to
 push and track it.

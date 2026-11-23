@@ -2,12 +2,13 @@
 
 Open the settings screen with **Settings** in the toolbar, or Ctrl+, (Cmd+, on macOS). It has six
 sections: **General**, **Git**, **Tools**, **Keyboard shortcuts**, **Accounts** and **About**.
-**Save** keeps your changes; **Cancel** drops them.
+**Save** keeps your changes; **Cancel** drops them. The one exception is **Accounts**: signing in
+and signing out take effect at once, and Cancel does not undo them.
 
 ## General
 
-<img src="pictures/settings-general-light.png" srcset="pictures/settings-general-light.png 2x" alt="The settings screen's General section: Theme with Dark, Light (chosen) and System; Fetching with Fetch in the background every 5 minutes ticked; Working tree with Keep ignored files and Include untracked files when stashing ticked; Opening files with the extensions Open file asks about first and the box Also ask for.">
-<img src="pictures/settings-general-dark.png" srcset="pictures/settings-general-dark.png 2x" alt="The settings screen's General section: Theme with Dark, Light (chosen) and System; Fetching with Fetch in the background every 5 minutes ticked; Working tree with Keep ignored files and Include untracked files when stashing ticked; Opening files with the extensions Open file asks about first and the box Also ask for.">
+<img src="pictures/settings-general-light.png" srcset="pictures/settings-general-light.png 2x" alt="The settings screen's General section: Theme with Dark, Light and System, the theme in use chosen; Fetching with Fetch in the background every 5 minutes ticked; Working tree with Keep ignored files and Include untracked files when stashing ticked; Opening files with the extensions Open file asks about first and the box Also ask for.">
+<img src="pictures/settings-general-dark.png" srcset="pictures/settings-general-dark.png 2x" alt="The settings screen's General section: Theme with Dark, Light and System, the theme in use chosen; Fetching with Fetch in the background every 5 minutes ticked; Working tree with Keep ignored files and Include untracked files when stashing ticked; Opening files with the extensions Open file asks about first and the box Also ask for.">
 
 - **Theme**: **Dark**, **Light**, or **System**, which follows your operating system's light or
   dark mode. The toolbar's **Theme** button switches between dark and light at once.

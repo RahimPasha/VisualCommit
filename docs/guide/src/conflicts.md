@@ -22,8 +22,8 @@ Click a conflicted file to open it in VisualCommit's conflict resolver, in place
 - **Merge tool…** opens the file in the merge tool set in Settings, Git; it is dimmed while none is
   set.
 - **Conflict 1 of 2** with its arrows, or Alt+Up and Alt+Down (Option+Up and Option+Down on
-  macOS), moves between the conflicts; **File 1 of 3** with its arrows, or Alt+Left and Alt+Right,
-  between the conflicted files.
+  macOS), moves between the conflicts; **File 1 of 3** with its arrows, or Alt+Left and Alt+Right
+  (Option+Left and Option+Right on macOS), between the conflicted files.
 - **Mark resolved** saves the result and stages the file. A file's menu also has
   **Mark as resolved**.
 

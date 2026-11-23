@@ -27,8 +27,9 @@ for later. For these, use git in a terminal: VisualCommit sees whatever git does
 
 ## Two limits worth knowing
 
-- **High contrast.** VisualCommit has no palette made for high contrast. When Windows' high
-  contrast is on, VisualCommit follows it as its light or its dark theme.
+- **High contrast.** VisualCommit has no palette made for high contrast. With **Settings**,
+  **General**, **Theme** set to **System**, VisualCommit follows Windows' high contrast as its
+  light or its dark theme; with **Dark** (the default) or **Light** chosen, it keeps that theme.
 - **Commits that are not next to each other** can be selected only with the mouse:
   Ctrl-click them (Cmd-click on macOS). The keyboard extends a selection only to the commits next
   to it, with Shift and the arrows. See [Keyboard and screen readers](keyboard-and-screen-readers.md).

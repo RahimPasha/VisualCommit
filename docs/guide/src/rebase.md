@@ -39,8 +39,9 @@ The list takes the graph's place. It is headed with the branch and its base, suc
 
 For each commit:
 
-- Choose its action in its box: **Pick** keeps it, **Reword** keeps it with a new message (press
-  **Edit…** on its row to write it), **Squash** joins it to the commit below and joins their
+- Choose its action in its box: **Pick** keeps it, **Reword** keeps it with a new message, which
+  VisualCommit asks for at once (**Edit…** on its row changes it later; **Cancel** in that dialog
+  keeps the action as it was), **Squash** joins it to the commit below and joins their
   messages, **Fixup** joins it to the commit below and keeps that commit's message, **Drop** leaves
   it out.
 - Drag it by its handle to another place, or select it and press Alt+Up or Alt+Down (Option+Up or

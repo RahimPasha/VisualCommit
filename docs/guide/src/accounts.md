@@ -33,7 +33,8 @@ paste into VisualCommit. Press **Sign in…** beside the service.
 <img src="pictures/sign-in-dialog-dark.png" srcset="pictures/sign-in-dialog-dark.png 2x" alt="The dialog Add GitHub account: the help on which token to paste, the link Create a token on GitHub, an empty Token box, and the buttons Cancel and a dimmed Sign in.">
 
 Paste the token into **Token** and press **Sign in**. VisualCommit checks the token with the
-service before it keeps it, and says what the service answered when it refuses it.
+service before it keeps it, and says what the service answered when it refuses it. Signing in,
+like signing out, takes effect at once: the settings screen's **Cancel** does not undo it.
 
 ## Where the token is kept
 
@@ -49,7 +50,8 @@ it until it closes and asks for it again at the next start."
 
 **Use for git over HTTPS**, under the account: "Clone, fetch, pull and push to GitHub over HTTPS
 use this account's token in place of your git credential helpers. Git in a terminal still uses your
-helpers." Untick it to let git ask your own credential helpers again.
+helpers." Untick it and press **Save** to let git ask your own credential helpers again: the box
+takes effect only when you press Save, and Cancel leaves it as it was.
 
 ### A note about .netrc
 
@@ -73,7 +75,8 @@ URL. See [Open, clone or create a repository](open-clone-create.md).
 ## Sign out
 
 **Sign out…** asks first, such as **Sign out of GitHub?**, then removes the token from this
-computer and, for GitHub, the authors' pictures VisualCommit saved. VisualCommit no longer lists
+computer and, for GitHub, the authors' pictures VisualCommit saved, at once, whether you then press
+Save or Cancel. VisualCommit no longer lists
 pull requests, and git over HTTPS asks your own credential helpers again.
 
 ## Pull requests

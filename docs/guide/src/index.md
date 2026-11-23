@@ -40,4 +40,7 @@ license and the notes on how it is shared are in the
   needs Git 2.34.1 or newer.
 - [Open, clone or create a repository](open-clone-create.md) and take
   [a tour of the window](tour.md).
-- Press F1 in VisualCommit at any time to open this guide.
+- Press F1 in VisualCommit to open this guide. It does nothing while the settings screen, the
+  command palette, another dialog or a menu is open; on a Mac keyboard F1 needs Fn unless "Use F1,
+  F2, etc. keys as standard function keys" is on (see
+  [Keyboard and screen readers](keyboard-and-screen-readers.md)).

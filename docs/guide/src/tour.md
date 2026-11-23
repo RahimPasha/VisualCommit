@@ -41,9 +41,10 @@ to apply it. Right-click any row for what you can do with it.
 
 ## The graph
 
-The middle shows the history, newest first, with four columns: **Branch / Tag**, **Graph**,
-**Message** and **Date**. The top row, **Working changes**, stands for your uncommitted changes.
-See [Read the graph](graph.md).
+The middle shows the history, newest first, in the columns **Branch / Tag**, **Graph**, **Message**,
+**Author**, **Date** and **SHA**. When the graph is too narrow for them all, as in the picture, the
+**SHA** column gives way first, then **Author**, then **Date**. While you have uncommitted changes,
+the top row, **Working changes**, stands for them. See [Read the graph](graph.md).
 
 ## The right panel
 

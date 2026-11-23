@@ -130,5 +130,6 @@ Windows."
 
 ## More help
 
-The link **How VisualCommit finds Git** on the screen opens the section of
-[Troubleshooting: Git](troubleshooting/git.md) for the state the screen shows.
+The link **How VisualCommit finds Git** on the screen (**What the helper does** on the screen for
+a missing helper) opens the section of [Troubleshooting: Git](troubleshooting/git.md) for the
+state the screen shows.

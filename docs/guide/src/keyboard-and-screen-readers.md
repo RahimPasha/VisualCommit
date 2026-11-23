@@ -4,7 +4,7 @@ Every main action can be reached from the keyboard: by its own key, through the 
 (Ctrl+Shift+P, Cmd+Shift+P on macOS), or with Tab and the arrows. The keys are fixed; the full list
 is in [Keyboard shortcuts](reference/shortcuts.md) and in Settings, **Keyboard shortcuts**.
 
-## Keys that work everywhere
+## General keys
 
 | Key | What it does |
 |---|---|
@@ -14,6 +14,9 @@ is in [Keyboard shortcuts](reference/shortcuts.md) and in Settings, **Keyboard s
 | Esc | Closes the diff, a page (file history, blame, reflog) or the search bar; in a dialog or a menu, cancels or closes it |
 | Enter | In a dialog, confirms it; Ctrl+Enter (Cmd+Enter on macOS) confirms from a box of several lines |
 | Tab, Shift+Tab | Moves between the controls of a region or a dialog |
+
+F1, F6 and Shift+F6 do nothing while the settings screen, the command palette, another dialog or a
+menu is open, or while you drag a branch.
 
 > [!NOTE]
 > On a Mac keyboard, F1, F6, Shift+F6 and Shift+F10 need Fn unless "Use F1, F2, etc. keys as
@@ -61,5 +64,7 @@ not been tried.
 
 ## High contrast
 
-VisualCommit has no palette of its own for high contrast. When Windows' high contrast is on,
-VisualCommit follows it as its light or its dark theme.
+VisualCommit has no palette of its own for high contrast. With **Settings**, **General**,
+**Theme** set to **System**, VisualCommit follows Windows' high contrast as its light or its dark
+theme; with **Dark** (the default) or **Light** chosen, it keeps that theme. See
+[Settings](settings.md).

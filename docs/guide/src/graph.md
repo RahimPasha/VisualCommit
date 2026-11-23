@@ -1,7 +1,9 @@
 # Read the graph
 
 The graph shows the repository's commits, one row each, the newest at the top. Its columns are
-**Branch / Tag**, **Graph**, **Message** (the commit's summary) and **Date**.
+**Branch / Tag**, **Graph**, **Message** (the commit's summary), **Author**, **Date** and **SHA**. When
+the graph is narrow, the **SHA** column gives way first, then **Author**, then **Date**, so that the
+message keeps its room.
 
 <img src="pictures/graph-labels-light.png" srcset="pictures/graph-labels-light.png 2x" alt="The graph with its labels: stash@{0} beside the top stash row, main with a check mark on the selected commit Show the battery level, origin/main outlined on Add a French readme, fix/rounding, feature/forecast with a +1 label, v1.1 with a tag sign, and feature/units with a +1 label, each on its commit, and the colored lines of the branches joining at their merges.">
 <img src="pictures/graph-labels-dark.png" srcset="pictures/graph-labels-dark.png 2x" alt="The graph with its labels: stash@{0} beside the top stash row, main with a check mark on the selected commit Show the battery level, origin/main outlined on Add a French readme, fix/rounding, feature/forecast with a +1 label, v1.1 with a tag sign, and feature/units with a +1 label, each on its commit, and the colored lines of the branches joining at their merges.">
@@ -24,9 +26,9 @@ branch's label onto another branch for the menu of the two ([Merge](merge.md)).
 ## The lines
 
 Each branch's history is a line of its own color, and a dot on it is a commit. Lines join where a
-branch was merged and part where one was started. The top row, **Working changes**, is a hollow
-circle above the commit you are on, joined to it by a dotted line, and stands for your uncommitted
-changes. A stash is a hollow circle joined by a dotted line to the commit it was taken on.
+branch was merged and part where one was started. While you have uncommitted changes, the top row,
+**Working changes**, is a hollow circle above the commit you are on, joined to it by a dotted line,
+and stands for them. A stash is a hollow circle joined by a dotted line to the commit it was taken on.
 
 ## Select commits
 
