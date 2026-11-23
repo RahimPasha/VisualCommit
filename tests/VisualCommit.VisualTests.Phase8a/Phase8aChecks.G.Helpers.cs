@@ -455,7 +455,7 @@ public sealed partial class Phase8aChecksG
             $"Check again to end after search {lookups}");
         await app.WaitForGitSetupAsync(guidance: guidance, choose: G.ChooseGitExe, winget: winget);
         app.Settle();
-        Assert.Equal("GitSetupCheckAgainButton", app.FocusedAutomationId());
+        await WaitForFocusAsync(app, "GitSetupCheckAgainButton");
     }
 
     /// <summary>
