@@ -349,6 +349,18 @@ Phase 8a's runs on `phase/8a-release-readiness`, the newest first. CI has six jo
 `e04762b`: the sixth, "ubuntu 22.04 container, git 2.34 (the floor)", did not fail the run until
 `bba59c7`, which made it required after its first green run.
 
+- [45133434382](https://github.com/RahimPasha/VisualCommit/actions/runs/45133434382), for `c1bc69b`
+  (the row list's fix, merged at `bad98b1`, with architecture.md and the design's note): **success
+  in all six jobs**. `windows-latest`: 8,514 tests, 8,509 passed, 5 skipped, Test step 42 min 18 s
+  of 70. `macos-latest`: 8,511 tests, 8,508 passed, 3 skipped, Test step 35 min 45 s of 70.
+  `ubuntu-latest`: 8,511 tests, 8,507 passed, 4 skipped, Test step 7 min 31 s. The floor's job (git
+  2.34.1) 8,511 tests with 4 skipped, Test step 5 min 33 s; the two containers 8,511 tests with 4
+  skipped each, Test steps 5 min 19 s with Microsoft's installer and 7 min 56 s with Ubuntu's
+  packages, and the Secret Service's test passed in both. The Windows and macOS keychain steps
+  passed. 57 tests more than the run before: `RowCollectionTests`' 30, `LeftPanelScrollTests`' 16,
+  `StageListScrollTests`' 7, three in `LeftPanelViewModelTests` and one in
+  `PullRequestSectionTests`. The logs are in
+  `D:/Projects/Personal/phase8-work/wave3/ci-45133434382/`.
 - [45035307735](https://github.com/RahimPasha/VisualCommit/actions/runs/45035307735), for `cb31275`
   (the two CI fixes' merges `70a8fc0` and `809b77f`, the bounds `0bfbe92`, architecture.md):
   **success in all six jobs**. `windows-latest`: 8,457 tests, 8,452 passed, 5 skipped, Test step 37
@@ -736,7 +748,7 @@ tree passed (the root build and the real-window project's Release build without 
 208 in fifteen App.Tests classes, 30 of 30 and 17 of 17 in phase 7a's and 8a's classes round the
 rows; `D:/Projects/Personal/phase8-work/wave3/ci-fixes/rows-merge/summary.txt`);
 `docs/architecture.md`'s passage on `RowCollection` and the design's 1.17 are written (`c1bc69b`),
-and the push of 00:45 started **CI's run 45133434382, to be read and recorded**. (b) **The whole
+and **CI's run 45133434382 on that push is green in all six jobs** (the CI section). (b) **The whole
 default run** through `scripts/heavy-run.sh` on `c1bc69b`, whose code is the merge's, **started at
 00:46** with no agent building beside it
 (`D:/Projects/Personal/phase8-work/wave3/ci-fixes/default-run-rows/`: `default-run.log`, then
