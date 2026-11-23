@@ -3,8 +3,8 @@
 The graph shows the repository's commits, one row each, the newest at the top. Its columns are
 **Branch / Tag**, **Graph**, **Message** (the commit's summary) and **Date**.
 
-<img src="pictures/graph-labels-light.png" srcset="pictures/graph-labels-light.png 2x" alt="The graph with its labels: stash@{0} beside the top stash row, main with a check mark on the selected commit Show the battery level, origin/main outlined on Add a French readme, fix/rounding, feature/forecast with a +1 label, v1.1 with a tag sign, and feature/units with a +1 label, each on its commit, and the coloured lines of the branches joining at their merges.">
-<img src="pictures/graph-labels-dark.png" srcset="pictures/graph-labels-dark.png 2x" alt="The graph with its labels: stash@{0} beside the top stash row, main with a check mark on the selected commit Show the battery level, origin/main outlined on Add a French readme, fix/rounding, feature/forecast with a +1 label, v1.1 with a tag sign, and feature/units with a +1 label, each on its commit, and the coloured lines of the branches joining at their merges.">
+<img src="pictures/graph-labels-light.png" srcset="pictures/graph-labels-light.png 2x" alt="The graph with its labels: stash@{0} beside the top stash row, main with a check mark on the selected commit Show the battery level, origin/main outlined on Add a French readme, fix/rounding, feature/forecast with a +1 label, v1.1 with a tag sign, and feature/units with a +1 label, each on its commit, and the colored lines of the branches joining at their merges.">
+<img src="pictures/graph-labels-dark.png" srcset="pictures/graph-labels-dark.png 2x" alt="The graph with its labels: stash@{0} beside the top stash row, main with a check mark on the selected commit Show the battery level, origin/main outlined on Add a French readme, fix/rounding, feature/forecast with a +1 label, v1.1 with a tag sign, and feature/units with a +1 label, each on its commit, and the colored lines of the branches joining at their merges.">
 
 ## The labels
 

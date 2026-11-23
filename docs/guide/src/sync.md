@@ -77,5 +77,5 @@ Removing a remote asks first, keeps your local branches, and saves a backup.
 
 While a fetch, pull or push runs, the status bar shows a **Cancel** button that stops it.
 The command palette also lists **Cancel** and the operation's name, such as
-`Cancel Fetch origin`, while the operation can be cancelled. Afterwards the status bar reads, for
+`Cancel Fetch origin`, while the operation can be canceled. Afterwards the status bar reads, for
 example, `Fetch origin cancelled`.

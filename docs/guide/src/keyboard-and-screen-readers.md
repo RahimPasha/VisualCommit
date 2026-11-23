@@ -34,8 +34,9 @@ is in [Keyboard shortcuts](reference/shortcuts.md) and in Settings, **Keyboard s
 - **A blame**: the arrows, PageUp, PageDown, Home and End pick the run of the line the caret moves
   to, with any modifier; Shift+F10 opens that run's menu.
 - **A file's buttons in the working changes**: Tab from a file's row reaches its **Stage** and
-  **Discard** buttons (**Unstage** on a staged file), then the next file.
-- **Cancel**: while an operation that can be cancelled runs, the command palette lists **Cancel**
+  **Discard** buttons, icons whose tooltips say so (**Unstage** on a staged file), then the next
+  file's row.
+- **Cancel**: while an operation that can be canceled runs, the command palette lists **Cancel**
   and its name, such as `Cancel Fetch origin`. It has no key.
 - **Panels' widths**: Tab to a divider between panels; each arrow moves it by 10 pixels, and the
   panel keeps its new width, as after a drag.
@@ -55,7 +56,7 @@ selected row is read: its commit's summary, author, date and labels, such as
 the new row is read. The status bar's messages, such as an operation's result, are read as they
 change.
 
-VisualCommit has been tested with one screen reader, Narrator on Windows. Others may work, but have
+Narrator on Windows is the one screen reader VisualCommit is tested with. Others may work, but have
 not been tried.
 
 ## High contrast
