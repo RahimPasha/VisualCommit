@@ -733,26 +733,33 @@ before the gate (step 19) and its fixes, §12's merge last, the lagged list and 
 run. **Part G's checks are written and in the report** (2026-11-23, before §11's build, D244): G1 to
 G3 in four methods with four pictures, no real window; the lead settled its open points 99 to 113 as
 rulings 77 to 85 (design 13.1), and the design's 11.4 to 11.6 say what they changed (Notes, "Wave
-4"). **Still under way, only reading the repository and writing outside it:** the restore order's
-section (run `wf_e8daca0e-d5c`: a drafter, three reviewers, verifiers, a fixer; into
+4"). **§11's build is under way** since 09:21 (run `wf_7dddbd2e-deb`, script
+`…/workflows/scripts/phase8a-wave-4-guide-wf_7dddbd2e-deb.js`; worktree
+`D:/Projects/Personal/vc-wt/p8a-guide` on `wip/p8a-guide`, from `124337a`): three builders one after
+the other (the app's links with part G and 11.6's proof; the site's machinery with GuideShots, the
+workflow and the links' check; the 33 pages with their two test classes and the whole site built
+locally), then five reviewers (the design, safety, the tests, the pages in two halves), a verifier
+for each major and a fixer. GuideShots' local root is `C:\demo`, which the site's builder creates
+(it did not exist). While agents build, the lead starts no heavy run and no series (ruling 23).
+**Also under way, only reading the repository and writing outside it:** the restore order's section
+(run `wf_e8daca0e-d5c`: a drafter, three reviewers, verifiers, a fixer; into
 `D:/Projects/Personal/phase8-work/wave4/restore/section-14.md`). **Left for the lead when it ends:**
 read it; put it into the design as section 14, with 0.4's row and what the fixer lists for the
 design; confirm or change the choices the section makes for the package; commit and push; then start
-the two builders (the wave 3 build script is the model:
+`restore`'s builder beside §11's (the wave 3 build script is the model:
 `C:/Users/rpkha/.claude/projects/d--Projects-Personal-Visual-Git/9b135677-ae78-44f9-8ed1-d3fff497a168/workflows/scripts/phase8a-wave-3-wf_ee9f40a9-6e3.js`;
-worktrees `D:/Projects/Personal/vc-wt/p8a-guide` and `p8a-restore` on `wip/p8a-guide` and
-`wip/p8a-restore`, made from the commit that holds part G and section 14). §11's builder gets with
-its brief: mdBook at `D:/Projects/Personal/phase8-work/tools/mdbook-0.5.4/mdbook.exe` and the Linux
-archive's SHA-256 for `guide.yml` (Notes, "Wave 4"); the references
-`D:/Projects/Personal/phase8-work/references/wave3/`; rulings 80 (stop and report if the first-run
-link's frame touches its ink), 82 (the facts no check shows) and 83 (the rename, the comments); and
-what part G's open point 103 leaves for it to report. What step 16 ended with: the three packages
-merged, §10 (`86ecb3a`), §8 (`f014b2b`, its fixes after the merge `85e2884`) and §9 (`769f459`); the
-lagged list, the whole default run and the pictures on `85e2884`, whose one fault
-(`a1b-about-link-focus`) is fixed (`fcf8c1e`); the references of the later merges,
-`D:/Projects/Personal/phase8-work/references/wave3/` (1,235 scripted pictures); three "before"
-series, two probes, two panels and **D457** (the bounds `0bfbe92`, two backlog rows, the restore
-order as ruling 76, a change in wave 4); CI's two failures on the link frame's merge fixed
+its worktree `D:/Projects/Personal/vc-wt/p8a-restore` on `wip/p8a-restore`, made from the commit
+that holds section 14). §11's builders got with their briefs: mdBook at
+`D:/Projects/Personal/phase8-work/tools/mdbook-0.5.4/mdbook.exe` and the Linux archive's SHA-256 for
+`guide.yml` (Notes, "Wave 4"); the references `D:/Projects/Personal/phase8-work/references/wave3/`;
+rulings 80 (stop and report if the first-run link's frame touches its ink), 82 (the facts no check
+shows) and 83 (the rename, the comments); and what part G's open point 103 leaves for it to report.
+What step 16 ended with: the three packages merged, §10 (`86ecb3a`), §8 (`f014b2b`, its fixes after
+the merge `85e2884`) and §9 (`769f459`); the lagged list, the whole default run and the pictures on
+`85e2884`, whose one fault (`a1b-about-link-focus`) is fixed (`fcf8c1e`); the references of the
+later merges, `D:/Projects/Personal/phase8-work/references/wave3/` (1,235 scripted pictures); three
+"before" series, two probes, two panels and **D457** (the bounds `0bfbe92`, two backlog rows, the
+restore order as ruling 76, a change in wave 4); CI's two failures on the link frame's merge fixed
 (`70a8fc0`, `809b77f`); and, after a review of the second of those fixes, **the row list's fix,
 merged at `bad98b1`**: CI's run 45133434382 on it is green in all six jobs, the whole default run on
 `c1bc69b`, whose code is the merge's, passed with 8,514 tests and none failed, and each of its 54
