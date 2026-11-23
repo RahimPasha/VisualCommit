@@ -45,7 +45,8 @@ then press Shift+F10 for the menu with **Stage selected lines**. See
 3. Press the commit button, which reads **Commit 1 file** or **Commit 3 files**, or press
    Ctrl+Enter (Cmd+Enter on macOS) in either box.
 
-Ctrl+Shift+M (Cmd+Shift+M on macOS) goes to the commit message from anywhere in the repository.
+Ctrl+Shift+M (Cmd+Shift+M on macOS) selects the **Working changes** row and goes to the commit
+message from anywhere in the repository, while there are changes to commit.
 The button reads **Stage files to commit** while nothing is staged, and stays disabled until the
 summary has text.
 
