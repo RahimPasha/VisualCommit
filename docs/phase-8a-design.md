@@ -1340,6 +1340,52 @@ wave adds to it. What wave 2 tells §12's launches is in 12.3.5.
   what 10.3.6's step 5 names, as indications on the laptop (ruling 19): 100,000 commits, ten
   restored tabs of that size and the memory measured; its "first rows in about 2 s (Q1)" is one
   restored tab's.
+- **After wave 3's close: CI's two failures and the row list** (the lead, 2026-11-22 and 23; the
+  report's "CI's two failures after the link frame's merge, and the row list" has the account and
+  the numbers). CI's run on the link frame's merge failed one test on macOS and one on Windows.
+  **The underline's rule in `LinkFrame`** was wrong, not the app. Avalonia 12.1.3 draws an underline
+  in pieces that stop a line's thickness short of each letter that crosses it, between fractional
+  positions, so the column where a piece ends holds whatever part of a pixel the piece covers, and
+  macOS, whose `y` is a column narrower, showed such a column clear of the letters. The rule now
+  asks, in every column clear of the letters, for at least half a pixel of the link's colour over
+  the background, and lets one fainter column pass where a piece ends: at the text's first and last
+  columns and, alone, directly beside a letter that crosses the line (`LinkFrameTests`, App.Tests, 7
+  cases on made pictures; `8f50a34`, merged at `70a8fc0`). **The row list.** Windows' failure was
+  the app's: a hide's reload of the graph, which runs outside the operations queue, marks the hidden
+  branch's two rows in the left panel, and `RowCollection` then removed and inserted every row
+  between them, so a row pressed before the swap and released after it lost its click. `48f403c`
+  (merged at `809b77f`) made the list tell the view only of the rows that show something new. A
+  review of that change, and then headless tests of the real app, showed that it replaced such rows
+  and that Avalonia's virtualizing panel takes a replace of the top row in view as a slot of no
+  height, which left a scrolled list rows short or sent it to its top. The fix (merged at `bad98b1`)
+  is the rule that stands, in `RowCollection`'s comment with its measurements and in
+  architecture.md's "Working changes and writes": (1) a list whose rows have one height, the stage
+  lists, calls `ReplaceAll(rows, showSame)`, which removes each row it tells of and inserts its
+  rebuilt row at its index; (2) a row that shows the same stays, and a row that can show its rebuilt
+  row by changing its own properties does so (`IUpdatableRow`: the left panel's ref rows and section
+  headers), the view told nothing of the list; (3) a list of mixed heights, the left panel, calls
+  `ReplaceAll(rows, showSame, sameItem)` with what names an item, its rows' keys: the rows told of
+  go by runs of consecutive rows, a run of same-item rows replaced row by row and any other run
+  removed and inserted, and runs are never joined; (4) the list is reset above 64 rows told of. Two
+  limits are known: a same-item row that cannot change itself (a pull request row, a message row) is
+  replaced, with a replace's cost when it is the top row in view; and a row left in place between
+  the first and the last row that shows something new stays in the panel's estimate, so deep in a
+  long list the offset and the extent can end further off than before phase 8a, no row moving in the
+  window and no click lost that the code before kept. The lead chose that over joining two runs,
+  which a round of the fix had tried: a join brings the offset some tens of pixels nearer in a list
+  where it is off already, and takes the controls, and the click under a press, of the rows between
+  the runs, also where it gains nothing, and can reset the whole list. For whoever adds a list of
+  rows or a row: use the form that fits the rows' heights; a row that implements `IUpdatableRow`
+  raises a change for every property a template binds, the derived ones too, and its `CanUpdateTo`
+  says yes only when all that `UpdateTo` does not copy is the same; and a walk-through that hides or
+  solos a branch waits for the graph's reload (`WaitForGraphReloadAsync`) before it goes on, as the
+  sweep's state 05 and U2/U3's step 9 now do, because no wait for the operations queue covers it.
+  `RowCollectionTests`, `StageListScrollTests` and `LeftPanelScrollTests` (App.Tests) hold the rule,
+  each of the wrong forms tried failing one of them. What is older than the phase went to the list
+  of the review before the gate (status step 19): Avalonia's estimate after a remove at or above the
+  first row it has made, which near the top of the left panel misses by pixels and deep in it can
+  give rows in view new controls; a rebuild that changes the list's length; and the keyboard focus
+  that Enter or Space on a section header, a folder or a hidden row's eye drops.
 
 ## 2. colours: the contrast round (D410)
 

@@ -1081,20 +1081,42 @@ to a real parent from there and is solid. Lanes, colours and nodes are as before
   watcher delivers the index's change after a write's own refresh, and the read it started used to
   replace every row, which lost a click of phase 2's check 10 on CI (`StageListRefreshTests`). Since
   phase 8a a rebuild that changes rows on both sides of such a row keeps it too, as long as the list
-  keeps its length: `RowCollection.ReplaceAll(rows, showSame)`
-  (`ViewModels/Panels/RowCollection.cs`), which the left panel's `Rebuild` and the two stage lists
-  use, compares row with row in the part that changed and replaces only the rows that show something
-  new, one notification each (a reset above 64), where it used to remove and insert every row from
-  the first changed one to the last. The graph that a hide's reload swaps in marks the hidden
-  branch's two rows in the left panel, the local and the remote one, and a click on a row between
-  them whose release came after the swap was lost, once on CI's Windows job
-  (`AccessibleNameSweepTests.State_05_the_ops_tab`; `LeftPanelViewModelTests`, `HideAndSoloTests`).
-  A rebuild that changes the list's length while rows change on both sides of a pressed row still
-  replaces the rows between, and that press is lost. Since phase 6 the commit button's tooltip is
-  "{its text} ({key})" (`CommitToolTip`; its reason `CommitDisabledReason`, which the palette's
-  commit entry reads), Mod+Enter in the message boxes commits (see "Keyboard shortcuts"), and a
-  ticked Amend keeps the HEAD it was ticked on, against which the commit's operation checks HEAD
-  first (D235, see "Operations").
+  keeps its length: `RowCollection.ReplaceAll` (`ViewModels/Panels/RowCollection.cs`), which the
+  left panel's `Rebuild` and the two stage lists use, compares row with row in the part that changed
+  and tells the view only of the rows that show something new (a reset above 64 of them), where it
+  used to remove and insert every row from the first changed one to the last. The graph that a
+  hide's reload swaps in marks the hidden branch's two rows in the left panel, the local and the
+  remote one, and a click on a row between them whose release came after the swap was lost, once on
+  CI's Windows job (`AccessibleNameSweepTests.State_05_the_ops_tab`; `HideAndSoloTests`). How a row
+  is told of follows from what Avalonia's virtualizing panel (12.1.3) does with each notification,
+  which `RowCollection`'s comment gives with its measurements: a replace of the top row in view
+  leaves a slot of no height, so the offset and the extent end short by the heights of the rows
+  replaced from there down, and a list scrolled by less than that goes to its top and makes every
+  control again; a remove at or above the first row the panel has made has it estimate the top row
+  from the mean height of its rows, which is exact only where all rows have one height. So the stage
+  lists, 24 px a row, use `ReplaceAll(rows, showSame)`, which removes each such row and inserts its
+  rebuilt row at its index and leaves a scrolled list where it was (`StageListScrollTests`). The
+  left panel, whose 30 px headers sit among 26 px rows, uses `ReplaceAll(rows, showSame, sameItem)`
+  with the rows' keys. A ref row or a section header whose key, name, tooltip, level and opening
+  stay changes itself (`IUpdatableRow`: the filter's marks, the commit, HEAD, the counts, the
+  selection, the pull request's text; a header's count), so a hide, a solo, its end and a refresh
+  tell the view nothing of the list. The other rows go by runs of consecutive rows: a run of rows
+  that keep their key but cannot change themselves (a pull request row, whose `ShowsSameAs` compares
+  its whole record since then; a message row of that section) is replaced row by row, and a run that
+  holds another item, the rows that a rename, its undo or a fetch shifts by one, is removed and
+  inserted, as the whole changed part was before phase 8a. Runs are never joined, so a row between
+  two of them keeps its object (`RowCollectionTests`, `LeftPanelScrollTests`,
+  `LeftPanelViewModelTests`). Two limits are known and stated in that comment: a replaced row at the
+  top of the view costs its height in the offset, and a press on a replaced row is lost; and a row
+  left in place between the first and the last row that shows something new stays in the panel's
+  mean, so deep in a long list the offset and the extent can end further off than before phase 8a
+  (two renames at the bottom of 60 branches: 1248 for 1356, where it was 1295), with no row moved in
+  the window and no click lost that the code before kept. A rebuild that changes the list's length
+  still removes and inserts its changed part whole, and a press on a row inside that part is lost.
+  Since phase 6 the commit button's tooltip is "{its text} ({key})" (`CommitToolTip`; its reason
+  `CommitDisabledReason`, which the palette's commit entry reads), Mod+Enter in the message boxes
+  commits (see "Keyboard shortcuts"), and a ticked Amend keeps the HEAD it was ticked on, against
+  which the commit's operation checks HEAD first (D235, see "Operations").
 - `RepositoryViewModel` is that host, and the diff view's (`IDiffHost`). Every write runs through
   `WriteAsync`, which queues it as a local operation of the repository's queue (titles "Stage",
   "Unstage", "Discard", "Restore", "Commit", "Apply lines"; `ErrorDisplay.StagePanel`,
