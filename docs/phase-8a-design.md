@@ -6798,8 +6798,9 @@ scheduler had not shown as due and were taken again.
 M2's raised from 6,100 to 9,500 ms by ruling 93. On `23bea54`, 15:01 to 16:03, with no builder at
 work: the package's four classes, 39 of 39, then 0.4's lagged list through `scripts/heavy-run.sh`
 with `RestoreOrderShellTests` added to its App.Tests command: 25, 209, 21, 206, 178, 126 and 144
-tests, none failed, `AboutEntryTests` and `RequestOperationsProvidersTests` among them. CI's run on
-the push is in status.md's CI section (step 10).
+tests, none failed, `AboutEntryTests` and `RequestOperationsProvidersTests` among them. CI's run
+45286046457 on the push (`5e23aba`) is green in all six jobs, the floor's included, with
+`RestoreOrderShellTests` run on Windows, macOS and Linux (step 10; status.md's CI section).
 
 **The open points of 14.9.** 4 (M3's bound without a merge) did not arise. 5 (a release that delays
 the first frame): the release does come before the first frame, 180 to 256 ms before the tab's

@@ -363,6 +363,18 @@ Phase 8a's runs on `phase/8a-release-readiness`, the newest first. CI has six jo
 `e04762b`: the sixth, "ubuntu 22.04 container, git 2.34 (the floor)", did not fail the run until
 `bba59c7`, which made it required after its first green run.
 
+- [45286046457](https://github.com/RahimPasha/VisualCommit/actions/runs/45286046457), for `5e23aba`
+  (the restore order's merge `aedb12f`, the bounds `23bea54` and the docs): **success in all six
+  jobs**. `windows-latest`: 8,547 tests, 8,542 passed, 5 skipped, Test step 41 min 18 s of 70; it
+  built the opt-in projects. `macos-latest`: 8,544 tests, 8,541 passed, 3 skipped, Test step 36 min
+  3 s of 70. `ubuntu-latest`: 8,544 tests, 8,540 passed, 4 skipped, Test step 5 min 10 s. The
+  floor's job (git 2.34.1) 8,544 tests with 4 skipped, Test step 8 min 8 s; the two containers 8,544
+  tests with 4 skipped each, Test steps 5 min 35 s with Microsoft's installer and 6 min 29 s with
+  Ubuntu's packages, and the Secret Service's test passed in both. The Windows and macOS keychain
+  steps passed. 33 tests more than the run before, the restore order's: `RestoreOrderTests`' 24,
+  `RepositoryFirstPageTests`' 6, `RestoreOrderShellTests`' 2, which ran on Windows, macOS and Linux
+  (design 14.8 step 10), and one in `SettingsEntryTests`. The logs are in
+  `D:/Projects/Personal/phase8-work/wave4/ci-45286046457/`.
 - [45133434382](https://github.com/RahimPasha/VisualCommit/actions/runs/45133434382), for `c1bc69b`
   (the row list's fix, merged at `bad98b1`, with architecture.md and the design's note): **success
   in all six jobs**. `windows-latest`: 8,514 tests, 8,509 passed, 5 skipped, Test step 42 min 18 s
@@ -757,23 +769,23 @@ docs map are brought up to it. **`restore` is proven and merged** (step 17b; `ae
 `23bea54`; D458, rulings 91 to 93; design 14.10; the report's "The restore order's proof"): built
 and reviewed on `wip/p8a-restore` (run `wf_abcee249-c0e`), proven on the desktop from 13:36 to 14:52
 by the lead's probe and the alternated series, merged, the lagged list at the merge 948 tests with
-none failed, and pushed with its docs; CI's run on that push is in the CI section. **Next for the
-lead, when the fixes' run ends:** read its result, its diff since `982f5e5` and the changed
-pictures; then §11's merge with its checks (11.4's classes and part G, then Phase6, Phase6Look and
-8a's project whole through `scripts/heavy-run.sh`, the comparison with wave 3's references by
-`--expected`, the lead's own run of GuideShots), the lead's lines of 11.2, the report's part G
-results, the push, CI and the guide's workflow (step 17); then §12 (step 18). §11's builders got
-with their briefs: mdBook at `D:/Projects/Personal/phase8-work/tools/mdbook-0.5.4/mdbook.exe` and
-the Linux archive's SHA-256 for `guide.yml` (Notes, "Wave 4"); the references
-`D:/Projects/Personal/phase8-work/references/wave3/`; rulings 80 (stop and report if the first-run
-link's frame touches its ink), 82 (the facts no check shows) and 83 (the rename, the comments); and
-what part G's open point 103 leaves for it to report. What step 16 ended with: the three packages
-merged, §10 (`86ecb3a`), §8 (`f014b2b`, its fixes after the merge `85e2884`) and §9 (`769f459`); the
-lagged list, the whole default run and the pictures on `85e2884`, whose one fault
-(`a1b-about-link-focus`) is fixed (`fcf8c1e`); the references of the later merges,
-`D:/Projects/Personal/phase8-work/references/wave3/` (1,235 scripted pictures); three "before"
-series, two probes, two panels and **D457** (the bounds `0bfbe92`, two backlog rows, the restore
-order as ruling 76, a change in wave 4); CI's two failures on the link frame's merge fixed
+none failed, and pushed with its docs (`5e23aba`); CI's run 45286046457 on that push is green in all
+six jobs (the CI section). **Next for the lead, when the fixes' run ends:** read its result, its
+diff since `982f5e5` and the changed pictures; then §11's merge with its checks (11.4's classes and
+part G, then Phase6, Phase6Look and 8a's project whole through `scripts/heavy-run.sh`, the
+comparison with wave 3's references by `--expected`, the lead's own run of GuideShots), the lead's
+lines of 11.2, the report's part G results, the push, CI and the guide's workflow (step 17); then
+§12 (step 18). §11's builders got with their briefs: mdBook at
+`D:/Projects/Personal/phase8-work/tools/mdbook-0.5.4/mdbook.exe` and the Linux archive's SHA-256 for
+`guide.yml` (Notes, "Wave 4"); the references `D:/Projects/Personal/phase8-work/references/wave3/`;
+rulings 80 (stop and report if the first-run link's frame touches its ink), 82 (the facts no check
+shows) and 83 (the rename, the comments); and what part G's open point 103 leaves for it to report.
+What step 16 ended with: the three packages merged, §10 (`86ecb3a`), §8 (`f014b2b`, its fixes after
+the merge `85e2884`) and §9 (`769f459`); the lagged list, the whole default run and the pictures on
+`85e2884`, whose one fault (`a1b-about-link-focus`) is fixed (`fcf8c1e`); the references of the
+later merges, `D:/Projects/Personal/phase8-work/references/wave3/` (1,235 scripted pictures); three
+"before" series, two probes, two panels and **D457** (the bounds `0bfbe92`, two backlog rows, the
+restore order as ruling 76, a change in wave 4); CI's two failures on the link frame's merge fixed
 (`70a8fc0`, `809b77f`); and, after a review of the second of those fixes, **the row list's fix,
 merged at `bad98b1`**: CI's run 45133434382 on it is green in all six jobs, the whole default run on
 `c1bc69b`, whose code is the merge's, passed with 8,514 tests and none failed, and each of its 54
