@@ -46,3 +46,9 @@ Removing VisualCommit's program files does not remove what it saved elsewhere:
   written to git's own configuration: for all repositories to your global git configuration, for
   one repository to its `.git/config`. Git uses them, in a terminal too, and they stay. See
   [Settings](settings.md).
+- **Backups in your repositories.** Before anything that could lose work, VisualCommit saves a
+  backup in the repository, under `refs/visualcommit/backup/` (see
+  [Undo, redo and the reflog](undo-and-reflog.md)). Git itself never deletes them; VisualCommit
+  deletes old ones as it works, so the ones it made stay after an uninstall. In a repository's
+  folder, `git for-each-ref refs/visualcommit/backup/` lists them, and `git update-ref -d` followed
+  by one of the listed names deletes that one.

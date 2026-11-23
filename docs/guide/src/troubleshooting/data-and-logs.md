@@ -17,9 +17,11 @@ It holds:
 - `session.json`: the tabs to restore, the recent repositories, the window's place and the
   panels' sizes, and what each repository's graph hides or solos;
 - `workspaces.json`: your workspaces;
-- `accounts.json`: which hosting accounts you signed in to, without their tokens, which are in the
-  keychain;
-- `avatars`: the authors' pictures from GitHub;
+- `accounts.json`: which hosting accounts you signed in to, without their tokens: those are in your
+  system's keychain or, where the keychain cannot keep them, only in memory until VisualCommit
+  closes;
+- `avatars`: the authors' pictures from GitHub, and for each repository which GitHub account, if
+  any, each author's email belongs to; signing out of GitHub deletes it;
 - `merge-tools.json`: the merge tools git listed;
 - `logs`: VisualCommit's log files;
 - `instance.lock` and, while VisualCommit runs, `instance.json`, which keep a second VisualCommit
@@ -29,6 +31,8 @@ Git's own settings (your name and email, the pull mode, the merge tool) are not 
 git's configuration ([Settings](../settings.md)).
 
 One VisualCommit runs per data folder. Starting it again brings the running window to the front.
+If the running VisualCommit does not answer, a notice says **VisualCommit is already running**, with
+**Try again** and **Close**.
 
 ## The log files
 
@@ -47,5 +51,6 @@ VisualCommit ran and git's own output: see [The activity log](../activity-log.md
 How to report a problem is set up with the public beta, and this page will then say where. When you
 report one, say what you did, what you expected and what happened, and add the activity log's
 lines for the operation (**Copy command** and **Copy output**) and the part of the log file from
-that time. Check them first: they hold your repositories' paths and names, and your branch and file
-names.
+that time. Check them first: they can hold your repositories' paths and names, your branch and file
+names, the accounts you signed in to (for Azure DevOps, the organization) and your remotes'
+addresses.
