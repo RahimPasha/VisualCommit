@@ -15,8 +15,9 @@ namespace VisualCommit.App.Tests;
 
 /// <summary>
 /// The left panel's analogue of <see cref="StageListScrollTests"/>. The list holds the section
-/// headers, 30 px high, and 26 px rows: the local branches b01 on and main. A press on a row in view
-/// comes before each change and its release after the refresh.
+/// headers, 30 px high, and 26 px rows: the local branches b01 on and main, and in one fact the
+/// remote origin's branches. A press on a row in view comes before each change and its release after
+/// the refresh.
 /// <para>
 /// A hide, a solo or its end, whose rebuild keeps the number of rows of the scrolled branch list and
 /// changes what some branch rows show, leaves the list exactly where it was: its offset and its
@@ -34,19 +35,36 @@ namespace VisualCommit.App.Tests;
 /// A rename, outside the app, through the app's rename or through its undo, keeps the number of rows
 /// too, but every row between the branch's old place and its new one shifts by a row: other branches
 /// at those indexes, which the list is told of by removing that run of rows and inserting the rebuilt
-/// ones, as before phase 8a. When those rows were replaced, a rename of the top row in view under an
-/// offset smaller than the shifted rows' heights sent the list to its top and lost the click, and
-/// deeper in the list left the offset and the extent short by those heights. The remove makes the
-/// panel estimate where the top row in view is, which with headers among the rows is not exact: the
-/// facts allow the offset and the extent to move by as much as that estimate moved them before phase
-/// 8a, each stating its numbers (5 px near the top of the list, about 20 px at the bottom of 60
-/// branches), and assert that nothing moves in the window, that the rows outside the shifted run keep
-/// their objects and controls, and that the press on main is a click. Not asserted here, because the
-/// estimate does worse there, as it did before phase 8a: a rename far above the view deep in the
-/// list (b01 at the bottom of 60 branches: the offset 1226 for 1356), after which the panel makes
-/// five controls in view again, and the press on one of them loses its click, where a replace of
-/// the two rows it shifts touched nothing; and a fetch that drops the top remote branch in view and
-/// brings another, after which the rows in view are drawn 87 px lower than before.
+/// ones, as before phase 8a. Two renames in one refresh, or a fetch that drops two remote branches
+/// and brings two others, shift two runs with rows kept between them; with only such rows between
+/// them the two runs are removed and inserted as one, the kept rows between them with them, as the
+/// whole changed part was before phase 8a. When the shifted rows were replaced, a rename of the top
+/// row in view under an offset smaller than their heights sent the list to its top and lost the
+/// click, and deeper in the list left the offset and the extent short by those heights. The remove
+/// makes the panel estimate where the top row in view is, which with headers among the rows is not
+/// exact: the facts allow the offset and the extent to move by as much as that estimate moved them
+/// before phase 8a, each stating its numbers (5 px near the top of the list; at the bottom of 60
+/// branches about 20 px for one run and 61 px for two; 166 px for the fetch at the bottom of 40 local
+/// and 31 remote branches), and assert that nothing moves in the window, that the rows outside the
+/// span from the first shifted row to the last keep their objects and controls, and that the press
+/// is a click. The rows kept between two runs removed as one get new objects and controls, as before
+/// phase 8a, so a press on one of them would lose its click; that is not asserted. Told of as two
+/// runs apart, with those rows left in place, the estimate missed by more: 108 px for 61 and 172
+/// for 166.
+/// </para>
+/// <para>
+/// Not asserted here, because the estimate does worse there, as it did before phase 8a: a rename
+/// far above the view deep in the list (b01 at the bottom of 60 branches: the offset 1226 for 1356),
+/// after which the panel makes five controls in view again, and the press on one of them loses its
+/// click, where a replace of the two rows it shifts touched nothing; and a fetch that drops the top
+/// remote branch in view and brings another, after which the rows in view are drawn 87 px lower than
+/// before. Nor, because the estimate does worse there than it did before phase 8a: two runs kept
+/// apart by a row that changes itself between them, or a run with such a row right beside it, whose
+/// height stays in the estimate where it was removed before phase 8a (b50 moved to another commit by
+/// the refresh of the two renames above: the offset 1248 for 1356, 108 px off where it was 61; b61
+/// moved by the refresh of a rename of the top row in view whose run ends right above it, at the
+/// bottom of 61 branches: 1342 for 1386, 44 px off where it was 22); nothing moves in the window
+/// there, and the click is kept (<c>RowCollection.ReplaceChanged</c>).
 /// </para>
 /// </summary>
 public class LeftPanelScrollTests
@@ -150,7 +168,7 @@ public class LeftPanelScrollTests
         await AssertShiftKeepsTheListAsync(
             branches: 20,
             offset: 100,
-            shift: Outside("b03", "c99"),
+            shift: Outside(("b03", "c99")),
             topInView: "b03",
             bounds: new ShiftBounds(Offset: 5, Extent: 5));
     }
@@ -164,7 +182,7 @@ public class LeftPanelScrollTests
         await AssertShiftKeepsTheListAsync(
             branches: 20,
             offset: 40,
-            shift: Outside("b03", "c99"),
+            shift: Outside(("b03", "c99")),
             topInView: "b01",
             bounds: new ShiftBounds(Offset: 0, Extent: 2));
     }
@@ -178,9 +196,43 @@ public class LeftPanelScrollTests
         await AssertShiftKeepsTheListAsync(
             branches: 60,
             offset: null,
-            shift: Outside("b45", "b60x"),
+            shift: Outside(("b45", "b60x")),
             topInView: "b45",
             bounds: new ShiftBounds(Offset: 21, Extent: 20));
+    }
+
+    [AvaloniaFact]
+    public async Task Renaming_two_branches_of_a_left_panel_scrolled_to_its_bottom_so_that_two_runs_of_rows_shift_with_rows_kept_between_them_keeps_the_rows_in_view_and_the_click_under_a_press()
+    {
+        // At the bottom of 60 branches, b45 (the top row in view) becomes b48x and b55 becomes b58x in
+        // one refresh: b46 to b48 and b56 to b58 move up a row, b49 to b54 between them stay. The
+        // bounds are what the estimate gave before phase 8a's change, which removed and inserted the
+        // rows from b45 to b58 as one: 1295 for 1356 and 1840 for 1900. Told of as two runs apart,
+        // the six kept rows between them still made, the estimate missed by more: 1248 and 1793.
+        await AssertShiftKeepsTheListAsync(
+            branches: 60,
+            offset: null,
+            shift: Outside(("b45", "b48x"), ("b55", "b58x")),
+            topInView: "b45",
+            bounds: new ShiftBounds(Offset: 61, Extent: 60));
+    }
+
+    [AvaloniaFact]
+    public async Task A_fetch_that_drops_two_remote_branches_and_brings_two_others_while_the_left_panel_is_scrolled_to_its_bottom_keeps_the_rows_in_view_and_the_click_under_a_press()
+    {
+        // b01 to b40 and main, then origin's main and r01 to r30, scrolled to the bottom: origin/r13
+        // is the top row in view. The app's fetch, with fetch.prune set, drops r10 and r16 and brings
+        // r13a and r19a: r11 to r13a and r17 to r19a are other branches than before at their rows,
+        // r14 and r15 between them stay. The bounds are what the estimate gave before phase 8a's
+        // change, 1550 for 1716 and 2094 for 2260; told of as two runs apart, 1544 and 2088.
+        await AssertShiftKeepsTheListAsync(
+            branches: 40,
+            offset: null,
+            shift: Fetch(drop: ["r10", "r16"], bring: ["r13a", "r19a"]),
+            topInView: "r13",
+            bounds: new ShiftBounds(Offset: 166, Extent: 166),
+            remoteBranches: 30,
+            pressed: "ref:refs/remotes/origin/r25");
     }
 
     [AvaloniaFact]
@@ -212,28 +264,37 @@ public class LeftPanelScrollTests
 
     /// <summary>
     /// The app on a repository with the local branches b01 to b<paramref name="branches"/> and main,
-    /// its git held by a <see cref="HeldGitRunner"/>; <paramref name="shift"/>'s set-up, then the left
-    /// panel scrolled to <paramref name="offset"/>, or to its bottom without one, with
-    /// <paramref name="topInView"/> its top row in view; a press on main's row; then the rename that
-    /// <paramref name="shift"/> makes, which keeps the number of rows and moves the rows between the
-    /// old name and the new one by a row: other branches than before at those indexes, which the
-    /// list is told of. The press comes where <paramref name="shift"/> says, its release after the
-    /// refresh. Asserts that the offset and the extent moved by no more than
+    /// and with <paramref name="remoteBranches"/> its remote origin's main and r01 on, fetched with
+    /// fetch.prune set; its git held by a <see cref="HeldGitRunner"/>; <paramref name="shift"/>'s
+    /// set-up, then the left panel scrolled to <paramref name="offset"/>, or to its bottom without one,
+    /// with <paramref name="topInView"/> its top row in view; a press on the row whose key is
+    /// <paramref name="pressed"/>; then the change that <paramref name="shift"/> makes, which keeps
+    /// the number of rows and moves some rows by a row: other branches than before at those indexes,
+    /// which the list is told of. The press comes where <paramref name="shift"/> says, its release
+    /// after the refresh. Asserts that the offset and the extent moved by no more than
     /// <paramref name="bounds"/> says; that each row in view before has, at its index, a row in view
-    /// at its place in the window, nothing moving on screen; that each row whose branch is the one
-    /// at its index before (main and the headers below the moved rows) is the same object with the
-    /// same button; and that the release selected main.
+    /// at its place in the window, nothing moving on screen; that each row outside the span from the
+    /// first moved row to the last (main and the headers below them, the rows above them) is the same
+    /// object with the same button; and that the release selected the pressed row.
     /// </summary>
-    private static async Task AssertShiftKeepsTheListAsync(int branches, double? offset, Shift shift, string topInView, ShiftBounds bounds)
+    private static async Task AssertShiftKeepsTheListAsync(
+        int branches,
+        double? offset,
+        Shift shift,
+        string topInView,
+        ShiftBounds bounds,
+        int remoteBranches = 0,
+        string pressed = "ref:refs/heads/main")
     {
         using var repo = await ManyBranchesAsync(branches);
+        using var remote = remoteBranches > 0 ? await RemoteAsync(repo, remoteBranches) : null;
         using var data = new TempDirectory("data");
         var held = new HeldGitRunner();
         using var app = ShellDriver.StartWithTabs(data.Path, [repo.Path], width: 1100, height: 700, gitProbe: held.Probe);
         var repository = await app.WaitForRepositoryAsync();
         await app.WaitForWatchersQuietAsync();
         await app.WaitForIdleAsync();
-        var context = new ShiftContext(app, repository, repo, held);
+        var context = new ShiftContext(app, repository, repo, remote, held);
         if (shift.Prepare is { } prepare)
         {
             await prepare(context);
@@ -260,8 +321,8 @@ public class LeftPanelScrollTests
         var rowsBefore = repository.LeftPanel.Rows.ToList();
         var before = InView(app, list, scroller);
         Assert.Equal(topInView, before[0].Row.Text);
-        var main = (RefItemRow)MainRow([.. before.Select(entry => entry.Row)]);
-        var point = app.BoundsOf(before.Single(entry => ReferenceEquals(entry.Row, main)).Button).Center;
+        var target = (RefItemRow)before.Single(entry => entry.Row.Key == pressed).Row;
+        var point = app.BoundsOf(before.Single(entry => ReferenceEquals(entry.Row, target)).Button).Center;
 
         await shift.Make(context, () => app.PressMouse(point));
         await app.WaitForIdleAsync();
@@ -272,8 +333,10 @@ public class LeftPanelScrollTests
 
         var rowsAfter = repository.LeftPanel.Rows.ToList();
         Assert.Equal(rowsBefore.Count, rowsAfter.Count);
-        var moved = Enumerable.Range(0, rowsBefore.Count).Count(index => rowsBefore[index].Key != rowsAfter[index].Key);
-        Assert.True(moved > 1, $"{shift.Description} moved {moved} rows.");
+        var movedRows = Enumerable.Range(0, rowsBefore.Count).Where(index => rowsBefore[index].Key != rowsAfter[index].Key).ToList();
+        Assert.True(movedRows.Count > 1, $"{shift.Description} moved {movedRows.Count} rows.");
+        var firstMoved = movedRows[0];
+        var lastMoved = movedRows[^1];
         var after = InView(app, list, scroller);
         var problems = new List<string>();
         var offsetAfter = scroller.Offset.Y;
@@ -303,7 +366,7 @@ public class LeftPanelScrollTests
                 problems.Add(string.Create(CultureInfo.InvariantCulture, $"row {index} ({now.Row.Text}) at y {now.Y} for {y}"));
             }
 
-            if (now.Row.Key == shown.Key)
+            if (index < firstMoved || index > lastMoved)
             {
                 if (!ReferenceEquals(now.Row, shown))
                 {
@@ -319,10 +382,10 @@ public class LeftPanelScrollTests
 
         app.ReleaseMouse(point);
         await app.WaitForIdleAsync();
-        var selected = repository.LeftPanel.Rows.OfType<RefItemRow>().Where(item => item.IsSelected).Select(item => item.Text).ToList();
-        if (selected is not ["main"])
+        var selected = repository.LeftPanel.Rows.OfType<RefItemRow>().Where(item => item.IsSelected).ToList();
+        if (selected is not [var only] || only.Key != pressed)
         {
-            problems.Add($"the press on main selected {(selected.Count == 0 ? "nothing" : string.Join(", ", selected))}");
+            problems.Add($"the press on {target.Text} selected {(selected.Count == 0 ? "nothing" : string.Join(", ", selected.Select(item => item.Text)))}");
         }
 
         Assert.True(
@@ -333,8 +396,8 @@ public class LeftPanelScrollTests
     /// <summary>How far a shift may move the offset and the extent: no further than Avalonia's estimate moved them before phase 8a.</summary>
     private sealed record ShiftBounds(double Offset, double Extent);
 
-    /// <summary>The app, its repository, the repository on disk and the git runner that can hold a call.</summary>
-    private sealed record ShiftContext(ShellDriver App, RepositoryViewModel Repository, TempRepo Repo, HeldGitRunner Held);
+    /// <summary>The app, its repository, the repository on disk, its remote origin if it has one, and the git runner that can hold a call.</summary>
+    private sealed record ShiftContext(ShellDriver App, RepositoryViewModel Repository, TempRepo Repo, TempRepo? Remote, HeldGitRunner Held);
 
     /// <summary>
     /// A rename that moves rows: what is done before the scroll (<see cref="Prepare"/>), then the
@@ -343,17 +406,63 @@ public class LeftPanelScrollTests
     /// </summary>
     private sealed record Shift(string Description, Func<ShiftContext, Task>? Prepare, Func<ShiftContext, Action, Task> Make, Func<RepositoryViewModel, bool> Shown);
 
-    /// <summary><c>git branch -m</c> outside the app, after the press, then the refresh a watcher would start.</summary>
-    private static Shift Outside(string from, string to) => new(
-        $"the rename of {from} to {to} outside the app",
+    /// <summary>
+    /// The rename of each of <paramref name="renames"/> outside the app, after the press, then the
+    /// refresh a watcher would start: one rename with <c>git branch -m</c>; more in one
+    /// <c>git update-ref --stdin</c> transaction, so that they all come within the quiet period of the
+    /// app's watcher (300 ms) and one rebuild shows them, with no git process between them.
+    /// </summary>
+    private static Shift Outside(params (string From, string To)[] renames) => new(
+        $"the rename of {string.Join(" and ", renames.Select(rename => $"{rename.From} to {rename.To}"))} outside the app",
         null,
         async (context, press) =>
         {
             press();
-            await context.Repo.GitAsync("branch", "-m", from, to);
+            if (renames is [var (from, to)])
+            {
+                await context.Repo.GitAsync("branch", "-m", from, to);
+            }
+            else
+            {
+                var commands = new StringBuilder();
+                foreach (var rename in renames)
+                {
+                    var target = await context.Repo.RefTargetAsync("refs/heads/" + rename.From) ?? throw new InvalidOperationException($"No branch {rename.From}.");
+                    commands.Append(CultureInfo.InvariantCulture, $"create refs/heads/{rename.To} {target}\ndelete refs/heads/{rename.From}\n");
+                }
+
+                await context.Repo.GitWithInputAsync(commands.ToString(), "update-ref", "--stdin");
+            }
+
             await context.Repository.RefreshAsync();
         },
-        repository => HasBranch(repository, to) && !HasBranch(repository, from));
+        repository => renames.All(rename => HasBranch(repository, rename.To) && !HasBranch(repository, rename.From)));
+
+    /// <summary>
+    /// The branches <paramref name="drop"/> deleted on the remote and <paramref name="bring"/> made
+    /// there, then the press and the app's fetch of origin (<c>RepositoryOperations.FetchAsync</c>),
+    /// which prunes, as fetch.prune is set.
+    /// </summary>
+    private static Shift Fetch(string[] drop, string[] bring) => new(
+        $"the fetch that drops origin's {string.Join(" and ", drop)} and brings {string.Join(" and ", bring)}",
+        null,
+        async (context, press) =>
+        {
+            var remote = context.Remote ?? throw new InvalidOperationException("The repository has no remote.");
+            foreach (var name in drop)
+            {
+                await remote.GitAsync("branch", "-D", name);
+            }
+
+            foreach (var name in bring)
+            {
+                await remote.GitAsync("branch", name);
+            }
+
+            press();
+            await context.Repository.Operations.FetchAsync("origin");
+        },
+        repository => bring.All(name => HasRemoteBranch(repository, name)) && !drop.Any(name => HasRemoteBranch(repository, name)));
 
     /// <summary>
     /// The branch menu's "Rename …" (<c>RepositoryOperations.RenameBranchAsync</c>): its dialog
@@ -419,6 +528,9 @@ public class LeftPanelScrollTests
 
     private static bool HasBranch(RepositoryViewModel repository, string name) =>
         repository.LeftPanel.Rows.OfType<RefItemRow>().Any(row => row.Kind == RefItemKind.LocalBranch && row.Text == name);
+
+    private static bool HasRemoteBranch(RepositoryViewModel repository, string name) =>
+        repository.LeftPanel.Rows.Any(row => row.Key == "ref:refs/remotes/origin/" + name);
 
     /// <summary>
     /// The app on a repository with the local branches b01 to b<paramref name="branches"/> and main,
@@ -607,6 +719,35 @@ public class LeftPanelScrollTests
         catch
         {
             repo.Dispose();
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// A repository with one commit on main and the branches r01 to r<paramref name="branches"/> at
+    /// it, added to <paramref name="repo"/> as origin and fetched, with fetch.prune set there.
+    /// </summary>
+    private static async Task<TempRepo> RemoteAsync(TempRepo repo, int branches)
+    {
+        var remote = await TempRepo.CreateAsync("remote");
+        try
+        {
+            var head = await remote.CommitFileAsync("r.txt", "r\n", "Add r.txt");
+            var refs = new StringBuilder();
+            for (var number = 1; number <= branches; number++)
+            {
+                refs.Append(CultureInfo.InvariantCulture, $"create refs/heads/r{number:D2} {head}\n");
+            }
+
+            await remote.GitWithInputAsync(refs.ToString(), "update-ref", "--stdin");
+            await repo.GitAsync("remote", "add", "origin", remote.Path);
+            await repo.GitAsync("fetch", "--quiet", "origin");
+            await repo.ConfigAsync("fetch.prune", "true");
+            return remote;
+        }
+        catch
+        {
+            remote.Dispose();
             throw;
         }
     }
