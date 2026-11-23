@@ -174,10 +174,15 @@ public class RestoreOrderTests
         var tabB = lab.Window.Tabs[1];
         lab.Start();
         Assert.Equal(Folders("b"), lab.Provider.Opened);
+
+        // The 5 s, and the release line's milliseconds, count from the moment b is asked for, not
+        // from its answer.
+        var beforeAnswer = TimeSpan.FromSeconds(2);
+        lab.Clock.Advance(beforeAnswer);
         var b = lab.Provider.Answer(Folder("b"));
         await DashboardTestSupport.WaitUntilAsync(() => tabB.Repository?.Refs is not null, "b's refs to be read");
 
-        lab.Clock.Advance(RestoreOrder.LongestWait - TimeSpan.FromMilliseconds(1));
+        lab.Clock.Advance(RestoreOrder.LongestWait - beforeAnswer - TimeSpan.FromMilliseconds(1));
         await DashboardTestSupport.SettleAsync();
         Assert.Equal(Folders("b"), lab.Provider.Opened);
         Assert.Equal(1, lab.Clock.ArmedTimers);
@@ -210,8 +215,13 @@ public class RestoreOrderTests
         await DashboardTestSupport.SettleAsync();
         Assert.Equal(Folders(names[..(1 + RestoreOrder.OpensAtOnce)]), lab.Provider.Opened);
 
-        // One of them sends its first page: the next opens.
+        // One of them sends its first page: the next opens, and not before that page (its answer,
+        // RepositoryOpened and its refs read keep the slot).
         var second = lab.Provider.Answer(Folder(names[1]));
+        await DashboardTestSupport.WaitUntilAsync(() => tabs[1].Repository?.Refs is not null, "t1's refs to be read");
+        await DashboardTestSupport.SettleAsync();
+        Assert.Equal(Folders(names[..(1 + RestoreOrder.OpensAtOnce)]), lab.Provider.Opened);
+
         second.SendFirstPage();
         await lab.WaitForOpenedAsync(2 + RestoreOrder.OpensAtOnce);
         await DashboardTestSupport.SettleAsync();
@@ -257,9 +267,101 @@ public class RestoreOrderTests
         await DashboardTestSupport.SettleAsync();
         Assert.Equal(Folders(names[..(1 + RestoreOrder.OpensAtOnce)]), lab.Provider.Opened);
 
-        lab.Provider.Answer(Folder(names[1])).SendFirstPage();
+        // Nor by the asked tab's answer or its refs read: only its first page.
+        var answered = lab.Provider.Answer(Folder(names[1]));
+        await DashboardTestSupport.WaitUntilAsync(() => lab.Window.Tabs[1].Repository?.Refs is not null, "t1's refs to be read");
+        await DashboardTestSupport.SettleAsync();
+        Assert.Equal(Folders(names[..(1 + RestoreOrder.OpensAtOnce)]), lab.Provider.Opened);
+
+        answered.SendFirstPage();
         await lab.WaitForOpenedAsync(names.Length);
         Assert.Equal(Folders(names), lab.Provider.Opened);
+    }
+
+    [AvaloniaFact]
+    public async Task A_slot_is_freed_once_at_its_tabs_close_or_first_page_and_a_tab_shown_meanwhile_opens_beside_the_slots()
+    {
+        // 14.3.3 and 14.3.4 while tabs still wait: the active tab, the OpensAtOnce the release lets
+        // in, and four more waiting.
+        var names = Names(1 + RestoreOrder.OpensAtOnce + 4);
+        var letIn = 1 + RestoreOrder.OpensAtOnce;
+        using var lab = Lab.Of(0, names);
+        var tabs = lab.Window.Tabs.ToList();
+        lab.Start();
+        var first = lab.Provider.Answer(Folder(names[0]));
+        first.SendFirstPage();
+        await lab.WaitForOpenedAsync(letIn);
+        await DashboardTestSupport.SettleAsync();
+        Assert.Equal(Folders(names[..letIn]), lab.Provider.Opened);
+
+        // A slot's tab closed before its first page frees its slot inside the command: the next
+        // waiting tab has been asked for when the command returns.
+        lab.Window.CloseTabCommand.Execute(tabs[RestoreOrder.OpensAtOnce]);
+        Assert.Equal(Folders(names[..(letIn + 1)]), lab.Provider.Opened);
+
+        // The closed tab's opening ends when the provider answers, and frees no slot again.
+        lab.Provider.Fail(Folder(names[RestoreOrder.OpensAtOnce]));
+        await DashboardTestSupport.SettleAsync();
+        Assert.Equal(Folders(names[..(letIn + 1)]), lab.Provider.Opened);
+
+        // Another slot's tab sends its first page, then ends its load: one more opens, once.
+        var paged = lab.Provider.Answer(Folder(names[1]));
+        paged.SendFirstPage();
+        await lab.WaitForOpenedAsync(letIn + 2);
+        paged.End();
+        await DashboardTestSupport.WaitUntilAsync(() => tabs[1].Repository is { Graph.IsComplete: true }, "t1's load to end");
+        await DashboardTestSupport.SettleAsync();
+        Assert.Equal(Folders(names[..(letIn + 2)]), lab.Provider.Opened);
+
+        // Every slot is taken: the last waiting tab, shown, opens at once and takes none.
+        lab.Window.ActivateTabCommand.Execute(tabs[^1]);
+        Assert.Equal(Folders([.. names[..(letIn + 2)], names[^1]]), lab.Provider.Opened);
+        Assert.Equal(Shown(names[^1]), lab.OrderLines[^1]);
+        await DashboardTestSupport.SettleAsync();
+        Assert.Equal(letIn + 3, lab.Provider.Opened.Count);
+
+        // The tab before it still waits for a slot: the first page of the tab the close let in
+        // frees one, and it opens.
+        var closeLetIn = lab.Provider.Answer(Folder(names[letIn]));
+        closeLetIn.SendFirstPage();
+        await lab.WaitForOpenedAsync(names.Length);
+        await DashboardTestSupport.SettleAsync();
+        Assert.Equal(Folders([.. names[..(letIn + 2)], names[^1], names[^2]]), lab.Provider.Opened);
+
+        first.End();
+        closeLetIn.End();
+        lab.Provider.EndHeld(_ => false);
+        await lab.Starting.WaitAsync(Bound, TestContext.Current.CancellationToken);
+        Assert.Equal(names.Length, lab.Provider.Opened.Count);
+    }
+
+    [AvaloniaFact]
+    public async Task A_waiting_tabs_drop_starts_no_merge_tool_lookup_and_the_first_load_to_end_starts_it()
+    {
+        // 14.3.6 on the UI thread, where what the drop would start runs within the settle: the
+        // lookup waits for a load to end (D202), and a tab that never opened has none.
+        var lookups = 0;
+        var tools = new ToolCatalogues(
+            _ => Task.FromResult(ToolCatalogues.FixedEditors),
+            _ =>
+            {
+                Interlocked.Increment(ref lookups);
+                return Task.FromResult(ToolCatalogues.FixedMergeTools);
+            },
+            () => null);
+        using var lab = new Lab([.. Names("a", "b", "c").Select(name => new TabState(Folder(name)))], 1, tools: tools);
+        lab.Start();
+        Assert.Equal(Folders("b"), lab.Provider.Opened);
+
+        lab.Window.CloseTabCommand.Execute(lab.Window.Tabs[0]);
+        await DashboardTestSupport.SettleAsync();
+        Assert.Equal([Started("b", 2), Dropped("a")], lab.OrderLines);
+        Assert.Equal(0, Volatile.Read(ref lookups));
+
+        lab.Provider.Fail(Folder("b"));
+        await DashboardTestSupport.WaitUntilAsync(() => Volatile.Read(ref lookups) > 0, "the merge tool lookup to start");
+        await DashboardTestSupport.SettleAsync();
+        Assert.Equal(1, Volatile.Read(ref lookups));
     }
 
     [AvaloniaFact]
@@ -341,6 +443,10 @@ public class RestoreOrderTests
         Assert.Equal([Started("b", 2), Stopped(2)], lab.OrderLines);
         await DashboardTestSupport.SettleAsync();
         Assert.Equal(Folders("b"), lab.Provider.Opened);
+
+        // The stop has disarmed the 5 s although b still opens.
+        Assert.Equal(0, lab.Clock.ArmedTimers);
+        Assert.False(lab.Starting.IsCompleted);
 
         // The start ends once the opened tab's opening ends.
         lab.Provider.Fail(Folder("b"));
@@ -476,7 +582,7 @@ public class RestoreOrderTests
         private readonly CancellationTokenSource _lifetime = new();
         private bool _closed;
 
-        public Lab(IReadOnlyList<TabState> tabs, int active, IWorkspaceStore? workspaces = null, IStartupTimeline? startup = null)
+        public Lab(IReadOnlyList<TabState> tabs, int active, IWorkspaceStore? workspaces = null, IStartupTimeline? startup = null, ToolCatalogues? tools = null)
         {
             Session = new DashboardTestSupport.MemorySession(new SessionState { Tabs = [.. tabs], ActiveTab = active });
             Services = new TabServices(
@@ -486,6 +592,7 @@ public class RestoreOrderTests
                 Session,
                 new DateDisplay(TimeZoneInfo.Utc),
                 Log,
+                tools: tools,
                 workspaces: workspaces,
                 startup: startup,
                 restoreClock: Clock);
