@@ -150,9 +150,11 @@ public sealed class AppSession : IDisposable
     /// <paramref name="startup"/> is told when the window opens and when the first search for git
     /// ends with a usable git (null: <see cref="NullStartupTimeline"/>); <paramref name="identity"/>
     /// is the app's name, creator, version and copyright (null: this assembly's,
-    /// <see cref="AppIdentity.FromAssembly"/>). The headless harness (<c>ShellDriver</c>) always gives
-    /// its pinned identity and never a timeline, and gives a probe and a helper's path only when a
-    /// test names them (otherwise the machine's search and the helper next to <c>VisualCommit.Git</c>);
+    /// <see cref="AppIdentity.FromAssembly"/>); <paramref name="restoreClock"/> the clock of the 5 s
+    /// the other restored tabs wait for the active one at the most (null: the session's clock). The
+    /// headless harness (<c>ShellDriver</c>) always gives its pinned identity and never a timeline,
+    /// and gives a probe and a helper's path only when a test names them (otherwise the machine's
+    /// search and the helper next to <c>VisualCommit.Git</c>);
     /// the real window's launches start the built app, whose <see cref="App"/> gives the process's
     /// timeline (<see cref="AppLaunch.Current"/>) and nothing else.
     /// </para>
@@ -176,7 +178,8 @@ public sealed class AppSession : IDisposable
         IGitSetupProbe? gitProbe = null,
         string? askPassHelper = null,
         IStartupTimeline? startup = null,
-        AppIdentity? identity = null)
+        AppIdentity? identity = null,
+        TimeProvider? restoreClock = null)
     {
         ArgumentNullException.ThrowIfNull(paths);
         ArgumentNullException.ThrowIfNull(application);
@@ -297,6 +300,7 @@ public sealed class AppSession : IDisposable
             gitSettings: gitSettings,
             tools: tools,
             readClock: readClock,
+            restoreClock: restoreClock,
             hosting: hostingSession,
             startup: timeline,
             identity: identity ?? AppIdentity.FromAssembly(typeof(AppSession).Assembly));

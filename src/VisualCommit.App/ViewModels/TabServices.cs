@@ -40,7 +40,8 @@ public sealed class TabServices
         TimeProvider? readClock = null,
         IHostingSession? hosting = null,
         IStartupTimeline? startup = null,
-        AppIdentity? identity = null)
+        AppIdentity? identity = null,
+        TimeProvider? restoreClock = null)
     {
         ArgumentNullException.ThrowIfNull(repositories);
         ArgumentNullException.ThrowIfNull(folders);
@@ -74,6 +75,7 @@ public sealed class TabServices
         GitSettings = gitSettings;
         Tools = tools;
         ReadClock = readClock ?? Clock;
+        RestoreClock = restoreClock ?? Clock;
 
         // Phase 7a (docs/phase-7a-design.md 1.7): the session's hosting.
         Hosting = hosting ?? NullHostingSession.Instance;
@@ -191,6 +193,13 @@ public sealed class TabServices
     /// (17.2), so that a check moves it without waiting while every other time of the session runs on.
     /// </summary>
     public TimeProvider ReadClock { get; }
+
+    /// <summary>
+    /// The clock of the 5 s the other restored tabs wait for the active one at the most:
+    /// <see cref="Clock"/> unless the harness gives one, so that a test moves it or holds it still
+    /// while every other time of the session runs on.
+    /// </summary>
+    public TimeProvider RestoreClock { get; }
 
     /// <summary>
     /// The session's hosting (docs/phase-7a-design.md 1.5, 1.7): the GitHub account, recognition

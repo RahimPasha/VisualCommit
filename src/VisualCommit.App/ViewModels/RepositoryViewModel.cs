@@ -42,6 +42,7 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
     private readonly IDialogService? _dialogs;
     private readonly TabServices? _services;
     private TaskCompletionSource _firstRead = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private readonly TaskCompletionSource _firstPage = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly Lock _watcherGate = new();
     private Stopwatch _sinceOpening;
     private readonly List<double> _frameTimes = [];
@@ -211,6 +212,16 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
 
     /// <summary><see cref="FirstRead"/> has completed; raised in <c>PropertyChanged</c> when it does.</summary>
     public bool HasFirstRead => _firstRead.Task.IsCompleted;
+
+    /// <summary>
+    /// Completes once, never faulted, when the first full start's history has its first page in
+    /// <see cref="Graph"/>, or when that start has ended without one: a history with no commits, a
+    /// failure of its refs or its load, its cancellation, the view model closed. A summary-mode
+    /// view model's completes at the full start that follows its promotion, or at
+    /// <see cref="Dispose"/>. Its continuations run asynchronously, so that what waits for it never
+    /// runs inside the page's action on the UI thread.
+    /// </summary>
+    public Task FirstPage => _firstPage.Task;
 
     /// <summary>
     /// A tab adopts this summary-mode view model (3.3): it leaves summary mode, a summary read still

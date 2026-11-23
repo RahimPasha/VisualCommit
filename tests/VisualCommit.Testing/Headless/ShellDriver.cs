@@ -156,6 +156,8 @@ public sealed partial class ShellDriver : IDisposable
     /// where the prompt broker looks for its helper (next to <c>VisualCommit.Git</c> when null), and
     /// <paramref name="identity"/> is the app's identity, <see cref="TestIdentity.Pinned"/> when null,
     /// so that no picture shows the commit the tests were built from. No start-up timeline.
+    /// <paramref name="restoreClock"/> is the clock of the 5 s the other restored tabs wait for the
+    /// active one at the most; without it the session's own clock.
     /// </para>
     /// </summary>
     /// <exception cref="ArgumentException">A fake and <paramref name="hosting"/> are both given, or a fake is in process (<see cref="FakeGitHub.InProcess"/>, <see cref="FakeAzureDevOps.InProcess"/>, <see cref="FakeGitLab.InProcess"/>: its handler goes in <paramref name="hosting"/>).</exception>
@@ -174,7 +176,8 @@ public sealed partial class ShellDriver : IDisposable
         FakeGitLab? gitLab = null,
         IGitSetupProbe? gitProbe = null,
         string? askPassHelper = null,
-        AppIdentity? identity = null)
+        AppIdentity? identity = null,
+        TimeProvider? restoreClock = null)
     {
         if (gitHub is not null && hosting is not null)
         {
@@ -219,7 +222,8 @@ public sealed partial class ShellDriver : IDisposable
             tokens: store,
             gitProbe: gitProbe,
             askPassHelper: askPassHelper,
-            identity: identity ?? TestIdentity.Pinned);
+            identity: identity ?? TestIdentity.Pinned,
+            restoreClock: restoreClock);
         if (width is not null)
         {
             session.MainWindow.Width = width.Value;
@@ -269,7 +273,8 @@ public sealed partial class ShellDriver : IDisposable
         FakeGitLab? gitLab = null,
         IGitSetupProbe? gitProbe = null,
         string? askPassHelper = null,
-        AppIdentity? identity = null)
+        AppIdentity? identity = null,
+        TimeProvider? restoreClock = null)
     {
         ArgumentNullException.ThrowIfNull(tabs);
         if (gitHub is not null && hosting is not null)
@@ -285,7 +290,7 @@ public sealed partial class ShellDriver : IDisposable
         WriteSession(
             dataDirectory,
             new SessionState { Tabs = tabs.Select(path => new TabState(path)).ToList(), ActiveTab = activeTab });
-        return Start(dataDirectory, width, height, promptHandler, systemDark, readClock, tools, gitHub, tokens, hosting, azureDevOps, gitLab, gitProbe, askPassHelper, identity);
+        return Start(dataDirectory, width, height, promptHandler, systemDark, readClock, tools, gitHub, tokens, hosting, azureDevOps, gitLab, gitProbe, askPassHelper, identity, restoreClock);
     }
 
     /// <summary>

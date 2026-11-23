@@ -137,7 +137,8 @@ public class SettingsEntryTests
     public async Task The_merge_tool_lookup_starts_once_when_the_first_restored_tabs_load_ends()
     {
         // 8.10: once start-up has settled the window calls Tools.MergeTools and drops the task: when
-        // the first restored tab's load ends (here the second tab's, which fails), and only once.
+        // the first restored tab's load ends, and only once. Here that is the active tab's, which
+        // opens first and alone and fails; the second tab is asked for after it (ruling 76, D457 (5)).
         var first = Path.Combine(Path.GetTempPath(), "restored", "api");
         var second = Path.Combine(Path.GetTempPath(), "restored", "web");
         var repositories = new HeldRepositories();
@@ -146,14 +147,51 @@ public class SettingsEntryTests
         var shell = Shell(repositories, lookups, session, _ => Task.FromResult(GitFound));
 
         var starting = shell.InitializeAsync(TestContext.Current.CancellationToken);
+        Assert.Equal([first], repositories.Opened);
+        Assert.Equal(0, lookups.Count);
+
+        repositories.Fail(first);
+        await lookups.Started.Task.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+        await WaitForOpenedAsync(repositories, [first, second]);
+        repositories.Fail(second);
+        await starting.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+
+        Assert.Equal(1, lookups.Count);
+    }
+
+    [Fact]
+    public async Task Behind_a_closed_active_restored_tab_the_lookup_waits_for_a_load_to_end()
+    {
+        // 8.10 with the restore order (D202, D457 (5)): the lookup follows the first load to end,
+        // whichever tab's, and not the drop of a waiting tab, which never loaded.
+        var first = Path.Combine(Path.GetTempPath(), "restored", "api");
+        var second = Path.Combine(Path.GetTempPath(), "restored", "web");
+        var third = Path.Combine(Path.GetTempPath(), "restored", "docs");
+        var repositories = new HeldRepositories();
+        var lookups = new CountedLookups();
+        var session = new SessionMemory(new SessionState { Tabs = [new TabState(first), new TabState(second), new TabState(third)], ActiveTab = 0 });
+        var shell = Shell(repositories, lookups, session, _ => Task.FromResult(GitFound));
+
+        var starting = shell.InitializeAsync(TestContext.Current.CancellationToken);
+        Assert.Equal([first], repositories.Opened);
+
+        // The third tab, closed while it waits, never opens and starts no lookup.
+        shell.CloseTabCommand.Execute(shell.Tabs[2]);
+        Assert.Equal(0, lookups.Count);
+
+        // The active tab, closed while its opening is held, releases the second.
+        shell.CloseTabCommand.Execute(shell.Tabs[0]);
         Assert.Equal([first, second], repositories.Opened);
         Assert.Equal(0, lookups.Count);
 
+        // The second's load ends first, while the first's opening is still held.
         repositories.Fail(second);
         await lookups.Started.Task.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
-        repositories.Fail(first);
-        await starting;
+        Assert.False(starting.IsCompleted);
 
+        repositories.Fail(first);
+        await starting.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+        Assert.Equal([first, second], repositories.Opened);
         Assert.Equal(1, lookups.Count);
     }
 
@@ -176,11 +214,26 @@ public class SettingsEntryTests
 
     private static string ToolTipText() => MainWindowViewModel.SettingsToolTipFor(KeyTexts.Current);
 
+    /// <summary>
+    /// The window over <paramref name="repositories"/>, its restore clock a <see cref="ManualTimeProvider"/>
+    /// that never moves (ruling 87), so that the restore order's 5 s cannot come between the steps.
+    /// </summary>
     private static MainWindowViewModel Shell(HeldRepositories repositories, CountedLookups lookups, SessionMemory session, Func<CancellationToken, Task<GitDetection>> detectGit)
     {
         var settings = new MainWindowViewModelTests.FakeSettings();
-        var services = new TabServices(repositories, new FakeFolderPicker(), settings, session, new DateDisplay(TimeZoneInfo.Utc), tools: lookups.Catalogues);
+        var services = new TabServices(repositories, new FakeFolderPicker(), settings, session, new DateDisplay(TimeZoneInfo.Utc), tools: lookups.Catalogues, restoreClock: new ManualTimeProvider());
         return new MainWindowViewModel(settings, new MainWindowViewModelTests.FakeThemes(), detectGit, tabServices: services, session: session);
+    }
+
+    /// <summary>Polls until <paramref name="repositories"/> has been asked for <paramref name="expected"/>, in order; fails after 30 s.</summary>
+    private static async Task WaitForOpenedAsync(HeldRepositories repositories, IReadOnlyList<string> expected)
+    {
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(30);
+        while (!repositories.Opened.SequenceEqual(expected))
+        {
+            Assert.True(DateTime.UtcNow < deadline, $"The openings asked for are [{string.Join(", ", repositories.Opened)}], not [{string.Join(", ", expected)}].");
+            await Task.Delay(10, TestContext.Current.CancellationToken);
+        }
     }
 
     /// <summary>The window's session in memory.</summary>
@@ -191,22 +244,51 @@ public class SettingsEntryTests
         public void Update(Func<SessionState, SessionState> change) => Current = change(Current);
     }
 
-    /// <summary>Repositories whose opening waits until the test fails it (<see cref="Fail"/>).</summary>
+    /// <summary>
+    /// Repositories whose opening waits until the test fails it (<see cref="Fail"/>). The record and
+    /// the openings are kept under a lock: the restore order asks for a later tab's opening from its
+    /// continuation, on the thread pool beside the test.
+    /// </summary>
     private sealed class HeldRepositories : IRepositoryProvider
     {
+        private readonly Lock _gate = new();
         private readonly Dictionary<string, TaskCompletionSource<IGitRepository>> _openings = [];
+        private readonly List<string> _opened = [];
 
-        public List<string> Opened { get; } = [];
+        /// <summary>The folders asked for so far, in order.</summary>
+        public IReadOnlyList<string> Opened
+        {
+            get
+            {
+                lock (_gate)
+                {
+                    return [.. _opened];
+                }
+            }
+        }
 
         public Task<IGitRepository> OpenAsync(string path, CancellationToken cancellationToken = default)
         {
             var opening = new TaskCompletionSource<IGitRepository>(TaskCreationOptions.RunContinuationsAsynchronously);
-            _openings[path] = opening;
-            Opened.Add(path);
+            lock (_gate)
+            {
+                _openings[path] = opening;
+                _opened.Add(path);
+            }
+
             return opening.Task;
         }
 
-        public void Fail(string path) => _openings[path].SetException(new IOException($"{path} is gone."));
+        public void Fail(string path)
+        {
+            TaskCompletionSource<IGitRepository> opening;
+            lock (_gate)
+            {
+                opening = _openings[path];
+            }
+
+            opening.SetException(new IOException($"{path} is gone."));
+        }
 
         public Task<IGitRepository> InitAsync(string path, CancellationToken cancellationToken = default) => throw new NotSupportedException();
 
