@@ -19,7 +19,7 @@ in any diff.
 
 Double-click a commit, or choose **Show in graph** in its menu, to close the page and select it in
 the graph. Its menu also has **Blame at this commit**. **Blame** at the top right switches to the
-file's blame.
+file's blame at the selected commit.
 
 ## Blame
 
@@ -28,8 +28,9 @@ The blame shows, beside each line of the file, the commit that last changed it. 
 or from the file's history.
 
 The page **Blame of** *file* shows the file as it is in the working tree, at HEAD or at a commit.
-Lines that one commit changed together form a run, marked at its first line with the commit's
-short SHA, its author and its date. Lines you have not committed yet read **Not committed yet**.
+Consecutive lines that one commit last changed form a run, marked at its first line with the
+commit's short SHA, its author when the page is wide enough, and its date; point at the mark to see
+the commit's full details. Lines you have not committed yet read **Not committed yet**.
 
 <img src="pictures/blame-light.png" srcset="pictures/blame-light.png 2x" alt="The page Blame of units.py in the working tree: on the left of the lines, runs marked with their commits' short SHA, author and date, such as 29cf672 of 2025-11-05, 411ad46 of 2025-11-18 and dd8e6e1 of 2025-12-12, and Not committed yet beside the lines changed since the last commit; the page's File history button and close button at the top right.">
 <img src="pictures/blame-dark.png" srcset="pictures/blame-dark.png 2x" alt="The page Blame of units.py in the working tree: on the left of the lines, runs marked with their commits' short SHA, author and date, such as 29cf672 of 2025-11-05, 411ad46 of 2025-11-18 and dd8e6e1 of 2025-12-12, and Not committed yet beside the lines changed since the last commit; the page's File history button and close button at the top right.">

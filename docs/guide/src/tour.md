@@ -13,8 +13,8 @@ tab. The tabs you leave open come back when VisualCommit starts again. See
 
 ## The toolbar
 
-- **Undo** and **Redo** step back and forward through your git actions in this repository
-  ([Undo, redo and the reflog](undo-and-reflog.md)). Point at them to see what they would undo or
+- **Undo** and **Redo** step back and forward through the git actions VisualCommit records in this
+  repository ([Undo, redo and the reflog](undo-and-reflog.md)). Point at them to see what they would undo or
   redo.
 - **Fetch**, **Pull** and **Push** talk to your remotes ([Fetch, pull and push](sync.md)).
 - **Branch** creates a branch at HEAD; **Stash** stashes your changes and **Pop** applies the
