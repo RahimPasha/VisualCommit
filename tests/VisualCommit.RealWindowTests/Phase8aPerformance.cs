@@ -161,13 +161,16 @@ public sealed class Phase8aPerformance(Phase8aPerformanceRun fixture) : IClassFi
     private const int Commits = LargeHistory.CommitCount;
 
     // The bounds (D436, D457): the slowest counted run times 1.25, rounded up (PerformanceSeries.Bound):
-    // times to 100 ms, M7's to 10 ms, memory to 10 MB. Written by the lead from the three "before"
-    // series of 2026-11-22: M2's from the second series alone (4,872 ms), because the other two ran M2
-    // straight after a Release build; the others from the slowest of all fifteen runs (289.7 and 352 MB,
-    // 3,668.9, 7,024.9 and 499.7 ms). M3's stays null until the restore order's "after" series (D457,
-    // ruling 76) and is written from that one. While null, a fact asserts only its guards.
-    private static readonly long? M2BoundMilliseconds = 6_100;
-    private static readonly long? M3BoundMilliseconds = null;
+    // times to 100 ms, M7's to 10 ms, memory to 10 MB. Written by the lead. M4's to M7's come from the
+    // three "before" series of 2026-11-22, the slowest of all fifteen runs (289.7 and 352 MB, 3,668.9,
+    // 7,024.9 and 499.7 ms). M2's and M3's come from the restore order's alternated series of 2026-11-23
+    // (D457, rulings 76 and 93). M2's: the slowest of that day's runs that met no scheduled task, on
+    // the build before the order and on the one with it, which a start with one tab does not reach,
+    // 7,563 ms; the 6,100 ms drawn from the one quiet series of 2026-11-22 failed four of those fourteen
+    // runs on a laptop in its ordinary state. M3's: the slowest of the five counted runs with the
+    // order, 7,077 ms. While a bound is null, a fact asserts only its guards.
+    private static readonly long? M2BoundMilliseconds = 9_500;
+    private static readonly long? M3BoundMilliseconds = 8_900;
     private static readonly long? M4LoadBoundMegabytes = 370;
     private static readonly long? M4PeakBoundMegabytes = 440;
     private static readonly long? M5BoundMilliseconds = 4_600;
