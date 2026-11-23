@@ -3,7 +3,11 @@
 VisualCommit works without any account. Signing in to GitHub (github.com), GitLab (gitlab.com) or
 Azure DevOps (dev.azure.com) adds that service's features: VisualCommit lists and creates pull
 requests (merge requests on GitLab), clones your repositories from a list, and uses the account for
-git over HTTPS. You can be signed in to one account of each service.
+git over HTTPS. For a repository on GitHub, it also gets the pictures of the commits' authors from
+GitHub, shows them in the graph and the commit details, and keeps them in its data folder. You can
+be signed in to one account of each service. On Azure DevOps the account is one organization's:
+pull requests, the repositories to clone and git over HTTPS cover that organization's repositories
+only.
 
 Open Settings, Ctrl+, (Cmd+, on macOS), and choose **Accounts**.
 

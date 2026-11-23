@@ -6,7 +6,9 @@ A fetch, pull, push or clone may need a password, a passphrase or your answer ab
 and ssh then ask through VisualCommit, in one of these dialogs:
 
 - **Sign in to** and the host: "Git needs a user name and a password or token for" the address.
-  Type them and press **Sign in**. Your git credential helper, if you have one, may remember them.
+  Type them and press **Sign in**. Git asks your credential helpers first, such as Git Credential
+  Manager: one may answer without this dialog or show its own sign-in window, and a helper may
+  remember what you type here.
 - **Key passphrase**: "Enter the passphrase for" your SSH key, then **Unlock**.
 - **Unknown host**: ssh shows a host it has not seen before, with its key's fingerprint, and asks
   "Trust this host and connect?" **Trust and connect** adds the host to ssh's list of known hosts.
@@ -16,9 +18,10 @@ and ssh then ask through VisualCommit, in one of these dialogs:
 **Cancel** in any of them stops the operation. A fetch that VisualCommit runs in the background
 never asks.
 
-When a repository's remote is on GitHub, GitLab or Azure DevOps and you signed in to that service
-in VisualCommit with **Use for git over HTTPS** ticked, git over HTTPS uses the account's token and
-does not ask; see [Sign in to GitHub, GitLab or Azure DevOps](../accounts.md).
+When a repository's remote is on GitHub, GitLab or Azure DevOps (on Azure DevOps, in the
+organization you signed in to) and you signed in to that service in VisualCommit with
+**Use for git over HTTPS** ticked, git over HTTPS uses the account's token and does not ask; see
+[Sign in to GitHub, GitLab or Azure DevOps](../accounts.md).
 
 If the first-run screen says that part of VisualCommit is missing, these dialogs cannot come: see
 [The sign-in helper is missing](git.md#helper-missing).
@@ -29,9 +32,11 @@ An OpenSSH older than 8.4 ignores VisualCommit's sign-in dialog and asks in the 
 VisualCommit was started from. RHEL 8 ships 8.0, and the OpenSSH built into Windows can be older
 where you chose it.
 
-If VisualCommit was not started from a terminal, there is nowhere to ask, and the operation fails.
-Update OpenSSH, load your key into an SSH agent before you start VisualCommit, or use the remote's
-HTTPS address. `ssh -V` in a terminal prints the version.
+If you started VisualCommit from a terminal, answer there, or cancel the operation in VisualCommit.
+To avoid it, update OpenSSH, load your key into an SSH agent before you start VisualCommit, or use
+the remote's HTTPS address. `ssh -V` in a terminal prints the version of the ssh that terminal
+finds, which may not be the one git runs: on Windows, Git for Windows brings its own unless you
+chose the one built into Windows.
 
 ## A .netrc file answers before your account
 

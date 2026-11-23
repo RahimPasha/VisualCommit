@@ -13,7 +13,10 @@ open, and the one that was active, come back when VisualCommit starts again.
 | Go to tab 1 to 8 | Ctrl+1 to Ctrl+8 (Cmd+1 to Cmd+8 on macOS) |
 | Go to the last tab | Ctrl+9 (Cmd+9 on macOS) |
 
-Opening a repository that a tab already shows switches to that tab.
+Opening a repository that a tab already shows, with **Open** on the welcome page, Ctrl+O (Cmd+O on
+macOS), the command palette or a dashboard's row, switches to that tab. A repository picked under
+**Recent repositories** on the welcome page opens in that page's tab, even when another tab shows
+it.
 
 ## Workspaces
 
