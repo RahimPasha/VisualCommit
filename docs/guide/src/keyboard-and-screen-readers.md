@@ -1,8 +1,9 @@
 # Keyboard and screen readers
 
 Every main action can be reached from the keyboard: by its own key, through the command palette
-(Ctrl+Shift+P, Cmd+Shift+P on macOS), or with Tab and the arrows. The keys are fixed; the full list
-is in [Keyboard shortcuts](reference/shortcuts.md) and in Settings, **Keyboard shortcuts**.
+(Ctrl+Shift+P, Cmd+Shift+P on macOS), or with Tab and the arrows. The keys are fixed; VisualCommit's
+keys are listed in [Keyboard shortcuts](reference/shortcuts.md) and in Settings,
+**Keyboard shortcuts**, and this page adds what keys do in each part of the window.
 
 ## General keys
 
@@ -23,7 +24,7 @@ menu is open, or while you drag a branch.
 > standard function keys" is on; Home, End, PageUp and PageDown are Fn with the arrows. A Mac
 > keyboard has no Menu key: use Shift+F10.
 
-## What the settings screen's list cannot show
+## Keys in each part of the window
 
 - **The graph**: the arrows, PageUp, PageDown, Home and End move the selection; with Shift they
   extend it to the commits next to it. Commits apart from each other can be selected only with the
@@ -33,7 +34,7 @@ menu is open, or while you drag a branch.
   **Inline** and **Side by side**. Enter or Space presses the focused button.
 - **Lines of a diff**: the diff's caret is not drawn. Press F6 until the diff has the focus, select
   lines with Shift and the arrows, then press Shift+F10 for **Stage selected lines** (or
-  **Discard selected lines…**).
+  **Discard selected lines…**; **Unstage selected lines** in a staged diff).
 - **A blame**: the arrows, PageUp, PageDown, Home and End pick the run of the line the caret moves
   to, with any modifier; Shift+F10 opens that run's menu.
 - **A file's buttons in the working changes**: Tab from a file's row reaches its **Stage** and

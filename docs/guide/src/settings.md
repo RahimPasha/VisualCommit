@@ -11,7 +11,8 @@ and signing out take effect at once, and Cancel does not undo them.
 <img src="pictures/settings-general-dark.png" srcset="pictures/settings-general-dark.png 2x" alt="The settings screen's General section: Theme with Dark, Light and System, the theme in use chosen; Fetching with Fetch in the background every 5 minutes ticked; Working tree with Keep ignored files and Include untracked files when stashing ticked; Opening files with the extensions Open file asks about first and the box Also ask for.">
 
 - **Theme**: **Dark**, **Light**, or **System**, which follows your operating system's light or
-  dark mode. The toolbar's **Theme** button switches between dark and light at once.
+  dark mode. The toolbar's **Theme** button switches between dark and light at once and keeps your
+  choice; while **System** is chosen, a click on it stops following your system.
 - **Fetching**: **Fetch in the background every** 1 to 60 **minutes**, the active tab's repository
   only; it never asks for a password. See [Fetch, pull and push](sync.md).
 - **Working tree**: **Keep ignored files** ([How your work is protected](protection.md)) and
@@ -22,9 +23,11 @@ and signing out take effect at once, and Cancel does not undo them.
 
 ## Git
 
-These are git's own settings, saved in git's configuration, so git in a terminal uses them too.
-**All repositories (global)** saves them in your global git configuration; **This repository**, on
-a repository's tab, in that repository's `.git/config`, and they win over the global ones.
+**Name**, **Email**, **Pull** and **Merge tool** are git's own settings, saved in git's
+configuration, so git in a terminal uses them too. **All repositories (global)** saves them in your
+global git configuration; **This repository**, on a repository's tab, in that repository's
+`.git/config`, and they win over the global ones. **Git program**, last under
+**All repositories (global)**, is VisualCommit's own setting, which git in a terminal does not use.
 
 <img src="pictures/settings-git-light.png" srcset="pictures/settings-git-light.png 2x" alt="The settings screen's Git section on All repositories (global): Name and Email Not set, each with a note that weather-station sets its own; Pull with Not set chosen among six choices; Merge tool Not set with Choose…; and Git program C:\Program Files\Git\cmd\git.exe, Found on the PATH, with Browse….">
 <img src="pictures/settings-git-dark.png" srcset="pictures/settings-git-dark.png 2x" alt="The settings screen's Git section on All repositories (global): Name and Email Not set, each with a note that weather-station sets its own; Pull with Not set chosen among six choices; Merge tool Not set with Choose…; and Git program C:\Program Files\Git\cmd\git.exe, Found on the PATH, with Browse….">
@@ -42,14 +45,16 @@ a repository's tab, in that repository's `.git/config`, and they win over the gl
 
 ## Tools
 
-**Editor**: choose an editor, and the file menus gain **Open in editor** beside **Open file**. Pick
-one VisualCommit found, or **Other** with its **Program** and **Arguments**, where `{path}` stands
-for the file's full path.
+**Editor**: **Choose…** picks an editor, and the file menus gain **Open in editor** beside
+**Open file**. Pick one VisualCommit found, or **Other…** with its **Program** and **Arguments**,
+where `{path}` stands for the file's full path.
 
 ## Keyboard shortcuts
 
-Every key VisualCommit knows, grouped as in [Keyboard shortcuts](reference/shortcuts.md). The keys
-are fixed.
+VisualCommit's keys, grouped as in [Keyboard shortcuts](reference/shortcuts.md); the text boxes'
+usual keys, such as Ctrl+C (Cmd+C on macOS) to copy, are left out, and
+[Keyboard and screen readers](keyboard-and-screen-readers.md) adds what keys do in each part of the
+window. The keys are fixed.
 
 ## Accounts and About
 
@@ -58,14 +63,15 @@ are fixed.
 
 ## The command palette
 
-The command palette reaches every command, and every branch, tag, stash, remote, repository and
-workspace, by typing. Open it with Ctrl+Shift+P (Cmd+Shift+P on macOS), type part of a name, move
+The command palette reaches every command by typing, with the active repository's branches, tags,
+stashes and remotes, your other tabs, your recent repositories, the repositories of your workspaces
+and the workspaces themselves. Open it with Ctrl+Shift+P (Cmd+Shift+P on macOS), type part of a name, move
 with the arrows and press Enter. A command's key, if it has one, stands at its right, and its
 detail, such as the branch it acts on, beside its name.
 
 <img src="pictures/palette-light.png" srcset="pictures/palette-light.png 2x" alt="The command palette with branch typed: Create branch… with Ctrl+B, Filter branches and tags with Ctrl+Shift+E, then Create branch here… and Copy branch name for main, feature/forecast, feature/units, fix/rounding and origin/feature/forecast.">
 <img src="pictures/palette-dark.png" srcset="pictures/palette-dark.png 2x" alt="The command palette with branch typed: Create branch… with Ctrl+B, Filter branches and tags with Ctrl+Shift+E, then Create branch here… and Copy branch name for main, feature/forecast, feature/units, fix/rounding and origin/feature/forecast.">
 
-It also has commands with no key, such as **Use the dark theme**, **Use the light theme**,
-**Follow the system's theme**, **Show backups**, **Manage remotes…** and **About VisualCommit…**,
-and **Open the user guide**, whose key is F1. Esc closes it.
+It also has commands with no key, such as **Use the dark theme**, **Use the light theme** and
+**Follow the system's theme** (all but the one in use), **Show backups**, **Manage remotes…** and
+**About VisualCommit…**, and **Open the user guide**, whose key is F1. Esc closes it.
