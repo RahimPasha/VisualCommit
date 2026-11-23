@@ -51,6 +51,7 @@ public class ShortcutTextTests
         [AppCommand.FilterRefs] = ("Ctrl+Shift+E", "Ctrl+Shift+E", "Cmd+Shift+E", "Cmd+Shift+E"),
         [AppCommand.NextRegion] = ("F6", "F6", "F6", "F6"),
         [AppCommand.PreviousRegion] = ("Shift+F6", "Shift+F6", "Shift+F6", "Shift+F6"),
+        [AppCommand.OpenUserGuide] = ("F1", "F1", "F1", "F1"),
         [AppCommand.ContextMenu] = ("Shift+F10, Menu", "Shift+F10", "Shift+F10, Menu", "Shift+F10"),
         [AppCommand.TextUndo] = ("Ctrl+Z", "Ctrl+Z", "Cmd+Z", "Cmd+Z"),
         [AppCommand.TextRedo] = ("Ctrl+Y, Ctrl+Shift+Z", "Ctrl+Y", "Cmd+Y, Cmd+Shift+Z", "Cmd+Shift+Z"),
