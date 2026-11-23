@@ -5458,6 +5458,24 @@ reopening the failed tabs all at once in 8a and gets a Backlog row at the close;
 the gate; M3's bound without a merge, and a release that delays the first frame, are ruled when
 their case arises.
 
+**The restore order's build (the lead, 2026-11-23, at its end; 14.8 steps 1 and 2).** 91. The
+package stands as built and reviewed (`wip/p8a-restore`, `aa83146`), with its departures from
+section 14: the page's action completes `FirstPage` only for a page with a row; the order's handler
+hands the tab's view model to the watch, which reads `FirstPage` and the graph's count in its own
+continuation; the tabs let into slots are queued under the lock and asked for in the order let in,
+also when an opening ends inside its own call (a provider that fails at once), so 14.3.4's "have
+been asked to open when it returns" holds for a `Closed` that is not itself reached from inside an
+asking call, which then asks for them right after; `Open` checks under the lock that the entry still
+holds its tab and asks for no tab closed since it was let in. The order is not declared
+single-threaded: the lock stays, and the one gap left, a close on another thread between that check
+and the provider's call, is accepted, since the app reaches the order only on the UI thread and such
+an opening ends as a closed slot tab's does. Four test methods more than 14.4 lists stand (a slot
+freed once at its tab's close or first page with a tab shown meanwhile; a waiting tab's drop
+starting no lookup, on the dispatcher; the asks' order when openings fail inside their call; a tab
+closed after it was let in): 33 new tests by xUnit's count where 14.7 said about 29.
+`AboutEntryTests` and `RequestOperationsProvidersTests`, which the package did not run, are the
+merge's lagged list's. Nothing of this touches the proof's rule (rulings 88 and 89).
+
 ### 13.2 What the integration settled
 
 Beyond moving the packages' contracts into section 1: the broker's `gitVersion` goes at §3's merge,

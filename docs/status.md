@@ -746,16 +746,25 @@ for each major and a fixer. GuideShots' local root is `C:\demo`, which the site'
 rechecked against D457 and the code by run `wf_d117ae19-e9c`, 17 findings, all applied; Notes, "Wave
 4"). 0.4's row and files, 13.1's rulings, 13.3's row for the proof (about 50 minutes of the rested
 desktop, about 70 with a trial of two at once, about 80 when four stays after it) and CLAUDE.md's
-docs map are brought up to it. **`restore`'s build is under way** since 10:19 beside §11's (run
-`wf_abcee249-c0e`, script `…/workflows/scripts/phase8a-wave-4-restore-wf_abcee249-c0e.js`; worktree
-`D:/Projects/Personal/vc-wt/p8a-restore` on `wip/p8a-restore`, from `3f67850`): its tests first with
-the stubs, the build, 14.6's five comparisons, three reviewers (the design and the decision, races
-and lifetime, the tests), a verifier for each major, a fixer (14.8 steps 1 and 2). **Next for the
-lead, as each run ends:** read its result and its diff; for §11, the merge with its checks, the
-lead's lines of 11.2, the push, CI and the guide's workflow (step 17); for `restore`, when no agent
-is at work, the lead's proof (14.8 steps 3 to 7), the owner told in the chat just before each
-takeover, and the merge when it is proven (step 8) or the Backlog row when it is not (step 9). §11's
-builders got with their briefs: mdBook at
+docs map are brought up to it. **`restore` is built and reviewed** (run `wf_abcee249-c0e`, 10:19 to
+12:08, script `…/workflows/scripts/phase8a-wave-4-restore-wf_abcee249-c0e.js`; worktree
+`D:/Projects/Personal/vc-wt/p8a-restore` on `wip/p8a-restore`, from `3f67850`; five commits, the
+last `aa83146`; 14.8 steps 1 and 2): the tests first with the stubs (`b0780f4`, where 24 of the 35
+fail as 14.4 marks them), the order (`59b3585`), and after the three reviewers the fixer's
+`5285967`, `3a6654c` and `aa83146`. The package's four classes pass 39 of 39, 14.6's five
+walk-through runs change no picture, and the lead read the diff (ruling 91, design 13.1; Notes,
+"Wave 4"). **Its proof waits until §11's agents have ended** (ruling 23). Ready for it: the base's
+worktree `D:/Projects/Personal/vc-wt/p8a-restore-base`, detached at `3f67850`, the merge base, and
+both worktrees' Release builds of the real-window project, made at 12:10 and 12:11 on those commits;
+a commit in either worktree would make the proof's command build again, so neither gets one before
+the proof. **Next for the lead, when §11's run ends:** first, with no agent at work, `restore`'s
+proof (14.8 steps 4 to 7: the Task Scheduler read, the owner told in the chat just before the
+takeover, the probe's session and its summary by ruling 88, the alternated series, the rule by
+ruling 89), then its merge when it is proven (step 8) or the Backlog row when it is not (step 9);
+beside the proof only reading: §11's result and its diff; after the proof §11's merge with its
+checks, the lead's lines of 11.2, the push, CI and the guide's workflow (step 17). Whichever of the
+two merges comes second meets the other's lines in `MainWindowViewModel.cs`, if §11 changed that
+file. §11's builders got with their briefs: mdBook at
 `D:/Projects/Personal/phase8-work/tools/mdbook-0.5.4/mdbook.exe` and the Linux archive's SHA-256 for
 `guide.yml` (Notes, "Wave 4"); the references `D:/Projects/Personal/phase8-work/references/wave3/`;
 rulings 80 (stop and report if the first-run link's frame touches its ink), 82 (the facts no check
@@ -874,7 +883,36 @@ every commit.
   two outputs, whose numbers it gives as D457 has them); in `…/wave4/restore/series/`,
   `run_series.sh <first pair> <last pair>` (14.8 step 6: per run it waits out what the scheduler has
   due in the next five minutes, runs the command in the base's or the fix's worktree, copies the
-  series file and notes what the scheduler ran meanwhile, into `series.log`).
+  series file and notes what the scheduler ran meanwhile, into `series.log`). **`restore`'s build**
+  (run `wf_abcee249-c0e`: a builder, three reviewers, a verifier, a fixer; 6 agents, 1.74M tokens, 1
+  h 49 min). The builder's two commits: `b0780f4`, 14.4's tests with 14.2's stubs and ruling 87's
+  `restoreClock` complete, on which 24 of the four classes' 35 tests fail as 14.4 marks them
+  (`RestoreOrderTests` 1 to 10 at their first assertion on the openings asked for,
+  `RepositoryFirstPageTests` on their own 30 s wait, both shell tests on the order's lines, both
+  lookup tests of `SettingsEntryTests`) and 11 pass; `59b3585`, the order: 35 of 35, five times
+  over, 160 earlier App.Tests of 14.4's list, and 14.6's five walk-through runs, each compared with
+  wave 3's references: no picture changed. **The reviews:** the design's and the safety's readers
+  found the code as section 14 and D457 (5) have it, all thirteen races of 14.3.7 among it. One
+  major, in the tests (RT1): no test told a slot freed at its tab's first page from one freed at the
+  provider's answer; seven minors: the order of the asks when openings fail inside their own call
+  (RD1: a start without git and seven or more restored tabs asked for t1, t5, t6, t2, …), a tab
+  closed between being let in and being asked for (RS2, reachable only off the UI thread), and five
+  more test gaps (the 5 s counted from the ask, the stop's disarmed timer, a waiting tab's drop and
+  the lookup, a slot freed once at a close or a page, a tab shown while the slots are taken). **The
+  fixer** (`5285967` tests only; `3a6654c` the two failing tests of RD1 and RS2; `aa83146` their
+  fix, in `RestoreOrder.cs` alone): the tabs let into slots go through a queue and are asked for in
+  the order let in, and `Open` checks under the lock that the entry still holds its tab; every new
+  assertion was shown to fail under the mutation it is there for. The four classes: 39 of 39
+  (`RestoreOrderTests` 24, `RepositoryFirstPageTests` 6, `RestoreOrderShellTests` 2,
+  `SettingsEntryTests` 7, of which 33 are new tests, where 14.7 said about 29); 14.6's five runs
+  again, no picture changed; 8a's `KeyboardPassTests` of 14.4's list 5 of 5. Not run by the package
+  and left to the merge's lagged list: `AboutEntryTests` and Hosting.Tests'
+  `RequestOperationsProvidersTests`. **Ruling 91** (design 13.1) takes the build as it stands. What
+  the builder could not settle is the proof's: whether the release, which follows the first page
+  through `FirstPage`'s asynchronous completion and then asks for up to four openings on the UI
+  thread, comes before or after the first frame with rows (the section's risk 1). The lead made the
+  base's worktree and both Release builds at once after the run (12:10 and 12:11), while §11's third
+  builder worked; a build is no heavy run (D245).
 - **Wave 3 is under way (2026-11-21).** The owner's word that day: "Continue", all of wave 3 now, and
   the three takeovers of the desktop (the spike, §10's first run, the "before" series) each as soon
   as it is ready. **The checks** of parts A and U were written by a writer each, reviewed by two
