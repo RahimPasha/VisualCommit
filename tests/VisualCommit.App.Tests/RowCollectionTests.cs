@@ -401,6 +401,31 @@ public class RowCollectionTests
     }
 
     [Fact]
+    public void Two_runs_of_rows_that_only_shift_with_nothing_between_them_but_a_row_that_changes_itself_are_each_removed_and_inserted_and_that_row_stays()
+    {
+        // Rows 2 and 3 only shift (r02 gone, x new after r03), and rows 5 and 6 (r05 gone, y new after
+        // r06); row 4 alone lies between them and shows a new version, which it shows itself.
+        var list = Updatable(10);
+        var before = list.ToList();
+        List<Changing> rebuilt =
+        [
+            Same(before[0]), Same(before[1]), Same(before[3]), new Changing("x", 0, 0),
+            Next(before[4]),
+            Same(before[6]), new Changing("y", 0, 0), Same(before[7]), Same(before[8]), Same(before[9]),
+        ];
+        var changes = Record(list);
+
+        list.ReplaceAll(rebuilt, Changing.ShowSame, Changing.SameItem);
+
+        Assert.Equal([.. Removed(2, 3), .. Added(2, 3), .. Removed(5, 6), .. Added(5, 6)], changes);
+        AssertKept(before, list, changed: [2, 3, 5, 6]);
+        Assert.Same(before[4], list[4]);
+        Assert.Equal(1, list[4].Version);
+        Assert.All(new[] { 2, 3, 5, 6 }, i => Assert.Same(rebuilt[i], list[i]));
+        Assert.All(Enumerable.Range(0, rebuilt.Count), i => Assert.True(Changing.ShowSame(list[i], rebuilt[i]), $"Row {i} does not show what its rebuilt row shows."));
+    }
+
+    [Fact]
     public void Two_runs_of_rows_that_only_shift_are_each_removed_and_inserted_and_a_run_between_them_that_shows_new_versions_of_its_items_is_replaced_row_by_row()
     {
         // Rows 2 to 4 only shift (r02 gone, x new after r04), and rows 9 and 10 (r09 gone, y new after
