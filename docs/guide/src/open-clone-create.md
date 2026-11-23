@@ -9,18 +9,20 @@ Ctrl+T (Cmd+T on macOS) for a new tab, which starts on the welcome page.
 
 ## Open a repository
 
-Press **Open** on the welcome page, or Ctrl+O (Cmd+O on macOS) anywhere, and choose the
+Press **Open** on the welcome page, or Ctrl+O (Cmd+O on macOS) on any tab, and choose the
 repository's folder. When a tab already shows that repository, VisualCommit switches to it.
-Otherwise the repository opens in the active tab if it is empty, else in a new tab.
+Otherwise the repository opens in the active tab if it is empty, else in a new tab. The key does
+nothing while the settings screen, the command palette, another dialog or a menu is open, or
+while you drag a branch; the same holds for the keys of **Clone** and **Init** below.
 
 ## Open a recent repository
 
-Under **Recent repositories**, click a repository to open it. The list holds the repositories you
-opened before, with their folders.
+Under **Recent repositories**, click a repository to open it. The list holds the last ten
+repositories you opened, newest first, with their folders.
 
 ## Clone a repository
 
-1. Press **Clone** on the welcome page, or Ctrl+Shift+C (Cmd+Shift+C on macOS) anywhere. The form
+1. Press **Clone** on the welcome page, or Ctrl+Shift+C (Cmd+Shift+C on macOS) on any tab. The form
    **Clone a repository** opens.
 2. Type or paste the **Repository URL**.
 3. Choose the **Parent folder**, the folder the clone goes into, with **Browse** or by typing it.
@@ -37,7 +39,7 @@ lists your account's repositories to choose from. See
 
 ## Create a new repository
 
-Press **Init** on the welcome page, or Ctrl+Shift+I (Cmd+Shift+I on macOS) anywhere, and choose a
+Press **Init** on the welcome page, or Ctrl+Shift+I (Cmd+Shift+I on macOS) on any tab, and choose a
 folder for the new repository. VisualCommit runs `git init` there and opens the repository.
 
 ## From the command palette

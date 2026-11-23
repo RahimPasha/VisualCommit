@@ -2,14 +2,15 @@
 
 Press **Search** in the toolbar, or Ctrl+F (Cmd+F on macOS), to open the search bar above the
 graph. Type what you look for: VisualCommit searches as you type and marks the commits that match.
-The other rows are dimmed, and the bar counts the matches.
+The other rows, except **Working changes**, are dimmed, and the bar counts the matches.
 
 <img src="pictures/search-bar-light.png" srcset="pictures/search-bar-light.png 2x" alt="The search bar above the graph in the mode Commits with readme typed and 2 matches, its previous, next and close buttons; in the graph the two matching commits, Add a French readme and Update the readme, are in bold and marked at the left, and the other rows are dimmed.">
 <img src="pictures/search-bar-dark.png" srcset="pictures/search-bar-dark.png 2x" alt="The search bar above the graph in the mode Commits with readme typed and 2 matches, its previous, next and close buttons; in the graph the two matching commits, Add a French readme and Update the readme, are in bold and marked at the left, and the other rows are dimmed.">
 
 ## What it searches
 
-Choose the mode in the box at the bar's left:
+Choose the mode with the button at the bar's left, which shows the mode in use and opens a menu
+of the three modes:
 
 - **Commits**: the commit's whole message, its author, or the start of its SHA (at least 4
   characters).
@@ -29,4 +30,5 @@ The graph selects each match in turn and scrolls to it.
 
 ## Close the search
 
-Press Esc or the bar's **×**. The graph shows every row as before.
+Press Esc while the focus is in the search bar, or press the bar's **×**. The graph shows every
+row as before.

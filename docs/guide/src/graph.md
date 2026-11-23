@@ -15,8 +15,8 @@ message keeps its room.
 - Remote branches are outlined, such as `origin/main`.
 - Tags have a tag sign, such as `v1.1`.
 - A stash has its name, such as `stash@{0}`.
-- A branch with an open pull request carries its number, such as `#12`
-  ([Pull requests](pull-requests.md)).
+- A branch with an open pull request carries its number: `#12` on GitHub, `!12` on GitLab, where
+  it is a merge request, and on Azure DevOps ([Pull requests](pull-requests.md)).
 - When a commit has more labels than fit, a label such as `+1` stands for the rest: point at it to
   see them all.
 
@@ -47,11 +47,12 @@ squash, or copy their SHAs.
 
 A repository with many branches is easier to read with some of them out of the way:
 
-- **Hide** and a branch's name, in its menu, takes the branch out of the graph: its commits that no
-  other shown branch reaches are no longer drawn. The branch you are on is always shown. A remote's
-  menu has **Hide every branch of** the remote.
-- **Solo** and a branch's name shows only that branch, and any others you solo, with the branch you
-  are on.
+- **Hide** and a branch's name, in its menu, takes the branch out of the graph, and for a local
+  branch the remote branch it tracks too: their commits that no shown branch or tag reaches are no
+  longer drawn. The branch you are on is always shown. A remote's menu has **Hide every branch of**
+  the remote.
+- **Solo** and a branch's name shows only that branch (for a local branch, with the remote branch
+  it tracks), any others you solo, and the branch you are on.
 - In the left panel, a hidden or soloed branch is marked; click the mark to show it again or to
   stop soloing it. The menus have **Show** or **Stop soloing** and the branch's name, and the
   **Local branches** and **Remotes** sections' menus have **Show all hidden branches** and

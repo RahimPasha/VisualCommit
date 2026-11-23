@@ -38,8 +38,10 @@ Another branch that is behind its upstream can be brought up to date without che
 ## Push
 
 **Push** in the toolbar, or Ctrl+Shift+K (Cmd+Shift+K on macOS), pushes the branch you are on to
-its upstream. A branch with no upstream opens the dialog **Push** and the branch's name: choose the
-remote under **To**, the **Branch on the remote**, and whether to **Set as upstream**.
+its upstream. A branch with no upstream opens the dialog **Push** and the branch's name. **To**
+names the remote, or offers a choice when there are several. The box below it, for the branch's
+name on the remote, starts with the branch's own name, and **Set as upstream** is ticked to begin
+with.
 
 If the remote has commits your branch does not have, the push is refused with
 **Push rejected**: pull first, then push again. The dialog's **Pull** button does the pull. When
@@ -77,7 +79,9 @@ Removing a remote asks first, keeps your local branches, and saves a backup.
 
 ## Cancel
 
-While a fetch, pull or push runs, the status bar shows a **Cancel** button that stops it.
+While a fetch or a push you started runs, and while a pull is still fetching, the status bar shows
+a **Cancel** button that stops it. Once a pull has fetched and starts to bring the commits into your
+branch, it can no longer be canceled.
 The command palette also lists **Cancel** and the operation's name, such as
 `Cancel Fetch origin`, while the operation can be canceled. Afterwards the status bar reads, for
 example, `Fetch origin cancelled`.

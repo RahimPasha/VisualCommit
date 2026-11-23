@@ -30,7 +30,8 @@ The **Filter** box at the top narrows the lists to names that contain what you t
 
 - **Local branches**, grouped in folders by the part of their names before a `/`, such as
   `feature` for `feature/forecast`. The branch you are on is highlighted, and a branch that has an
-  upstream shows how many commits it is ahead (↑) and behind (↓).
+  upstream shows how many commits it is ahead (↑) and behind (↓); a count of 0 is left out, so a
+  branch level with its upstream shows neither.
 - **Remotes**, each with its branches.
 - **Pull requests**, the open pull requests of the repository on GitHub, GitLab (merge requests) or
   Azure DevOps when you are signed in ([Pull requests](pull-requests.md)).
@@ -58,8 +59,10 @@ boxes instead ([Stage and commit](stage-and-commit.md)).
 
 From the left: the branch you are on, what VisualCommit is doing or did last (such as `Ready`), the
 Git in use ([The first start](first-run.md)) and the **Activity log** button
-([The activity log](activity-log.md)). While an operation that talks to a remote runs, a
-**Cancel** button stops it.
+([The activity log](activity-log.md)). While an operation you started talks to a remote, a
+**Cancel** button stops it, as long as it can still be stopped: a pull, for example, can no longer
+be stopped once its fetch has ended. **Cancel** also shows while your merge tool runs, and stops git
+and the tool.
 
 ## Resizing
 

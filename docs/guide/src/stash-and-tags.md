@@ -7,8 +7,9 @@ A stash puts your uncommitted changes aside and leaves the working tree clean.
 1. Press **Stash** in the toolbar, or Ctrl+Shift+S (Cmd+Shift+S on macOS), or choose
    **Stash changes…** in a menu.
 2. In the dialog **Stash changes**, type a message if you like.
-   **Include untracked files** also stashes the files git does not track yet; it starts as set in
-   Settings, General.
+   **Include untracked files** also stashes the files git does not track yet. It starts as set in
+   Settings, General, **Include untracked files when stashing**, and the choice you stash with is
+   saved there for the next stash.
 3. Press **Stash**.
 
 The stash shows under **Stashes** in the left panel and in the graph, as a hollow circle joined by

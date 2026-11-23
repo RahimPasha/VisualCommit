@@ -12,8 +12,9 @@ to see its diff.
 
 ## Stage whole files
 
-- Point at a file: its **Stage** button stages it, its **Discard** button discards its changes. In
-  **Staged files**, a file's **Unstage** button unstages it.
+- Point at a file: two icon buttons appear at its right end. The first, whose tooltip reads
+  **Stage**, stages it; the second, **Discard**, discards its changes. In **Staged files**, a file's
+  one icon button, **Unstage**, unstages it.
 - Right-click a file for **Stage**, **Discard changes…**, **Unstage**, and more.
 - **Stage all**, Ctrl+Shift+A (Cmd+Shift+A on macOS), stages every change.
 - **Unstage all**, Ctrl+Shift+X (Cmd+Shift+X on macOS), unstages everything.
@@ -47,14 +48,16 @@ then press Shift+F10 for the menu with **Stage selected lines**. See
 
 Ctrl+Shift+M (Cmd+Shift+M on macOS) selects the **Working changes** row and goes to the commit
 message from anywhere in the repository, while there are changes to commit.
-The button reads **Stage files to commit** while nothing is staged, and stays disabled until the
-summary has text.
+While nothing is staged, the button reads **Stage files to commit** and is disabled, whatever the
+summary holds; once files are staged, it stays disabled until the summary has text.
 
 ## Amend the last commit
 
-Tick **Amend previous commit**: the boxes fill with the last commit's message, and the button reads
-**Amend previous commit**. Your staged changes and the message replace the last commit. If the
-commit was already pushed, pushing it again needs a force push (see [Fetch, pull and push](sync.md)).
+Tick **Amend previous commit**: when the **Summary** and **Description** boxes are both empty, they
+fill with the last commit's message (a message you already typed stays as it is), and the button
+reads **Amend previous commit**. Pressing it replaces the last commit with one that holds its
+changes and your staged ones, with the message in the boxes. If the commit was already pushed,
+pushing it again needs a force push (see [Fetch, pull and push](sync.md)).
 
 ## Discard changes
 
@@ -64,7 +67,8 @@ Discarding throws away uncommitted changes, so VisualCommit asks first:
 - **Discard hunk…** in a diff's menu, or the hunk's **Discard hunk** button.
 - **Discard selected lines…** for chosen lines.
 - **Discard all**, or **Discard all changes…** in the **Working changes** row's menu, for every
-  unstaged change.
+  file in **Unstaged files**: their unstaged changes are undone, and new files that git does not
+  track yet are deleted. Staged changes, and files with conflicts, are left as they are.
 
 Undo brings discarded changes back ([Undo, redo and the reflog](undo-and-reflog.md)).
 
