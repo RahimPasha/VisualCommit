@@ -421,7 +421,9 @@ public partial class LeftPanelViewModel : ObservableObject
             }
         }
 
-        Rows.ReplaceAll(rows, (shown, rebuilt) => shown.ShowsSameAs(rebuilt));
+        // The headers are 30 px high and the other rows 26 (LeftPanelView); a row's key names the
+        // section, folder, ref or request it stands for.
+        Rows.ReplaceAll(rows, (shown, rebuilt) => shown.ShowsSameAs(rebuilt), sameItem: (shown, rebuilt) => shown.Key == rebuilt.Key);
     }
 
     /// <summary>

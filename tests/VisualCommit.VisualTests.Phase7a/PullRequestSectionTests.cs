@@ -222,6 +222,26 @@ public sealed class PullRequestSectionTests
     }
 
     [Fact]
+    public void A_list_that_changes_only_what_a_row_does_not_show_gives_the_row_the_new_request()
+    {
+        // #5's head is fix-typo of the fork ada/hello. The fork is renamed: the next list is the
+        // same but for the head repository's name, which the row's label (ada:fix-typo) leaves out.
+        var panel = Panel(Loaded());
+        var shown = PullRequests(panel);
+        var renamed = Five with { HeadRepository = AdaHello with { Name = "hello-fork" } };
+        Assert.Equal(Row(panel, 5).HeadLabel, PullRequestRow.HeadLabelOf(renamed));
+
+        panel.UpdatePullRequests(Loaded(new PullRequestList([renamed, Three, Two, One], MoreExist: false)));
+
+        // The row holds the new request, which a double-click plans its checkout from, as the
+        // menu does from the list; the rows whose requests are the same stay as they were.
+        Assert.Same(renamed, Row(panel, 5).PullRequest);
+        Assert.Same(shown[1], Row(panel, 3));
+        Assert.Same(shown[2], Row(panel, 2));
+        Assert.Same(shown[3], Row(panel, 1));
+    }
+
+    [Fact]
     public void A_branch_row_shows_its_pull_request_from_by_ref()
     {
         var panel = Panel(Loaded());

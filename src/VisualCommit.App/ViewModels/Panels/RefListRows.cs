@@ -82,8 +82,12 @@ public abstract class RefListRow : ObservableObject
     public abstract bool ShowsSameAs(RefListRow other);
 }
 
-/// <summary>A section header: a chevron, the title and the number of items that match the filter.</summary>
-public sealed class RefSectionRow : RefListRow
+/// <summary>
+/// A section header: a chevron, the title and the number of items that match the filter. A rebuild
+/// that changes only the number keeps the header, which shows the new one itself
+/// (<see cref="IUpdatableRow{T}"/>).
+/// </summary>
+public sealed partial class RefSectionRow : RefListRow, IUpdatableRow<RefListRow>
 {
     internal RefSectionRow(RefSection section, string title, int count, bool isOpen, bool canToggle, Action<RefListRow> activate)
         : base("section:" + section, title, 0, isOpen, activate, canActivate: canToggle)
@@ -99,7 +103,9 @@ public sealed class RefSectionRow : RefListRow
     /// Matching local branches, remote branches, tags, stashes or pull requests; 0 for the "Pull
     /// requests" placeholder of a repository without a GitHub remote (docs/phase-7a-design.md 10.3).
     /// </summary>
-    public int Count { get; }
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CountText))]
+    public partial int Count { get; private set; }
 
     public string CountText => Count.ToString(CultureInfo.InvariantCulture);
 
@@ -114,6 +120,13 @@ public sealed class RefSectionRow : RefListRow
         other is RefSectionRow section
         && section.Key == Key && section.Text == Text && section.IsOpen == IsOpen
         && section.Count == Count && section.CanToggle == CanToggle;
+
+    /// <summary>The same section with the same title, open or closed as this one and as clickable: only its number may differ.</summary>
+    public bool CanUpdateTo(RefListRow rebuilt) =>
+        rebuilt is RefSectionRow section
+        && section.Key == Key && section.Text == Text && section.IsOpen == IsOpen && section.CanToggle == CanToggle;
+
+    public void UpdateTo(RefListRow rebuilt) => Count = ((RefSectionRow)rebuilt).Count;
 }
 
 /// <summary>
@@ -132,8 +145,14 @@ public sealed record RefRowMarks(bool IsHidden, bool IsSoloed, bool IsDimmed, st
     public static RefRowMarks None { get; } = new(false, false, false, null);
 }
 
-/// <summary>A remote, a folder, a branch, a tag or a stash under a section header.</summary>
-public sealed partial class RefItemRow : RefListRow
+/// <summary>
+/// A remote, a folder, a branch, a tag or a stash under a section header. A rebuild that changes
+/// only what the graph's filter marks on it, the commit it points to, whether HEAD is on it, its
+/// counts or its pull request keeps the row, which shows the new values itself
+/// (<see cref="IUpdatableRow{T}"/>): a hide, a solo or its end, and a refresh after a commit or a
+/// fetch, then leave the scrolled list and its controls as they were.
+/// </summary>
+public sealed partial class RefItemRow : RefListRow, IUpdatableRow<RefListRow>
 {
     internal RefItemRow(
         RefItemKind kind,
@@ -190,16 +209,22 @@ public sealed partial class RefItemRow : RefListRow
     public bool ShowsClosedChevron => IsContainer && !IsOpen;
 
     /// <summary>The commit a branch, tag or stash points to; null for a remote or a folder.</summary>
-    public string? TargetSha { get; }
+    [ObservableProperty]
+    public partial string? TargetSha { get; private set; }
 
     /// <summary>The local branch HEAD is on: its name is drawn in the accent colour.</summary>
-    public bool IsHead { get; }
+    [ObservableProperty]
+    public partial bool IsHead { get; private set; }
 
     /// <summary>Commits on a local branch that its upstream lacks; 0 without an upstream.</summary>
-    public int Ahead { get; }
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowsAhead), nameof(ShowsAheadBehind), nameof(AheadText))]
+    public partial int Ahead { get; private set; }
 
     /// <summary>Commits on the upstream that the local branch lacks; 0 without an upstream.</summary>
-    public int Behind { get; }
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowsBehind), nameof(ShowsAheadBehind), nameof(BehindText))]
+    public partial int Behind { get; private set; }
 
     public bool ShowsAhead => Ahead > 0;
 
@@ -216,7 +241,9 @@ public sealed partial class RefItemRow : RefListRow
     public partial bool IsSelected { get; set; }
 
     /// <summary>What the graph's filter marks on the row (docs/phase-5-design.md 8.3).</summary>
-    public RefRowMarks Marks { get; }
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowsHiddenToggle), nameof(ShowsSoloToggle), nameof(IsDimmed), nameof(NameToolTip))]
+    public partial RefRowMarks Marks { get; private set; } = RefRowMarks.None;
 
     /// <summary>The eye button (<c>RefHiddenToggle</c>) shows: a hidden branch, or a remote hidden as a whole.</summary>
     public bool ShowsHiddenToggle => Marks.IsHidden;
@@ -241,10 +268,13 @@ public sealed partial class RefItemRow : RefListRow
     /// Azure DevOps' <c>!21</c>, D355) at the row's right before its counts and toggles; empty without
     /// one, and for every row of a repository without a hosted remote.
     /// </summary>
-    public string PullRequestText { get; } = string.Empty;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowsPullRequest))]
+    public partial string PullRequestText { get; private set; } = string.Empty;
 
     /// <summary>The <c>#1</c>'s tooltip: <c>Pull request #1: Add the login form</c> (<c>Merge request !21: …</c>); null without one.</summary>
-    public string? PullRequestToolTip { get; }
+    [ObservableProperty]
+    public partial string? PullRequestToolTip { get; private set; }
 
     /// <summary>The <c>#1</c> shows (<c>RefPullRequest</c>); collapsed, it takes no room.</summary>
     public bool ShowsPullRequest => PullRequestText.Length > 0;
@@ -256,4 +286,27 @@ public sealed partial class RefItemRow : RefListRow
         && item.IsHead == IsHead && item.Ahead == Ahead && item.Behind == Behind
         && item.IsSelected == IsSelected && item.Marks == Marks
         && item.PullRequestText == PullRequestText && item.PullRequestToolTip == PullRequestToolTip;
+
+    /// <summary>
+    /// The same ref, remote or folder with the same name, tooltip, level and opening. The panel gives
+    /// every row of one kind the same commands for its eye and its solo button, so the kept row's
+    /// commands still fit.
+    /// </summary>
+    public bool CanUpdateTo(RefListRow rebuilt) =>
+        rebuilt is RefItemRow item
+        && item.Key == Key && item.Kind == Kind && item.Text == Text && item.ToolTip == ToolTip
+        && item.Depth == Depth && item.IsOpen == IsOpen;
+
+    public void UpdateTo(RefListRow rebuilt)
+    {
+        var item = (RefItemRow)rebuilt;
+        TargetSha = item.TargetSha;
+        IsHead = item.IsHead;
+        Ahead = item.Ahead;
+        Behind = item.Behind;
+        IsSelected = item.IsSelected;
+        Marks = item.Marks;
+        PullRequestText = item.PullRequestText;
+        PullRequestToolTip = item.PullRequestToolTip;
+    }
 }

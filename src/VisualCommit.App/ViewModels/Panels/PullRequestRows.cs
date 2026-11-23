@@ -120,12 +120,19 @@ public sealed partial class PullRequestRow : RefListRow
         return sameProject ? $"{repository.Name}:{branch}" : $"{project}/{repository.Name}:{branch}";
     }
 
+    /// <summary>
+    /// What the row shows, and also the whole request: a kept row keeps its
+    /// <see cref="PullRequest"/>, which a double-click plans its checkout from, so a list that
+    /// changes only what the row does not show (a fork renamed, whose head label names its owner
+    /// alone) gives the row the new request.
+    /// </summary>
     public override bool ShowsSameAs(RefListRow other) =>
         other is PullRequestRow row
         && row.Key == Key && row.Text == Text && row.Depth == Depth
         && row.Number == Number && row.Title == Title && row.Author == Author && row.IsDraft == IsDraft
         && row.HeadLabel == HeadLabel && row.TargetSha == TargetSha && row.ToolTip == ToolTip
-        && row.IsSelected == IsSelected;
+        && row.IsSelected == IsSelected
+        && row.PullRequest == PullRequest;
 }
 
 /// <summary>
