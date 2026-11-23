@@ -299,9 +299,15 @@ Wave 3:
 - [x] 15. §10, the performance pass (D436 to D438): the log lines and the opt-in class. Built, reviewed
   and merged on 2026-11-21 (`86ecb3a`); the first run on the desktop and the "before" series are
   step 16's (Notes, "Wave 3 is under way").
-- [ ] 16. Wave 3's close: the lagged list, the whole default run and the pictures; then the
-  "before" series on the rested laptop, the owner told, and a change only where a trigger fires,
-  after a ruling.
+- [x] 16. Wave 3's close: the lagged list, the whole default run and the pictures; then the "before"
+  series on the rested laptop, the owner told, and a change only where a trigger fires, after a
+  ruling. Done on 2026-11-23: the runs and the pictures on `85e2884`, whose one fault, the focused
+  link's frame, is fixed (`fcf8c1e`); three series and D457 (the bounds; the one change a trigger
+  asks for, the restore order of ruling 76, is wave 4's); CI's two failures on the link frame's
+  merge fixed; and, after a review of the second fix, the row list's fix (`bad98b1`), with CI's run
+  45133434382 green, the whole default run on it passed and its 54 pictures that are not the
+  references' files explained (the report's "CI's two failures after the link frame's merge, and the
+  row list").
 
 Wave 4 and the review:
 
@@ -712,63 +718,30 @@ and 85 picture names; §10 has no part (Notes, "Wave 3 is under way"). For the t
 (the spike, §10's first run, the "before" series) the owner said on 2026-11-21: start each when it is
 ready, without asking again; §9's Narrator listen needs the owner in person and is asked for at
 its merge.
-All three packages of wave 3 are merged: §10 (`86ecb3a`), §8 (`f014b2b`, its fixes after the merge
-`85e2884`) and §9 (`769f459`), with the fetch hold's fix (`eba3717`), the wave's docs (`b593097`),
-the link frame's fix (`fcf8c1e`), the two fixes of what CI's run on that merge found (`70a8fc0`,
-`809b77f`) and the performance bounds (`0bfbe92`). **Step 16 is under way**; what is done and what
-is left, as of 2026-11-23 02:50 (the details in Notes, "Wave 3's close"). Done: the lagged list and
-the whole default run on `85e2884`'s code; the pictures compared with wave 2's references and
-inspected; the fault they showed (`a1b-about-link-focus`) fixed and merged; the new references
-(`D:/Projects/Personal/phase8-work/references/wave3/`, 1,235 scripted pictures); three "before"
-series, two probes, two panels and **D457** (the bounds, two backlog rows, **the restore order as
-ruling 76, a change in wave 4**); CI's two failures on the link frame's merge fixed, and **CI's run
-45035307735 on `cb31275` green in all six jobs**; the report's and the design's sections on wave 3's
-close merged (`c914fb7`, the lead's wording fixes `b6c9e7b`). Under way: **(a) the row list's fix.**
-A read-only review of `809b77f`'s app change (`RowCollection`, which then replaced single rows)
-traced from Avalonia's source a fault that change brought: a scrolled list whose top visible rows
-are replaced can end rows short or jump to its top. A fixer, tests first, and an independent
-verifier worked on it for three rounds (run `wf_6702b8e4-d46`) in
-`D:/Projects/Personal/vc-wt/p8a-rows-scroll` (`wip/p8a-rows-scroll`, eight commits on `b6c9e7b`,
-head `ab2cbb2` after round 3, not merged): the fault shows in headless tests of the real app; the
-stage lists now remove and insert a changed row, which held in every case tried; the left panel's
-ref rows and section headers now change themselves in place, so a hide, a solo and a refresh tell
-the view nothing of the list; a pull request row compares its whole record. The third verifier left
-one fault: left-panel rows that only shift (a branch renamed) were still replaced, and a list
-scrolled by less than their height went to its top and lost a click, which the code before `48f403c`
-did not do. A fourth round (run `wf_1c642ecd-da4`, two tries; head `e30d208`, 13 commits on
-`b6c9e7b`) removes and inserts such rows by runs, which gives the numbers of the code before
-`48f403c` in every rename, undo and fetch tried, with the click kept. Its verifiers left no bug but
-two trade-offs, which **the lead settled on 2026-11-22** (Notes, "The row list's fix", the final
-rule): runs of shifted rows are never joined, and the offset that ends off where rows are left in
-place between them, nothing moving in the window, is a known limit that `RowCollection`'s comment
-states. The closing round (run `wf_d5a9ed01-a48`, two passes) applied that; its verifiers found the
-code doing the rule and gaps in the tests, the last two of which the lead closed (`a9a7847`). **The
-fix is merged at `bad98b1`** (18 commits of `wip/p8a-rows-scroll`); the lead's checks on the merged
-tree passed (the root build and the real-window project's Release build without a warning, 208 of
-208 in fifteen App.Tests classes, 30 of 30 and 17 of 17 in phase 7a's and 8a's classes round the
-rows; `D:/Projects/Personal/phase8-work/wave3/ci-fixes/rows-merge/summary.txt`);
-`docs/architecture.md`'s passage on `RowCollection` and the design's 1.17 are written (`c1bc69b`),
-and **CI's run 45133434382 on that push is green in all six jobs** (the CI section). (b) **The whole
-default run** through `scripts/heavy-run.sh` on `c1bc69b`, whose code is the merge's, with no agent
-building beside it: **8,514 tests, 8,509 passed, 5 skipped, none failed, 1 h 44 min 41 s** (00:46 to
-02:32; `D:/Projects/Personal/phase8-work/wave3/ci-fixes/default-run-rows/`: `default-run.log`,
-`summary.txt`, the run's 1,235 scripted pictures under `visual/`, the comparison under `compare/`).
-Of the 1,235 scripted pictures 1,181 are the files of wave 3's references and 54 are not; no changed
-pixel lies in the left panel's list or in a stage list's rows, and 25 of the 54 are the files of
-wave 1's or wave 2's references. **Under way: the inspection of the 54** (run `wf_40a7d6a4-956`: six
-readers, a second reader for the eleven names no earlier comparison listed, a refuter for whatever
-is not plainly run-to-run; crops under `default-run-rows/inspect/`). (c) The docs: in the report the
-subsection on CI's two failures, their fixes, the review and the row list's fix, with the lead's
-checks, CI's run and the default run's comparison (the lead's draft is ready; the entries on the
-underline's rule and on U2/U3's step 9 are in, `e402e58`), and an independent check of it, of the
-design's new bullet and of architecture.md's passage. (d) The last worktree removed
-(`D:/Projects/Personal/vc-wt/p8a-rows-scroll`; its branch stays local, as the other `wip/` branches
-do). Then step 16 is ticked and **the owner is asked for the week's share before wave 4** ("Waiting
-on the owner"), which holds the restore order's package (ruling 76: a design section, the build with
-its tests first, a review, the alternated series, about half an hour of the desktop, and the probe)
-beside §11, §12 and the review. The owner's Narrator listen can come at any time before the review
-of step 19; it is best not taken beside a test run. Two timeouts of older tests are open and are
-step 19's to look at unless one comes again sooner (Notes, "Two timeouts").
+**Wave 3 is closed (step 16, 2026-11-23). The next step is the owner's: the week's share before wave
+4** (D241; "Waiting on the owner" has the figures). Nothing of wave 4 starts before the owner
+answers. What step 16 ended with: the three packages merged, §10 (`86ecb3a`), §8 (`f014b2b`, its
+fixes after the merge `85e2884`) and §9 (`769f459`); the lagged list, the whole default run and the
+pictures on `85e2884`, whose one fault (`a1b-about-link-focus`) is fixed (`fcf8c1e`); the references
+of the later merges, `D:/Projects/Personal/phase8-work/references/wave3/` (1,235 scripted pictures);
+three "before" series, two probes, two panels and **D457** (the bounds `0bfbe92`, two backlog rows,
+the restore order as ruling 76, a change in wave 4); CI's two failures on the link frame's merge
+fixed (`70a8fc0`, `809b77f`); and, after a review of the second of those fixes, **the row list's
+fix, merged at `bad98b1`**: CI's run 45133434382 on it is green in all six jobs, the whole default
+run on `c1bc69b`, whose code is the merge's, passed with 8,514 tests and none failed, and each of
+its 54 scripted pictures that are not the files of wave 3's references was read and varies from run
+to run, none in a row of a list. The report's subsection "CI's two failures after the link frame's
+merge, and the row list", the design's 1.17 and architecture.md's "Working changes and writes" hold
+it; four independent readers checked the three passages and the lead corrected them. Notes, from
+"The two CI fixes" to "The merge's runs and the docs", have each run. The last worktree is removed;
+the `wip/p8a-*` branches stay local (D396). **When the owner has answered**, wave 4 starts as waves
+1 to 3 did, each part's checks written and committed before its package is built: §11 (the guide),
+§12 (the real-window part), the restore order's package (ruling 76: a design section written from
+D457 (5), the build with its tests first, a review, the alternated series of M2 and M3, about half
+an hour of the rested desktop with the owner told, and the probe), then the review before the gate
+(step 19) with its list, which the Notes hold in their paragraphs "More for step 19's list" and in
+"Timeouts of older tests". The owner's Narrator listen can come at any time before that review; it
+is best not taken beside a test run.
 The [phase 7b handoff](handoffs/phase-7b.md), "For the next phase", says what to reuse, what to do
 first and which risks to watch.
 
@@ -1100,14 +1073,15 @@ every commit.
   letter that crosses it (`TextDecoration.Draw`, read at the tag), between fractional positions, so
   the column where a piece ends holds whatever part of a pixel the piece covers: in "Or create a
   legacy token, filled in" the piece before the y of "legacy" ends at 472.332. On Windows and Linux
-  that column lies under the y's ink; on macOS the y's ink is one column narrower (its unfocused
-  picture, 7b's `a05a`, gives CI's 182 clear columns exactly), and the end shows. `LinkFrame` now
-  excuses one faint column directly beside a letter that crosses the underline's rows, when neither
-  neighbour is a faint clear column; two side by side, one away from the letters, or any colour that
-  is not the link's over the background still fail; its message names each failing column's share
-  per row and its neighbours. `LinkFrameTests` (App.Tests, 7 cases on synthetic pictures; 5 fail on
-  the helper as it was). Only test code changed (`8f50a34`, merged `70a8fc0`). The verifier rebuilt
-  CI's message character for character from a macOS-like pair of pictures on the old helper.
+  that column lies under the y's ink; on macOS the y's ink is narrower, columns 473 to 475 where
+  Windows and Linux cover 472 to 476 (its unfocused picture, 7b's `a05a`, gives CI's 182 clear
+  columns exactly), and the end shows. `LinkFrame` now excuses one faint column directly beside a
+  letter that crosses the underline's rows, when neither neighbour is a faint clear column; two side
+  by side, one away from the letters, or any colour that is not the link's over the background still
+  fail; its message names each failing column's share per row and its neighbours. `LinkFrameTests`
+  (App.Tests, 7 cases on synthetic pictures; 5 fail on the helper as it was). Only test code changed
+  (`8f50a34`, merged `70a8fc0`). The verifier rebuilt CI's message character for character from a
+  macOS-like pair of pictures on the old helper.
   **Windows**: the app was at fault. A hide reloads the graph outside the operations queue; the
   graph without the branch, when swapped in, marks the hidden branch's two rows in the left panel
   (the tooltip "is hidden in the graph"), and `RowCollection.ReplaceAll(rows, showSame)` then
@@ -1229,25 +1203,25 @@ every commit.
   same-key rows replaced row by row, any other removed and inserted, and runs are never joined; (4)
   the list is reset above 64 rows told of. Two known limits, to be stated in `RowCollection`'s
   comment: (A) a same-key row that cannot change itself is replaced, with a replace's cost when it
-  is the top row in view; (B) a row left in place between the first and the last row told of stays
-  in Avalonia's estimate, so deep in the list the offset and the extent can end further off than
-  before phase 8a, with no row moved in the window and no click lost that the code before kept. The
-  reason: `48f403c` exists so that a press on a row a rebuild need not tell the view of stays a
-  click; a join gives that up for an offset some tens of pixels nearer in a list where it is off
-  already, and (B) has to be accepted for the rows that change themselves anyway. **The closing
-  round** (run `wf_d5a9ed01-a48`) drops the join, pins the rule with tests and rewrites the
-  comments; its verifier judges by a closed list of fault kinds (the rule not done as worded, a
-  behaviour no test pins, an untrue comment, a row moved or a click lost where the code before kept
-  both, hygiene), so an offset that ends off is no fault there. More for step 19's list, older than
-  the phase: a run removed far above the view deep in the list gives rows in view new controls and
-  loses a press on one (a rename of b01 at the bottom of 60 branches: 1226 for 1356), where a
-  replace would have touched nothing, and `RowCollection` cannot see the view to choose; a fetch
-  that drops the top remote branch in view draws the rows 87 px lower; the undo of a rename at the
-  bottom of 60 branches moves rows by up to 131 px. Both rounds' class runs wrote `u20c` and `u20e`
-  of phase 5's part U with other bytes than wave 3's references, the same bytes from every source
-  and the bytes of wave 1's and wave 2's references: the reference run of wave 3 caught the
-  variation the report's comparison names for these two, so they will differ at the whole default
-  run's comparison and are explained.
+  is the top row in view; (B) a row left in place between the first and the last row that shows
+  something new stays in Avalonia's estimate, so deep in the list the offset and the extent can end
+  further off than before phase 8a, with no row moved in the window and no click lost that the code
+  before kept. The reason: `48f403c` exists so that a press on a row a rebuild need not tell the
+  view of stays a click; a join gives that up for an offset 1 to 47 px nearer, in the cases
+  measured, in a list where it is off already, and (B) has to be accepted for the rows that change
+  themselves anyway. **The closing round** (run `wf_d5a9ed01-a48`) drops the join, pins the rule
+  with tests and rewrites the comments; its verifier judges by a closed list of fault kinds (the
+  rule not done as worded, a behaviour no test pins, an untrue comment, a row moved or a click lost
+  where the code before kept both, hygiene), so an offset that ends off is no fault there. More for
+  step 19's list, older than the phase: a run removed far above the view deep in the list gives rows
+  in view new controls and loses a press on one (a rename of b01 at the bottom of 60 branches: 1226
+  for 1356), where a replace would have touched nothing, and `RowCollection` cannot see the view to
+  choose; a fetch that drops the top remote branch in view draws the rows 87 px lower; the undo of a
+  rename at the bottom of 60 branches moves rows by up to 131 px. Both rounds' class runs wrote
+  `u20c` and `u20e` of phase 5's part U with other bytes than wave 3's references, the same bytes
+  from every source and the bytes of wave 1's and wave 2's references: the reference run of wave 3
+  caught the variation the report's comparison names for these two, so they will differ at the whole
+  default run's comparison and are explained.
   **The closing round and the merge** (run `wf_d5a9ed01-a48`: two passes, 4 agents, 1.04M tokens;
   `D:/Projects/Personal/phase8-work/wave3/rows-final-result.json`, readable in
   `wave3/ci-fixes/rows-scroll/round5-two-rounds.txt`). The fixer dropped the join (`1f239c2`, its
@@ -1262,7 +1236,36 @@ every commit.
   click is lost against the code before `48f403c` but in limit A's own case (a pull request row
   replaced as the top row in view). The row list's whole cost: the review 1.24M tokens, the five
   rounds 4.41M.
-- **Two timeouts of older tests on 2026-11-20, each seen once, neither explained.** (1) CI's first
+  **The merge's runs and the docs** (2026-11-23). The lead's checks on the merged tree
+  (`D:/Projects/Personal/phase8-work/wave3/ci-fixes/rows-merge/summary.txt`, the commands in
+  `checks.sh` beside it): both builds without a warning, 208 of 208 in fifteen App.Tests classes, 30
+  of 30 and 17 of 17 in phase 7a's and 8a's classes round the rows. CI's run 45133434382 on
+  `c1bc69b`: green in all six jobs (the CI section). The whole default run on `c1bc69b` through
+  `scripts/heavy-run.sh`, nothing built beside it: 8,514 tests, 8,509 passed, 5 skipped, none
+  failed, 1 h 44 min 41 s (00:46 to 02:32; `wave3/ci-fixes/default-run-rows/`). Its 1,235 scripted
+  pictures against wave 3's references: 1,181 the same files, 54 not, none of another size, no
+  changed pixel in a row of the left panel's list or of a stage list, 25 of the 54 the files of wave
+  1's or wave 2's references. Six readers read the 54 by their pixels, a seventh read again the
+  eleven names that wave 3's comparison does not list, a refuter took the one that is none of the
+  five kinds (run `wf_40a7d6a4-956`: 8 agents, 0.81M tokens; `wave3/rows-pictures-result.json`,
+  readable in `default-run-rows/inspection.txt`): 23 carets, 16 temporary names, 2 ports, 3 progress
+  bars at another moment, 9 of anti-aliased edge pixels, and `10b-second-tab`, whose reference of
+  wave 3 holds the tooltip `New tab` and this run's picture, wave 1's and wave 2's file, does not
+  (check 10's timing, on step 19's list). The references stay wave 3's. The report's subsection, the
+  design's bullet in 1.17 and architecture.md's passage were then checked by three independent
+  readers, one each, and a fourth across them, against the code, git, CI and the records (run
+  `wf_4ded1152-06f`: 4 agents, 1.02M tokens; `wave3/rows-docs-check-result.json`, readable in
+  `wave3/ci-fixes/rows-docs-check.txt`): 50 points, most of them a wording narrower or looser than
+  `RowCollection`'s own comment (which rows are replaced, what a replace costs, the span of the
+  second limit, how the reset counts, what is older than the phase), some wrong details (the `y`'s
+  columns on macOS, `State_05`'s one hide, round four's count), and one thing the lead had not seen:
+  the watchdog's stop in the default run of 2026-11-22 ("Timeouts of older tests", (3)). The lead
+  corrected the three passages on them; they were not checked a second time. Wave 3 with its close:
+  about 27M tokens in the runs these notes record, where 15 to 18M were expected (the three packages
+  with their merge fixes 8.7M; the close's pictures, link frame, panels, CI fixes and docs 10.7M;
+  the row list with its review, five rounds, pictures and docs' check 7.5M).
+- **Timeouts of older tests: two on 2026-11-20 and one on 2026-11-22, each seen once, none
+  explained.** (1) CI's first
   attempt on the merge (44851353430), macOS:
   `PaletteEntriesTests.An_empty_tab_lists_the_windows_commands_and_a_dashboard_its_own` waited 60 s
   for the dashboard's line `Solo: read … repositories in … ms`; the job run again passed, and so
@@ -1280,7 +1283,17 @@ every commit.
   run 1 h 46 min 41 s where it was 1 h 32 min 7 s). Step 19's review looks at both waits (a wait
   that asks for a second pass or a hold at a chosen percentage is a change of the harness; no
   assertion is loosened), and a second failure of either brings that forward. For plan.md's risks
-  at the close: the default run and CI's Windows and macOS Test steps grow with each wave.
+  at the close: the default run and CI's Windows and macOS Test steps grow with each wave. (3) In
+  the whole default run on `cb31275` of 2026-11-22 (07:54), which the lead stopped after 49 minutes
+  for the review's finding, the hang watchdog had stopped `VisualCommit.App.Tests` 1,510 s into the
+  run:
+  `UndoRecordingTests.A_hard_reset_is_undone_with_its_files_and_index_from_the_snapshot_and_redone_with_a_new_one`
+  had run for 181 s counted, the test whose stop at phase 7a's gate led to D343
+  (`D:/Projects/Personal/phase8-work/wave3/ci-fixes/default-run/default-run.log`). The lead did not
+  read that log then, the run counting for nothing; the docs' checker found it on 2026-11-23. The
+  test passed in the whole default runs on `85e2884` and on `c1bc69b` and in every CI run of the
+  phase. It is step 19's with the two others: why 181 s, what the run beside it was doing, and
+  whether D343's four projects at once still leave it room.
 - **Wave 2 is built and merged (2026-11-20); the owner read the week's share as 70 to 85 % used,
   so only step 12's runs and comparison followed, and the work stops there.** The workflow `phase8a-wave-2` (run `wf_9e189d2e-fb7`; its script is `phase8a-wave-2-build.js`
   beside wave 1's: three Opus builders in the worktrees `D:/Projects/Personal/vc-wt/p8a-firstrun`,
@@ -1609,6 +1622,13 @@ every commit.
     may also overrule the two backlog rows of D457 (the reload after a commit or a fetch, 2.5 to 4 s
     in a 100,000-commit history; Pull's three settings reads made one, about 0.2 s of a Pull), each
     ruled on a panel's advice, the second by two judges to one.
+    What to tell the owner with the question (2026-11-23): wave 3 with its close used about 27M
+    tokens where 15 to 18M were expected, because the close found three faults and each was fixed
+    with its tests and checked independently: a focused link's frame, a pixel rule that was wrong on
+    macOS, and the row list, where a first fix of a click lost on CI's Windows job made scrolled
+    lists jump and took five rounds to put right (Notes, "The merge's runs and the docs"). Wave 4 is
+    expected to need 15 to 25M: the guide, the real-window part, the restore order and the review
+    before the gate with the fixes it brings.
         - **The week's allowance: "all of wave 3 now"** (the owner, 2026-11-21; D241). The owner said
     "Continue" and, told that wave 3 needs 15 to 18M tokens and could reach the week's limit before
     Thursday's reset, chose all of it now over the picture check alone or the checks alone. The

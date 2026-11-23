@@ -4024,22 +4024,22 @@ returns). `ActivityLogView.axaml` changes only if 6.3.8's test fails. K10's four
   pieces that stop a line's thickness short of each letter that crosses it, between fractional positions
   (`TextDecoration.Draw`), so the column where a piece ends holds whatever part of a pixel the piece covers;
   in "Or create a legacy token, filled in" the piece before the y of "legacy" ends at 472.332, a column that
-  lies under the y's ink on Windows and Linux and clear of it on macOS, which draws the y one column narrower.
-  The rule was wrong, not the app. Two faint columns side by side, a faint column away from the letters and
-  any colour that is not the link's over the background still fail (`LinkFrameTests`, seven cases on made
-  pictures, five of which fail on the rule as it was). No expected result changes: A1's step 9 and the sign-in
-  links' cases assert what they asserted, with the rule's one exception said; CI's next run, 45035307735,
-  passed them in all six jobs.
+  lies under the y's ink on Windows and Linux, which draw it over columns 472 to 476 in the underline's rows,
+  and clear of it on macOS, which draws it over 473 to 475. The rule was wrong, not the app. Two faint columns
+  side by side, a faint column away from the letters and any colour that is not the link's over the background
+  still fail (`LinkFrameTests`, seven cases on made pictures, five of which fail on the rule as it was). No
+  expected result changes: A1's step 9 and the sign-in links' cases assert what they asserted, with the rule's
+  one exception said; CI's next run, 45035307735, passed them in all six jobs.
 - **U2 and U3, method 3, step 9** (2026-11-22, `996b9fc`, merged at `809b77f`): the step also waits until the
   graph has been read again for the solo. Reason: a hide's and a solo's reload run outside the operations
   queue (phase 5's design 8.2), so the wait for the row's `RefSoloToggle` could end before the reload had
-  swapped the graph in, and the left panel could rebuild under the next step's pointer. CI's Windows job
-  failed `AccessibleNameSweepTests.State_05_the_ops_tab` in that way after its two hides (the same run: a
-  click on `main`'s row whose release came after the swap was lost), which was the app's fault and is fixed in
-  the app (`RowCollection`, `48f403c`, and the row list's fix that followed it, `bad98b1`: "CI's two failures
-  after the link frame's merge, and the row list" below); the sweep's state 05 and this step wait for the
-  reload beside that, so that each reads a panel that has come to rest. A step waits for more; no expected
-  result changes.
+  swapped the graph in, and step 10's sweep and its picture `u3b` could be of the graph before the solo. CI's
+  Windows job failed `AccessibleNameSweepTests.State_05_the_ops_tab` on the same missing wait, after its hide
+  of `feature/alpha`, which hides the branch's upstream with it (the same run: a click on `main`'s row whose
+  release came after the swap was lost), which was the app's fault and is fixed in the app (`RowCollection`,
+  `48f403c`, and the row list's fix that followed it, `bad98b1`: "CI's two failures after the link frame's
+  merge, and the row list" below); the sweep's state 05 and this step wait for the reload beside that, so that
+  each reads a panel that has come to rest. A step waits for more; no expected result changes.
 
 ### Wave 1's comparison with phase 7b's references (2026-11-20)
 
@@ -4315,49 +4315,63 @@ who had to find the cause and an independent verifier who defaults to fault (run
 column of the 182 clear of the letters held about a quarter of a pixel of the underline, where the rule asked
 half. Avalonia 12.1.3 draws an underline in pieces that stop a line's thickness short of each letter that
 crosses it, between fractional positions, so the column where a piece ends holds whatever part of a pixel the
-piece covers; on macOS, whose `y` is a column narrower, that column lies clear of the letter. The rule now
-lets one such column pass beside a letter that crosses the line (`8f50a34`, merged at `70a8fc0`; only test
-code changed; `LinkFrameTests`, 7 cases on made pictures, 5 of which fail on the rule as it was). The entry
-"Part A's conventions" under "Changed in this report after its first commit" has the rule's words and its
-reason.
+piece covers; macOS draws the `y` of "legacy" narrower in the underline's rows, over columns 473 to 475 where
+Windows and Linux cover 472 to 476, so column 472, where the piece before it ends, lies clear of the letter
+there. The rule now lets one such column pass beside a letter that crosses the line (`8f50a34`, merged at
+`70a8fc0`; only test code changed; `LinkFrameTests`, 7 cases on made pictures, 5 of which fail on the rule as
+it was). The entry "Part A's conventions" under "Changed in this report after its first commit" has the rule's
+words and its reason.
 
-**Windows: `AccessibleNameSweepTests.State_05_the_ops_tab`; the app was at fault.** A click on `main`'s row in
-the left panel selected nothing. A hide reloads the graph outside the operations queue; the graph without the
-branch, when swapped in, marks the hidden branch's two rows in the left panel (the tooltip "is hidden in the
-graph"), and `RowCollection` then removed and inserted every row between the two, so a row pressed before the
-swap and released after it had lost its control and its click. It was reproduced only by forcing the timing
-(30 plain runs, 15 lagged and 20 under load all passed); the verifier got CI's message with `State_05`'s own
-steps and a held `git log`. `48f403c` made the list compare row with row and replace only the rows that show
-something new, with two tests that failed first; `State_05` and U2/U3's step 9 now also wait for the hide's
-and the solo's reload (`996b9fc`; the entry "U2 and U3, method 3, step 9" above); merged at `809b77f`. The
-lead's checks on the merged tree passed (`D:/Projects/Personal/phase8-work/wave3/ci-fixes/merge/summary.txt`),
-and **CI's run 45035307735**, on `cb31275`, was green in all six jobs, macOS's case and Windows' `State_05`
-among them.
+**Windows: `AccessibleNameSweepTests.State_05_the_ops_tab`; a flaw of the app, which the test's wait let
+show.** A click on `main`'s row in the left panel selected nothing. A hide reloads the graph outside the
+operations queue; the graph without the branch, when swapped in, marks the hidden branch's two rows in the
+left panel (the tooltip "is hidden in the graph"), and `RowCollection` then removed and inserted every row
+between the two, so a row pressed before the swap and released after it had lost its control and its click;
+the test did not wait for that reload. It was reproduced only by forcing the timing (30 plain runs, 15 lagged
+and 20 under load all passed): with `State_05`'s own steps and a held `git log` the verifier got CI's message
+exactly, and nothing more proves that this is what happened on CI's runner. `48f403c` made the list compare
+row with row and replace only the rows that show something new, with two tests that failed first; `State_05`
+and U2/U3's step 9 now also wait for the hide's and the solo's reload (`996b9fc`; the entry "U2 and U3, method
+3, step 9" above); merged at `809b77f`. The lead's checks on the merged tree passed
+(`D:/Projects/Personal/phase8-work/wave3/ci-fixes/merge/summary.txt`), and **CI's run 45035307735**, on
+`cb31275`, was green in all six jobs, macOS's case and Windows' `State_05` among them.
 
 **The review of that change.** Because `48f403c` changed code that the left panel and the stage lists of every
 walk-through use, the lead had it reviewed, read only, from the code and Avalonia 12.1.3's source (run
-`wf_0fce5560-752`: 6 agents, 1.24M tokens, three lenses and a skeptic per finding;
-`wave3/ci-fixes/rows-review/findings.txt`). Three findings stood. (A), new with `48f403c`: a replace of the
-first row a virtualizing list has made leaves a slot whose height Avalonia's search for the top row passes
-over, so a scrolled list whose top rows in view are replaced ends rows short, or goes to its top and makes
-every control again, which loses the very click the change set out to keep. (C), older and small: a pull
+`wf_0fce5560-752`: 6 agents, 1.24M tokens, three lenses and then a skeptic for each lens's chief finding;
+`wave3/ci-fixes/rows-review/findings.txt`). The three chief findings stood. (A), new with `48f403c`: a replace
+of the first row a virtualizing list has made leaves a slot whose height Avalonia's search for the top row
+passes over, so a scrolled list whose top rows in view are replaced ends rows short, or goes to its top and
+makes every control again, which loses the very click the change set out to keep. (C), older and small: a pull
 request row compared what it shows, not its whole record, so a kept row could hold an old record. (D), older:
-Enter or Space on a section header or a folder toggles it and drops the keyboard focus; it is on the list of
-the review before the gate (status.md's step 19). The whole default run that the lead had started on `cb31275`
-for the pictures was stopped after 49 minutes when (A) came, and counts for nothing.
+Enter or Space on a section header or a folder of the left panel, or on a tree folder of a file list, toggles
+it and drops the keyboard focus; it is on the list of the review before the gate (status.md's step 19), where
+a later find of the fix's rounds joined it: Space on the eye of a hidden row. Beside them the lenses noted,
+with no skeptic, that the tests left the new path partly unpinned and `RowCollection` had no test of its own
+((B), which `RowCollectionTests` answers), and that a row that itself shows something new still loses a press,
+its focus and its tooltip at a rebuild (step 19's list). The whole default run that the lead had started on
+`cb31275` for the pictures was stopped after 49 minutes when (A) came, and counts for nothing. Before that, 25
+minutes into it, the hang watchdog had stopped `VisualCommit.App.Tests`:
+`UndoRecordingTests.A_hard_reset_is_undone_with_its_files_and_index_from_the_snapshot_and_redone_with_a_new_one`
+had run for 181 s counted, the test whose stop at phase 7a's gate led to D343
+(`wave3/ci-fixes/default-run/default-run.log`). It passed in the whole default runs before and after it, on
+`85e2884` and on `c1bc69b` (below), and in CI's runs; seen once, it is with the two other timeouts of older
+tests on the list of the review before the gate.
 
-**The row list's fix** was built in the worktree `wip/p8a-rows-scroll` by a fixer, tests first, and an
-independent verifier, over five rounds in three runs (`wf_6702b8e4-d46`, three rounds, 6 agents, 1.71M tokens;
-`wf_1c642ecd-da4`, two, 4 agents, 1.66M; `wf_d5a9ed01-a48`, the closing round in two passes, 4 agents, 1.04M;
-the accounts in `wave3/ci-fixes/rows-scroll/three-rounds.txt`, `round4-two-rounds.txt` and
-`round5-two-rounds.txt`, each round's notes, logs and copies of its temporary tests beside them). Every number
-below was measured headless in the real app on Windows, a press on a row before the change and its release
-after the refresh; "for" gives the value before the change, and "before phase 8a" is the code before
-`48f403c`.
+**The row list's fix** was built on the branch `wip/p8a-rows-scroll`, in the worktree
+`D:/Projects/Personal/vc-wt/p8a-rows-scroll`, by a fixer, tests first, and an independent verifier, over five
+rounds in three runs (`wf_6702b8e4-d46`, rounds 1 to 3, 6 agents, 1.71M tokens; `wf_1c642ecd-da4`, round 4 in
+two passes, 4 agents, 1.66M; `wf_d5a9ed01-a48`, the closing round in two passes, 4 agents, 1.04M; the accounts
+in `wave3/ci-fixes/rows-scroll/three-rounds.txt`, `round4-two-rounds.txt` and `round5-two-rounds.txt`, each
+round's notes, logs and copies of its temporary tests beside them). Every number below was measured headless
+on Windows: in the real app, but for the pull request rows' numbers, which come from the left panel's view and
+view model alone (a harness in phase 7a's test project). Where a case has a press, it is on a row before the
+change, and its release comes after the refresh. "For" gives the value before the change, and "before phase
+8a" is the code before `48f403c`.
 
 - (A) shows. On `b6c9e7b`, in the unstaged list (15 files, 24 px a row) scrolled by 50 px, a status read that
   changes the top row in view leaves the offset at 26 and the extent at 336, for 50 and 360; scrolled by 12 px
-  the list goes to its top, every row in view lies 12 px lower with a new control, and the press selects
+  the list goes to its top, every row in view lies 12 px lower with a new control, and a press selects
   nothing. The code before phase 8a held all of these.
 
 - Round 1 removed and inserted each changed row. In the stage lists that is exact in every case three
@@ -4368,43 +4382,53 @@ after the refresh; "for" gives the value before the change, and "before phase 8a
 
 - Round 2 kept the replace in the left panel, and its verifier measured what a replace costs there: the offset
   and the extent end short by the heights of the consecutive replaced rows from the top row in view down, so a
-  solo, which dims every other branch row, sent a list scrolled by 40 or 100 px to its top and lost the click.
+  solo, which dims every branch row but the soloed one and HEAD's, sent a list scrolled by 40 or 100 px to its
+  top and lost the click.
 
 - Round 3 let the left panel's ref rows and section headers change themselves (`IUpdatableRow`: the marks, the
-  commit, HEAD, the counts, the selection, the pull request's text; a header's count), so a hide, a solo, its
-  end and a refresh tell the view nothing of the list: exact in every such case, each row its own object with
-  its own control. Its verifier found the rows that only shift, which have another key than their rebuilt rows
-  and were still replaced: with 20 branches scrolled by 100 px and the top row in view renamed to sort last,
-  the list went to its top and lost the click, where the code before phase 8a left the offset at 105 and kept
-  it.
+  commit, HEAD, the counts, the selection, the pull request's number and tooltip; a header's count), so a
+  hide, a solo, its end and a refresh that changes only those tell the view nothing of the list: exact in
+  every such case, each row its own object with its own control. Its verifier found the rows that only shift,
+  which have another key than their rebuilt rows and were still replaced: with 20 branches scrolled by 100 px
+  and the top row in view, `b03`, renamed `c99`, which sorts after `b20` and shifts 18 rows, the list went to
+  its top and lost the click, where the code before phase 8a left the offset at 105 and kept it.
 
 - Round 4 took the rows the view is told of by runs of consecutive rows: a run of same-key rows is replaced
-  row by row, any other run removed and inserted. The renames (outside the app, through the app's rename,
-  through its undo) then give the numbers of the code before phase 8a, 105 for 100 near the top and 1335 for
-  1356 at the bottom of 60 branches, no row moved in the window and the click kept. Its first verifier (47
-  cases, each on three versions) found that two runs with kept rows between them leave the offset further off
-  than before phase 8a; its second pass joined such runs, and its second verifier (48 cases) showed what the
-  join costs, the controls and the click of the rows between the runs, also where both runs lie below the top
-  row in view, and a reset of the whole list past 64 rows, and that a row that changes itself in place between
-  shifted rows leaves the offset further off in any case.
+  row by row, any other run removed and inserted. A rename of the top row in view near the top of the list,
+  made outside the app or through the app's rename, the undo of one there, and a rename at the bottom of 60
+  branches then give the numbers of the code before phase 8a, 105 for 100 near the top and 1335 for 1356 at
+  the bottom, no row moved in the window and the click kept. Its first verifier (47 cases, each on three
+  versions) found that two runs with kept rows between them leave the offset further off than before phase 8a;
+  its second pass joined such runs, and its second verifier (48 cases) showed what the join costs, the
+  controls and the click of the rows between the runs, also where both runs lie below the top row in view, and
+  a reset of the whole list past 64 rows, and that a row that changes itself in place anywhere between the
+  first and the last row that shows something new, also below the last shifted row, leaves the offset further
+  off in any case.
 
-- **The lead's rule, 2026-11-22**, which the closing round applied: (1) the stage lists remove and insert each
-  row the view is told of; (2) a row that shows the same stays, and a row that can change itself does; (3) in
-  the left panel the other rows go by runs, a run of same-key rows replaced row by row and any other removed
-  and inserted, and runs are never joined; (4) the list is reset above 64 rows told of. Two limits are known
-  and stated in `RowCollection`'s comment with their numbers. A same-key row that cannot change itself (a pull
-  request row that shows something new, a message row of that section) is replaced: when it is the top row in
-  view the offset ends its height short (a retitled request at the top: 26 px; seven of them under an offset
-  of 172 px: the list goes to its top), and a press on the replaced row itself is lost, as before phase 8a.
-  And a row left in place between the first and the last row that shows something new stays in the panel's
-  mean, so deep in a long list the offset and the extent can end further off than before phase 8a: two renames
-  at the bottom of 60 branches leave 1248 for 1356, where it was 1295; a fetch that drops two remote branches
-  and brings two, 1544 for 1716, where it was 1550; a rename whose refresh also moves HEAD's branch, 1241 for
-  1356, where it was 1368. No row moves in the window in these cases, and no press loses a click that the code
-  before phase 8a kept. The reason for not joining: `48f403c` exists so that a press on a row a rebuild need
-  not tell the view of stays a click; near the top of the list two renames a few rows apart now keep the rows
-  between them, their controls and the click (98 for 100), where the code before phase 8a lost it (99 for
-  100).
+- **The lead's rule, 2026-11-22**, which the closing round applied, for a rebuild whose changed part keeps its
+  number of rows: (1) the stage lists remove and insert each row the view is told of; (2) a row that shows the
+  same stays, and a row that can change itself does; (3) in the left panel the other rows go by runs, a run of
+  same-key rows replaced row by row and any other removed and inserted, and runs are never joined; (4) the
+  list is reset above 64 rows told of. A rebuild that changes the number of rows removes and inserts its
+  changed part whole, as before phase 8a. Two limits are known, and `RowCollection`'s comment states both.
+  First, a same-key row that cannot change itself is replaced: a pull request row that shows something new or
+  whose request changed, a message row of that section whose text changes, or a ref row whose name, tooltip,
+  level or opening changes under its key (a stash with a new message). When such a row is the top row in view,
+  the offset and the extent end short by the heights of the consecutive replaced rows from it down, and under
+  a smaller offset the list goes to its top and makes every control again (on the panel alone: one retitled
+  request at the top, 26 px; seven of them, 182 px, under an offset of 172 px, the list at its top and the
+  press lost, the one case on record where the fix loses a click that the code before phase 8a kept); and a
+  press on the replaced row itself is lost, as before phase 8a. Second, a row left in place between the first
+  and the last row that shows something new stays in the panel's mean, so deep in a long list the offset and
+  the extent can end further off than before phase 8a: two renames at the bottom of 60 branches leave 1248 for
+  1356, where it was 1295; a fetch that drops two remote branches and brings two, 1544 for 1716, where it was
+  1550; a rename whose refresh also moves HEAD's branch, 1241 for 1356, where it was 1368. In the cases on
+  record no row moves in the window there and no press loses a click that the code before phase 8a kept; deep
+  in the list kept rows in view may get new controls, as they did before. The reason for not joining:
+  `48f403c` exists so that a press on a row a rebuild need not tell the view of stays a click; near the top of
+  the list two renames a few rows apart now keep the rows between them, their controls and the click (98 for
+  100), where the code before phase 8a lost it (99 for 100), and a join brought the offset 1 to 47 px nearer
+  in the cases measured, in a list where it is off already.
 
 - The closing round's two verifiers judged by a closed list of fault kinds (the rule not done as worded; a
   behaviour no test pins; an untrue comment; a row moved or a click lost where the code before phase 8a kept
@@ -4412,7 +4436,8 @@ after the refresh; "for" gives the value before the change, and "before phase 8a
   record no row moved and no click was lost against the code before phase 8a but in the first limit's own
   case; and of 20 wrong forms of `RowCollection` (the join and two narrower joins, wrong reset counts, runs
   taken over rows that change themselves, a run's kind decided wrongly, wrong orders and indexes, the
-  one-height form by runs) 18 failed a test. The lead added a fact for each of the other two (`a9a7847`; each
+  one-height form by runs), each run against `RowCollectionTests`, `LeftPanelViewModelTests` and
+  `LeftPanelScrollTests`, 18 failed a test. The lead added a fact for each of the other two (`a9a7847`; each
   passes on the code and fails on its wrong form), so all 20 fail.
 
 - (C): `PullRequestRow.ShowsSameAs` also compares the record (`e40c9ae`, one fact in
@@ -4421,24 +4446,30 @@ after the refresh; "for" gives the value before the change, and "before phase 8a
 The tests that hold it, all in App.Tests but the last: `RowCollectionTests` (30 cases: what the view is told
 of, in order, and which rows keep their objects, for both forms), `StageListScrollTests` (7),
 `LeftPanelScrollTests` (16: hides, solos and their ends, renames, an undo and a fetch in a scrolled panel,
-each with the offset, the extent, the rows' places in the window, their objects and controls, and the press),
-`LeftPanelViewModelTests` (the rows marked in place; a stash's new message replaces that row alone) and
-`PullRequestSectionTests`. Older than the phase, equal on the fix and on the code before phase 8a, and on the
-list of the review before the gate: Avalonia's estimate after a remove at or above the first row it has made
-(a rename of the top row in view near the top: 105 for 100; a rename far above the view at the bottom of 60
-branches: 1226 for 1356, five rows in view with new controls and a press on one lost, where a replace would
-have touched nothing; a fetch that drops the top remote branch in view: the rows drawn 87 px lower), and a
-rebuild that changes the list's length.
+each with the offset, the extent, the rows' places in the window and their objects, their controls where the
+fact says so and, in all but the hide of the top row near the top, a press), `LeftPanelViewModelTests` (the
+rows marked in place; a stash's new message replaces that row alone) and `PullRequestSectionTests`. Older than
+the phase, equal on the fix and on the code before phase 8a, and on the list of the review before the gate:
+Avalonia's estimate after a remove at or above the first row it has made, or an insert above it (a rename of
+the top row in view near the top: 105 for 100; a rename far above the view at the bottom of 60 branches: 1226
+for 1356, five rows in view with new controls and a press on one lost, where a replace would have touched
+nothing; a fetch that drops the top remote branch in view: the rows drawn 87 px lower; the app's undo of a
+rename at the bottom of 60 branches: rows moved by up to 131 px and the click on `main` lost), and a rebuild
+that changes the list's length.
 
 **The merge and the lead's checks.** The fix is merged at `bad98b1` (the branch's 18 commits). On the merged
-tree, whose code is the verified branch's with the lead's two facts: the root build and the real-window
-project's Release build without a warning; fifteen App.Tests classes round the rows (the three new ones,
-`LeftPanelViewModelTests`, `HideAndSoloTests`, the stage lists', the panels' and the branch operations') 208
-of 208; phase 7a's `PullRequestSectionTests` with `LeftPanelPullRequestsViewTests` 30 of 30;
-`AccessibleNameSweepTests` with `Phase8aChecksU` 17 of 17
-(`D:/Projects/Personal/phase8-work/wave3/ci-fixes/rows-merge/summary.txt`). **CI's run 45133434382**, on
-`c1bc69b` (the merge with architecture.md's and the design's passages on it), is green in all six jobs: 8,514
-tests on Windows and 8,511 in each other job, 57 more than the run before.
+tree, whose code is the verified branch's with the lead's two facts and the lead's correction of one example's
+branch counts in `RowCollection`'s comment: the root build and the real-window project's Release build without
+a warning; fifteen App.Tests classes (`RowCollectionTests`, `LeftPanelScrollTests`, `StageListScrollTests`,
+`LeftPanelViewModelTests`, `HideAndSoloTests`, `StageListRefreshTests`, `WorkingChangesTests`,
+`WorkingChangesInProgressTests`, `PanelViewTests`, `BranchDragTests`, `GraphReviewFixTests`,
+`RegionKeysTests`, `RepositoryViewModelFilterTests`, `AutomationSweepTests`,
+`RepositoryOperationsBranchesTests`) 208 of 208; phase 7a's `PullRequestSectionTests` with
+`LeftPanelPullRequestsViewTests` 30 of 30; `AccessibleNameSweepTests` with `Phase8aChecksU` 17 of 17
+(`D:/Projects/Personal/phase8-work/wave3/ci-fixes/rows-merge/summary.txt`, the commands in `checks.sh` beside
+it). **CI's run 45133434382**, on `c1bc69b` (the merge with architecture.md's and the design's passages on
+it), is green in all six jobs: 8,514 tests on Windows and 8,511 in each other job, 57 more than the run
+before.
 
 **The whole default run** on `c1bc69b`, through `scripts/heavy-run.sh` with no agent building or testing
 beside it: 8,514 tests, 8,509 passed, 5 skipped, none failed, 1 h 44 min 41 s (00:46 to 02:32 on 2026-11-23).
