@@ -746,12 +746,16 @@ for each major and a fixer. GuideShots' local root is `C:\demo`, which the site'
 rechecked against D457 and the code by run `wf_d117ae19-e9c`, 17 findings, all applied; Notes, "Wave
 4"). 0.4's row and files, 13.1's rulings, 13.3's row for the proof (about 50 minutes of the rested
 desktop, about 70 with a trial of two at once, about 80 when four stays after it) and CLAUDE.md's
-docs map are brought up to it. **Next for the lead:** start `restore`'s builder beside §11's
-(worktree `D:/Projects/Personal/vc-wt/p8a-restore` on `wip/p8a-restore`, made from the commit that
-holds section 14): its tests first with the stubs, the build, three reviewers, a verifier for each
-major, a fixer (14.8 steps 1 and 2). Then, when no agent is at work, the lead's proof (14.8 steps 3
-to 7), the owner told in the chat just before each takeover, and the merge when it is proven (step
-8) or the Backlog row when it is not (step 9). §11's builders got with their briefs: mdBook at
+docs map are brought up to it. **`restore`'s build is under way** since 10:19 beside §11's (run
+`wf_abcee249-c0e`, script `…/workflows/scripts/phase8a-wave-4-restore-wf_abcee249-c0e.js`; worktree
+`D:/Projects/Personal/vc-wt/p8a-restore` on `wip/p8a-restore`, from `3f67850`): its tests first with
+the stubs, the build, 14.6's five comparisons, three reviewers (the design and the decision, races
+and lifetime, the tests), a verifier for each major, a fixer (14.8 steps 1 and 2). **Next for the
+lead, as each run ends:** read its result and its diff; for §11, the merge with its checks, the
+lead's lines of 11.2, the push, CI and the guide's workflow (step 17); for `restore`, when no agent
+is at work, the lead's proof (14.8 steps 3 to 7), the owner told in the chat just before each
+takeover, and the merge when it is proven (step 8) or the Backlog row when it is not (step 9). §11's
+builders got with their briefs: mdBook at
 `D:/Projects/Personal/phase8-work/tools/mdbook-0.5.4/mdbook.exe` and the Linux archive's SHA-256 for
 `guide.yml` (Notes, "Wave 4"); the references `D:/Projects/Personal/phase8-work/references/wave3/`;
 rulings 80 (stop and report if the first-run link's frame touches its ink), 82 (the facts no check
