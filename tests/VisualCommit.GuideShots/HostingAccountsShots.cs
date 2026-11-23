@@ -1,3 +1,4 @@
+using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
@@ -51,6 +52,12 @@ public sealed class HostingAccountsShots
                 "the pull requests in the left panel");
             await app.WaitForIdleAsync();
             app.MoveToNeutral();
-            return GuideFrame.Of(app.FindByAutomationId("LeftPanel"), GuideSteps.GraphArea(app));
+
+            // The left panel and the graph down to the graph's last whole row; the panel holds
+            // nothing that low.
+            var panel = app.BoundsOf(app.FindByAutomationId("LeftPanel"));
+            var graph = GuideSteps.GraphAreaToLastWholeRow(app);
+            var top = Math.Min(panel.Top, graph.Top);
+            return GuideFrame.Area(new Rect(panel.Left, top, graph.Right - panel.Left, graph.Bottom - top));
         });
 }

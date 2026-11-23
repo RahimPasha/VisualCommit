@@ -13,12 +13,12 @@ namespace VisualCommit.GuideShots;
 /// </summary>
 public sealed class FindHistoryShots
 {
-    /// <summary>The graph with its branches', tags' and the stash's labels and the merged branch's lane.</summary>
+    /// <summary>The graph with its branches', tags' and the stash's labels and the merged branch's lane, down to its last whole row.</summary>
     [AvaloniaTheory]
     [MemberData(nameof(GuideCamera.Themes), MemberType = typeof(GuideCamera))]
     public Task Graph_labels(GuideTheme theme) =>
         GuideCamera.ShootAsync(GuideShotCatalogue.GraphLabels, theme, GuideStart.WeatherStation, run =>
-            Task.FromResult(GuideFrame.Of(GuideSteps.GraphArea(run.App))));
+            Task.FromResult(GuideFrame.Area(GuideSteps.GraphAreaToLastWholeRow(run.App))));
 
     /// <summary>The search bar over the graph, "readme" typed, its matches marked.</summary>
     [AvaloniaTheory]

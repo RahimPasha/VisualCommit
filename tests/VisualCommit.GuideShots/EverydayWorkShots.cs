@@ -95,7 +95,14 @@ public sealed class EverydayWorkShots
             var forecast = await app.RefRowAsync("Local branches", "feature", "forecast");
             app.RightClick(app.BoundsOf(forecast).Center);
             app.Menu();
-            return GuideFrame.Of(app.FindByAutomationId("LeftPanel"), GuideSteps.OpenMenu(app));
+
+            // The left panel down to the menu's bottom and the menu with its margin: the panel holds
+            // nothing below the menu, and the graph beside it would show only rows cut at the edge.
+            var menu = GuideSteps.OpenMenu(app);
+            var panel = app.BoundsOf(app.FindByAutomationId("LeftPanel"));
+            var shown = app.BoundsOf(menu);
+            var top = Math.Min(panel.Top, shown.Top);
+            return GuideFrame.Area(new Rect(panel.Left, top, panel.Width, shown.Bottom - top)).With(GuideFrame.Card(menu));
         });
 
     /// <summary>"Create branch here…" of a commit: the branch's name typed, "Check out the new branch" ticked.</summary>

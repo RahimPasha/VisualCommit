@@ -1,6 +1,8 @@
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.VisualTree;
+using VisualCommit.App.Controls;
 using VisualCommit.App.Controls.Diff;
 using VisualCommit.App.ViewModels.Panels;
 using VisualCommit.App.Views.Diff;
@@ -90,14 +92,95 @@ internal static class GuideSteps
         return GuideFrame.Area(new Rect(bounds.Left, bounds.Top, bounds.Width, Math.Min(bounds.Bottom, bottom.Y + 24) - bounds.Top));
     }
 
-    /// <summary>Right-clicks the graph's row <paramref name="row"/> in its Message column and returns the menu's view.</summary>
-    public static Control OpenCommitMenu(ShellDriver app, int row)
+    /// <summary>
+    /// Right-clicks the graph's row <paramref name="row"/>, in its Message column or at the window's
+    /// <paramref name="x"/>, and returns the menu's view.
+    /// </summary>
+    public static Control OpenCommitMenu(ShellDriver app, int row, double? x = null)
     {
         var point = app.GraphRowPoint(row);
-        app.RightClick(point);
+        app.RightClick(x is { } at ? point.WithX(at) : point);
         app.Menu();
         return OpenMenu(app);
     }
+
+    /// <summary>
+    /// Throws unless the open <paramref name="menu"/>, with its card's margin, lies within the
+    /// graph's area from left to right: a menu that reached past it would take a strip of the
+    /// panel beside it into a picture framed on the graph.
+    /// </summary>
+    public static void ThrowUnlessMenuInGraph(ShellDriver app, Control menu)
+    {
+        var graph = app.BoundsOf(GraphArea(app));
+        var shown = GuideFrame.Card(menu).BoundsIn(app);
+        if (shown.Left < graph.Left || shown.Right > graph.Right)
+        {
+            throw new InvalidOperationException($"The menu with its margin, {shown}, reaches past the graph's area, {graph}.");
+        }
+    }
+
+    /// <summary>The graph's rows: the control that draws the commits.</summary>
+    public static CommitGraphControl GraphRows(ShellDriver app) =>
+        app.Window.GetVisualDescendants().OfType<CommitGraphControl>().First(graph => graph.Name == "GraphRows" && graph.IsEffectivelyVisible);
+
+    /// <summary>
+    /// The window's y of each commit row's bottom edge (from row 0, the working changes' row not
+    /// counted) that lies in the graph's view, top to bottom.
+    /// </summary>
+    public static IReadOnlyList<double> GraphRowBottoms(ShellDriver app)
+    {
+        var rows = GraphRows(app);
+        var view = app.BoundsOf(rows);
+        var bottoms = new List<double>();
+        for (var row = 0; row < (rows.Data?.Count ?? 0); row++)
+        {
+            var bottom = (rows.TranslatePoint(rows.RowBounds(row).BottomLeft, app.Window)
+                ?? throw new InvalidOperationException("The graph is not in the window.")).Y;
+            if (bottom > view.Bottom)
+            {
+                break;
+            }
+
+            bottoms.Add(bottom);
+        }
+
+        return bottoms;
+    }
+
+    /// <summary>
+    /// The graph's area from its top down to the bottom edge of the last commit row it shows
+    /// whole, so that no row is cut through its text at the picture's bottom.
+    /// </summary>
+    public static Rect GraphAreaToLastWholeRow(ShellDriver app)
+    {
+        var area = app.BoundsOf(GraphArea(app));
+        var bottom = GraphRowBottoms(app).LastOrDefault(row => row <= area.Bottom);
+        if (bottom <= area.Top)
+        {
+            throw new InvalidOperationException("The graph's area shows no whole commit row.");
+        }
+
+        return new Rect(area.Left, area.Top, area.Width, bottom - area.Top);
+    }
+
+    /// <summary>The bottom edge of the first commit row of the graph whose bottom lies at or below <paramref name="y"/>.</summary>
+    public static double GraphRowBottomBelow(ShellDriver app, double y)
+    {
+        foreach (var bottom in GraphRowBottoms(app))
+        {
+            if (bottom >= y)
+            {
+                return bottom;
+            }
+        }
+
+        throw new InvalidOperationException($"No commit row of the graph in view ends at or below {y}.");
+    }
+
+    /// <summary>The right panel's row of the changed file named <paramref name="name"/>, in a commit's or a stash's details; null while it is not shown.</summary>
+    public static Control? DetailsFileRow(ShellDriver app, string name) =>
+        app.FindByAutomationId("RightPanel").GetVisualDescendants().OfType<Button>()
+            .FirstOrDefault(row => row.IsEffectivelyVisible && AutomationProperties.GetAutomationId(row) == "ChangedFile" && AutomationProperties.GetName(row) == name);
 
     /// <summary>The open context menu's view.</summary>
     public static Control OpenMenu(ShellDriver app) =>

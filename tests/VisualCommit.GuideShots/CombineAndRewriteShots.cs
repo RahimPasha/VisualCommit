@@ -11,11 +11,21 @@ namespace VisualCommit.GuideShots;
 /// </summary>
 public sealed class CombineAndRewriteShots
 {
-    /// <summary>fix/rounding's label dragged onto main's and dropped: the menu of what the drop can do.</summary>
+    /// <summary>
+    /// Where the commit's menu is asked for, from the graph's area's left edge: in the Graph
+    /// column, so that the menu, about 288 wide, ends inside the 440 of the graph's area.
+    /// </summary>
+    private const double CommitMenuX = 140;
+
+    /// <summary>
+    /// fix/rounding's label dragged onto main's and dropped: the menu of what the drop can do. In
+    /// the wider window, whose graph holds the whole menu, so that the picture takes in nothing of
+    /// the right panel.
+    /// </summary>
     [AvaloniaTheory]
     [MemberData(nameof(GuideCamera.Themes), MemberType = typeof(GuideCamera))]
     public Task Drag_menu(GuideTheme theme) =>
-        GuideCamera.ShootAsync(GuideShotCatalogue.DragMenu, theme, GuideStart.WeatherStation, async run =>
+        GuideCamera.ShootAsync(GuideShotCatalogue.DragMenu, theme, GuideStart.WeatherStationWide, async run =>
         {
             var app = run.App;
             var rounding = app.GraphLabelBounds(GuideSteps.RoundHalfUpRow, "fix/rounding");
@@ -24,7 +34,9 @@ public sealed class CombineAndRewriteShots
             app.MoveMouseHeld(main.Center, steps: 5);
             app.ReleaseMouse(main.Center);
             app.Menu();
-            return GuideFrame.Of(GuideSteps.GraphArea(app), GuideSteps.OpenMenu(app));
+            var menu = GuideSteps.OpenMenu(app);
+            GuideSteps.ThrowUnlessMenuInGraph(app, menu);
+            return GuideFrame.Area(GuideSteps.GraphAreaToLastWholeRow(app)).With(GuideFrame.Card(menu));
         });
 
     /// <summary>"Interactive rebase of main from here…": the list of main's commits since the chosen one, each with its action.</summary>
@@ -41,15 +53,20 @@ public sealed class CombineAndRewriteShots
             return GuideFrame.Of(list);
         });
 
-    /// <summary>A commit's menu in the graph.</summary>
+    /// <summary>
+    /// A commit's menu in the graph, opened from the row's Graph column, so that the menu ends
+    /// inside the graph's area and the picture takes in nothing of the right panel.
+    /// </summary>
     [AvaloniaTheory]
     [MemberData(nameof(GuideCamera.Themes), MemberType = typeof(GuideCamera))]
     public Task Commit_menu(GuideTheme theme) =>
         GuideCamera.ShootAsync(GuideShotCatalogue.CommitMenu, theme, GuideStart.WeatherStation, run =>
         {
             var app = run.App;
-            var menu = GuideSteps.OpenCommitMenu(app, GuideSteps.RoundToDigitsRow);
-            return Task.FromResult(GuideFrame.Of(GuideSteps.GraphArea(app), menu));
+            var graph = app.BoundsOf(GuideSteps.GraphArea(app));
+            var menu = GuideSteps.OpenCommitMenu(app, GuideSteps.RoundToDigitsRow, graph.Left + CommitMenuX);
+            GuideSteps.ThrowUnlessMenuInGraph(app, menu);
+            return Task.FromResult(GuideFrame.Area(GuideSteps.GraphAreaToLastWholeRow(app)).With(GuideFrame.Card(menu)));
         });
 
     /// <summary>"Reset main to this commit…": the question with its three kinds of reset.</summary>
