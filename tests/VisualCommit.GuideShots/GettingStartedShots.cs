@@ -97,7 +97,7 @@ public sealed class GettingStartedShots
             var app = run.App;
             await app.WaitForAsync(() => app.FindByAutomationId("GitStatus") is TextBlock { Text.Length: > 0 }, "the Git box's text");
             app.MoveToNeutral();
-            return GuideFrame.Of(app.FindByAutomationId("StatusBar"));
+            return GuideFrame.Of(app.FindByAutomationId("StatusBar")).Inflate(-GuideCamera.Margin / GuideCamera.Scale);
         });
 
     /// <summary>An empty tab: the welcome page with Open, Clone and Create, the recent repositories and the workspaces.</summary>

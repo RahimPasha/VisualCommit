@@ -51,6 +51,6 @@ public sealed class HostingAccountsShots
                 "the pull requests in the left panel");
             await app.WaitForIdleAsync();
             app.MoveToNeutral();
-            return GuideFrame.Window;
+            return GuideFrame.Of(app.FindByAutomationId("LeftPanel"), GuideSteps.GraphArea(app));
         });
 }

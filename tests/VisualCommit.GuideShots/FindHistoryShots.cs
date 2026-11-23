@@ -1,4 +1,6 @@
 using Avalonia.Headless.XUnit;
+using Avalonia.VisualTree;
+using VisualCommit.App.Controls.Diff;
 using VisualCommit.App.Views.Pages;
 using Xunit;
 
@@ -37,25 +39,34 @@ public sealed class FindHistoryShots
     [AvaloniaTheory]
     [MemberData(nameof(GuideCamera.Themes), MemberType = typeof(GuideCamera))]
     public Task File_history(GuideTheme theme) =>
-        GuideCamera.ShootAsync(GuideShotCatalogue.FileHistory, theme, GuideStart.WeatherStation, async run =>
+        GuideCamera.ShootAsync(GuideShotCatalogue.FileHistory, theme, GuideStart.WeatherStationWide, async run =>
         {
             var app = run.App;
             await GuideSteps.OpenWorkingChangesAsync(app);
             app.RightClick(await app.FileRowAsync("UnstagedFileList", GuideScenario.UnitsFile));
             app.Menu();
             app.ClickMenuItem("File history");
-            await app.WaitForPageAsync<FileHistoryView>();
-            await app.WaitForAsync(() => app.FileHistorySnapshot() is { IsLoading: false, Rows.Count: > 0 }, "units.py's history");
+            var page = await app.WaitForPageAsync<FileHistoryView>();
+
+            // The history's rows, then the first one's diff, read after them, with its rows laid out.
+            await app.WaitForAsync(
+                () =>
+                {
+                    app.Capture();
+                    return app.FileHistorySnapshot() is { IsLoading: false, Rows.Count: > 0, Selected: not null, Diff.ShowsText: true }
+                        && page.GetVisualDescendants().OfType<DiffTextView>().Any(view => view.IsEffectivelyVisible && view.Rows.Count > 0 && view.RowBounds(0) is not null);
+                },
+                "units.py's history with its latest change's diff");
             await app.WaitForIdleAsync();
             app.MoveToNeutral();
-            return GuideFrame.Window;
+            return GuideFrame.Of(page);
         });
 
     /// <summary>units.py's blame: each line with the commit that last changed it.</summary>
     [AvaloniaTheory]
     [MemberData(nameof(GuideCamera.Themes), MemberType = typeof(GuideCamera))]
     public Task Blame(GuideTheme theme) =>
-        GuideCamera.ShootAsync(GuideShotCatalogue.Blame, theme, GuideStart.WeatherStation, async run =>
+        GuideCamera.ShootAsync(GuideShotCatalogue.Blame, theme, GuideStart.WeatherStationWide, async run =>
         {
             var app = run.App;
             await GuideSteps.OpenWorkingChangesAsync(app);

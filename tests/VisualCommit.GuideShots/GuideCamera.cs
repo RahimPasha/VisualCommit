@@ -16,9 +16,10 @@ namespace VisualCommit.GuideShots;
 /// of the demo (<see cref="GuideScenario.FreshAsync"/>), a fresh start of the app on it through the
 /// scripted walk-through's harness (<see cref="ShellDriver"/>), the theme chosen through the
 /// session's own <c>UseTheme</c> and waited for before the shot's state is set up, so that no theme
-/// switch closes a menu; then the window's render scaling set to <see cref="Scale"/>, a capture, a
-/// crop to the shot's frame times the scale plus <see cref="Margin"/> pixels on each side, the
-/// <see cref="LeakGuard"/>'s look, and the picture saved as
+/// switch closes a menu, and the window's render scaling set to <see cref="Scale"/> before the
+/// pointer first moves; then the shot's state, a capture, a crop to the shot's frame times the
+/// scale plus <see cref="Margin"/> pixels on each side, the <see cref="LeakGuard"/>'s look, and the
+/// picture saved as
 /// <see cref="GuideShotCatalogue.FileName"/> in <see cref="GuideSettings.PicturesFolder"/>.
 /// </summary>
 public static class GuideCamera
@@ -53,13 +54,20 @@ public static class GuideCamera
         app.Session.Shell.UseTheme(theme == GuideTheme.Dark ? AppTheme.Dark : AppTheme.Light);
         var variant = theme == GuideTheme.Dark ? ThemeVariant.Dark : ThemeVariant.Light;
         await app.WaitForAsync(() => app.Window.ActualThemeVariant == variant, $"the window to show the {theme} theme");
+
+        // The scaling before the pointer first moves: set later, it re-reads the pointer's last
+        // place in the new scaling's pixels, half as far from the corner at 2, and hovers what lies
+        // there (a reflog row did, under the neutral point's half).
+        app.Window.SetRenderScaling(Scale);
+        app.Settle();
         await run.WaitUntilShownAsync();
 
         var frame = await setUp(run);
         app.WaitForCommitDetails();
         app.Settle();
 
-        app.Window.SetRenderScaling(Scale);
+        // A frame first, so that what draws itself late (the graph, the diff's text) has done so.
+        app.Capture();
         app.Settle();
         var picture = Capture(app, frame.BoundsIn(app));
         LeakGuard.Check(app.Window, name);

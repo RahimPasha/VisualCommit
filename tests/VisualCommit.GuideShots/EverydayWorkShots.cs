@@ -19,28 +19,28 @@ public sealed class EverydayWorkShots
     [AvaloniaTheory]
     [MemberData(nameof(GuideCamera.Themes), MemberType = typeof(GuideCamera))]
     public Task Diff_side_by_side(GuideTheme theme) =>
-        GuideCamera.ShootAsync(GuideShotCatalogue.DiffSideBySide, theme, GuideStart.WeatherStation, async run =>
+        GuideCamera.ShootAsync(GuideShotCatalogue.DiffSideBySide, theme, GuideStart.WeatherStationWide, async run =>
         {
             var app = run.App;
             var diff = await GuideSteps.OpenDiffAsync(app, GuideScenario.UnitsFile);
             app.Click(app.FindByAutomationId("SideBySideDiffButton"));
-            await app.WaitForIdleAsync();
+            await GuideSteps.WaitForDiffTextAsync(app, GuideScenario.UnitsFile);
             app.MoveToNeutral();
-            return GuideFrame.Of(diff);
+            return GuideSteps.DiffFrame(app, diff);
         });
 
     /// <summary>The same diff in one column, the removed lines above the added.</summary>
     [AvaloniaTheory]
     [MemberData(nameof(GuideCamera.Themes), MemberType = typeof(GuideCamera))]
     public Task Diff_inline(GuideTheme theme) =>
-        GuideCamera.ShootAsync(GuideShotCatalogue.DiffInline, theme, GuideStart.WeatherStation, async run =>
+        GuideCamera.ShootAsync(GuideShotCatalogue.DiffInline, theme, GuideStart.WeatherStationWide, async run =>
         {
             var app = run.App;
             var diff = await GuideSteps.OpenDiffAsync(app, GuideScenario.UnitsFile);
             app.Click(app.FindByAutomationId("InlineDiffButton"));
-            await app.WaitForIdleAsync();
+            await GuideSteps.WaitForDiffTextAsync(app, GuideScenario.UnitsFile);
             app.MoveToNeutral();
-            return GuideFrame.Of(diff);
+            return GuideSteps.DiffFrame(app, diff);
         });
 
     /// <summary>The working changes: the unstaged and staged files, the commit's message and the Commit button.</summary>
@@ -61,12 +61,12 @@ public sealed class EverydayWorkShots
     [AvaloniaTheory]
     [MemberData(nameof(GuideCamera.Themes), MemberType = typeof(GuideCamera))]
     public Task Stage_hunk(GuideTheme theme) =>
-        GuideCamera.ShootAsync(GuideShotCatalogue.StageHunk, theme, GuideStart.WeatherStation, async run =>
+        GuideCamera.ShootAsync(GuideShotCatalogue.StageHunk, theme, GuideStart.WeatherStationWide, async run =>
         {
             var app = run.App;
             var diff = await GuideSteps.OpenDiffAsync(app, GuideScenario.UnitsFile);
             app.Click(app.FindByAutomationId("InlineDiffButton"));
-            await app.WaitForIdleAsync();
+            await GuideSteps.WaitForDiffTextAsync(app, GuideScenario.UnitsFile);
 
             // The hunks' bars are made as the text is drawn.
             Button? stage = null;
@@ -79,8 +79,9 @@ public sealed class EverydayWorkShots
                     return stage is not null;
                 },
                 "the first hunk's Stage hunk button");
-            await app.RestPointerAtAsync(app.BoundsOf(stage!).Center);
-            return GuideFrame.Of(diff);
+            app.MoveMouse(stage!);
+            app.Settle();
+            return GuideSteps.DiffFrame(app, diff);
         });
 
     /// <summary>A local branch's menu in the left panel.</summary>
@@ -112,19 +113,17 @@ public sealed class EverydayWorkShots
             return GuideFrame.Of(GuideSteps.DialogCard(app));
         });
 
-    /// <summary>main one commit ahead of origin/main and one behind it: the left panel's arrows and the graph's two lines.</summary>
+    /// <summary>main one commit ahead of origin/main and one behind it: the left panel's arrows beside main, and origin's branches below.</summary>
     [AvaloniaTheory]
     [MemberData(nameof(GuideCamera.Themes), MemberType = typeof(GuideCamera))]
     public Task Ahead_behind(GuideTheme theme) =>
         GuideCamera.ShootAsync(GuideShotCatalogue.AheadBehind, theme, GuideStart.WeatherStation, async run =>
         {
             var app = run.App;
-            await app.RefRowAsync("Local branches", "main");
-            var header = await app.RefRowAsync("Local branches");
-            var bottom = app.GraphRowPoint(GuideSteps.CheckWiringRow).Y + 14;
-            var top = app.BoundsOf(header).Top - 10;
-            var right = app.BoundsOf(app.FindByAutomationId("CommitGraph")).Right;
-            return GuideFrame.Area(new Rect(0, top, right, bottom - top));
+            var header = app.BoundsOf(await app.RefRowAsync("Local branches"));
+            var originMain = app.BoundsOf(await app.RefRowAsync("Remotes", "origin", "main"));
+            var panel = app.BoundsOf(app.FindByAutomationId("LeftPanel"));
+            return GuideFrame.Area(new Rect(panel.Left, header.Top - 4, panel.Width, originMain.Bottom + 4 - (header.Top - 4)));
         });
 
     /// <summary>The Remotes dialog, from the Remotes section's menu.</summary>

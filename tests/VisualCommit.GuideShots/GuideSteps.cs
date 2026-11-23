@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.VisualTree;
+using VisualCommit.App.Controls.Diff;
 using VisualCommit.App.ViewModels.Panels;
 using VisualCommit.App.Views.Diff;
 using VisualCommit.Testing.Headless;
@@ -51,9 +52,42 @@ internal static class GuideSteps
             () => app.Window.GetVisualDescendants().OfType<DiffView>().Any(view => view.IsEffectivelyVisible)
                 && app.Window.GetVisualDescendants().OfType<TextBlock>().Any(text => text.Name == "DiffFileName" && text.IsEffectivelyVisible && text.Text == name),
             $"the diff of {path}");
+        await WaitForDiffTextAsync(app, path);
+        return app.Window.GetVisualDescendants().OfType<DiffView>().First(view => view.IsEffectivelyVisible);
+    }
+
+    /// <summary>
+    /// Waits until the open diff of <paramref name="path"/> shows its text with its rows laid out,
+    /// as phase 3's checks wait for it: the diff is read by git after the click, and its rows are
+    /// made as it is drawn.
+    /// </summary>
+    public static async Task WaitForDiffTextAsync(ShellDriver app, string path)
+    {
+        await app.WaitForAsync(
+            () =>
+            {
+                app.Capture();
+                return app.Session.Shell.ActiveTab.Repository?.Diff is { ShowsText: true } diff && diff.Target.Path == path
+                    && app.Window.GetVisualDescendants().OfType<DiffTextView>().Any(view => view.Name == "DiffText" && view.IsEffectivelyVisible && view.Rows.Count > 0 && view.RowBounds(0) is not null);
+            },
+            $"the text diff of {path}");
         await app.WaitForIdleAsync();
         app.Settle();
-        return app.Window.GetVisualDescendants().OfType<DiffView>().First(view => view.IsEffectivelyVisible);
+    }
+
+    /// <summary>
+    /// The open diff from its header down to its last row and a little more, so that a short diff
+    /// leaves no empty pane below it in the picture.
+    /// </summary>
+    public static GuideFrame DiffFrame(ShellDriver app, Control diff)
+    {
+        var text = app.Window.GetVisualDescendants().OfType<DiffTextView>().First(view => view.Name == "DiffText" && view.IsEffectivelyVisible);
+        var last = text.RowBounds(text.Rows.Count - 1)
+            ?? throw new InvalidOperationException("The diff's last row is not laid out in view.");
+        var bottom = text.TranslatePoint(last.BottomLeft, app.Window)
+            ?? throw new InvalidOperationException("The diff's text is not in the window.");
+        var bounds = app.BoundsOf(diff);
+        return GuideFrame.Area(new Rect(bounds.Left, bounds.Top, bounds.Width, Math.Min(bounds.Bottom, bottom.Y + 24) - bounds.Top));
     }
 
     /// <summary>Right-clicks the graph's row <paramref name="row"/> in its Message column and returns the menu's view.</summary>

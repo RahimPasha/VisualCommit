@@ -24,6 +24,9 @@ public sealed record GuideStart
     /// <summary>One empty tab, the welcome page, with the two demo repositories in its recent list.</summary>
     public static GuideStart Welcome { get; } = new() { Recent = DemoRecent };
 
+    /// <summary>One tab on the weather station in a wider window, for a diff or a page in the graph's place, whose lines are long.</summary>
+    public static GuideStart WeatherStationWide { get; } = WeatherStation with { Width = 1440, Height = 800 };
+
     /// <summary>The weather station with GitHub served by the fake and Alex signed in.</summary>
     public static GuideStart WeatherStationOnGitHub { get; } = WeatherStation with { GitHub = true };
 

@@ -41,9 +41,6 @@ public sealed class StaySafeShots
             var page = await app.WaitForPageAsync<ReflogView>();
             await app.WaitForAsync(() => app.ReflogSnapshot() is { IsLoading: false } reflog && reflog.Rows.Count > 0, "the reflog's rows");
             await app.WaitForIdleAsync();
-
-            // The menu's item lay over the page's rows: the pointer leaves them across the page's header.
-            app.MoveMouse(app.FindByAutomationId("ReflogHeader"));
             app.MoveToNeutral();
             return GuideFrame.Of(page);
         });
