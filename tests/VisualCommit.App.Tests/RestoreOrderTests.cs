@@ -336,6 +336,56 @@ public class RestoreOrderTests
     }
 
     [AvaloniaFact]
+    public async Task Openings_that_fail_inside_their_call_are_still_asked_for_in_tab_order()
+    {
+        // A provider that fails at once, as one without git does, ends each opening inside its own
+        // call, which frees its slot there: the tab that slot lets in is asked for after those the
+        // release let in before it (14.3.1, 14.3.3).
+        var names = Names(1 + RestoreOrder.OpensAtOnce + 2);
+        using var lab = Lab.Of(0, names);
+        lab.Provider.FailsAtOnce = true;
+
+        lab.Start();
+
+        await lab.WaitForOpenedAsync(names.Length);
+        Assert.Equal(Folders(names), lab.Provider.Opened);
+        await lab.Starting.WaitAsync(Bound, TestContext.Current.CancellationToken);
+        Assert.Equal([Started(names[0], names.Length - 1), Released(names[0], RestoreOrder.EndedReason, 0, names.Length - 1)], lab.OrderLines);
+    }
+
+    [AvaloniaFact]
+    public async Task A_tab_closed_after_the_release_let_it_in_and_before_it_is_asked_for_is_never_asked_for()
+    {
+        // The close comes between the release's choice of a tab and the call that asks for it: here
+        // from inside the opening asked for before it, as a close on another thread could come. Its
+        // slot is freed for the next waiting tab, the closed tab is never asked for, and its task in
+        // the start still completes (14.3.1, 14.3.4).
+        var names = Names(1 + RestoreOrder.OpensAtOnce + 1);
+        using var lab = Lab.Of(0, names);
+        var tabs = lab.Window.Tabs.ToList();
+        lab.Provider.Asked = path =>
+        {
+            if (path == Folder(names[1]))
+            {
+                lab.Window.CloseTabCommand.Execute(tabs[2]);
+            }
+        };
+        lab.Start();
+        var first = lab.Provider.Answer(Folder(names[0]));
+        first.SendFirstPage();
+
+        await lab.WaitForOpenedAsync(1 + RestoreOrder.OpensAtOnce);
+        await DashboardTestSupport.SettleAsync();
+        Assert.Equal(Folders([names[0], names[1], .. names[3..]]), lab.Provider.Opened);
+        Assert.DoesNotContain(tabs[2], lab.Window.Tabs);
+
+        first.End();
+        lab.Provider.EndHeld(_ => false);
+        await lab.Starting.WaitAsync(Bound, TestContext.Current.CancellationToken);
+        Assert.Equal(Folders([names[0], names[1], .. names[3..]]), lab.Provider.Opened);
+    }
+
+    [AvaloniaFact]
     public async Task A_waiting_tabs_drop_starts_no_merge_tool_lookup_and_the_first_load_to_end_starts_it()
     {
         // 14.3.6 on the UI thread, where what the drop would start runs within the settle: the
@@ -689,8 +739,9 @@ internal enum RestoreHistory
 /// <summary>
 /// A provider that records the folder of each open, in call order, and holds the open until the
 /// test answers it with a <see cref="RestoreFake"/> (<see cref="Answer"/>) or fails it
-/// (<see cref="Fail"/>). Its record and its openings are kept under a lock: an order's continuation
-/// may ask for an opening beside the test.
+/// (<see cref="Fail"/>), or fails each open inside its call (<see cref="FailsAtOnce"/>). Its record
+/// and its openings are kept under a lock: an order's continuation may ask for an opening beside
+/// the test.
 /// </summary>
 internal sealed class HeldRestores : IRepositoryProvider
 {
@@ -710,16 +761,29 @@ internal sealed class HeldRestores : IRepositoryProvider
         }
     }
 
+    /// <summary>Every open fails inside its call, as a provider without git fails, and none is held.</summary>
+    public bool FailsAtOnce { get; set; }
+
+    /// <summary>Runs inside each open's call, with its folder, once the open is recorded.</summary>
+    public Action<string>? Asked { get; set; }
+
     public Task<IGitRepository> OpenAsync(string path, CancellationToken cancellationToken = default)
     {
-        var opening = new TaskCompletionSource<IGitRepository>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var opening = FailsAtOnce
+            ? null
+            : new TaskCompletionSource<IGitRepository>(TaskCreationOptions.RunContinuationsAsynchronously);
         lock (_gate)
         {
-            _openings[path] = opening;
+            if (opening is not null)
+            {
+                _openings[path] = opening;
+            }
+
             _opened.Add(path);
         }
 
-        return opening.Task;
+        Asked?.Invoke(path);
+        return opening?.Task ?? Task.FromException<IGitRepository>(new IOException(string.Create(CultureInfo.InvariantCulture, $"{path} is gone.")));
     }
 
     /// <summary>Answers the held open of <paramref name="path"/> with a fake over that folder.</summary>
