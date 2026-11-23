@@ -1,0 +1,117 @@
+name: Guide
+
+# Builds the user guide (docs/guide/) into a site with mdBook 0.5.4, pinned by its version and its
+# archive's hash (D439), with the pictures that tests/VisualCommit.GuideShots makes from demo data
+# at scale 2 in both themes, which are never committed; checks that every link of the built site
+# resolves and that nothing it loads comes from another host (D441, D451); and deploys it to GitHub
+# Pages from master alone. On any other branch the site is the artifact guide-site, which the
+# gate's hand check reads (D451). Before the pictures it runs the two App.Tests classes that read
+# the guide's pages, the app's links and the shortcuts page (D451): CI leaves docs/** out, so a page
+# renamed or an anchor dropped is caught here.
+on:
+  push:
+    paths:
+      - 'docs/guide/**'
+      - '.github/workflows/guide.yml'
+      - 'scripts/check-guide-links.py'
+      - 'src/**'
+      - 'tests/VisualCommit.Testing/**'
+      - 'tests/VisualCommit.GuideShots/**'
+      - 'Directory.*.props'
+      - 'Directory.Build.targets'
+      - 'global.json'
+  workflow_dispatch:
+
+# Read-only everywhere; the deploy job alone adds what GitHub Pages needs (D451).
+permissions:
+  contents: read
+
+# One run per ref; a newer push cancels an older run, but never on master, whose run deploys.
+concurrency:
+  group: guide-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/master' }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    env:
+      DOTNET_NOLOGO: true
+      DOTNET_CLI_TELEMETRY_OPTOUT: true
+      AVALONIA_TELEMETRY_OPTOUT: 1
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+
+      # Every page and anchor the app links to exists, and the shortcuts page's tables are the
+      # app's own (docs/phase-8a-design.md 11.4).
+      - name: App's links
+        timeout-minutes: 5
+        run: dotnet test --project tests/VisualCommit.App.Tests -c Release --filter-class "*AppLinksTests" --filter-class "*GuideShortcutsPageTests"
+
+      # The demo's root, /home/demo, holds the demo repositories and the app's data folder while
+      # the pictures are taken: the paths the pictures show (ruling 63).
+      - name: Pictures
+        timeout-minutes: 15
+        run: |
+          sudo mkdir -p /home/demo
+          sudo chown "$(id -u):$(id -g)" /home/demo
+          export VISUALCOMMIT_GUIDE_ROOT=/home/demo
+          export VISUALCOMMIT_GUIDE_PICTURES="$GITHUB_WORKSPACE/docs/guide/src/pictures"
+          dotnet test --project tests/VisualCommit.GuideShots -c Release
+
+      # mdBook publishes no checksum: the archive's SHA-256 was taken once, on 2026-11-23, and
+      # equals the digest GitHub shows for the release's file (docs/phase-8a-design.md 13.4 item 20).
+      - name: Book
+        timeout-minutes: 5
+        run: |
+          mkdir -p "$RUNNER_TEMP/mdbook"
+          curl --fail --location --silent --show-error --output "$RUNNER_TEMP/mdbook/mdbook.tar.gz" \
+            https://github.com/rust-lang/mdBook/releases/download/v0.5.4/mdbook-v0.5.4-x86_64-unknown-linux-gnu.tar.gz
+          echo "3f28de05dafca9d0f2eab99c662116b0e37b89b1d96a08f8f430b9eeae958cd7  $RUNNER_TEMP/mdbook/mdbook.tar.gz" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/mdbook/mdbook.tar.gz" -C "$RUNNER_TEMP/mdbook"
+          "$RUNNER_TEMP/mdbook/mdbook" build docs/guide
+          python3 -I scripts/check-guide-links.py --self-test
+          python3 -I scripts/check-guide-links.py docs/guide/book
+
+      - name: Upload the site for GitHub Pages
+        if: github.ref == 'refs/heads/master'
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: docs/guide/book
+
+      - name: Upload the site
+        if: github.ref != 'refs/heads/master'
+        uses: actions/upload-artifact@v7
+        with:
+          name: guide-site
+          path: docs/guide/book/
+          if-no-files-found: error
+          retention-days: 14
+
+  # Only master deploys, and only this job may write to GitHub Pages (D408, D451). Pages' source
+  # must be "GitHub Actions" before the first push of master that runs it (ruling 64).
+  deploy:
+    if: github.ref == 'refs/heads/master'
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/configure-pages@v6
+
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v5
