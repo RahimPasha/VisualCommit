@@ -1423,6 +1423,24 @@ wave adds to it. What wave 2 tells §12's launches is in 12.3.5.
   changes itself in place, not measured; and one more timeout of an older test, seen once (the
   report has it).
 
+- **Wave 4: the restore order, as built, proven and merged** (the lead, 2026-11-23; section 14 with
+  its 14.10; rulings 86 to 93; D458; merge `aedb12f`). What a later package or session must know. A
+  start whose active tab is a restored repository's beside other restored tabs opens them through
+  `RestoreOrder` (`ViewModels/RestoreOrder.cs`): the active tab first and alone, the others at its
+  graph's first page (`RepositoryViewModel.FirstPage`), at its opening's end without one, at its
+  close or after 5 s on `TabServices.RestoreClock`, then at most `OpensAtOnce` (4) before their own
+  first pages; a waiting tab that is shown opens at once, one that is closed never opens. Every
+  other start is unchanged, and `InitializeAsync` and the harness's `WaitUntilReadyAsync` keep their
+  contracts, so no wait changed. `AppSession.Start` and `ShellDriver`'s `Start` and `StartWithTabs`
+  take the optional `restoreClock`, last in each list: a test that starts the app with several
+  restored repository tabs and must not meet the 5 s gives a `ManualTimeProvider` that it never
+  moves, and then only the first tab's page, end or close releases the others. The order writes
+  `Restore order: …` lines, at Info at its start and its release. In the real window phase 1's check
+  15 opens its 100,000-commit tab after `linear`'s first page. M3's bound is 8,900 ms and M2's 9,500
+  ms (`Phase8aPerformance`, `23bea54`), and CLAUDE.md has the command that runs M2 and M3 alone for
+  two builds by turns. "Check again" still reopens the tabs whose restore failed all at once (ruling
+  90).
+
 ## 2. colours: the contrast round (D410)
 
 Wave 1, after WP0; part L. Branch `wip/p8a-colours`, worktree `D:/Projects/Personal/vc-wt/p8a-colours`.
@@ -5491,6 +5509,48 @@ at once with 0x80070002, its program missing on this Windows build: it starts no
 names it, and it voids no run. Any other task without a next time that a run meets voids it. The
 waits lengthen the series from about 30 minutes to about 55; the owner is told.
 
+**The restore order's proof (the lead, 2026-11-23, at its end; 14.8 steps 5 to 8; D458).** 93. Four
+at once stays: ruling 88's rule is met (230 ms against 335 ms), and no trial of two is made. The
+series is proven by D457 (5)'s rule on five undisturbed pairs (the report's "The restore order's
+proof"). Four of nine pairs met a task the scheduler had not shown as due and were taken again, as
+step 6 says; once four pairs were kept, their values fixed the rule's outcome for any fifth pair, so
+the lead would have ended the series there had the last retake met a task too, which it did not.
+M3's bound is 8,900 ms (7,077 ms; step 8). M2's bound goes from 6,100 to 9,500 ms, as D457 (3)
+provides: the slowest of the fourteen runs that themselves met no scheduled task, on the base and on
+the fix, whose one-tab start makes no order, is 7,563 ms, the fix's (from the base's runs alone,
+7,374 ms, it would be 9,300 ms); a run of a dropped pair counts for this when its own run met no
+task. The fix's M2 median lies 794 ms above the base's, with ranges that overlap wholly; the fix
+adds no wait and no process on the one-tab path, the window opened 416 ms later in its kept one-tab
+runs (medians), before anything of the fix runs, and counted from the window's opening its one-tab
+first rows came sooner than the base's in four of the nine pairs and later in five: read as the
+laptop's spread, and put on the list of the review before the gate, with the bound's reading that
+both builds count. 14.9's open point 4 (M3's bound without a merge) did not arise. Its open point 5
+(a release that delays the first frame) is answered by the probe and the alternation together. The
+release does come before the first frame: its line stands 180 to 256 ms before the tab's `first
+graph rows drawn` in the probe's six launches with ten tabs. No cost of it shows beyond the spread:
+by the tab's own clock its first rows came as soon beside nine tabs as alone (the fix's medians
+1,840 and 1,913 ms against 2,113 ms alone), and in the series, counted from the window's opening,
+the fix's M3 first rows came 255 ms after its M2's in the five kept pairs (medians 2,511 and 2,256
+ms) and 236 ms before them over all nine (1,957 and 2,193 ms). The order stays as built.
+
+**The guide's pages and pictures before §11's merge (the lead, 2026-11-23; ruling 79, 11.8).** 94.
+§11's reviewers read the pages by sampling and found nine false statements, so before the merge
+every statement of the 33 pages was checked against the source and every one of the 84 pictures
+opened, each finding verified by a second reader (run `wf_be89944c-5a7`, read only): 1,157
+statements, 73 confirmed faults in the text (six major), 11 alt texts or sentences that do not match
+their picture, 14 framing defects of pictures, no leak. All confirmed findings are applied in the
+package's worktree before the merge (run `wf_3220124e-9d8`), under these rulings: each with its
+verified replacement, overlapping ones merged into one text; `install.md` gains a fourth item, the
+backups left in repositories under `refs/visualcommit/backup/`, though 11.3.2's row names three; the
+graph's widest dates touching the overlay scroll bar are the app's look and change neither a page
+nor a shot (they go on the list of the review before the gate); the resolver's page sentence on the
+status bar is corrected and its shot is not rebuilt to run the merge in the app;
+`troubleshooting/large-repositories.md` takes the restore order's numbers as indications (one
+restored tab about 5 s, ten about 5 to 7 s) and says that the tab in front opens first, and
+`tabs-and-workspaces.md` says how several restored tabs open (D458). What the pass found in the app
+itself, not in the guide, goes on the same list: a repository picked under Recent repositories opens
+in that page's tab even when another tab shows it.
+
 ### 13.2 What the integration settled
 
 Beyond moving the packages' contracts into section 1: the broker's `gitVersion` goes at §3's merge,
@@ -5509,7 +5569,7 @@ activity log's splitter goes to a fixer (D427).
 | §6's merge | Told before two earlier real-window checks run alone on the laptop, phase 2's `Check_17` and phase 5's `Check_A4_real_keys` (6.8 item 5; about 2 minutes of the desktop). |
 | §9's spike and merge | Told before the spike (a minute of keys and clicks); at §9's merge, a short Narrator listen (9.3.9's steps 2 to 6 and 14, about 5 minutes; 13.4 item 13). |
 | §10's merge and the series | Told before the first run (about 5 minutes of the desktop) and the series (rested, the desktop for 12 to 18 minutes per run as estimated, about 8 as taken (10.7); M6 clicks Fetch). |
-| The restore order's proof (ruling 76, D457; wave 4) | Asked first for the week's share (D241; answered on 2026-11-23: all of wave 4). Told in the chat just before each takeover, with no agent at work (ruling 23; 14.7, 14.8): the lead's probe (two warm-up launches and 18 counted ones on data folders of its own, no input, about 9 minutes) and the alternated series of M2 and M3 (the two builds five times each, taken as D457 (2) says, about 30 minutes), each after a rest of at least ten minutes behind its builds: about 50 minutes of the rested desktop in all, about 70 with a trial of two at once, about 80 when four stays after that trial. |
+| The restore order's proof (ruling 76, D457; wave 4) | Asked first for the week's share (D241; answered on 2026-11-23: all of wave 4). Told in the chat just before each takeover, with no agent at work (ruling 23; 14.7, 14.8): the lead's probe (two warm-up launches and 18 counted ones on data folders of its own, no input, about 9 minutes) and the alternated series of M2 and M3 (the two builds five times each, taken as D457 (2) says, about 30 minutes), each after a rest of at least ten minutes behind its builds: about 50 minutes of the rested desktop in all, about 70 with a trial of two at once, about 80 when four stays after that trial. **Taken on 2026-11-23**, the owner told at 13:26: 13:36 to 14:52, the probe 8 minutes and the series 67 with its waits for the scheduler (ruling 92) and four pairs taken again; no trial of two. |
 | §12's build (status step 18) | Told before each of its 13 methods runs alone and before phase 0's `Check_8` runs alone (12.4, 12.8 item 3): about 15 minutes of the desktop in all, never beside a heavy run (ruling 23). |
 | Before the counted round | Nothing: the owner chose the mark before §7 was built (1.17, 7.8), and §7 built with it, so nothing waits there. |
 | Before the gate | The three live tokens made again (GitHub's expires on 2026-11-29, Azure DevOps' and GitLab's on 2026-12-04), through the masked script; told before each live run (D335). Present for D246's two runs of 8a's real-window checks; told before the pass. |
@@ -6710,3 +6770,45 @@ ruling 90 has it.
 6. 13.3's row "The restore order's proof" and 0.6's series line take 14.7's times: the lead, when
    the section enters the design. **Ruled (ruling 90): the lead brings them to 14.7's times in the
    commit that puts the section into the design.**
+
+### 14.10 As built, proven and merged (the lead, 2026-11-23)
+
+**Built and reviewed** (14.8 steps 1 and 2; ruling 91). `wip/p8a-restore`, five commits from
+`3f67850`: `b0780f4`, the tests with the stubs and ruling 87's clock, on which 24 of the four
+classes' 35 tests fail as 14.4 marks them; `59b3585`, the order; and after the review (one major and
+seven minors, six of the eight in the tests) `5285967`, `3a6654c`, the two failing tests of the
+asks' order and of a tab closed after it was let in, and `aa83146`, their fix. Where the build
+departs from 14.2 to 14.4, ruling 91 has it: `FirstPage` completes at a page only when the page has
+a row; the tabs let into slots are queued under the lock and asked for in the order let in, so
+`Closed` has asked for them when it returns unless it was itself reached from inside an asking call;
+`Open` asks for no tab closed since it was let in; four test methods beyond 14.4's list. The four
+classes hold 39 tests, 33 of them new.
+
+**Proven** (steps 3 to 7; rulings 88, 89, 92 and 93; D458; the numbers are in the report's "The
+restore order's proof"). The probe, three alternated rounds: by its own clock the active tab's first
+rows came after 1,769 to 2,025 ms beside nine large tabs and 1,907 to 2,858 ms beside nine small
+ones, where the base read 5,182 to 7,627 and 5,079 to 7,811 ms; four at once stays (230 ms against
+335 ms), and no trial of two was made. The alternated series, five undisturbed pairs of nine taken:
+the fix's M3 median 6,876 ms against 1.25 times its M2 median, 7,170 ms; the base's 10,078 ms
+against 6,177.5 ms; the fix's M2 median 5,736 ms within the base's 4,753 to 6,143 ms. The takeover
+lasted from 13:36 to 14:52, where 14.7 had estimated about 50 minutes: four pairs met a task the
+scheduler had not shown as due and were taken again.
+
+**Merged** (step 8). `aedb12f`; the bounds in `23bea54`, a commit of their own: M3's 8,900 ms, and
+M2's raised from 6,100 to 9,500 ms by ruling 93. On `23bea54`, 15:01 to 16:03, with no builder at
+work: the package's four classes, 39 of 39, then 0.4's lagged list through `scripts/heavy-run.sh`
+with `RestoreOrderShellTests` added to its App.Tests command: 25, 209, 21, 206, 178, 126 and 144
+tests, none failed, `AboutEntryTests` and `RequestOperationsProvidersTests` among them. CI's run on
+the push is in status.md's CI section (step 10).
+
+**The open points of 14.9.** 4 (M3's bound without a merge) did not arise. 5 (a release that delays
+the first frame): the release does come before the first frame, 180 to 256 ms before the tab's
+`first graph rows drawn`, and no cost of it shows beyond the spread (ruling 93). Risk 3's two items
+(`NamesRepositoryInDialogs` and a dashboard's Add open tabs while tabs wait) and ruling 90's "Check
+again" stand as ruled: the first two are on the list of the review before the gate, the third gets a
+Backlog row at the close.
+
+**For the review before the gate** (status.md's step 19): the fix's one-tab start read above the
+base's in the series and the probe, within the laptop's spread by the lead's reading (ruling 93),
+and M2's bound counts both builds on that reading; and the series' script began a run 7 to 29 s
+after a waited task's time without checking that the task had ended, which the script now does.

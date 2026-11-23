@@ -307,11 +307,35 @@ Program.Main                        src/VisualCommit.App/Program.cs
   provider, `{Name}: {host}.` or `{Name}: off.`, in D353's order (GitHub, GitLab, Azure DevOps). In
   the tests' environment all three are off unless a check gives a fake (see "Hosting: the provider
   and GitHub's API" and "Hosting: the session and the account").
-- `AppSession.Initialization` is `MainWindowViewModel.InitializeAsync`: it looks for git, then
-  opens the repositories of the tabs restored from the session and loads their whole history.
-  Since phase 6 it also awaits the first read of a restored dashboard that is the active tab, beside
-  those openings, and starts the lookup of the merge tools git knows once the first restored tab's
-  load ends, or at once without one (D202). Tests await it before they look at the window.
+- `AppSession.Initialization` is `MainWindowViewModel.InitializeAsync`: it looks for git, then opens
+  the repositories of the tabs restored from the session and loads their whole history. Since phase
+  6 it also awaits the first read of a restored dashboard that is the active tab, beside those
+  openings, and starts the lookup of the merge tools git knows once the first restored tab's load
+  ends, or at once without one (D202). Since phase 8a (D457 (5), D458; `docs/phase-8a-design.md` 14)
+  a start whose active tab is a restored repository's beside other restored tabs opens them through
+  a `RestoreOrder` (`ViewModels/RestoreOrder.cs`): the active tab first and alone, the others at the
+  earliest of its graph's first page (`RepositoryViewModel.FirstPage`, which completes once, never
+  faulted, also when the first load ends without a page or the view model is disposed), its
+  opening's end without one, its close, or 5 s on `TabServices.RestoreClock` (the session's clock
+  unless the harness gives one, as `ReadClock` is). They then open in tab order, at most
+  `OpensAtOnce` (4) before their own first pages: a slot is freed by its tab's first page, its
+  opening's end or its close, never by a clock. A waiting tab the user shows opens at once, beside
+  the four; a waiting tab that is closed never opens; the window's close stops the order. Every
+  other start (one restored tab, or an active dashboard or empty tab) opens its restored tabs at
+  once, by the code of before. `InitializeAsync` still completes when every restored tab has loaded,
+  failed or been dropped (closed while it waited, or left waiting at the stop), and the lookup
+  starts at the first load that ends (at the stop if the order opened none; a waiting tab's drop
+  starts nothing). The 5 s and the release line's milliseconds count from the moment the active tab
+  is asked to open, where its own Q1 clock starts (D50). The window holds the order only while that
+  start runs and tells it of every tab shown or closed and of its own close; the start's token,
+  which `AppSession.Dispose` cancels first, stops it too, and a start whose token is cancelled
+  already makes none. The order keeps no closed tab; its state is under a lock and it calls the
+  opening outside it. It logs `Restore order: …` lines: at Info when it starts and when it releases
+  the others, with the reason and the milliseconds since the first opening began, at Debug for a tab
+  shown, dropped or left waiting at the close. `AppSession.Start` and `ShellDriver`'s `Start` and
+  `StartWithTabs` take the optional `restoreClock` (null: the session's clock). "Check again"
+  (`OpenWhatWaitedForGitAsync`) still reopens the tabs whose restore failed all at once, outside the
+  order (ruling 90; plan.md's Backlog at the close). Tests await it before they look at the window.
 - Services that need git hold the `GitAccess` and ask it for the runner when they need it
   (`GetRunnerAsync`), which waits for the search and throws `GitUnavailableException` when git
   was not found. Nothing assumes git is there.

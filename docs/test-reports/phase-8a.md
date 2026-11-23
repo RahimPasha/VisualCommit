@@ -4031,7 +4031,7 @@ has no part (design 0.1, 10.5). Where a row names a page of the guide, the page 
 | The About screen (plan.md 763 and 776; R6, D398, D409; with plan.md 782's visual check "The About screen") | A1 to A6, G3 (About's guide link); real window A1 (with a 1920×1080 capture where it fits) and A4 | `AboutSettingsViewModelTests` (the texts, the dialogs, the links' addresses, no launcher, a throwing launcher; `The_texts_are_read_off_the_callers_thread_and_a_second_press_meanwhile_opens_nothing_more`, `A_screen_closed_while_the_texts_are_read_shows_no_dialog`); `AboutSectionTests` (`Enter_in_the_licenses_text_closes_the_dialog_as_Close_does_and_gives_the_focus_back` among them); `LinkFocusFrameTests` (App.Tests, 12 cases: a link focused by the keyboard shows its whole text and its underline inside the frame, not under it, in About, dark and light, and in GitLab's sign-in dialog, `An_About_link_focused_by_Tab_shows_its_text_and_underline_inside_the_frame` and `A_sign_in_link_focused_by_Shift_Tab_shows_its_text_and_underline_inside_the_frame`; the frame moves nothing and a link draws outside its bounds only while focused, `The_frame_moves_nothing_and_a_link_draws_outside_its_bounds_only_while_focused`; the frame takes no pointer, `A_pointer_on_the_frame_reaches_what_lies_under_it_not_the_link`; a link focused by a click is underlined without the frame, `An_About_link_focused_by_a_click_is_underlined_without_the_frame` and `A_sign_in_link_focused_by_a_click_is_underlined_without_the_frame`); `AboutEntryTests` (the palette on a welcome, a repository and a dashboard tab; the macOS menu's one item `About VisualCommit`, no `Avalonia`, its `Command` with and without a dialog open); `SettingsDialogViewTests` (Down from Accounts reaches About, Down stays); `PaletteEntriesTests`, `CommandPaletteViewTests` and phase 6's K10 (the entry after `Follow the system's theme`); `AppVersionInfoTests` (WP0) and `The_identity_matches_LICENSE`; `Phase8aExpectationTests.A`; §9's sweep over About (part U); About in macOS's application menu, 8b's Mac checklist (8.9 item 2) |
 | An accessible name on every control and the graph's selected row exposed to UI Automation, with one Narrator walk-through by hand (R7, D411, D49 as D435 amends it, D450; plan.md 759's "an accessible name on every control; the graph's selected row exposed to UI Automation (D49); and one walk-through with Windows Narrator by hand", 770's icon buttons without a name, 784's visual check "the accessible names read through UI Automation in the real window", and "Done when" 786's "every control has an accessible name"; design 0.1) | U1, U2, U3; real window U1 and U3 (launch 13); by hand: the Narrator walk-through | `AccessibleNameSweepTests` (14 states; on the code before §9's names 12 of the first 13 failed, the notice's had nothing to find, and About's came at the merge: U2); `AutomationSweepTests`; `GraphRowSpeechTests`; `CommitGraphControlAutomationTests` (no peer without a client, one row peer for 100,000 rows, one Name change per move, bounds, the request's words, the same bytes after ten moves back); `CommitGraphControlTests.The_graph_is_a_ui_automation_list_with_its_name`; `StatusBarTests.The_operation_text_is_a_polite_live_region` (the status bar's live region, ruling 36); `Phase8aExpectationTests.U`; the spike's events in §9's merge notes (9.3.1); 9.6's grep (only `AutomationProperties.*` and `xmlns` lines in the `.axaml` hunks; no `Render`, `AffectsRender`, `InvalidateVisual`, measure or arrange in the graph's diff; no `IEmbeddedRootProvider`, `[PrivateApi]` or window peer in `src/` without a decision); the guide's `keyboard-and-screen-readers.md` (ruling 39, D411; 11.3.2); to the Backlog at the close, an item status on the left panel's rows (ruling 36) and the hunk bars' repeated names (13.4 item 15) |
 | User guide (D408; plan.md's Delivers item "Markdown pages in the repository, a site on GitHub Pages built by a workflow, pictures in both themes from the walk-through's harness, and the app's links to it", and "Done when"'s "the user guide exist[s]"; D417, D434, D439 to D441, D451; design 0.1, 11.1) | G1, G2, G3 (the app's links: the palette's row and F1, the shortcuts list's `Help`, the first-run links, About's link); by hand: the guide's site from the `guide-site` artifact, and after the merge the live site and the environment's branch rule | The files: `docs/guide/book.toml`, `docs/guide/guide.css`, `docs/guide/src/SUMMARY.md` and its 33 pages in 11.3.2's order, each saying its row, those of rulings 7, 8, 19, 39, 46, 50, 53 and D411 among them (11.8 item 1, read by the lead at §11's merge), in American spelling (D434); `.github/workflows/guide.yml` (its run green after the merge's push, its step "App's links" included, no deploy job off `master`, `guide-site` looked at, 11.8 item 4) with mdBook 0.5.4 pinned by its Linux archive's SHA-256 `3f28de05dafca9d0f2eab99c662116b0e37b89b1d96a08f8f430b9eeae958cd7`, the digest GitHub shows for release `v0.5.4`, downloaded and checked on 2026-11-23 (13.4 item 20); `scripts/check-guide-links.py` with its `--self-test` (D441, D451); `tests/VisualCommit.GuideShots` (built by CI's Windows job; `GuideCatalogueTests`, `LeakGuardTests`; the lead's run on the laptop through `scripts/heavy-run.sh`, `LeakGuard` silent and every picture looked at, 11.8 item 3); App.Tests' `AppLinksTests` (each `GuidePage`'s page under `docs/guide/src`, linked from `SUMMARY.md`, its anchor once) and `GuideShortcutsPageTests` (the shortcuts page's tables made from `AppShortcuts.Groups`), also run by the guide's workflow (D451); `AppShortcutsTests` (F1 bound, routed on Ctrl and Cmd; `Help` with its note on a Mac), `SettingsDialogViewTests`, `PaletteEntriesTests`, `CommandPaletteViewTests`, phase 6's part S and K10 (the earlier tests 11.4 changes); `Phase8aExpectationTests.G`; `compare-pictures.py` at §11's merge showing only 11.6's changes (11.8 item 3) |
-| Performance pass (plan.md's Delivers list; D436 to D438, D457; design 0.1, 10.5) | none: §10 has no part (design 0.5, 10.5) | This report's section "The performance series" and its table (design 10.3.6's step 5); `PerformanceSeriesTests` (RealWindowTests, no window: the median of odd and even counts, the range, the bound's rounding, `ParseRuns`, the summary line); App.Tests' `StartupTimelineTests` (the start-up lines), `RepositoryViewModelTests` and `RepositoryViewModelFilterTests` (the reload's and the heap's log lines) and `RepositoryOperationsPullTests` (a Pull's git calls held to their budgets), design 10.4's classes; Q1 in phase 1's real-window pass (`Phase1RealWindowPass.Checks_8_and_9_the_100k_commit_repo_and_Q1`; D50, D436); still to come in wave 4, ruling 76's package `restore`, proven by its alternated series and the lead's probe (D457); the guide's `troubleshooting/large-repositories.md`, with the report's numbers as indications (10.3.6 step 5; 1.17, "At wave 3's close") |
+| Performance pass (plan.md's Delivers list; D436 to D438, D457; design 0.1, 10.5) | none: §10 has no part (design 0.5, 10.5) | This report's section "The performance series" and its table (design 10.3.6's step 5); `PerformanceSeriesTests` (RealWindowTests, no window: the median of odd and even counts, the range, the bound's rounding, `ParseRuns`, the summary line); App.Tests' `StartupTimelineTests` (the start-up lines), `RepositoryViewModelTests` and `RepositoryViewModelFilterTests` (the reload's and the heap's log lines) and `RepositoryOperationsPullTests` (a Pull's git calls held to their budgets), design 10.4's classes; Q1 in phase 1's real-window pass (`Phase1RealWindowPass.Checks_8_and_9_the_100k_commit_repo_and_Q1`; D50, D436); ruling 76's restore order, merged at `aedb12f`: App.Tests' `RestoreOrderTests`, `RepositoryFirstPageTests`, `RestoreOrderShellTests` and `SettingsEntryTests`, and the proof by its alternated series and the lead's probe ("The restore order's proof"; D457, D458); the guide's `troubleshooting/large-repositories.md`, with the report's numbers as indications (10.3.6 step 5; 1.17, "At wave 3's close") |
 
 Plan.md 786's "Done when" ("the About screen … the complete notices … exist") rests on the rows of the
 third-party notices and the About screen.
@@ -4480,6 +4480,40 @@ returns). `ActivityLogView.axaml` changes only if 6.3.8's test fails. K10's four
      `Open the user guide` · `F1` under `Help`. Reason: ruling 62 (this report's reading of 11.4's part
      S change; open point 111).
 - **8a's own expectations.** None changes.
+
+### The restore order: no earlier picture; one earlier test rewritten (design 14.4, 14.6; rulings 76, 87; D457 (5))
+
+**Earlier pictures.** None changed. Design 14.6's five targeted walk-through runs, the checks that start
+with several restored tabs (phase 1's check 15, phase 6's K13, part L's L33, phase 7a's P2 with P11 and
+P13 with P6, phase 7b's P2 on Azure DevOps), were made on the package's branch twice, on `59b3585` and
+on `aa83146`, each compared with wave 3's references by `scripts/compare-pictures.py`: every picture a
+run wrote is the reference's file (3, 1, 5, 9 and 5 pictures). At the merge the lagged list's runs wrote
+399 scripted pictures (phase 2's, phase 6's S, K10, K13, W1 and W8, and phases 7a's, 7b's and 8a's whole
+walk-throughs, on `23bea54`); compared with wave 3's references, 379 are the references' files and 20
+differ in the five kinds that vary from run to run, none in a tab or in what a graph shows: a text box's
+caret (10: `k10a`, `b09a`, `n06b`, 7b's `b03a`, `b03b`, `b06a`, `n01a` and `n04c`, 8a's `l3d` and
+`k3a`), a fake's port in a clone form's address (3: 7a's `b06a`, where the fake of GitHub took the
+fallback 58984 for its own 47395, 7b's `b07b` and 8a's `k5a`), a temporary folder's name (2: `w1e`,
+`k10e`), anti-aliased edge pixels (4: `s18c`, `s18f`, `a09b`, `n05d`) and the status bar's progress bar
+(1: `n07a`). The comparison is kept in `D:/Projects/Personal/phase8-work/wave4/restore/merge/compare/`.
+
+**The earlier test that changes.**
+`SettingsEntryTests.The_merge_tool_lookup_starts_once_when_the_first_restored_tabs_load_ends`
+(App.Tests, phase 6's) asserted that both restored tabs' openings are asked for as soon as
+`InitializeAsync` starts (`[first, second]`), and failed the second tab's opening first. Ruling 76 (D457
+(5)) opens the active restored tab first and alone, so the test now expects `[first]` at the start and
+fails the active tab's opening first: that is the first load to end, and the merge tools' lookup starts
+there (D202). It then waits for the second tab's opening, which the order asks for at that release, and
+fails it. The test keeps its name, and the lookup's rule (once, when the first restored load ends) is
+unchanged. Its class's `Shell` gives the window a restore clock that never moves (ruling 87), and
+`HeldRepositories` keeps its record under a lock, since there the order asks for a later tab's opening
+from a continuation on the thread pool. A new test beside it,
+`Behind_a_closed_active_restored_tab_the_lookup_waits_for_a_load_to_end`, holds that a waiting tab's
+drop starts no lookup and that the lookup follows the first load to end, whichever tab's.
+
+**No other earlier test changes.** `TabServices`, `AppSession.Start` and `ShellDriver`'s `Start` and
+`StartWithTabs` gain the optional `restoreClock`, last in each list, each passing it on to the next
+(ruling 87); no other earlier caller changes.
 
 ### Changed in this report after its first commit
 
@@ -5165,8 +5199,8 @@ each series, a disturbed take marked; after; the bound; the trigger with its num
 
 | Measure | Before: series 1, 2 and 3 | After | Bound | Trigger | Decision (D457) |
 |---|---|---|---|---|---|
-| M2: the start with one restored 100,000-commit tab, from the process's start to its first rows | 1: 7,825 ms (6,753 to 13,898), after a build; 2: 4,621 ms (4,570 to 4,872); 3: 8,184 ms (6,630 to 10,368), after a build | no change | 6,100 ms, from the second series alone (4,872) | none but the bound | None. A bound drawn from a series that ran straight after a build guards nothing, so M2's comes from the quiet take; if the unchanged build's M2 passes it in a series taken as D457 (2) says, it is raised by a ruling with the numbers |
-| M3: the start with ten such tabs, the active one's first rows | 1: 6,759 ms (6,622 to 9,556); 2: 9,367 ms (7,822 to 10,988), with Office's updater; 3: 8,284 ms (6,523 to 12,776) | after ruling 76's change, in wave 4 | unset until the change's series | the median above 1.25 times M2's median. The series' own lines compare within one series: not fired in the first (against 9,781.3 ms) and the third (against 10,230 ms), whose M2 was disturbed; fired in the second (against 5,776.3 ms). 1.25 times the quiet M2 (4,621 ms) is 5,776 ms, and the fastest of M3's fifteen runs, 6,523 ms, lies above it: **fired** (D457 (4)) | A change in wave 4: ruling 76, the restore order (below) |
+| M2: the start with one restored 100,000-commit tab, from the process's start to its first rows | 1: 7,825 ms (6,753 to 13,898), after a build; 2: 4,621 ms (4,570 to 4,872); 3: 8,184 ms (6,630 to 10,368), after a build | no change: the order is not made for one restored tab. In the alternated series of 2026-11-23, one counted run per command: 4,942 ms (4,753 to 6,143) on the build before the order and 5,736 ms (4,609 to 7,563) on the one with it, five kept pairs | 9,500 ms since 2026-11-23 (ruling 93, D458): the slowest of that series' fourteen runs that met no scheduled task (7,563). Before: 6,100 ms, from the second series alone (4,872) | none but the bound | The bound was raised by a ruling with the numbers, as D457 (3) provides: the unchanged build's M2 passed 6,100 ms in a series taken as D457 (2) says ("The restore order's proof", below) |
+| M3: the start with ten such tabs, the active one's first rows | 1: 6,759 ms (6,622 to 9,556); 2: 9,367 ms (7,822 to 10,988), with Office's updater; 3: 8,284 ms (6,523 to 12,776) | with ruling 76's restore order, in the alternated series of 2026-11-23: 6,876 ms (5,223 to 7,077), against 10,078 ms (7,054 to 10,428) on the build before it in the same series; counted from the window's opening 2,511 ms against 5,730 ms | 8,900 ms (7,077), from the five counted runs with the order | the median above 1.25 times M2's median. Before: the series' own lines compare within one series: not fired in the first (against 9,781.3 ms) and the third (against 10,230 ms), whose M2 was disturbed; fired in the second (against 5,776.3 ms). 1.25 times the quiet M2 (4,621 ms) is 5,776 ms, and the fastest of M3's fifteen runs, 6,523 ms, lies above it: **fired** (D457 (4)). With the order: 6,876 ms against 7,170 ms, not fired, where the build before it fired in the same series (10,078 ms against 6,177.5 ms) | Ruling 76, the restore order: built in wave 4, proven on 2026-11-23 and merged at `aedb12f` (below; D458) |
 | M4 after the load: the working set 2 s after the `loaded` line, in M5's launches | 1: 286.3 MB (285.8 to 286.8); 2: 286.5 MB (286.2 to 289.7); 3: 287.4 MB (286.2 to 288.9) | no change | 370 MB (289.7) | read in the peak's row | None |
 | M4's peak after the reload: the peak working set 2 s after the reload line | 1: 346 MB (344.9 to 348.2); 2: 346.9 MB (346.3 to 348.3); 3: 351.1 MB (345.2 to 352) | no change | 440 MB (352) | the peak's median above twice the median after the load: 346 against 572.6, 346.9 against 573, 351.1 against 574.9 MB, not fired | None: not fired |
 | M5: the reload after an outside commit, from git's return to the reload line; and the reload line's own time (refs read to swap) | 1: 3,232.7 ms (3,066.6 to 3,668.9), the line's median 2,927 ms; 2: 3,227.5 ms (3,057.6 to 3,573.9), the line's 2,928 ms; 3: 2,839.1 ms (2,623.6 to 3,157.7), the line's 2,547 ms | no change | 4,600 ms (3,668.9) | the reload line's median above 2,000 ms: **fired** in every series | To plan.md's Backlog: no stall was seen, about nine tenths of the reload is the one `git log --date-order` of D47, and every change that would cut it amends D47 or D52 |
@@ -5175,9 +5209,11 @@ each series, a disturbed take marked; after; the bound; the trigger with its num
 
 Each bound is the slowest counted run, in brackets, times 1.25, rounded up (times to 100 ms, M7's to 10
 ms, memory to 10 MB; design 10.3.6's step 2): M2's from the second series alone, the others from all
-fifteen runs, which no build touched (D457 (3)). The bounds D457 gives are in `Phase8aPerformance`
-since `0bfbe92`, a commit of their own (2026-11-22; M3's field stays unset); each counted run of a
-later series is held to them.
+fifteen runs, which no build touched (D457 (3)). The bounds D457 gives are in `Phase8aPerformance` since
+`0bfbe92`, a commit of their own (2026-11-22; M3's field stays unset); each counted run of a later
+series is held to them. M3's bound and M2's raised one are in it since `23bea54` (2026-11-23; ruling 93,
+D458): M3's from the five counted runs with the restore order, M2's from the fourteen runs of that day's
+alternated series that met no scheduled task ("The restore order's proof", below).
 
 **The reload's stall probe** (the lead's, by hand, outside any test, 00:59;
 `D:/Projects/Personal/phase8-work/wave3/reload-probe/reload_stall_probe.ps1`, its result
@@ -5229,7 +5265,8 @@ or more, by the user's judge; one of 250 ms or more, or several of 50 ms or more
 the same delay with ordinary background tabs (the shown tab about 0.5 s or more slower beside nine of
 1,000 to 10,000 commits, by the user's; of about 10,000, by the phase's). The probes showed both.
 
-**Ruling 76, the restore order** (D457 (5)), which wave 4 builds and proves. When the session's active
+**Ruling 76, the restore order** (D457 (5)), which wave 4 built and proved ("The restore order's
+proof", below; the paragraph stands as it was written before the build). When the session's active
 restored tab is a repository's, it opens first and alone. The other restored tabs open at the earliest
 of: its graph has its first page; its opening or its first load fails or ends without a page; its tab
 is closed; 5 s have passed on the session's clock. They then open at most four at once, as "Add
@@ -5251,6 +5288,122 @@ Backlog with the numbers. Its cost belongs to the week's share the owner is aske
 shown, which breaks that contract and the checks that wait on it, puts a whole load on the first
 switch to such a tab and moves D289's reads; it goes to plan.md's Backlog with the memory it would
 save (about 800 MB of working set with ten 100,000-commit tabs, against 286 MB with one).
+
+**The restore order's proof** (the lead, 2026-11-23; design 14.8 steps 3 to 7; rulings 88, 89, 92 and
+93; D458). The package was built and reviewed on `wip/p8a-restore`: five commits from `3f67850`, the
+last `aa83146`; its tests fail first on `b0780f4`, the stubs, and those of two later findings on
+`3a6654c`. The two builds: the base, `3f67850`, detached in a worktree of its own, and the fix,
+`aa83146`. The real-window project was built in Release in each at 12:10 and 12:11, nothing was
+committed in either worktree afterwards, no agent was at work from 13:25, and the owner was told in the
+chat at 13:26.
+
+*The probe* (13:36:20 to 13:44:16; `D:/Projects/Personal/phase8-work/wave4/restore/probe/`: wave 3's
+script with the build's program named and the app's `Restore order:` lines kept,
+`run_probe_session.ps1`, `summarize_probe.py`, the session's output `session-1.txt` and each launch's
+data folder with the app's log; wave 3's clones). One uncounted warm-up launch per build (the active
+tab's clock 3,707 ms on the base and 3,331 ms on the fix), then three rounds of the three cases, the
+builds' order alternating by round; no input; the window's thread asked an empty message every 15 ms.
+The session waited out the one task the scheduler had due (`\EasyDuplicateFinder`, 13:42:00, between two
+rounds), and nothing else ran. Each cell holds the three rounds' values in their order.
+
+| Case | Build | The active tab's own clock (ms) | Its refs read after (ms) | The window's longest answer (ms) | Answers of 50 ms or more | Every tab loaded after (s) |
+|---|---|---|---|---|---|---|
+| One 100,000-commit tab | base | 2,434, 1,809, 1,761 | 1,172, 852, 877 | 335, 237, 244 | 5, 5, 5 | 8.5, 6.6, 6.5 |
+| | fix | 2,215, 2,113, 1,850 | 1,076, 996, 912 | 294, 247, 237 | 5, 5, 5 | 8.1, 7.1, 6.7 |
+| Ten such tabs | base | 5,182, 7,627, 6,172 | 2,800, 7,028, 4,371 | 420, 623, 354 | 8, 11, 9 | 21.8, 26.3, 17.1 |
+| | fix | 1,769, 2,025, 1,840 | 851, 969, 840 | 230, 279, 219 | 5, 9, 15 | 19.7, 24.9, 19.4 |
+| One such tab and nine of 2,000 commits | base | 5,079, 7,811, 5,734 | 2,832, 6,037, 4,149 | 407, 586, 422 | 6, 13, 7 | 10.4, 16.9, 11.4 |
+| | fix | 1,913, 2,858, 1,907 | 920, 1,253, 880 | 266, 346, 235 | 5, 13, 7 | 10.3, 15.8, 10.9 |
+
+With the order the active tab's first rows came as soon beside nine other tabs as alone (medians 1,840
+and 1,913 ms, against the fix's 2,113 ms and the base's 1,809 ms alone), where the base took 6,172 and
+5,734 ms; its refs were read after 0.8 to 1.3 s instead of 2.8 to 7.0 s. The fix's log holds the order's
+two lines in each of its six launches with ten tabs, the release always for the first page: 1,589, 1,824
+and 1,649 ms after the tab began opening beside nine large tabs, 1,722, 2,602 and 1,719 ms beside nine
+small ones; the 5 s never came. All ten loads ended about as soon as on the base (19.4 to 24.9 s against
+17.1 to 26.3 s; 10.3 to 15.8 s against 10.4 to 16.9 s). **Four at once stays** (ruling 88): the middle
+value of the longest answers of the fix's three launches with ten large tabs, 230 ms, lies under the
+highest of the base's three one-tab launches, 335 ms; no trial of two was made. The count of answers of
+50 ms or more with ten large tabs was 5, 9 and 15 on the fix against 8, 11 and 9 on the base: the order
+moves the nine openings behind the first page, it does not take their work off the window's thread.
+
+*The alternated series* (13:44:41 to 14:51:51; `D:/Projects/Personal/phase8-work/wave4/restore/series/`:
+`run_series.sh`, `series.log`, each run's series file and output, and `dropped/`;
+`…/wave4/restore/series_summary.py`). The command, in each build's worktree, makes one counted run of M2
+and one of M3, each after a warm-up launch of its own (four starts of the app):
+
+`VISUALCOMMIT_PERF_RUNS=1 bash scripts/heavy-run.sh --project tests/VisualCommit.RealWindowTests -c Release --filter-method "*Phase8aPerformance.M2_*" --filter-method "*Phase8aPerformance.M3_*"`
+
+Its file holds M2's and M3's lines alone; a run took 62 to 112 s. Before each run the script read what
+the scheduler had due in the next ten minutes and, for what was due within five, waited until its time
+had passed (ruling 92: `ActionCenterDeferralTask` at 13:50, 14:05, 14:20, 14:35 and 14:50, `Office
+Actions Server` at 14:00, Zoom's updater at 14:17, `Office Serviceability Manager` at 14:33:56,
+`\EasyDuplicateFinder` at 14:42), and after each run what had run since it began. A run then began 7 to
+29 s after such a task's time; the script did not check that the task had ended, as the probe's session
+did, and the reading after a run cannot show a task that started before it: the fix's run of pair 9,
+whose M2 and M3 are the slowest the two bounds below are drawn from, began 7 s after
+`ActionCenterDeferralTask` was due. Nine pairs were taken, the base first in each. Four were dropped and
+taken again, because a task that the scheduler had not shown as due ran during one of their two runs:
+pair 1 (`\Microsoft\Windows\Flighting\OneSettings\RefreshCache`, 13:50:58, in the fix's run), pair 4
+(`\Microsoft\Office\Office Feature Updates`, 14:11:00, in the last second of the fix's run), pair 6
+(`\Microsoft\Windows\ConsentUX\UnifiedConsent\UnifiedConsentSyncTask`, 14:23:32, in the base's run) and
+pair 8 (the same task, 14:42:16, in the fix's run). `\Microsoft\Windows\Location\Notifications`, which
+ruling 92 leaves out, ran during no run.
+
+| Pair | Base: M2 (ms) | Base: M3 (ms) | Fix: M2 (ms) | Fix: M3 (ms) | |
+|---|---|---|---|---|---|
+| 2 | 5,179 | 7,054 | 5,580 | 7,068 | kept |
+| 3 | 4,753 | 8,428 | 5,736 | 6,876 | kept |
+| 5 | 6,143 | 10,428 | 4,609 | 5,223 | kept |
+| 7 | 4,877 | 10,165 | 6,555 | 6,196 | kept |
+| 9 | 4,942 | 10,078 | 7,563 | 7,077 | kept |
+| 1 | 7,374 | 10,252 | 6,683 | 5,450 | dropped |
+| 4 | 5,508 | 7,604 | 4,603 | 5,067 | dropped |
+| 6 | 7,605 | 10,821 | 5,058 | 4,532 | dropped |
+| 8 | 4,833 | 9,249 | 6,167 | 4,605 | dropped |
+| The five kept: median (range) | 4,942 (4,753 to 6,143) | 10,078 (7,054 to 10,428) | 5,736 (4,609 to 7,563) | 6,876 (5,223 to 7,077) | |
+
+**The rule** (D457 (5), ruling 89), on the five kept pairs: the fix's M3 median, 6,876 ms, is at or
+under 1.25 times its M2 median (5,736 ms: 7,170 ms); the base's M3 median, 10,078 ms, is above 1.25
+times its M2 median (4,942 ms: 6,177.5 ms); and the fix's M2 median lies within the base's range (4,753
+to 6,143 ms). **Proven.** The first condition holds by 294 ms, and by about as much counted from the
+window's opening (309 ms: 2,511 ms against 1.25 times 2,256 ms, 2,820 ms): the margin is narrow, the
+effect is not. The window's own opening, which comes before git is looked for and which the order does
+not touch, took 2.7 to 4.7 s in the kept runs. Counted from it, the active tab's first rows came after
+1,939 to 2,699 ms with the order (median 2,511) and after 4,155 to 6,789 ms without (median 5,730); M2's
+after 1,801 to 3,061 ms (2,256) and 1,811 to 2,340 ms (1,963). The four dropped pairs read the same way:
+the base's M3 from 7,604 to 10,821 ms, the fix's from 4,532 to 5,450 ms. The working set after the ten
+loads was 779 to 793 MB with the order and 804 to 823 MB without.
+
+**What the proof leaves open.** The fix's M2 median lies 794 ms above the base's, and its one-tab clock
+in the probe about 0.3 s above (medians 2,113 and 1,809 ms). A start with one restored tab makes no
+order: `InitializeAsync`'s other branch asks for the openings with the statement of before, word for
+word. On that path the fix adds `FirstPage` (one more task per view model, completed at the first page
+or the first load's end, with a reference check in the page action of every load), the null checks of
+the window's order in `Activate`, `CloseTab` and `CloseAll`, and a `try` and `finally` round the start's
+await; none of them waits or starts a process. About half of the gap comes before the window opened: it
+opened 416 ms later in the fix's kept one-tab runs than in the base's (medians 3,543 and 3,127 ms),
+where the fix runs nothing new but one assignment. Counted from the window's opening, the fix's one-tab
+first rows came sooner than the base's in four of the nine pairs and later in five (medians of all nine
+2,193 and 1,999 ms), and the base's own M2 read from 4,753 to 7,374 ms that hour in its runs that met no
+task. So the lead reads it as the laptop's spread; the review before the gate looks at the one-tab path
+once more (status.md's step 19).
+
+**The bounds after it** (ruling 93; D458; the commit `23bea54`). M3's: 8,900 ms, the slowest of the five
+counted runs with the order (7,077 ms) times 1.25, rounded up. M2's: raised from 6,100 to 9,500 ms, as
+D457 (3) provides: the unchanged build's M2 passed 6,100 ms in a series taken as D457 (2) says (6,143 ms
+in a kept pair, 7,374 ms in pair 1), and so did the fix's on the same path (6,555 and 7,563 ms). The new
+bound is the slowest of the fourteen runs that themselves met no scheduled task, on either build, 7,563
+ms, the fix's, times 1.25, rounded up; both builds count because a one-tab start makes no order, a
+reading the review before the gate checks with the fix's higher M2 (from the base's runs alone, 7,374
+ms, the bound would be 9,300 ms). A bound of that width catches only a gross slow-down of the start; a
+suspected one is settled as D436 asks, by the old and the new build run alternately.
+
+**Tasks the scheduler does not announce.** Four of nine pairs met a task that showed no next time within
+the reading, or ran before the time it showed: a laptop left untouched for a series invites them (D457
+(1); CLAUDE.md's note). The reading after each run found them; the readings before cannot. The takeover
+lasted from 13:36 to 14:52, the probe 8 minutes and the series 67 with its waits and its four pairs
+taken again, where 14.7 had estimated about 50 minutes in all.
 
 **What reopens the backlog rows** (plan.md's Backlog). Pull's batch: a rested median of about 600 ms,
 or the owner (D457). The reload: D457 and the row name no measure; a change to it amends D47 or D52,

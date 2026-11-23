@@ -314,11 +314,14 @@ Wave 4 and the review:
 - [ ] 17. §11, the user guide (D408, D439 to D441, D451), part G: the pages, the workflow that
   builds the site and runs the links' tests, the pictures in both themes, the app's links and F1.
   (GitHub Pages is turned on at "Phase 8a accepted", before `master` is pushed.)
-- [ ] 17b. `restore`, the restore order (ruling 76, D457 (5)): its design section (the design's
+- [x] 17b. `restore`, the restore order (ruling 76, D457 (5)): its design section (the design's
   section 14), its tests first and failing on today's code, the build, a review; then the lead's
   proof: M2 and M3 with the two builds run alternately, five times each, taken as D457 (2) says
   (about half an hour of the rested desktop, the owner told), and the probe; merged when proven,
-  reverted and sent to plan.md's Backlog with its numbers when not.
+  reverted and sent to plan.md's Backlog with its numbers when not. **Done on 2026-11-23: proven and
+  merged** (`aedb12f`; the bounds `23bea54`; D458; design 14.10; the report's "The restore order's
+  proof"): the probe and the alternated series, 13:36 to 14:52, the lagged list at the merge 948
+  tests, none failed.
 - [ ] 18. §12, the real-window part for 8a's checks (`Phase8aRealWindowPass`, D442 to D446): built
   on the Windows machine, each of its 13 methods run alone, the owner told before each.
 - [ ] 19. (With it, the lead's ruling of 2026-11-20: Ctrl+Tab from a stage row gives the focus to
@@ -733,48 +736,44 @@ before the gate (step 19) and its fixes, §12's merge last, the lagged list and 
 run. **Part G's checks are written and in the report** (2026-11-23, before §11's build, D244): G1 to
 G3 in four methods with four pictures, no real window; the lead settled its open points 99 to 113 as
 rulings 77 to 85 (design 13.1), and the design's 11.4 to 11.6 say what they changed (Notes, "Wave
-4"). **§11's build is under way** since 09:21 (run `wf_7dddbd2e-deb`, script
-`…/workflows/scripts/phase8a-wave-4-guide-wf_7dddbd2e-deb.js`; worktree
-`D:/Projects/Personal/vc-wt/p8a-guide` on `wip/p8a-guide`, from `124337a`): three builders one after
-the other (the app's links with part G and 11.6's proof; the site's machinery with GuideShots, the
-workflow and the links' check; the 33 pages with their two test classes and the whole site built
-locally), then five reviewers (the design, safety, the tests, the pages in two halves), a verifier
-for each major and a fixer. GuideShots' local root is `C:\demo`, which the site's builder creates
-(it did not exist). While agents build, the lead starts no heavy run and no series (ruling 23).
-**The restore order's section is the design's section 14** (drafted, reviewed and corrected by run
+4"). **§11 is built and reviewed** (run `wf_7dddbd2e-deb`, 09:21 to 13:25; worktree
+`D:/Projects/Personal/vc-wt/p8a-guide` on `wip/p8a-guide`, from `124337a`; 18 commits, the last
+`982f5e5`): three builders one after the other (the app's links with part G and 11.6's proof; the
+site's machinery with GuideShots, the workflow and the links' check; the 33 pages), five reviewers,
+nine majors and 20 minors, all fixed but the page's ten-tab row. Its reviewers had read the pages by
+sampling, so **before the merge the lead had every statement of the pages and every picture
+checked** (run `wf_be89944c-5a7`, read only; ruling 94): 1,157 statements, 73 confirmed faults in
+the text, six of them major, 11 texts that do not match their picture, 14 framing defects of
+pictures, no leak. **The fixes are under way** since 16:05 (run `wf_3220124e-9d8`, script
+`…/workflows/scripts/phase8a-guide-fixes-wf_3220124e-9d8.js`): a fixer of the pages, a fixer of the
+shots who retakes all 84 pictures, two checkers and a last fixer. GuideShots' local root is
+`C:\demo`. While agents run processes, the lead starts no heavy run and no series (ruling 23). **The
+restore order's section is the design's section 14** (drafted, reviewed and corrected by run
 `wf_e8daca0e-d5c`; the lead's rulings 86 to 90 on its 18 choices written in and the whole section
 rechecked against D457 and the code by run `wf_d117ae19-e9c`, 17 findings, all applied; Notes, "Wave
 4"). 0.4's row and files, 13.1's rulings, 13.3's row for the proof (about 50 minutes of the rested
 desktop, about 70 with a trial of two at once, about 80 when four stays after it) and CLAUDE.md's
-docs map are brought up to it. **`restore` is built and reviewed** (run `wf_abcee249-c0e`, 10:19 to
-12:08, script `…/workflows/scripts/phase8a-wave-4-restore-wf_abcee249-c0e.js`; worktree
-`D:/Projects/Personal/vc-wt/p8a-restore` on `wip/p8a-restore`, from `3f67850`; five commits, the
-last `aa83146`; 14.8 steps 1 and 2): the tests first with the stubs (`b0780f4`, where 24 of the 35
-fail as 14.4 marks them), the order (`59b3585`), and after the three reviewers the fixer's
-`5285967`, `3a6654c` and `aa83146`. The package's four classes pass 39 of 39, 14.6's five
-walk-through runs change no picture, and the lead read the diff (ruling 91, design 13.1; Notes,
-"Wave 4"). **Its proof waits until §11's agents have ended** (ruling 23). Ready for it: the base's
-worktree `D:/Projects/Personal/vc-wt/p8a-restore-base`, detached at `3f67850`, the merge base, and
-both worktrees' Release builds of the real-window project, made at 12:10 and 12:11 on those commits;
-a commit in either worktree would make the proof's command build again, so neither gets one before
-the proof. **Next for the lead, when §11's run ends:** first, with no agent at work, `restore`'s
-proof (14.8 steps 4 to 7: the Task Scheduler read, the owner told in the chat just before the
-takeover, the probe's session and its summary by ruling 88, the alternated series, the rule by
-ruling 89), then its merge when it is proven (step 8) or the Backlog row when it is not (step 9);
-beside the proof only reading: §11's result and its diff; after the proof §11's merge with its
-checks, the lead's lines of 11.2, the push, CI and the guide's workflow (step 17). Whichever of the
-two merges comes second meets the other's lines in `MainWindowViewModel.cs`, if §11 changed that
-file. §11's builders got with their briefs: mdBook at
-`D:/Projects/Personal/phase8-work/tools/mdbook-0.5.4/mdbook.exe` and the Linux archive's SHA-256 for
-`guide.yml` (Notes, "Wave 4"); the references `D:/Projects/Personal/phase8-work/references/wave3/`;
-rulings 80 (stop and report if the first-run link's frame touches its ink), 82 (the facts no check
-shows) and 83 (the rename, the comments); and what part G's open point 103 leaves for it to report.
-What step 16 ended with: the three packages merged, §10 (`86ecb3a`), §8 (`f014b2b`, its fixes after
-the merge `85e2884`) and §9 (`769f459`); the lagged list, the whole default run and the pictures on
-`85e2884`, whose one fault (`a1b-about-link-focus`) is fixed (`fcf8c1e`); the references of the
-later merges, `D:/Projects/Personal/phase8-work/references/wave3/` (1,235 scripted pictures); three
-"before" series, two probes, two panels and **D457** (the bounds `0bfbe92`, two backlog rows, the
-restore order as ruling 76, a change in wave 4); CI's two failures on the link frame's merge fixed
+docs map are brought up to it. **`restore` is proven and merged** (step 17b; `aedb12f`, the bounds
+`23bea54`; D458, rulings 91 to 93; design 14.10; the report's "The restore order's proof"): built
+and reviewed on `wip/p8a-restore` (run `wf_abcee249-c0e`), proven on the desktop from 13:36 to 14:52
+by the lead's probe and the alternated series, merged, the lagged list at the merge 948 tests with
+none failed, and pushed with its docs; CI's run on that push is in the CI section. **Next for the
+lead, when the fixes' run ends:** read its result, its diff since `982f5e5` and the changed
+pictures; then §11's merge with its checks (11.4's classes and part G, then Phase6, Phase6Look and
+8a's project whole through `scripts/heavy-run.sh`, the comparison with wave 3's references by
+`--expected`, the lead's own run of GuideShots), the lead's lines of 11.2, the report's part G
+results, the push, CI and the guide's workflow (step 17); then §12 (step 18). §11's builders got
+with their briefs: mdBook at `D:/Projects/Personal/phase8-work/tools/mdbook-0.5.4/mdbook.exe` and
+the Linux archive's SHA-256 for `guide.yml` (Notes, "Wave 4"); the references
+`D:/Projects/Personal/phase8-work/references/wave3/`; rulings 80 (stop and report if the first-run
+link's frame touches its ink), 82 (the facts no check shows) and 83 (the rename, the comments); and
+what part G's open point 103 leaves for it to report. What step 16 ended with: the three packages
+merged, §10 (`86ecb3a`), §8 (`f014b2b`, its fixes after the merge `85e2884`) and §9 (`769f459`); the
+lagged list, the whole default run and the pictures on `85e2884`, whose one fault
+(`a1b-about-link-focus`) is fixed (`fcf8c1e`); the references of the later merges,
+`D:/Projects/Personal/phase8-work/references/wave3/` (1,235 scripted pictures); three "before"
+series, two probes, two panels and **D457** (the bounds `0bfbe92`, two backlog rows, the restore
+order as ruling 76, a change in wave 4); CI's two failures on the link frame's merge fixed
 (`70a8fc0`, `809b77f`); and, after a review of the second of those fixes, **the row list's fix,
 merged at `bad98b1`**: CI's run 45133434382 on it is green in all six jobs, the whole default run on
 `c1bc69b`, whose code is the merge's, passed with 8,514 tests and none failed, and each of its 54
@@ -920,7 +919,44 @@ every commit.
   on, so **the restore order's proof begins at 13:36**, the owner told in the chat at 13:26: the
   probe's session first (`…/wave4/restore/probe/session-1.txt`), then the series. **Ruling 92**
   (design 13.1), made at 13:31 before the first launch, says how the scripts wait out the Task
-  Scheduler and which task voids no run; the series takes about 55 minutes with those waits.
+  Scheduler and which task voids no run; the series takes about 55 minutes with those waits. **The
+  restore order's proof and merge (13:36 to 16:05).** The probe's session, 13:36:20 to 13:44:16, 20
+  launches: ruling 88's rule met, four at once stays. The alternated series, 13:44:41 to 14:51:51:
+  nine pairs, four of them (1, 4, 6, 8) dropped for a task the scheduler had not shown as due and
+  taken again, five kept (2, 3, 5, 7, 9); D457 (5)'s rule met, **proven**. Everything of it is
+  outside the repository under `D:/Projects/Personal/phase8-work/wave4/restore/`
+  (`probe/session-1.txt`, `series/series.log` with each run's file and `dropped/`,
+  `series_summary.py`, `merge/lagged.log` with each command's output). The merge `aedb12f`, then the
+  bounds `23bea54` (M3's 8,900 ms; M2's from 6,100 to 9,500 ms). On `23bea54`, 15:01 to 16:03: the
+  package's four classes 39 of 39; the lagged list 25, 209, 21, 206, 178, 126 and 144 tests, none
+  failed. Of the 399 scripted pictures those runs wrote, 379 are the files of wave 3's references
+  and 20 differ in the kinds that vary from run to run (carets, a fake's port, a temporary folder's
+  name, edge pixels, a progress bar; the report's entry names them). The write-up (the report's "The
+  restore order's proof" and its entry under "Changes to expected results", D458, plan.md's risk 10,
+  architecture.md, rulings 93 and 94, design 1.17 and 14.10, CLAUDE.md's row and note) was checked
+  before its commit by two independent readers (run `wf_0ade832a-484`, 2 agents, 0.50M tokens): 215
+  numbers recomputed from the raw logs, all right, and 72 statements against the merged code; 15
+  minor findings, all taken, among them that the lead's reason for the series' narrow margin did not
+  follow from the numbers. **For step 19's list, from the proof:** the fix's one-tab start read
+  above the base's (M2's medians 5,736 and 4,942 ms; the probe's 2,113 and 1,809 ms), within the
+  spread by the lead's reading, and M2's bound counts both builds on that reading; `run_series.sh`
+  now also waits for a waited task's end. **The guide's pass** (run `wf_be89944c-5a7`: seven readers
+  of the pages, three inspectors of the pictures, a verifier for each; 20 agents, 5.24M tokens, 50
+  minutes; its result in `D:/Projects/Personal/phase8-work/wave4/guide/pages-pass-result.json`, the
+  confirmed findings in `pages-pass-confirmed.json`, the pictures' hashes before the fixes in
+  `pictures-before-fixes.sha256`): the six majors are the resolver's Ours and Theirs told the wrong
+  way round for a rebase, Take ours and Take theirs said to resolve the file, Undo said to take back
+  an abort, a rebase said to ask first, the uninstall page without the backups left in repositories,
+  and the advice on what a log holds without the accounts and the remotes' addresses. **For step
+  19's list, from the pass:** the graph's last column leaves no room for the overlay scroll bar, so
+  the widest dates touch it (seen in `main-window`, `search-bar`, `compare` and others; a change
+  moves every scripted graph picture); a repository picked under Recent repositories opens in that
+  page's tab even when another tab shows it, where Open, Ctrl+O, the palette and a dashboard's row
+  switch to the tab; and `index.md`'s two loosely worded items that the pass did not report ("from
+  the toolbar", and refusing to overwrite ignored files, which holds only while Keep ignored files
+  is on and not for a hard reset), which the lead corrects at the merge. Wave 4's runs so far: 5.7M
+  tokens before the builds, §11's build 5.42M, `restore`'s 1.74M, the write-up's check 0.50M, the
+  guide's pass 5.24M; the fixes' run not counted yet.
 - **Wave 3 is under way (2026-11-21).** The owner's word that day: "Continue", all of wave 3 now, and
   the three takeovers of the desktop (the spike, §10's first run, the "before" series) each as soon
   as it is ready. **The checks** of parts A and U were written by a writer each, reviewed by two
