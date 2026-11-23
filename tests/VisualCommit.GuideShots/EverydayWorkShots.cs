@@ -15,6 +15,9 @@ namespace VisualCommit.GuideShots;
 /// </summary>
 public sealed class EverydayWorkShots
 {
+    /// <summary>The name the stash's details list its one changed file by, <c>station/display.py</c>.</summary>
+    private const string StashedFile = "display.py";
+
     /// <summary>A changed file's diff, the old text beside the new.</summary>
     [AvaloniaTheory]
     [MemberData(nameof(GuideCamera.Themes), MemberType = typeof(GuideCamera))]
@@ -130,7 +133,9 @@ public sealed class EverydayWorkShots
             var header = app.BoundsOf(await app.RefRowAsync("Local branches"));
             var originMain = app.BoundsOf(await app.RefRowAsync("Remotes", "origin", "main"));
             var panel = app.BoundsOf(app.FindByAutomationId("LeftPanel"));
-            return GuideFrame.Area(new Rect(panel.Left, header.Top - 4, panel.Width, originMain.Bottom + 4 - (header.Top - 4)));
+
+            // From the header's own top, which clears the Filter box's bottom edge above it.
+            return GuideFrame.Area(new Rect(panel.Left, header.Top, panel.Width, originMain.Bottom + 8 - header.Top));
         });
 
     /// <summary>The Remotes dialog, from the Remotes section's menu.</summary>
@@ -149,7 +154,7 @@ public sealed class EverydayWorkShots
             return GuideFrame.Card(GuideSteps.DialogCard(app));
         });
 
-    /// <summary>The stash in the graph, on the commit it was made on, selected, with its details.</summary>
+    /// <summary>The stash in the graph, on the commit it was made on, selected, with its details and its changed file.</summary>
     [AvaloniaTheory]
     [MemberData(nameof(GuideCamera.Themes), MemberType = typeof(GuideCamera))]
     public Task Stash_in_graph(GuideTheme theme) =>
@@ -158,10 +163,15 @@ public sealed class EverydayWorkShots
             var app = run.App;
             app.Click(app.GraphRowPoint(GuideSteps.StashRow));
             await app.WaitForAsync(() => app.Session.Shell.ActiveTab.Repository?.Details?.Subject?.Contains(GuideScenario.StashMessage, StringComparison.Ordinal) == true, "the stash's details");
+            await app.WaitForAsync(() => GuideSteps.DetailsFileRow(app, StashedFile) is not null, $"the stash's changed file {StashedFile}");
             app.MoveToNeutral();
+
+            // Down to the bottom of the first graph row that ends below the changed file's row, so
+            // that the details' Changed files show and no graph row is cut through.
             var graph = app.BoundsOf(GuideSteps.GraphArea(app));
             var right = app.BoundsOf(app.FindByAutomationId("RightPanel"));
-            var bottom = app.GraphRowPoint(GuideSteps.CheckWiringRow).Y + 14;
+            var file = app.BoundsOf(GuideSteps.DetailsFileRow(app, StashedFile)!);
+            var bottom = GuideSteps.GraphRowBottomBelow(app, file.Bottom + 4);
             return GuideFrame.Area(new Rect(graph.Left, graph.Top, right.Right - graph.Left, bottom - graph.Top));
         });
 

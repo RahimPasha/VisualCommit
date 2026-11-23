@@ -27,11 +27,15 @@ public sealed class StaySafeShots
             return GuideFrame.Window;
         });
 
-    /// <summary>"Show reflog" of the Local branches section: where HEAD has been, the newest first.</summary>
+    /// <summary>
+    /// "Show reflog" of the Local branches section: where HEAD has been, the newest first. In a
+    /// wider window of the usual height, so that a checkout's row shows where it moved to and the
+    /// rows stay HEAD@{0} to HEAD@{20}.
+    /// </summary>
     [AvaloniaTheory]
     [MemberData(nameof(GuideCamera.Themes), MemberType = typeof(GuideCamera))]
     public Task Reflog(GuideTheme theme) =>
-        GuideCamera.ShootAsync(GuideShotCatalogue.Reflog, theme, GuideStart.WeatherStation, async run =>
+        GuideCamera.ShootAsync(GuideShotCatalogue.Reflog, theme, GuideStart.WeatherStation with { Width = GuideStart.WeatherStationWide.Width }, async run =>
         {
             var app = run.App;
             app.RightClick(await app.RefRowAsync("Local branches"));

@@ -1,3 +1,4 @@
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
@@ -19,6 +20,9 @@ namespace VisualCommit.GuideShots;
 /// </summary>
 public sealed class GettingStartedShots
 {
+    /// <summary>The room the welcome page keeps round its content (its <c>Margin="24"</c>).</summary>
+    private const double WelcomeRoom = 24;
+
     /// <summary>Windows, no Git found, winget there: the install button, the download and Check again.</summary>
     [AvaloniaTheory]
     [MemberData(nameof(GuideCamera.Themes), MemberType = typeof(GuideCamera))]
@@ -123,7 +127,15 @@ public sealed class GettingStartedShots
             app.FindByAutomationId("CloneStartButton").Focus(NavigationMethod.Pointer);
             app.Settle();
             app.MoveToNeutral();
-            return GuideFrame.Of(Welcome(app));
+
+            // The page's width, from the heading down to the form's buttons, with the room the page
+            // keeps at its sides above and below them, so that its empty bands stay out.
+            var welcome = Welcome(app);
+            var page = app.BoundsOf(welcome);
+            var heading = app.BoundsOf(welcome.GetVisualDescendants().OfType<TextBlock>().First(text => text.IsEffectivelyVisible && text.Text == "No repository open"));
+            var form = app.BoundsOf(welcome.GetVisualDescendants().OfType<StackPanel>().First(panel => panel.Name == "CloneForm" && panel.IsEffectivelyVisible));
+            var top = heading.Top - WelcomeRoom;
+            return GuideFrame.Area(new Rect(page.Left, top, page.Width, form.Bottom + WelcomeRoom - top));
         });
 
     private static GuideStart FirstRun(GitGuidance guidance, FakeGitAnswer answer) =>
