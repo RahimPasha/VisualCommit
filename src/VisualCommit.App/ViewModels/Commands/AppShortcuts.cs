@@ -322,7 +322,7 @@ public static class AppShortcuts
             FromKeys("Cancel or close", new Shortcut(Escape)),
         ]),
 
-        // The last group (D417): no settings row links to the guide, so the list's top is as before.
+        // The last group (D417), so that the list's top keeps its rows; no settings row links to the guide.
         new(
             "Help",
             [FromCommands(AppCommands.OpenUserGuideText, AppCommand.OpenUserGuide)],

@@ -5,6 +5,7 @@ using VisualCommit.App.ViewModels.Commands;
 using VisualCommit.Core;
 using VisualCommit.Core.Logging;
 using VisualCommit.Core.Workspaces;
+using VisualCommit.Testing;
 using VisualCommit.Testing.Headless;
 using Xunit;
 using static VisualCommit.App.ViewModels.Commands.ShortcutKey;
@@ -15,9 +16,11 @@ namespace VisualCommit.App.Tests;
 /// "Open the user guide" where no check of the walk-through shows it (D417; ruling 82): without a
 /// launcher it says so in the log at Info and opens nothing; a launcher that throws is the command's
 /// Error line; F1's route, the key read as the router reads it and run by the window's commands, opens
-/// the guide's start page on a dashboard tab and on a welcome tab. The window is a view model's,
-/// with no app started: what F1 does with a dialog or a menu open or during a drag is the router's
-/// rule for every key, which <see cref="KeyRouterTests"/> holds.
+/// the guide's start page on a dashboard tab and on a welcome tab (a view model's window, no app
+/// started). And F1 pressed in the app on "ops" opens nothing while a menu is open or a branch drag
+/// runs, then the start page once the menu or the drag has ended: the router's rule for every key,
+/// which <see cref="KeyRouterTests"/>' table holds by pressing each key and reading where it went,
+/// here read where it would show, in the launcher.
 /// </summary>
 public class OpenUserGuideCommandTests
 {
@@ -94,6 +97,60 @@ public class OpenUserGuideCommandTests
 
         Assert.Equal([new FileLaunch(FileLaunchKind.OpenUrl, StartPage)], launcher.Requests);
         Assert.Empty(GuideLines(log));
+    }
+
+    [AvaloniaFact]
+    public async Task F1_with_a_menu_open_opens_nothing_and_after_it_the_start_page()
+    {
+        using var repo = await Scenarios.OperationsAsync();
+        using var data = new TempDirectory("data");
+        using var app = ShellDriver.StartWithTabs(data.Path, [repo.Path]);
+        await app.WaitForRepositoryAsync();
+        var shell = app.Session.Shell;
+
+        // The empty graph area's menu, opened by the pointer.
+        app.RightClick(new Avalonia.Point(484, 360));
+        Assert.True(shell.Menu.IsOpen, "The empty graph area's menu did not open.");
+        app.PressKey(Avalonia.Input.Key.F1);
+        await DashboardTestSupport.SettleAsync();
+        Assert.Empty(app.Launcher.Requests);
+        Assert.True(shell.Menu.IsOpen, "F1 closed the menu.");
+
+        app.PressKey(Avalonia.Input.Key.Escape);
+        await app.WaitForAsync(() => !shell.Menu.IsOpen, "the menu to close");
+        app.PressKey(Avalonia.Input.Key.F1);
+        await app.WaitForAsync(() => app.Launcher.Requests.Count == 1, "the launcher's request");
+        Assert.Equal([new FileLaunch(FileLaunchKind.OpenUrl, StartPage)], app.Launcher.Requests);
+    }
+
+    [AvaloniaFact]
+    public async Task F1_during_a_branch_drag_opens_nothing_and_after_it_the_start_page()
+    {
+        using var repo = await Scenarios.OperationsAsync();
+        using var data = new TempDirectory("data");
+        using var app = ShellDriver.StartWithTabs(data.Path, [repo.Path]);
+        var repository = await app.WaitForRepositoryAsync();
+        repository.BranchDropMenu = null;
+
+        // feature/alpha's label dragged onto main's, held there.
+        var alpha = app.GraphLabelBounds(4, "feature/alpha").Center;
+        var main = app.GraphLabelBounds(3, "main").Center;
+        app.PressMouse(alpha);
+        app.MoveMouseHeld(main, steps: 6);
+        Assert.True(app.BranchDrag.IsDragging, "The drag did not start.");
+        app.PressKey(Avalonia.Input.Key.F1);
+        await DashboardTestSupport.SettleAsync();
+        Assert.Empty(app.Launcher.Requests);
+        Assert.True(app.BranchDrag.IsDragging, "F1 ended the drag.");
+
+        // Esc ends the drag; the button let go over main drops nothing.
+        app.PressKey(Avalonia.Input.Key.Escape);
+        app.ReleaseMouse(main);
+        await app.WaitForAsync(() => !app.BranchDrag.IsDragging, "the drag to end");
+        await app.WaitForIdleAsync();
+        app.PressKey(Avalonia.Input.Key.F1);
+        await app.WaitForAsync(() => app.Launcher.Requests.Count == 1, "the launcher's request");
+        Assert.Equal([new FileLaunch(FileLaunchKind.OpenUrl, StartPage)], app.Launcher.Requests);
     }
 
     /// <summary>F1 as the router takes it on the platform's tunnelling pass: routed by the key table, then run by the window's commands; waits for the launcher's <paramref name="requests"/>th request.</summary>
