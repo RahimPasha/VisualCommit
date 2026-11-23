@@ -864,7 +864,17 @@ every commit.
   is still armed at 4,999 ms, and the count of new tests (about 29). Section 14 went into the design
   with 0.4's row and files, rulings 86 to 90 in 13.1, 13.3's row and CLAUDE.md's docs map. Wave 4's
   runs so far: 5.7M tokens (part G 1.97M, the section 2.54M, its settle 1.15M), §11's build not
-  counted yet.
+  counted yet. **Ready for the restore order's proof** (written by the lead on 2026-11-23 while the
+  builders worked; nothing of it run yet but the two readings of the Task Scheduler): in
+  `D:/Projects/Personal/phase8-work/wave4/restore/probe/`, `startup_tabs_probe.ps1` (wave 3's probe
+  with `-Exe` required and the `Restore order:` lines kept, on wave 3's clones),
+  `run_probe_session.ps1 -Base <exe> -Fix <exe> -Out <file>` (the two warm-ups and the 18 counted
+  launches of 14.8 step 4, the builds' order alternating by round) and `summarize_probe.py <file>`
+  (each launch's clock, answers and `Restore order:` lines, and ruling 88's rule; tried on wave 3's
+  two outputs, whose numbers it gives as D457 has them); in `…/wave4/restore/series/`,
+  `run_series.sh <first pair> <last pair>` (14.8 step 6: per run it waits out what the scheduler has
+  due in the next five minutes, runs the command in the base's or the fix's worktree, copies the
+  series file and notes what the scheduler ran meanwhile, into `series.log`).
 - **Wave 3 is under way (2026-11-21).** The owner's word that day: "Continue", all of wave 3 now, and
   the three takeovers of the desktop (the spike, §10's first run, the "before" series) each as soon
   as it is ready. **The checks** of parts A and U were written by a writer each, reviewed by two
