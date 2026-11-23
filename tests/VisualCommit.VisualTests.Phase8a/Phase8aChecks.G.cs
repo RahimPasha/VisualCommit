@@ -71,6 +71,7 @@ public sealed partial class Phase8aChecksG : Phase8aChecks
         await app.WaitForAsync(() => app.Palette.Shown.Count == 1, $"one row for \"{G.Query}\"");
         var g1a = Picture(app, G.G1aPaletteGuide);
         AssertGuideRow(app, g1a);
+        Assert.True(app.PaletteBox.IsFocused, "The palette's box does not have the keyboard focus.");
         Assert.True(app.Session.Shell.Dialogs.IsOpen, "The palette is not a dialog of the dialog layer.");
         Assert.Equal(G.CardHeightOneRow, app.PaletteSnapshot().CardBounds.Height, 0.5);
         Assert.Empty(app.Launcher.Requests);
@@ -181,6 +182,7 @@ public sealed partial class Phase8aChecksG : Phase8aChecks
         var before = app.Capture();
         Assert.Equal([new GitLookup(F.Chosen, null)], probe.Lookups);
         AssertState(app, G.MissingTitle, G.MissingGuidance, G.MissingButtons, G.MissingButtonTexts, G.HowVisualCommitFindsGit);
+        Assert.Equal(F.MissingBodyWindows, app.GitSetupText("GitSetupBody"));
         Assert.Empty(app.Launcher.Requests);
         Assert.Empty(app.GitCalls());
 
