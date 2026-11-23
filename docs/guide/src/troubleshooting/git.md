@@ -3,7 +3,7 @@
 VisualCommit works through the Git installed on your computer and needs Git 2.34.1 or newer. When
 it cannot use Git, it shows the first-run screen, whose link **How VisualCommit finds Git** (or
 **What the helper does**) opens the section of this page for what the screen shows.
-[The first start](../first-run.md) shows each screen.
+[The first start](../first-run.md) describes each screen.
 
 ## How VisualCommit finds Git
 
@@ -69,7 +69,8 @@ The screen's title names the version, such as **Git 2.29.0 is too old**: VisualC
 - **Linux**: install a newer Git from your distribution. If your distribution has none new enough,
   **Other ways to install Git** opens Git's page for Linux, which lists other sources.
 
-Or choose a newer Git that is already on this computer. Then press **Check again**.
+Or choose a newer Git that is already on this computer: VisualCommit checks it, saves it as your
+choice and looks for Git again at once. After an update, press **Check again**.
 
 <img src="../pictures/first-run-too-old-light.png" srcset="../pictures/first-run-too-old-light.png 2x" alt="The first-run screen titled Git 2.29.0 is too old, saying that VisualCommit needs Git 2.34.1 or newer and found Git 2.29.0 at C:\Program Files\Git\cmd\git.exe, with the buttons Update with winget…, Download Git for Windows, Choose git.exe… and Check again.">
 <img src="../pictures/first-run-too-old-dark.png" srcset="../pictures/first-run-too-old-dark.png 2x" alt="The first-run screen titled Git 2.29.0 is too old, saying that VisualCommit needs Git 2.34.1 or newer and found Git 2.29.0 at C:\Program Files\Git\cmd\git.exe, with the buttons Update with winget…, Download Git for Windows, Choose git.exe… and Check again.">
@@ -77,8 +78,9 @@ Or choose a newer Git that is already on this computer. Then press **Check again
 ## Git does not work { #git-not-working }
 
 The screen **Git is not working** means that VisualCommit found Git, but it did not report its
-version, said nothing, or could not be started. Under **Git said:** the screen shows Git's own
-words.
+version, said nothing, or could not be started. When Git printed something, the screen shows Git's
+own words under **Git said:**; when it said nothing, the screen gives its exit code, and when it
+could not be started, the screen says why.
 
 **A broken global git configuration.** The most common cause is a mistake in your global git
 configuration file, such as `~/.gitconfig`. Git then names the file and the line, as in

@@ -5,11 +5,12 @@ At every start it looks for Git: first the Git chosen in Settings, if any, then 
 in the folders Git is usually installed in. [How VisualCommit finds Git](troubleshooting/git.md)
 gives the details.
 
-When it finds a Git that works and is new enough, VisualCommit opens as usual and the first-run
-screen never shows. When it cannot use Git, a tab with no repository open shows the first-run
-screen in place of the welcome page. The screen says what is wrong, what to do, and offers buttons
-for it. Once Git is in place, press **Check again**: VisualCommit does not need to restart, and the
-tabs whose repositories could not open without Git open again.
+When it finds a Git that works and is new enough, and VisualCommit's own helper for git's questions
+is in place, VisualCommit opens as usual and the first-run screen never shows. When it cannot use
+Git, a tab with no repository open shows the first-run screen in place of the welcome page. The
+screen says what is wrong, what to do, and offers buttons for it. Once Git is in place, press
+**Check again**: VisualCommit does not need to restart, and the tabs whose repositories could not
+open without Git open again.
 
 ## The status bar's Git box
 
@@ -92,10 +93,14 @@ When the Git that is too old is the one you chose in Settings, the screen offers
 ## When Git does not work
 
 The title reads **Git is not working**: VisualCommit found Git, but it did not report its version.
-Under **Git said:** the screen shows Git's own words. A common cause is a mistake in your global
-git configuration file: then Git names the file and the line, the screen says which line to
-correct, and **Show the file** shows the file in your file manager. Correct that line, or rename the
-file, then press **Check again**. Otherwise repair or reinstall Git.
+When Git printed something, the screen shows Git's own words under **Git said:**. A common cause is
+a mistake in your global git configuration file: then Git names the file and the line, the screen
+says which line to correct, and **Show the file** shows the file in your file manager. Correct that
+line, or rename the file, then press **Check again**. Otherwise repair or reinstall Git. On macOS,
+when Apple's Command Line Tools look damaged, the screen offers **Install the Command Line Tools**
+and the command that selects them, `sudo xcode-select --switch /Library/Developer/CommandLineTools`,
+with a **Copy** button. When the Git that does not work is the one you chose in Settings, the screen
+also offers **Use the Git on the PATH**, which removes your choice.
 
 <img src="pictures/first-run-not-working-light.png" srcset="pictures/first-run-not-working-light.png 2x" alt="The first-run screen titled Git is not working, with Git's words fatal: bad config line 3 in file C:/Users/demo/.gitconfig under Git said:, the advice to correct line 3 of that file or rename it, and the buttons Download Git for Windows, Show the file, Choose git.exe… and Check again.">
 <img src="pictures/first-run-not-working-dark.png" srcset="pictures/first-run-not-working-dark.png 2x" alt="The first-run screen titled Git is not working, with Git's words fatal: bad config line 3 in file C:/Users/demo/.gitconfig under Git said:, the advice to correct line 3 of that file or rename it, and the buttons Download Git for Windows, Show the file, Choose git.exe… and Check again.">
