@@ -45,14 +45,15 @@ namespace VisualCommit.App.Tests;
 /// an offset smaller than their heights sent the list to its top and lost the click, and deeper in
 /// the list left the offset and the extent short by those heights; a row that keeps its item but
 /// cannot show its rebuilt row itself is still replaced so, a known limit that these facts do not
-/// meet. The remove makes the panel estimate where the top row in view is, from the mean height of
-/// the rows it has made, which with headers among the rows is not exact. The facts allow the offset
-/// and the extent to move by as much as that gives, each stating its numbers and those before phase
-/// 8a's change: one run, 5 px near the top of the list and about 20 px at the bottom of 60
-/// branches, as before; two runs, 2 px near the top of the list where it was 1, and deep in the list
-/// more than before, a known limit, because the rows left in place between the runs stay in the
-/// panel's mean: 108 px at the bottom of 60 branches where it was 61, and 172 px for the fetch at
-/// the bottom of 40 local and 31 remote branches where it was 166. They assert that nothing moves
+/// meet; and a press on a replaced row itself loses its click, as in every version. The remove makes
+/// the panel estimate where the top row in view is, from the mean height of the rows it has made,
+/// which with headers among the rows is not exact. The facts allow the offset and the extent to move
+/// by as much as that gives, each stating its numbers and those before phase 8a's change: one run,
+/// up to 5 px near the top of the list and about 20 px at the bottom of 60 branches, as before; two
+/// runs, 2 px near the top of the list where it was 1, and deep in the list more than before, a
+/// known limit, because the rows left in place between the runs stay in the panel's mean: 108 px at
+/// the bottom of 60 branches where it was 61, and 172 px for the fetch at the bottom of 41 local and
+/// 31 remote branches, each side's main among them, where it was 166. They assert that nothing moves
 /// in the window, that every row the list is not told of keeps its object, that the rows outside
 /// the span from the first shifted row to the last keep their controls too, as do the rows between
 /// the runs where the fact says so, and that the press is a click.
@@ -64,13 +65,14 @@ namespace VisualCommit.App.Tests;
 /// click, where a replace of the two rows it shifts touched nothing; and a fetch that drops the top
 /// remote branch in view and brings another, after which the rows in view are drawn 87 px lower than
 /// before. Nor the other cases of the known limit above, where a row left in place, one that shows
-/// the same or one that changes itself, lies between the first and the last row a rebuild tells the
-/// view of: at the bottom of 60 branches, b45 renamed b50x with main, HEAD's branch, moved to another
-/// commit by the same refresh, ten rows below the run, leaves the offset at 1241 for 1356, where it
-/// was 1368; at the bottom of 61 branches, b46 renamed b60x with b61, right below the run, moved by
-/// the same refresh leaves 1342 for 1386, where it was 1364. Nothing moves in the window there and
-/// no press loses a click that the code before phase 8a kept; deep in the list, kept rows in view
-/// may get new controls, as they did before phase 8a (<c>RowCollection.ReplaceChanged</c>).
+/// the same or one that changes itself, lies between the first and the last row that shows something
+/// new, told of or changing itself (the span the code before phase 8a removed and inserted): at the
+/// bottom of 60 branches, b45 renamed b50x with main (HEAD's branch, the eleventh row below the run)
+/// moved to another commit by the same refresh leaves the offset at 1241 for 1356, where it was 1368;
+/// at the bottom of 61 branches, b46 renamed b60x with b61, right below the run, moved by the same
+/// refresh leaves 1342 for 1386, where it was 1364. Nothing moves in the window there and no press
+/// loses a click that the code before phase 8a kept; deep in the list, kept rows in view may get new
+/// controls, as they did before phase 8a (<c>RowCollection.ReplaceChanged</c>).
 /// </para>
 /// </summary>
 public class LeftPanelScrollTests

@@ -148,22 +148,23 @@ public sealed class RowCollection<T> : ObservableCollection<T>
     /// How far the estimate misses depends on which of the rows the panel has made are left for its
     /// mean: a row that is neither removed nor inserted stays in it. Before phase 8a the whole changed
     /// part was removed and inserted, from its first row that showed something new to its last, the
-    /// rows between with it. Now a row left in place anywhere between the first and the last row a
-    /// rebuild tells the view of, one that shows the same or one that changes itself, stays in the
-    /// mean, and deep in a list of mixed heights the offset and the extent can then end further from
-    /// the true ones than they did before phase 8a, a known limit. So, at the bottom of 60 branches,
-    /// b45 renamed b48x and b55 renamed b58x in one refresh leave the offset at 1248 for 1356, where
-    /// it was 1295; a fetch at the bottom of 40 local and 31 remote branches that drops r10 and r16
-    /// and brings r13a and r19a leaves 1544 for 1716, where it was 1550; at the bottom of 60
-    /// branches, b45 renamed b50x by a refresh that also moves main, HEAD's branch, to another commit
-    /// ten rows below the run leaves 1241 for 1356, where it was 1368; and at the bottom of 61
-    /// branches, b46 renamed b60x by a refresh that also moves b61, right below the run, leaves 1342
-    /// for 1386, where it was 1364. No row moves in the window in these cases, and no press loses a
-    /// click that the code before phase 8a kept; deep in the list, kept rows in view may get new
-    /// controls, as they did before phase 8a. Runs are not joined because a row between two runs
-    /// keeps its object and, near the top of the list, its control and the click under a press,
-    /// which a join would give up, and a join could turn two changes far apart into a reset of the
-    /// whole list.
+    /// rows between with it. Now a row left in place, one that shows the same or one that changes
+    /// itself, anywhere between the first and the last row that shows something new, told of or
+    /// changing itself (the span the code before phase 8a removed and inserted), stays in the mean,
+    /// and deep in a list of mixed heights the offset and the extent can then end further from the
+    /// true ones than they did before phase 8a, a known limit. So, at the bottom of 60 branches, b45
+    /// renamed b48x and b55 renamed b58x in one refresh leave the offset at 1248 for 1356, where it
+    /// was 1295; a fetch at the bottom of 41 local and 31 remote branches, each side's main among
+    /// them, that drops r10 and r16 and brings r13a and r19a leaves 1544 for 1716, where it was 1550;
+    /// at the bottom of 60 branches, b45 renamed b50x by a refresh that also moves main (HEAD's
+    /// branch, the eleventh row below the run) to another commit leaves 1241 for 1356, where it was
+    /// 1368; and at the bottom of 61 branches, b46 renamed b60x by a refresh that also moves b61,
+    /// right below the run, leaves 1342 for 1386, where it was 1364. No row moves in the window in
+    /// these cases, and no press loses a click that the code before phase 8a kept; deep in the list,
+    /// kept rows in view may get new controls, as they did before phase 8a. Runs are not joined
+    /// because a row between two runs keeps its object and, wherever Avalonia leaves it, its control
+    /// and the click under a press, which a join would give up, and a join could turn two changes far
+    /// apart into a reset of the whole list.
     /// </para>
     /// </summary>
     private void ReplaceChanged(IReadOnlyList<T> rows, int start, int count, Func<T, T, bool> showSame, Func<T, T, bool>? sameItem)
