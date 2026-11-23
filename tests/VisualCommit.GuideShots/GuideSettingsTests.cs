@@ -57,6 +57,36 @@ public sealed class GuideSettingsTests
         Assert.Equal(GuideSettings.RootRefusal, GuideSettings.WhyNotRoot(file, Repository, "/no/temp"));
     }
 
+    [Fact]
+    public void A_pictures_folder_the_variable_names_loses_the_catalogues_files_alone()
+    {
+        using var temp = new TempDirectory("guide-settings");
+        var theirs = new[] { "someone.png", "stage-hunk.png", "stage-hunk-light-old.png", "notes.txt" };
+        var ours = new[] { GuideShotCatalogue.FileName(GuideShotCatalogue.StageHunk, GuideTheme.Light), GuideShotCatalogue.FileName(GuideShotCatalogue.MainWindow, GuideTheme.Dark) };
+        foreach (var file in theirs.Concat(ours))
+        {
+            File.WriteAllText(temp.Combine(file), file);
+        }
+
+        GuideSettings.ClearPictures(temp.Path, own: false);
+
+        Assert.Equal(theirs.Order(StringComparer.Ordinal), Directory.EnumerateFiles(temp.Path).Select(file => Path.GetFileName(file)).Order(StringComparer.Ordinal));
+    }
+
+    [Fact]
+    public void The_projects_own_pictures_folder_loses_every_picture()
+    {
+        using var temp = new TempDirectory("guide-settings");
+        foreach (var file in new[] { "someone.png", GuideShotCatalogue.FileName(GuideShotCatalogue.StageHunk, GuideTheme.Light), "notes.txt" })
+        {
+            File.WriteAllText(temp.Combine(file), file);
+        }
+
+        GuideSettings.ClearPictures(temp.Path, own: true);
+
+        Assert.Equal(["notes.txt"], Directory.EnumerateFiles(temp.Path).Select(file => Path.GetFileName(file)));
+    }
+
     [Theory]
     [InlineData("/home/demo/Projects", "/home/demo", true)]
     [InlineData("/home/demo", "/home/demo/", true)]

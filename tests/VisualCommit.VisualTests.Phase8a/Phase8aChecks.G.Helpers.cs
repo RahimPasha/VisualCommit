@@ -258,8 +258,10 @@ public sealed partial class Phase8aChecksG
 
     /// <summary>
     /// G3 after its step 2: About as part A's A1 after its step 3 reads it, over the "ops" tab: the
-    /// pinned identity's texts, the labels in order in the form's first column in the secondary
-    /// colour, the values in its third column, both links in the accent colour and not underlined,
+    /// pinned identity's texts, the seven rows 18 apart, the head (the icon 48 × 48 at the labels'
+    /// left, the name at 20 SemiBold 16 to its right, the creator under it), the labels in order in
+    /// the form's first column in the secondary colour, the values in its third column, both links in
+    /// the accent colour and not underlined,
     /// nothing cut off and no "@"; and the row <c>User guide</c>: its label at x 336, its link
     /// <c>Open the user guide</c> at x 480, named by its text, enabled, its ink the accent on the
     /// card in <paramref name="capture"/>, its tooltip's text.
@@ -278,6 +280,23 @@ public sealed partial class Phase8aChecksG
         Assert.Equal(A.NoticesNote, InSettings<TextBlock>(app, A.NoticesNoteId).Text);
         Assert.Equal(A.ShowLicense, InSettings<Button>(app, G.AboutShowLicenseId).Content);
         Assert.Equal(A.ShowNotices, InSettings<Button>(app, G.AboutShowNoticesId).Content);
+
+        // The rows, 18 apart, and the head, as A1 reads them.
+        var rows = section.Children.OfType<Control>().Where(row => row.IsVisible).ToList();
+        Assert.Equal(7, rows.Count);
+        for (var i = 1; i < rows.Count; i++)
+        {
+            var gap = app.BoundsOf(rows[i]).Top - app.BoundsOf(rows[i - 1]).Bottom;
+            Assert.True(Math.Abs(gap - A.RowSpacing) <= 0.5, $"About's rows {i - 1} and {i} lie {gap} apart, not {A.RowSpacing}.");
+        }
+
+        var icon = app.BoundsOf(InSettings<Image>(app, A.IconId));
+        Assert.Equal((A.IconSize, A.IconSize), (icon.Width, icon.Height));
+        Assert.True(Math.Abs(icon.X - G.LabelX) <= G.Tolerance, $"The icon is at x {icon.X}, not {G.LabelX} ±{G.Tolerance}.");
+        var name = InSettings<TextBlock>(app, A.NameId);
+        Assert.Equal((A.NameFontSize, FontWeight.SemiBold), (name.FontSize, name.FontWeight));
+        Assert.True(Math.Abs(app.BoundsOf(name).X - (icon.Right + A.NameAfterIcon)) <= 0.5, $"The name is at x {app.BoundsOf(name).X}, not {icon.Right + A.NameAfterIcon}.");
+        Assert.True(app.BoundsOf(InSettings<TextBlock>(app, A.CreatorId)).Top >= app.BoundsOf(name).Bottom - 0.5, "The creator is not under the name.");
 
         // The labels, the guide's last, in the first column, secondary.
         var labels = section.GetVisualDescendants().OfType<TextBlock>().Where(text => text.Classes.Contains("settingsLabel")).ToList();

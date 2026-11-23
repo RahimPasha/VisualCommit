@@ -102,7 +102,7 @@ public partial class AppLinksTests
 
             if (anchor is not null)
             {
-                var ids = Regex.Matches(File.ReadAllText(file), @"\{ #" + Regex.Escape(anchor) + @" \}").Count;
+                var ids = HeadingIdCount(File.ReadAllText(file), anchor);
                 if (ids != 1)
                 {
                     problems.Add($"{page}: {markdown} holds {{ #{anchor} }} {ids} times, not once");
@@ -113,6 +113,80 @@ public partial class AppLinksTests
         Assert.True(problems.Count == 0, "Pages and anchors the app links to that the guide lacks:\n" + string.Join('\n', problems));
     }
 
+    /// <summary>
+    /// Only a heading gives an id: <c>{ #anchor }</c> in a paragraph, a list, a table, a code block or
+    /// an HTML comment is text to mdBook, so the app's link would land on no section (made-up pages).
+    /// </summary>
+    [Fact]
+    public void An_anchor_counts_only_at_the_end_of_a_heading_outside_code()
+    {
+        const string Id = "{ #git-missing }";
+        Assert.Equal(1, HeadingIdCount("# Troubleshooting\n\n## Git is missing " + Id + "\n\nText.\n", "git-missing"));
+        Assert.Equal(1, HeadingIdCount("### Git is missing " + Id + "  \r\n", "git-missing"));
+        Assert.Equal(0, HeadingIdCount("Write " + Id + " after a heading's text.\n", "git-missing"));
+        Assert.Equal(0, HeadingIdCount("- a list's item " + Id + "\n", "git-missing"));
+        Assert.Equal(0, HeadingIdCount("| Id | " + Id + " |\n|---|---|\n", "git-missing"));
+        Assert.Equal(0, HeadingIdCount("<!-- ## Git is missing " + Id + " -->\n", "git-missing"));
+        Assert.Equal(0, HeadingIdCount("```markdown\n## Git is missing " + Id + "\n```\n", "git-missing"));
+        Assert.Equal(0, HeadingIdCount("~~~\n## Git is missing " + Id + "\n~~~\n", "git-missing"));
+        Assert.Equal(0, HeadingIdCount("    ## Git is missing " + Id + "\n", "git-missing"));
+        Assert.Equal(0, HeadingIdCount("## Git is missing " + Id + " and more\n", "git-missing"));
+        Assert.Equal(0, HeadingIdCount("## Git is missing { #git-missing-too }\n", "git-missing"));
+        Assert.Equal(2, HeadingIdCount("## One " + Id + "\n\n```\nnot this " + Id + "\n```\n\n## Two " + Id + "\n", "git-missing"));
+    }
+
+    /// <summary>
+    /// How many headings of <paramref name="markdown"/> end in mdBook's id <c>{ #anchor }</c>: ATX
+    /// headings (one to six <c>#</c> at the line's start, at most three spaces in), outside fenced
+    /// code and HTML comments.
+    /// </summary>
+    private static int HeadingIdCount(string markdown, string anchor)
+    {
+        var heading = new Regex(@"^ {0,3}#{1,6}[ \t].*\{ #" + Regex.Escape(anchor) + @" \}[ \t]*$");
+        var count = 0;
+        string? fence = null;
+        var inComment = false;
+        foreach (var raw in markdown.Split('\n'))
+        {
+            var line = raw.TrimEnd('\r');
+            if (inComment)
+            {
+                inComment = !line.Contains("-->", StringComparison.Ordinal);
+                continue;
+            }
+
+            var trimmed = line.TrimStart(' ');
+            if (fence is not null)
+            {
+                if (trimmed.StartsWith(fence, StringComparison.Ordinal) && trimmed.Trim().All(c => c == fence[0]))
+                {
+                    fence = null;
+                }
+
+                continue;
+            }
+
+            if (line.Length - trimmed.Length <= 3 && Fence().Match(trimmed) is { Success: true } opening)
+            {
+                fence = opening.Value;
+                continue;
+            }
+
+            if (trimmed.StartsWith("<!--", StringComparison.Ordinal))
+            {
+                inComment = !line.Contains("-->", StringComparison.Ordinal);
+                continue;
+            }
+
+            if (heading.IsMatch(line))
+            {
+                count++;
+            }
+        }
+
+        return count;
+    }
+
     /// <summary>The path of a file of the repository, from the root the build names.</summary>
     private static string RepositoryPath(string relative) =>
         Path.GetFullPath(Path.Combine(VisualRun.RepoRoot, relative.Replace('/', Path.DirectorySeparatorChar)));
@@ -120,4 +194,8 @@ public partial class AppLinksTests
     /// <summary>A link of SUMMARY.md: <c>[Title](path.md)</c>.</summary>
     [GeneratedRegex(@"\]\((?<path>[^)#\s]+\.md)\)")]
     private static partial Regex SummaryLink();
+
+    /// <summary>A fenced code block's opening: three or more backticks or tildes.</summary>
+    [GeneratedRegex(@"^(`{3,}|~{3,})")]
+    private static partial Regex Fence();
 }

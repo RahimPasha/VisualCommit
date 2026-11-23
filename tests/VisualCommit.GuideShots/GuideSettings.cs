@@ -125,29 +125,45 @@ public static class GuideSettings
 
     /// <summary>
     /// The pictures' folder: <see cref="PicturesVariable"/>, else <c>artifacts/guide/pictures/</c>
-    /// under the repository. The run's first call empties it of <c>*.png</c>, so that it holds
-    /// only this run's pictures.
+    /// under the repository. The run's first call clears it (<see cref="ClearPictures"/>), so that it
+    /// holds only this run's pictures.
     /// </summary>
     public static string PicturesFolder()
     {
-        var folder = string.IsNullOrWhiteSpace(PicturesSetting)
+        var own = string.IsNullOrWhiteSpace(PicturesSetting);
+        var folder = own
             ? Path.Combine(RepoRoot, "artifacts", "guide", "pictures")
-            : Path.GetFullPath(PicturesSetting);
+            : Path.GetFullPath(PicturesSetting!);
         lock (Gate)
         {
             Directory.CreateDirectory(folder);
             if (!picturesStarted)
             {
-                foreach (var old in Directory.EnumerateFiles(folder, "*.png"))
-                {
-                    File.Delete(old);
-                }
-
+                ClearPictures(folder, own);
                 picturesStarted = true;
             }
         }
 
         return folder;
+    }
+
+    /// <summary>
+    /// Clears the pictures' <paramref name="folder"/> before a run's first picture: this project's own
+    /// folder (<paramref name="own"/>, <c>artifacts/guide/pictures/</c>) of every <c>*.png</c>; a
+    /// folder that <see cref="PicturesVariable"/> names, which may hold someone else's files, of the
+    /// catalogue's files alone, both themes of each name (<see cref="GuideShotCatalogue.FileName"/>).
+    /// </summary>
+    internal static void ClearPictures(string folder, bool own)
+    {
+        var old = own
+            ? Directory.EnumerateFiles(folder, "*.png")
+            : GuideShotCatalogue.Names
+                .SelectMany(name => new[] { GuideShotCatalogue.FileName(name, GuideTheme.Dark), GuideShotCatalogue.FileName(name, GuideTheme.Light) })
+                .Select(file => Path.Combine(folder, file));
+        foreach (var file in old.ToList())
+        {
+            File.Delete(file);
+        }
     }
 
     /// <summary>Whether <paramref name="path"/> is <paramref name="folder"/> or lies inside it, ignoring case and the kind of separator.</summary>

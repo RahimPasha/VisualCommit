@@ -17,6 +17,8 @@ on:
       - 'src/**'
       - 'tests/VisualCommit.Testing/**'
       - 'tests/VisualCommit.GuideShots/**'
+      # The tests' own props name RepoRoot, through which GuideShots and the App.Tests classes find the pages.
+      - 'tests/Directory.Build.props'
       - 'Directory.*.props'
       - 'Directory.Build.targets'
       - 'global.json'
