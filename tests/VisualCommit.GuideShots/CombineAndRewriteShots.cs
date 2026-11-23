@@ -1,6 +1,5 @@
 using Avalonia.Headless.XUnit;
 using VisualCommit.App.ViewModels.Dialogs;
-using VisualCommit.Core.Session;
 using Xunit;
 
 namespace VisualCommit.GuideShots;

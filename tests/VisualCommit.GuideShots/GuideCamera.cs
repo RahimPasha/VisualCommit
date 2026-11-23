@@ -3,7 +3,6 @@ using System.Runtime.InteropServices;
 using Avalonia;
 using Avalonia.Headless;
 using Avalonia.Media.Imaging;
-using Avalonia.Platform;
 using Avalonia.Styling;
 using VisualCommit.Core.Settings;
 using VisualCommit.Testing.Headless;

@@ -1,6 +1,5 @@
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
-using Avalonia.VisualTree;
 using VisualCommit.App.ViewModels.Dialogs;
 using VisualCommit.App.Views.Pages;
 using Xunit;
