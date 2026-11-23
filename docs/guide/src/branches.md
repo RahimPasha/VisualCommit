@@ -18,8 +18,8 @@ Type the name in the dialog **Create branch**. **Check out the new branch** is t
 with; untick it to stay on the branch you are on. VisualCommit says at once when a name is not
 allowed or is taken.
 
-<img src="pictures/create-branch-light.png" srcset="pictures/create-branch-light.png 2x" alt="The dialog Create branch, from 2e57073 Show the battery level, with the name feature/alerts typed, Check out the new branch ticked, and the buttons Cancel and Create branch.">
-<img src="pictures/create-branch-dark.png" srcset="pictures/create-branch-dark.png 2x" alt="The dialog Create branch, from 2e57073 Show the battery level, with the name feature/alerts typed, Check out the new branch ticked, and the buttons Cancel and Create branch.">
+<img src="pictures/create-branch-light.png" srcset="pictures/create-branch-light.png 2x" alt="The dialog Create branch, from c8a5135 Show the battery level, with the name feature/alerts typed, Check out the new branch ticked, and the buttons Cancel and Create branch.">
+<img src="pictures/create-branch-dark.png" srcset="pictures/create-branch-dark.png 2x" alt="The dialog Create branch, from c8a5135 Show the battery level, with the name feature/alerts typed, Check out the new branch ticked, and the buttons Cancel and Create branch.">
 
 ## Check out a branch
 

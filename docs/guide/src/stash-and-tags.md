@@ -44,8 +44,8 @@ Choose **Create tag here…** in a commit's or a branch's menu, or **Create tag 
 **Tags** section's menu. Type the tag's name. With a message, the tag is an annotated tag; without
 one, a lightweight tag. Press **Create tag**.
 
-<img src="pictures/create-tag-light.png" srcset="pictures/create-tag-light.png 2x" alt="The dialog Create tag, at 2e57073 Show the battery level, with the name v1.2 typed, an empty box Message (optional: makes an annotated tag), and the buttons Cancel and Create tag.">
-<img src="pictures/create-tag-dark.png" srcset="pictures/create-tag-dark.png 2x" alt="The dialog Create tag, at 2e57073 Show the battery level, with the name v1.2 typed, an empty box Message (optional: makes an annotated tag), and the buttons Cancel and Create tag.">
+<img src="pictures/create-tag-light.png" srcset="pictures/create-tag-light.png 2x" alt="The dialog Create tag, at c8a5135 Show the battery level, with the name v1.2 typed, an empty box Message (optional: makes an annotated tag), and the buttons Cancel and Create tag.">
+<img src="pictures/create-tag-dark.png" srcset="pictures/create-tag-dark.png 2x" alt="The dialog Create tag, at c8a5135 Show the battery level, with the name v1.2 typed, an empty box Message (optional: makes an annotated tag), and the buttons Cancel and Create tag.">
 
 ### Push, delete and more
 

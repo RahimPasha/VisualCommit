@@ -14,8 +14,8 @@ commit. Close it with the **×** at its right or with Esc, and the graph comes b
 **Inline** shows the old and the new lines in one column, removed lines marked `-` and added lines
 `+`, each with its old and new line number.
 
-<img src="pictures/diff-inline-light.png" srcset="pictures/diff-inline-light.png 2x" alt="The inline diff of station/units.py, unstaged, with Inline selected: two hunks, the first replacing the module's first line with three lines, the second adding a function kilometres_per_hour_to_knots; each hunk's bar has the buttons Stage hunk and Discard hunk, and the toolbar has Stage file and Discard file.">
-<img src="pictures/diff-inline-dark.png" srcset="pictures/diff-inline-dark.png 2x" alt="The inline diff of station/units.py, unstaged, with Inline selected: two hunks, the first replacing the module's first line with three lines, the second adding a function kilometres_per_hour_to_knots; each hunk's bar has the buttons Stage hunk and Discard hunk, and the toolbar has Stage file and Discard file.">
+<img src="pictures/diff-inline-light.png" srcset="pictures/diff-inline-light.png 2x" alt="The inline diff of station/units.py, unstaged, with Inline selected: two hunks, the first replacing the module's first line with three lines, the second adding a function kilometers_per_hour_to_knots; each hunk's bar has the buttons Stage hunk and Discard hunk, and the toolbar has Stage file and Discard file.">
+<img src="pictures/diff-inline-dark.png" srcset="pictures/diff-inline-dark.png 2x" alt="The inline diff of station/units.py, unstaged, with Inline selected: two hunks, the first replacing the module's first line with three lines, the second adding a function kilometers_per_hour_to_knots; each hunk's bar has the buttons Stage hunk and Discard hunk, and the toolbar has Stage file and Discard file.">
 
 **Side by side** shows the old file on the left and the new one on the right, with the lines lined
 up.

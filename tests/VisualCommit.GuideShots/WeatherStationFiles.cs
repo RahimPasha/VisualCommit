@@ -20,7 +20,7 @@ internal sealed class WeatherStationFiles
     public static string UnitsInProgress(string committed) =>
         committed
             .Replace(UnitsDocstring, UnitsDocstring + "\n\nEvery function takes and returns plain numbers, never strings.", StringComparison.Ordinal)
-            + "\n\ndef kilometres_per_hour_to_knots(speed):\n    return speed / 1.852\n";
+            + "\n\ndef kilometers_per_hour_to_knots(speed):\n    return speed / 1.852\n";
 
     /// <summary>What the working tree's change adds to the readme.</summary>
     public const string ReadmeAddition = "\n## Calibration\n\nCompare the temperature with a reference thermometer once a season.\n";
@@ -199,8 +199,8 @@ internal sealed class WeatherStationFiles
         text.Append("\n\ndef hectopascals_to_inches(hectopascals):\n    return hectopascals * 0.02953\n");
         if (On(nameof(ConvertWindSpeeds)))
         {
-            text.Append("\n\ndef metres_per_second_to_kilometres_per_hour(speed):\n    return speed * 3.6\n");
-            text.Append("\n\ndef metres_per_second_to_miles_per_hour(speed):\n    return speed * 2.23694\n");
+            text.Append("\n\ndef meters_per_second_to_kilometers_per_hour(speed):\n    return speed * 3.6\n");
+            text.Append("\n\ndef meters_per_second_to_miles_per_hour(speed):\n    return speed * 2.23694\n");
         }
 
         if (On(nameof(RoundReadings)))
@@ -275,7 +275,7 @@ internal sealed class WeatherStationFiles
         var text = new StringBuilder("from station import units\n\n\ndef test_freezing_point():\n    assert units.celsius_to_fahrenheit(0) == 32\n");
         if (On(nameof(ConvertWindSpeeds)))
         {
-            text.Append("\n\ndef test_wind_speed():\n    assert units.metres_per_second_to_kilometres_per_hour(10) == 36\n");
+            text.Append("\n\ndef test_wind_speed():\n    assert units.meters_per_second_to_kilometers_per_hour(10) == 36\n");
         }
 
         return text.ToString();
