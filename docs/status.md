@@ -314,6 +314,11 @@ Wave 4 and the review:
 - [ ] 17. §11, the user guide (D408, D439 to D441, D451), part G: the pages, the workflow that
   builds the site and runs the links' tests, the pictures in both themes, the app's links and F1.
   (GitHub Pages is turned on at "Phase 8a accepted", before `master` is pushed.)
+- [ ] 17b. `restore`, the restore order (ruling 76, D457 (5)): its design section (the design's
+  section 14), its tests first and failing on today's code, the build, a review; then the lead's
+  proof: M2 and M3 with the two builds run alternately, five times each, taken as D457 (2) says
+  (about half an hour of the rested desktop, the owner told), and the probe; merged when proven,
+  reverted and sent to plan.md's Backlog with its numbers when not.
 - [ ] 18. §12, the real-window part for 8a's checks (`Phase8aRealWindowPass`, D442 to D446): built
   on the Windows machine, each of its 13 methods run alone, the owner told before each.
 - [ ] 19. (With it, the lead's ruling of 2026-11-20: Ctrl+Tab from a stage row gives the focus to
@@ -720,12 +725,27 @@ ready, without asking again; §9's Narrator listen needs the owner in person and
 its merge.
 **Wave 3 is closed (step 16, 2026-11-23), and the owner said on 2026-11-23, asked for the week's
 share: "All of wave 4 now"** (D241; "Waiting on the owner"). **Wave 4 is the next step** (steps 17
-to 19), begun that day: first the lead reads the design's sections 11 and 12, 0.4 and 0.5 and D457
-(5), writes the restore order's design section and has each part's checks written and committed
-before its package is built (D244). What step 16 ended with: the three packages merged, §10
-(`86ecb3a`), §8 (`f014b2b`, its fixes after the merge `85e2884`) and §9 (`769f459`); the lagged
-list, the whole default run and the pictures on `85e2884`, whose one fault (`a1b-about-link-focus`)
-is fixed (`fcf8c1e`); the references of the later merges,
+to 19, with 17b), begun that day at about 08:00. Its order, by design 0.4 and section 12: part G's
+checks and the restore order's design section first; then §11 (the guide) and `restore` built side
+by side in worktrees of their own, reviewed, fixed and merged; then §12 (the real-window part),
+built after §11's merge, each of its 13 methods run alone with the owner told; then the review
+before the gate (step 19) and its fixes, §12's merge last, the lagged list and the whole default
+run. **Under way since 08:05, both only reading the repository and writing outside it:** part G's
+checks (run `wf_05b26e3f-45e`: a writer, two reviewers, a verifier per major, a fixer; into
+`D:/Projects/Personal/phase8-work/wave4/checks/part-G.md`) and the restore order's section (run
+`wf_e8daca0e-d5c`: a drafter, three reviewers, verifiers, a fixer; into
+`wave4/restore/section-14.md`). **Left for the lead when they end:** read both; put part G into the
+report (its subsection, the Checks rows, the hand check, the Delivers rows, the changes to expected
+results, with mdBook's pinned hashes of Notes, "Wave 4") and the section into the design as section
+14, with 0.4's row and what the fixers list for the design; confirm or change the choices the
+section makes for the package; commit and push both; then start the two builders (the wave 3 build
+script is the model:
+`C:/Users/rpkha/.claude/projects/d--Projects-Personal-Visual-Git/9b135677-ae78-44f9-8ed1-d3fff497a168/workflows/scripts/phase8a-wave-3-wf_ee9f40a9-6e3.js`;
+worktrees `D:/Projects/Personal/vc-wt/p8a-guide` and `p8a-restore` on `wip/p8a-guide` and
+`wip/p8a-restore`, made from the commit that holds part G and section 14). What step 16 ended with:
+the three packages merged, §10 (`86ecb3a`), §8 (`f014b2b`, its fixes after the merge `85e2884`) and
+§9 (`769f459`); the lagged list, the whole default run and the pictures on `85e2884`, whose one
+fault (`a1b-about-link-focus`) is fixed (`fcf8c1e`); the references of the later merges,
 `D:/Projects/Personal/phase8-work/references/wave3/` (1,235 scripted pictures); three "before"
 series, two probes, two panels and **D457** (the bounds `0bfbe92`, two backlog rows, the restore
 order as ruling 76, a change in wave 4); CI's two failures on the link frame's merge fixed
@@ -753,6 +773,23 @@ every commit.
 
 ### Notes for whoever resumes
 
+- **Wave 4 (begun 2026-11-23).** The owner's word that day, asked for the week's share with wave 3's
+  cost and wave 4's estimate before them: "All of wave 4 now"; the Narrator listen "Later, before
+  the review". **mdBook 0.5.4 is pinned and at hand** (design 13.4 item 20; release `v0.5.4` of
+  `rust-lang/mdBook`, published 2026-07-06, downloaded with `gh release download` on 2026-11-23):
+  the Linux archive `mdbook-v0.5.4-x86_64-unknown-linux-gnu.tar.gz`, which the guide's workflow
+  downloads and checks, has SHA-256
+  `3f28de05dafca9d0f2eab99c662116b0e37b89b1d96a08f8f430b9eeae958cd7`; the Windows archive
+  `mdbook-v0.5.4-x86_64-pc-windows-msvc.zip` has
+  `8a6b2421aa522de06d746871d2b8fff9c8d71773467e310a4516d2566e7f2de4`; both equal the digests GitHub
+  shows for the release's files. The archives are in
+  `D:/Projects/Personal/phase8-work/tools/mdbook-0.5.4-download/`, the Windows program unpacked in
+  `D:/Projects/Personal/phase8-work/tools/mdbook-0.5.4/mdbook.exe` (SHA-256
+  `ffa917c9b6b608aa8b6189dcb38a548ff2615832113ad6c6e26f6ef9c8d77a44`; it prints `mdbook v0.5.4`),
+  for §11's builder and the lead's local builds; nothing of it is in the repository. For §12's runs
+  on the desktop (each of its 13 methods alone) and for the restore order's series the owner is told
+  first each time; the owner's "start each when ready" of 2026-11-21 was for wave 3's three
+  takeovers and is asked again for wave 4's.
 - **Wave 3 is under way (2026-11-21).** The owner's word that day: "Continue", all of wave 3 now, and
   the three takeovers of the desktop (the spike, §10's first run, the "before" series) each as soon
   as it is ready. **The checks** of parts A and U were written by a writer each, reviewed by two

@@ -5501,9 +5501,17 @@ on the review, and item 22 is the review's question for the owner (13.5).
     fast-forward or a merge, and the budget stays 23 (`status.md`'s CI section).
 19. The region of `s14e-shortcuts-top`'s scroll bar: §11's builder measures it, the lead adds it to
     0.7. At §11's merge.
-20. mdBook publishes no checksum: the lead downloads the Linux archive once, pins its SHA-256 with the
-    date in the report, and puts mdBook 0.5.4 for Windows, hashed, in
-    `D:/Projects/Personal/phase8-work/tools/`. Before §11.
+20. mdBook publishes no checksum: the lead downloads the Linux archive once, pins its SHA-256 with
+    the date in the report, and puts mdBook 0.5.4 for Windows, hashed, in
+    `D:/Projects/Personal/phase8-work/tools/`. Before §11. **Settled (the lead, 2026-11-23, before
+    §11):** GitHub shows a SHA-256 digest for each file of the release `v0.5.4` (published
+    2026-07-06), and the two archives downloaded that day hash to them: the Linux archive
+    `mdbook-v0.5.4-x86_64-unknown-linux-gnu.tar.gz`
+    `3f28de05dafca9d0f2eab99c662116b0e37b89b1d96a08f8f430b9eeae958cd7`, which `guide.yml` checks,
+    and the Windows archive `mdbook-v0.5.4-x86_64-pc-windows-msvc.zip`
+    `8a6b2421aa522de06d746871d2b8fff9c8d71773467e310a4516d2566e7f2de4`, whose `mdbook.exe` is at
+    `D:/Projects/Personal/phase8-work/tools/mdbook-0.5.4/` (SHA-256
+    `ffa917c9b6b608aa8b6189dcb38a548ff2615832113ad6c6e26f6ef9c8d77a44`).
 21. The 42 shots may cost more than planned; the lead may drop a shot whose state is too costly and
     keep its page's text. During §11.
 22. Whether winget is offered for a git that is too old or not working: the owner's D405 offers the
