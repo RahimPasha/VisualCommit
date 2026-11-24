@@ -92,6 +92,41 @@ public static class FocusReturn
     }
 
     /// <summary>
+    /// For a button whose command may ask a question first and is disabled while it runs (a
+    /// discard, Stage all's question on conflict markers, Restore's after a later change): when it
+    /// is pressed while it shows the keyboard's frame (Enter or Space after Tab), it gets the focus
+    /// back with the frame once the run has ended, as a question cancelled leaves it (D104's
+    /// return finds the button disabled). Only when the run took the focus away and the button
+    /// still shows, enabled, with the data it was pressed for; a click arms nothing, so the
+    /// mouse's path stays as it was. When the run leaves the button hidden, <paramref name="instead"/>,
+    /// when given, takes the focus in its place, without the frame. Call once, when the view is made.
+    /// </summary>
+    public static void AfterKeyboardPress(Button button, Func<InputElement?>? instead = null)
+    {
+        ArgumentNullException.ThrowIfNull(button);
+        button.Click += (_, _) =>
+        {
+            if (button.Command is not IAsyncRelayCommand command || !button.Classes.Contains(":focus-visible"))
+            {
+                return;
+            }
+
+            var armed = button.DataContext;
+            var lost = LostFrom(TopLevel.GetTopLevel(button), button, static () => true);
+            AfterRun(command, button, () => ReferenceEquals(button.DataContext, armed) ? button : null, NavigationMethod.Tab, lost);
+            if (instead is not null)
+            {
+                AfterRun(
+                    command,
+                    button,
+                    () => ReferenceEquals(button.DataContext, armed) && !button.IsEffectivelyVisible ? instead() : null,
+                    NavigationMethod.Unspecified,
+                    lost);
+            }
+        };
+    }
+
+    /// <summary>
     /// The usual test of a focus that a run took away from <paramref name="pressed"/>: nothing has
     /// it, <paramref name="topLevel"/> (the window) has it, or the element that has it is no longer
     /// shown or enabled; or <paramref name="pressed"/> itself has it while <paramref name="stillThere"/>

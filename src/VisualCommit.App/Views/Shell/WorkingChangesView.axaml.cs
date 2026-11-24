@@ -43,6 +43,12 @@ public partial class WorkingChangesView : UserControl
         // Tab and Shift+Tab walk the lists' rows in their order, also those not made yet.
         UnstagedFileList.AddHandler(KeyDownEvent, (_, e) => OnListKeyDown(e, UnstagedFileList), RoutingStrategies.Tunnel);
         StagedFileList.AddHandler(KeyDownEvent, (_, e) => OnListKeyDown(e, StagedFileList), RoutingStrategies.Tunnel);
+
+        // These may ask first, their buttons disabled meanwhile: one pressed by the keys gets the
+        // focus back when its question is cancelled (D75 for Restore).
+        FocusReturn.AfterKeyboardPress(StageAllButton);
+        FocusReturn.AfterKeyboardPress(DiscardAllButton);
+        FocusReturn.AfterKeyboardPress(RestoreDiscardButton);
     }
 
     protected override void OnDataContextChanged(EventArgs e)
