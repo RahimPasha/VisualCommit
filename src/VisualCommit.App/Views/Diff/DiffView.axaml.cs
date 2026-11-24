@@ -61,7 +61,8 @@ public partial class DiffView : UserControl
 
         // Stage lines and Unstage lines go with the lines they took, and "Show the diff" with its
         // message: pressed by the keys, they leave the focus in the text, without a frame, as
-        // Discard lines does (D462).
+        // Discard lines does, once their run has ended; one that failed keeps its lines and has the
+        // focus back itself (D462).
         FocusReturn.Instead(StageLinesButton, () => DiffText.BodyFocusTarget, NavigationMethod.Unspecified);
         FocusReturn.Instead(UnstageLinesButton, () => DiffText.BodyFocusTarget, NavigationMethod.Unspecified);
         FocusReturn.Instead(ShowLargeDiffButton, () => DiffText.BodyFocusTarget, NavigationMethod.Unspecified);

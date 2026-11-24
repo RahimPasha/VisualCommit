@@ -34,7 +34,7 @@ public partial class WelcomeView : UserControl
         // while a clone that Clone started runs, Clone is disabled and Cancel clone stands beside it.
         FocusReturn.Instead(CloneCancelButton, () => CloneStartButton);
         FocusReturn.Instead(CloneCloseButton, () => CloneRepoButton);
-        FocusReturn.Instead(CloneStartButton, () => CloneCancelButton);
+        FocusReturn.Instead(CloneStartButton, () => CloneCancelButton, whileRunning: true);
     }
 
     private void Watch(WelcomeViewModel? viewModel)

@@ -41,7 +41,9 @@ public static partial class FocusReturn
         var topLevel = TopLevel.GetTopLevel(scope);
         void Follow(Task run) =>
             run.ContinueWith(
-                _ => Dispatcher.UIThread.Post(() => Return(topLevel, scope, target, method, stillLost), DispatcherPriority.Loaded),
+                _ => Dispatcher.UIThread.Post(
+                    () => WhenActive(topLevel ?? TopLevel.GetTopLevel(scope), () => Return(topLevel, scope, target, method, stillLost)),
+                    DispatcherPriority.Loaded),
                 CancellationToken.None,
                 TaskContinuationOptions.ExecuteSynchronously,
                 TaskScheduler.Default);
@@ -151,7 +153,7 @@ public static partial class FocusReturn
             var topLevel = TopLevel.GetTopLevel(button);
             var lost = LostFrom(topLevel, button, static () => false);
             Dispatcher.UIThread.Post(
-                () =>
+                () => WhenActive(topLevel, () =>
                 {
                     if (ReferenceEquals(button.DataContext, armed)
                         && !button.IsEffectivelyVisible
@@ -160,9 +162,38 @@ public static partial class FocusReturn
                     {
                         element.Focus(NavigationMethod.Tab);
                     }
-                },
+                }),
                 DispatcherPriority.Loaded);
         };
+    }
+
+    /// <summary>
+    /// Runs <paramref name="look"/> now when <paramref name="topLevel"/> is active; while it is not
+    /// (another program in front: Alt+Tab, a browser opened, a native dialog), once it is active again
+    /// and Avalonia has given back the focus it remembered. The platform takes the focus from a window
+    /// it deactivates (Avalonia's <c>TopLevel</c> sets it to nothing), which is no loss of an action's,
+    /// and a focus given meanwhile would be the one the window comes back with, by Tab, a text box's
+    /// text all selected (D462). Avalonia raises <c>Activated</c> before it gives the remembered focus
+    /// back, hence the two rounds of the dispatcher before the look.
+    /// </summary>
+    internal static void WhenActive(TopLevel? topLevel, Action look)
+    {
+        ArgumentNullException.ThrowIfNull(look);
+        if (topLevel is not WindowBase { IsActive: false } window)
+        {
+            look();
+            return;
+        }
+
+        void OnActivated(object? sender, EventArgs e)
+        {
+            window.Activated -= OnActivated;
+            Dispatcher.UIThread.Post(
+                () => Dispatcher.UIThread.Post(() => WhenActive(window, look), DispatcherPriority.Loaded),
+                DispatcherPriority.Loaded);
+        }
+
+        window.Activated += OnActivated;
     }
 
     /// <summary>

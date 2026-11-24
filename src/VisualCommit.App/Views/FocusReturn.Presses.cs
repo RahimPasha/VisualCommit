@@ -34,26 +34,42 @@ namespace VisualCommit.App.Views;
 /// gives it (<see cref="KeyRegionNavigator.MarkedTargetIn"/>);</item>
 /// <item>the graph area's target, for an element in no region (the tab strip, the toolbar, the status bar).</item>
 /// </list>
-/// The focus comes with the keyboard's frame when the element had it. Views that place the focus
-/// themselves after such an action (a stage row's buttons, the first-run screen, the settings
-/// screen's Git program row, a dialog's own return, D104) do so first: this rule looks only after
-/// them and acts only when the focus is still lost. A click on a button without the frame arms
-/// nothing; a focus the user has moved meanwhile stays; a dialog the action closed leaves the return
-/// to D104 and to its opener's own action; a dialog that stands over the element's place (one opened
+/// The focus comes with the keyboard's frame when the element had it; a text box given the focus
+/// back keeps the caret and selection it had at the press, and a dialog's opening box gets them as
+/// on opening. Views that place the focus themselves after such an action (a stage row's buttons,
+/// the first-run screen, the settings screen's Git program row, a dialog's own return, D104) do so
+/// first: this rule looks only after them and acts only when the focus is still lost. A click on a
+/// button without the frame arms nothing, and a press of the mouse on an element ends what the keys
+/// armed on it, so the mouse's path stays as it was. A press is dropped once the focus moves, after
+/// it, to another element that stands, outside a menu and outside a dialog over the element's place
+/// (the user's Tab or click, or a view's own placement), so a focus the user moved meanwhile stays,
+/// also when the user's own later action loses it. A dialog the action closed leaves the return to
+/// D104 and to its opener's own action; a dialog that stands over the element's place (one opened
 /// over the window, or over the element's own dialog) is waited for, and the look comes once it has
-/// closed, so that no focus goes behind it; and after a switch of tabs the window places the focus
-/// first (<c>MainWindow.FocusAfterSwitch</c>), and a focus still on nothing then, as when the action
-/// had taken it before the switch, goes to the graph area's target of the tab now shown. While the
-/// action's run lasts, a pressed element its run disables hands the focus to what its view named to
-/// stand in its place, when that shows (the clone form's Cancel clone beside its disabled Clone).
+/// closed, so that no focus goes behind it; after a switch of tabs the window places the focus first
+/// (<c>MainWindow.FocusAfterSwitch</c>), and a focus still on nothing then, as when the action had
+/// taken it before the switch, goes to the graph area's target of the tab now shown; and while the
+/// window is inactive no look is made: the platform's taking of the focus from a window it
+/// deactivates is no loss of an action's, and the look comes once the window is active again and
+/// Avalonia has given back the focus it remembered (<see cref="WhenActive"/>). While the action's run
+/// lasts, a pressed element its run disables hands the focus to what its view named to stand in its
+/// place for that time, when that shows (the clone form's Cancel clone beside its disabled Clone). The
+/// rule holds no tab or data it was pressed for: a closed tab goes.
 /// </summary>
 public static partial class FocusReturn
 {
     /// <summary>The pseudo-class of an element that shows the keyboard's frame (its focus came by Tab or the arrows).</summary>
     private const string FocusVisibleClass = ":focus-visible";
 
-    /// <summary>The action by the keys each element is followed for now: a newer one replaces it.</summary>
+    /// <summary>The press by the keys (a click, a dialog's Enter, a menu) each element is followed for now: a newer one replaces it.</summary>
     private static readonly ConditionalWeakTable<InputElement, ActionByKeys> Followed = new();
+
+    /// <summary>
+    /// The key of the window's (<see cref="AfterKeyboardShortcut"/>) each element is followed for now,
+    /// beside its press in <see cref="Followed"/>: a newer key on the element replaces it, so a key held
+    /// or repeated arms one follower.
+    /// </summary>
+    private static readonly ConditionalWeakTable<InputElement, ActionByKeys> FollowedByKey = new();
 
     /// <summary>What stands in an element's place when its action leaves it hidden or disabled (<see cref="Instead"/>).</summary>
     private static readonly ConditionalWeakTable<InputElement, InPlace> InPlaces = new();
@@ -71,7 +87,7 @@ public static partial class FocusReturn
             {
                 if (e.Source is Button button && button.IsFocused && button.Classes.Contains(FocusVisibleClass))
                 {
-                    Follow(button, button.Command, NavigationMethod.Tab);
+                    Follow(button, button.Command, NavigationMethod.Tab, Followed);
                 }
             },
             RoutingStrategies.Bubble,
@@ -87,7 +103,7 @@ public static partial class FocusReturn
     public static void AfterKeyboardAction(InputElement pressed, ICommand? command)
     {
         ArgumentNullException.ThrowIfNull(pressed);
-        Follow(pressed, command, pressed.Classes.Contains(FocusVisibleClass) ? NavigationMethod.Tab : NavigationMethod.Unspecified);
+        Follow(pressed, command, pressed.Classes.Contains(FocusVisibleClass) ? NavigationMethod.Tab : NavigationMethod.Unspecified, Followed);
     }
 
     /// <summary>
@@ -98,7 +114,7 @@ public static partial class FocusReturn
     public static void AfterKeyboardMenu(InputElement opener)
     {
         ArgumentNullException.ThrowIfNull(opener);
-        Follow(opener, null, opener.Classes.Contains(FocusVisibleClass) ? NavigationMethod.Tab : NavigationMethod.Unspecified);
+        Follow(opener, null, opener.Classes.Contains(FocusVisibleClass) ? NavigationMethod.Tab : NavigationMethod.Unspecified, Followed);
     }
 
     /// <summary>
@@ -112,43 +128,43 @@ public static partial class FocusReturn
     {
         if (focused is InputElement element && element.Classes.Contains(FocusVisibleClass))
         {
-            // Beside an action already followed on the element (a press whose run still lasts), not in its place.
-            Follow(element, null, NavigationMethod.Tab, replaces: false);
+            // Beside an action already followed on the element (a press whose run still lasts), not
+            // in its place; in the place of the key before on the same element, which, the element
+            // having kept the focus, has nothing pending but its watch of the element's next loss.
+            Follow(element, null, NavigationMethod.Tab, FollowedByKey);
         }
     }
 
     /// <summary>
     /// Names what takes the focus, by <paramref name="method"/>, when an action by the keys leaves
     /// <paramref name="pressed"/> hidden or disabled: the control that stands in its place (the
-    /// clone form's Clone for its Cancel clone, and Cancel clone for Clone while the clone runs) or
-    /// that opened what it closed (the welcome page's Clone for the form's Cancel). Call once, when
-    /// the view is made.
+    /// clone form's Clone for its Cancel clone) or that opened what it closed (the welcome page's
+    /// Clone for the form's Cancel), second in the class comment's order once the action's run has
+    /// ended. With <paramref name="whileRunning"/>, it also takes a focus that the pressed element's
+    /// own run takes as it disables the element, while that run lasts (Cancel clone beside Clone).
+    /// Call once, when the view is made.
     /// </summary>
-    public static void Instead(InputElement pressed, Func<InputElement?> target, NavigationMethod method = NavigationMethod.Tab)
+    public static void Instead(InputElement pressed, Func<InputElement?> target, NavigationMethod method = NavigationMethod.Tab, bool whileRunning = false)
     {
         ArgumentNullException.ThrowIfNull(pressed);
         ArgumentNullException.ThrowIfNull(target);
-        InPlaces.AddOrUpdate(pressed, new InPlace(target, method));
+        InPlaces.AddOrUpdate(pressed, new InPlace(target, method, whileRunning));
     }
 
-    private static void Follow(InputElement pressed, ICommand? command, NavigationMethod method, bool replaces = true)
+    private static void Follow(InputElement pressed, ICommand? command, NavigationMethod method, ConditionalWeakTable<InputElement, ActionByKeys> table)
     {
         if (TopLevel.GetTopLevel(pressed) is not { } topLevel || InMenu(pressed))
         {
             return;
         }
 
-        var action = new ActionByKeys(pressed, topLevel, method);
-        if (replaces)
+        if (table.TryGetValue(pressed, out var earlier))
         {
-            if (Followed.TryGetValue(pressed, out var earlier))
-            {
-                earlier.Stop();
-            }
-
-            Followed.AddOrUpdate(pressed, action);
+            earlier.Stop();
         }
 
+        var action = new ActionByKeys(pressed, topLevel, method, table);
+        table.AddOrUpdate(pressed, action);
         if (command is IAsyncRelayCommand run)
         {
             action.FollowNextRun(run);
@@ -167,7 +183,7 @@ public static partial class FocusReturn
     private static bool CanTake(InputElement? element) =>
         element is { IsEffectivelyVisible: true, IsEffectivelyEnabled: true, Focusable: true } && element.IsAttachedToVisualTree();
 
-    private sealed record InPlace(Func<InputElement?> Target, NavigationMethod Method);
+    private sealed record InPlace(Func<InputElement?> Target, NavigationMethod Method, bool WhileRunning);
 
     /// <summary>One action by the keys on an element, followed until the focus is placed or found elsewhere.</summary>
     private sealed class ActionByKeys
@@ -175,13 +191,26 @@ public static partial class FocusReturn
         private readonly InputElement _pressed;
         private readonly TopLevel _topLevel;
         private readonly NavigationMethod _method;
-        private readonly object? _data;
-        private readonly object? _tab;
+        private readonly ConditionalWeakTable<InputElement, ActionByKeys> _table;
+
+        /// <summary>The element's data at the press, held weakly: the action keeps no closed tab's view models (D462).</summary>
+        private readonly WeakReference<object>? _data;
+
+        /// <summary>The active tab at the press, held weakly for the same reason.</summary>
+        private readonly WeakReference<object>? _tab;
+
         private readonly Control? _root;
         private readonly DialogView? _dialog;
-        private readonly ItemsControl? _list;
-        private readonly int _place;
+        private ItemsControl? _list;
+        private int _place;
+
+        /// <summary>The pressed text box's selection and caret as the action armed or last found it focused: a single-line box focused by Tab selects all it holds, and the look gives them back.</summary>
+        private (int Start, int End, int Caret)? _text;
+
         private bool _stopped;
+
+        /// <summary>Whether the rule is placing the focus itself, so that the move it makes does not end the action.</summary>
+        private bool _placing;
 
         /// <summary>Whether the look follows the end of the action's run, after which a disabled element is disabled for good (Undo with nothing left to undo).</summary>
         private bool _afterRun;
@@ -192,39 +221,47 @@ public static partial class FocusReturn
         /// <summary>The window's dialogs while a look waits for those that stand over the element's place to close.</summary>
         private DialogHostViewModel? _waitingOn;
 
-        /// <summary>Whether a loss while the run lasts is handed to what stands in the element's place (<see cref="Instead"/>).</summary>
+        /// <summary>Whether a loss while the run lasts is handed to what stands in the element's place for that time (<see cref="Instead"/>).</summary>
         private bool _watchingRun;
 
-        public ActionByKeys(InputElement pressed, TopLevel topLevel, NavigationMethod method)
+        public ActionByKeys(InputElement pressed, TopLevel topLevel, NavigationMethod method, ConditionalWeakTable<InputElement, ActionByKeys> table)
         {
             _pressed = pressed;
             _topLevel = topLevel;
             _method = method;
-            _data = pressed.DataContext;
-            _tab = (topLevel.DataContext as MainWindowViewModel)?.ActiveTab;
+            _table = table;
+            _data = pressed.DataContext is { } data ? new WeakReference<object>(data) : null;
+            _tab = (topLevel.DataContext as MainWindowViewModel)?.ActiveTab is { } tab ? new WeakReference<object>(tab) : null;
             _root = KeyRegion.RootOf(pressed);
             _dialog = pressed.GetSelfAndVisualAncestors().OfType<DialogView>().FirstOrDefault();
             (_list, _place) = PlaceOf(pressed, (Visual?)_dialog ?? _root);
+            _text = TextOf(pressed);
+            topLevel.AddHandler(InputElement.GotFocusEvent, OnFocusMoved, RoutingStrategies.Bubble, handledEventsToo: true);
         }
 
         public void Stop()
         {
             _stopped = true;
-            _pressed.LostFocus -= OnLostFocus;
+            StopWatchingLoss();
             _pressed.PropertyChanged -= OnEnabledChanged;
             _pressed.DetachedFromVisualTree -= OnDetached;
+            _topLevel.RemoveHandler(InputElement.GotFocusEvent, OnFocusMoved);
             StopWatchingRun();
             StopWaitingForDialogs();
+            if (_table.TryGetValue(_pressed, out var current) && ReferenceEquals(current, this))
+            {
+                _table.Remove(_pressed);
+            }
         }
 
         /// <summary>
         /// The run the press starts (the command's next execution, which the click comes before): when
-        /// it ends, a look. Meanwhile, for an element whose view named what stands in its place, a loss
-        /// of the focus (the run disabling the element as it starts) hands it there.
+        /// it ends, a look. Meanwhile, for an element whose view named what stands in its place while
+        /// its run lasts, a loss of the focus (the run disabling the element as it starts) hands it there.
         /// </summary>
         public void FollowNextRun(IAsyncRelayCommand command)
         {
-            if (InPlaces.TryGetValue(_pressed, out _))
+            if (InPlaces.TryGetValue(_pressed, out var inPlace) && inPlace.WhileRunning)
             {
                 _watchingRun = true;
                 _pressed.LostFocus += OnLostDuringRun;
@@ -250,7 +287,7 @@ public static partial class FocusReturn
                     if (!started)
                     {
                         command.PropertyChanged -= OnChanged;
-                        StopWatchingRun();
+                        Stop();
                     }
                 },
                 DispatcherPriority.Loaded);
@@ -267,7 +304,9 @@ public static partial class FocusReturn
         {
             if (ReferenceEquals(e.Source, _pressed))
             {
-                Dispatcher.UIThread.Post(() => Dispatcher.UIThread.Post(LookDuringRun, DispatcherPriority.Loaded), DispatcherPriority.Loaded);
+                Dispatcher.UIThread.Post(
+                    () => Dispatcher.UIThread.Post(() => WhenActive(_topLevel, LookDuringRun), DispatcherPriority.Loaded),
+                    DispatcherPriority.Loaded);
             }
         }
 
@@ -280,21 +319,34 @@ public static partial class FocusReturn
                 return;
             }
 
-            if (InPlaces.TryGetValue(_pressed, out var inPlace) && inPlace.Target() is { } instead && CanTake(instead))
+            if (InPlaces.TryGetValue(_pressed, out var inPlace) && inPlace.WhileRunning && inPlace.Target() is { } instead && CanTake(instead))
             {
-                instead.Focus(inPlace.Method);
+                Place(instead, inPlace.Method);
             }
         }
 
-        /// <summary>The next loss of the focus by the element: a look, once a run of its own that is going on has ended.</summary>
+        /// <summary>
+        /// The next loss of the focus by the element: a look, once a run of its own that is going on
+        /// has ended. Meanwhile a press of the mouse on the element (a right-click's menu, a click
+        /// without the frame) starts an action of the mouse's, and what the keys armed ends.
+        /// </summary>
         public void WatchLoss()
         {
-            _pressed.LostFocus -= OnLostFocus;
+            StopWatchingLoss();
             if (!_stopped)
             {
                 _pressed.LostFocus += OnLostFocus;
+                _pressed.AddHandler(InputElement.PointerPressedEvent, OnPointerPressed, RoutingStrategies.Tunnel, handledEventsToo: true);
             }
         }
+
+        private void StopWatchingLoss()
+        {
+            _pressed.LostFocus -= OnLostFocus;
+            _pressed.RemoveHandler(InputElement.PointerPressedEvent, OnPointerPressed);
+        }
+
+        private void OnPointerPressed(object? sender, PointerPressedEventArgs e) => Stop();
 
         private void OnLostFocus(object? sender, RoutedEventArgs e)
         {
@@ -303,7 +355,7 @@ public static partial class FocusReturn
                 return;
             }
 
-            _pressed.LostFocus -= OnLostFocus;
+            StopWatchingLoss();
             if (_pressed is Button { Command: IAsyncRelayCommand { IsRunning: true, ExecutionTask: { } running } })
             {
                 AfterRun(running);
@@ -312,6 +364,24 @@ public static partial class FocusReturn
             {
                 LookLater();
             }
+        }
+
+        /// <summary>
+        /// The focus moved, after the press, to another element that stands (the user's Tab or click,
+        /// or a view's own placement): the press no longer holds it, and its look is dropped. A move
+        /// into a menu, into a dialog over the element's place, back to the element, or to nothing that
+        /// stands (the window, an element hidden or disabled) keeps it, as does the rule's own placing.
+        /// </summary>
+        private void OnFocusMoved(object? sender, FocusChangedEventArgs e)
+        {
+            if (_placing || _stopped || e.Source is not InputElement source || ReferenceEquals(source, _pressed) || InMenu(source)
+                || LostFrom(_topLevel, _pressed, static () => true)(source)
+                || (DialogsAbove() is not null && !ReferenceEquals(source.GetSelfAndVisualAncestors().OfType<DialogView>().FirstOrDefault(), _dialog)))
+            {
+                return;
+            }
+
+            Stop();
         }
 
         private void AfterRun(Task run) =>
@@ -357,16 +427,24 @@ public static partial class FocusReturn
         /// <summary>
         /// A look once the layout has followed, after what the views ask for themselves at the same
         /// priority (a row's return, the first-run screen's search, a page's list), so that theirs
-        /// comes first.
+        /// comes first; and once the window is active (<see cref="WhenActive"/>).
         /// </summary>
         private void LookLater() =>
-            Dispatcher.UIThread.Post(() => Dispatcher.UIThread.Post(Look, DispatcherPriority.Loaded), DispatcherPriority.Loaded);
+            Dispatcher.UIThread.Post(
+                () => Dispatcher.UIThread.Post(() => WhenActive(_topLevel, Look), DispatcherPriority.Loaded),
+                DispatcherPriority.Loaded);
 
         private void Look()
         {
-            // A dialog the action closed leaves the return to D104.
-            if (_stopped || (_dialog is not null && !_dialog.IsAttachedToVisualTree()))
+            if (_stopped)
             {
+                return;
+            }
+
+            // A dialog the action closed leaves the return to D104.
+            if (_dialog is not null && !_dialog.IsAttachedToVisualTree())
+            {
+                Stop();
                 return;
             }
 
@@ -379,7 +457,7 @@ public static partial class FocusReturn
             }
 
             var focused = _topLevel.FocusManager?.GetFocusedElement();
-            if (_root is not null && _tab is not null && !ReferenceEquals(_tab, (_topLevel.DataContext as MainWindowViewModel)?.ActiveTab))
+            if (_root is not null && TabChanged())
             {
                 // A switch of tabs away from an element in a region: the window's own placement
                 // comes first, a round later than the switch; a focus it found on nothing already
@@ -390,28 +468,45 @@ public static partial class FocusReturn
                 {
                     _afterSwitch = true;
                     LookLater();
-                }
-                else if (LostFrom(_topLevel, _pressed, static () => true)(focused) && GraphAreaTarget() is { } graph && CanTake(graph))
-                {
-                    graph.Focus(_method);
+                    return;
                 }
 
+                if (LostFrom(_topLevel, _pressed, static () => true)(focused) && GraphAreaTarget() is { } graph && CanTake(graph))
+                {
+                    Place(graph, _method);
+                }
+
+                Stop();
                 return;
             }
 
             if (!LostFrom(_topLevel, _pressed, StillThere)(focused))
             {
-                // Still on the element, or in a menu that gives it back: its next loss is looked at too.
+                // Still on the element, or in a menu that gives it back: its next loss is looked at
+                // too, from its place and text as they are now.
                 if (ReferenceEquals(focused, _pressed) || InMenu(focused))
                 {
+                    if (_pressed.IsAttachedToVisualTree())
+                    {
+                        (_list, _place) = PlaceOf(_pressed, (Visual?)_dialog ?? _root);
+                    }
+
+                    if (ReferenceEquals(focused, _pressed))
+                    {
+                        _text = TextOf(_pressed);
+                    }
+
                     WatchLoss();
+                }
+                else
+                {
+                    Stop();
                 }
 
                 return;
             }
 
-            if (!_afterRun && _pressed.IsAttachedToVisualTree() && _pressed.IsEffectivelyVisible && !_pressed.IsEffectivelyEnabled
-                && ReferenceEquals(_pressed.DataContext, _data))
+            if (!_afterRun && _pressed.IsAttachedToVisualTree() && _pressed.IsEffectivelyVisible && !_pressed.IsEffectivelyEnabled && HasItsData())
             {
                 WaitUntilEnabled();
                 return;
@@ -419,12 +514,74 @@ public static partial class FocusReturn
 
             if (Target() is ({ } target, var method))
             {
+                Place(target, method);
+            }
+
+            Stop();
+        }
+
+        /// <summary>Gives <paramref name="target"/> the focus by <paramref name="method"/>, as the rule's own move, and a text box its caret and selection back (<see cref="KeepText"/>).</summary>
+        private void Place(InputElement target, NavigationMethod method)
+        {
+            _placing = true;
+            try
+            {
                 target.Focus(method);
+                KeepText(target);
+            }
+            finally
+            {
+                _placing = false;
+            }
+        }
+
+        /// <summary>
+        /// A text box the rule focused: the pressed box gets back the selection and caret it had as
+        /// the action armed (a single-line box focused by Tab selects all it holds); a dialog's opening
+        /// box gets them as on opening. A region's mark keeps what F6 gives it.
+        /// </summary>
+        private void KeepText(InputElement target)
+        {
+            if (target is not TextBox box)
+            {
+                return;
+            }
+
+            var length = box.Text?.Length ?? 0;
+            if (ReferenceEquals(box, _pressed) && _text is { } text)
+            {
+                var (start, end, caret) = text;
+                if (start == end)
+                {
+                    box.ClearSelection();
+                    box.CaretIndex = Math.Min(caret, length);
+                }
+                else
+                {
+                    // The anchor first: a selection made backwards keeps its direction.
+                    box.SelectionStart = Math.Min(start, length);
+                    box.SelectionEnd = Math.Min(end, length);
+                }
+            }
+            else if (_dialog is not null && ReferenceEquals(box, _dialog.OpeningFocus()))
+            {
+                _dialog.PlaceCaretAsOnOpening(box);
             }
         }
 
         /// <summary>Whether the element stands where it was pressed: in the window, shown, enabled, with its data.</summary>
-        private bool StillThere() => CanTake(_pressed) && ReferenceEquals(_pressed.DataContext, _data);
+        private bool StillThere() => CanTake(_pressed) && HasItsData();
+
+        /// <summary>Whether the element still has the data it was pressed for (data that has been let go it cannot have).</summary>
+        private bool HasItsData() =>
+            _data is null
+                ? _pressed.DataContext is null
+                : _data.TryGetTarget(out var data) && ReferenceEquals(_pressed.DataContext, data);
+
+        /// <summary>Whether the active tab is another than the one of the press (a closed tab that has been let go is not the active one).</summary>
+        private bool TabChanged() =>
+            _tab is not null
+            && !(_tab.TryGetTarget(out var tab) && ReferenceEquals(tab, (_topLevel.DataContext as MainWindowViewModel)?.ActiveTab));
 
         /// <summary>The window's dialogs when one stands over the element's place: any, for an element outside them; one above its own, for an element in a dialog. Null otherwise.</summary>
         private DialogHostViewModel? DialogsAbove() =>
@@ -508,6 +665,10 @@ public static partial class FocusReturn
             list.ScrollIntoView(index);
             return list.ContainerFromIndex(index) is { } container ? RowOrderStackPanel.StopsOf(container).FirstOrDefault() : null;
         }
+
+        /// <summary>A text box's selection and caret; none for another element.</summary>
+        private static (int Start, int End, int Caret)? TextOf(InputElement element) =>
+            element is TextBox box ? (box.SelectionStart, box.SelectionEnd, box.CaretIndex) : null;
 
         /// <summary>The list whose item holds <paramref name="pressed"/>, below <paramref name="within"/>, and the item's index; none for an element in no list.</summary>
         private static (ItemsControl? List, int Place) PlaceOf(InputElement pressed, Visual? within)

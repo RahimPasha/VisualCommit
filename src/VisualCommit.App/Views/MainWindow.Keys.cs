@@ -127,8 +127,10 @@ public partial class MainWindow : IWindowKeyActions
         }
 
         _focusAtSwitch = null;
+
+        // Not while the window is inactive: a focus given then would be the one it comes back with (D462).
         Dispatcher.UIThread.Post(
-            () => Dispatcher.UIThread.Post(() => FocusAfterSwitch(before), DispatcherPriority.Loaded),
+            () => Dispatcher.UIThread.Post(() => FocusReturn.WhenActive(this, () => FocusAfterSwitch(before)), DispatcherPriority.Loaded),
             DispatcherPriority.Loaded);
     }
 

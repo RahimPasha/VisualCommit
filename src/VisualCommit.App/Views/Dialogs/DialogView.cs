@@ -67,20 +67,30 @@ public class DialogView : UserControl
         if (OpeningTextBox() is { } box)
         {
             box.Focus(NavigationMethod.Unspecified);
-            if (SelectsAllOnOpening)
-            {
-                box.SelectAll();
-            }
-            else
-            {
-                box.ClearSelection();
-                box.CaretIndex = box.Text?.Length ?? 0;
-            }
-
+            PlaceCaretAsOnOpening(box);
             return;
         }
 
         InitialFocus?.Focus(NavigationMethod.Tab);
+    }
+
+    /// <summary>
+    /// The caret and selection a box gets as the dialog opens: all it holds selected when renaming
+    /// (<see cref="SelectsAllOnOpening"/>), else nothing selected and the caret at the end. A focus the
+    /// window's rule for an action by the keys gives this box back gets them too (D462).
+    /// </summary>
+    internal void PlaceCaretAsOnOpening(TextBox box)
+    {
+        ArgumentNullException.ThrowIfNull(box);
+        if (SelectsAllOnOpening)
+        {
+            box.SelectAll();
+        }
+        else
+        {
+            box.ClearSelection();
+            box.CaretIndex = box.Text?.Length ?? 0;
+        }
     }
 
     /// <summary>
