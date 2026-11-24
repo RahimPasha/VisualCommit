@@ -291,6 +291,98 @@ public class BlameViewTests
         Assert.Equal([RenameSha], pageHost.Shown);
     }
 
+    /// <summary>
+    /// A click in the gutter picks a run without touching the text, which keeps the keyboard focus:
+    /// it also puts the caret, which is not drawn, on the picked run's first line, so that the arrows
+    /// go on from that run (docs/phase-8a-design.md 6.3.2). A click beside line 5, run 2's second
+    /// line, puts it on line 4; Up then takes it to line 3 and picks run 1. Before, the caret stayed
+    /// on line 1, where the page opened it, and Up picked run 0.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task A_click_in_the_gutter_puts_the_caret_on_its_runs_first_line_so_that_the_arrows_go_on_from_that_run()
+    {
+        using var page = ThreeRuns(out var pageHost);
+        var view = new BlameView { DataContext = page };
+        using var host = DiffHost.Show(view, 700, 400, ThemeVariant.Dark);
+        await page.LoadAsync();
+        DiffHost.Settle();
+        var text = Text(view);
+        var gutter = Gutter(view);
+        Assert.True(text.TextArea.Focus());
+        Assert.Equal(1, text.TextArea.Caret.Line);
+
+        host.Click(gutter, GutterPoint(text, gutter, 5));
+
+        Assert.Equal(2, page.SelectedRun?.Index);
+        Assert.Equal(4, text.TextArea.Caret.Line);
+        Assert.True(text.TextArea.IsKeyboardFocusWithin);
+
+        host.PressKey(Avalonia.Input.Key.Up);
+
+        Assert.Equal(3, text.TextArea.Caret.Line);
+        Assert.Equal(1, page.SelectedRun?.Index);
+        Assert.Equal([AddTracingSha, RenameSha], pageHost.Shown);
+    }
+
+    /// <summary>
+    /// The caret put on a picked run's first line moves no text (phase 5's and 8a's blame pictures
+    /// stay as they were), though AvaloniaEdit scrolls toward a caret it is given: with the text
+    /// scrolled across and down until line 46, run 1's first, is the last line in view, a click on
+    /// run 0's line 40, whose first line is far above the view, and one on line 46 leave the text
+    /// where it was; the caret is on line 1, then on line 46.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task A_click_in_the_gutter_moves_no_text_however_far_its_runs_first_line_lies()
+    {
+        var first = BlameCommitOf(AddParserSha, "Mira Kovac", 1, "src/Parser.cs");
+        var second = BlameCommitOf(AddTracingSha, "Jonas Berg", 4, "src/Parser.cs");
+        var repository = new PageFakeRepository
+        {
+            Blame = (_, _) => new BlameResult(
+            [
+                .. Enumerable.Range(1, 45).Select(line => new BlameLine($"// line {line} {new string('x', 150)}", first)),
+                .. Enumerable.Range(46, 40).Select(line => new BlameLine($"// line {line}", second)),
+            ]),
+        };
+        using var page = new BlameViewModel(new RecordingPageHost(repository), new BlameRequest("src/Reader.cs", null));
+        var view = new BlameView { DataContext = page };
+        using var host = DiffHost.Show(view, 700, 400, ThemeVariant.Dark);
+        await page.LoadAsync();
+        DiffHost.Settle();
+        var text = Text(view);
+        var gutter = Gutter(view);
+        Assert.True(text.TextArea.Focus());
+        var scroller = text.GetVisualDescendants().OfType<Avalonia.Controls.ScrollViewer>().First();
+        scroller.Offset = new Vector(60, text.TextView.GetVisualTopByDocumentLine(47) - text.TextView.Bounds.Height);
+        DiffHost.Settle();
+        var scrolled = (text.HorizontalOffset, text.VerticalOffset);
+        Assert.True(scrolled.VerticalOffset > 0 && scrolled.HorizontalOffset > 0, $"The text did not scroll: {scrolled}.");
+        Assert.Equal(46, text.LineAt(text.TextView.TranslatePoint(new Point(0, text.TextView.Bounds.Height - 2), text)!.Value.Y));
+        Assert.NotNull(text.LineAt(text.TextView.TranslatePoint(new Point(0, text.TextView.GetVisualTopByDocumentLine(40) - text.VerticalOffset + 4), text)!.Value.Y));
+
+        host.Click(gutter, GutterPoint(text, gutter, 40));
+        DiffHost.Settle();
+
+        Assert.Equal(0, page.SelectedRun?.Index);
+        Assert.Equal(1, text.TextArea.Caret.Line);
+        Assert.Equal(scrolled, (text.HorizontalOffset, text.VerticalOffset));
+
+        host.Click(gutter, GutterPoint(text, gutter, 46));
+        DiffHost.Settle();
+
+        Assert.Equal(1, page.SelectedRun?.Index);
+        Assert.Equal(46, text.TextArea.Caret.Line);
+        Assert.Equal(scrolled, (text.HorizontalOffset, text.VerticalOffset));
+    }
+
+    /// <summary>The point 20 right of the gutter's left edge, 4 below the top of line <paramref name="line"/> as the text draws it now.</summary>
+    private static Point GutterPoint(BlameTextEditor text, BlameGutter gutter, int line)
+    {
+        var top = text.TextView.GetVisualTopByDocumentLine(line) - text.TextView.VerticalOffset + 4;
+        var inGutter = text.TextView.TranslatePoint(new Point(0, top), gutter) ?? throw new InvalidOperationException("The text and the gutter share no window.");
+        return new Point(20, inGutter.Y);
+    }
+
     /// <summary>The page of a blame of five lines in three runs: lines 1 and 2 "Add the parser", line 3 the rename, lines 4 and 5 "Add tracing"; <paramref name="pageHost"/> records what it shows.</summary>
     private static BlameViewModel ThreeRuns(out RecordingPageHost pageHost)
     {
