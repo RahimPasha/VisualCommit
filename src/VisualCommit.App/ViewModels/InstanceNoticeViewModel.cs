@@ -77,8 +77,10 @@ public sealed partial class InstanceNoticeViewModel : ObservableObject
     public string Status => InstanceNoticeTexts.StillNoAnswer;
 
     /// <summary>
-    /// The status line's text: <see cref="Status"/> once a try went unanswered, empty before, so
-    /// that the line's text changes as it shows and a screen reader is told of it (D435).
+    /// The status line's text: <see cref="Status"/> once a try went unanswered, empty before. The line
+    /// is a polite live region (D435), but it shows with this text in one step, before any screen
+    /// reader can have reached it: a reader finds the words when it reads the notice, and is not told
+    /// of them as they come.
     /// </summary>
     public string StatusLine => ShowsStatus ? Status : string.Empty;
 

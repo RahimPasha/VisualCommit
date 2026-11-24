@@ -71,7 +71,7 @@ public sealed class InstanceNoticeViewModelTests
         held.Answer(NoticeRetry.NoAnswer);
         await run;
 
-        // The status line's text comes with it, so that a screen reader is told of it (D435).
+        // The status line's text comes with it, in the same step.
         Assert.True(notice.ShowsStatus);
         Assert.Equal("It still did not answer.", notice.StatusLine);
         Assert.Contains(nameof(InstanceNoticeViewModel.StatusLine), changed);

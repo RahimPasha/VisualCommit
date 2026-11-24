@@ -19,9 +19,10 @@
        body. Tokens only. -->
   <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
     <StackPanel Margin="24" MaxWidth="520" VerticalAlignment="Center" Spacing="8">
-      <!-- The title, the error line and Check again's text are polite live regions (D435): a
-           search that ends on another state, Choose's "Checking…" and its refusal, and a search
-           that runs are spoken. -->
+      <!-- The title and the error line are polite live regions (D435), and nothing else here: a
+           reader that has read the screen hears the title of a state a search ends on, and one that
+           has reached the error line while Choose checks hears the refusal. The error line shows
+           with its "Checking…", which therefore reaches no reader. -->
       <TextBlock Name="GitSetupTitle"
                  Text="{Binding Title}"
                  FontSize="16" FontWeight="SemiBold"
@@ -149,11 +150,10 @@
         <Button Name="GitSetupCheckAgainButton"
                 Theme="{StaticResource VcActionButton}"
                 kr:KeyRegion.IsMain="True"
+                Content="{Binding CheckAgainText}"
                 Command="{Binding CheckAgainCommand}"
                 AutomationProperties.AutomationId="GitSetupCheckAgainButton"
-                AutomationProperties.Name="{Binding CheckAgainText}">
-          <TextBlock Text="{Binding CheckAgainText}" AutomationProperties.LiveSetting="Polite" />
-        </Button>
+                AutomationProperties.Name="{Binding CheckAgainText}" />
         <Button Name="GitSetupContinueButton"
                 Theme="{StaticResource VcActionButton}"
                 kr:KeyRegion.IsMain="True"
