@@ -548,6 +548,69 @@ public class StatusBarTests
         await fetching;
     }
 
+    /// <summary>
+    /// The live region speaks an operation's start and its result, not its progress (D435; docs/phase-8a-design.md
+    /// 9.9, risk 4): git reports its progress up to ten times a second, and each new text was a Name
+    /// change, which Windows speaks. A fetch that reports twenty percentages raises two Name changes,
+    /// its start and its result, while the text shows every percentage and the peer's name is that
+    /// text, as the real-window pass reads it.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task The_operation_texts_live_region_speaks_the_start_and_the_result_not_the_progress()
+    {
+        using var repo = await Scenarios.OperationsAsync();
+        using var data = new TempDirectory("data");
+        using var app = ShellDriver.StartWithTabs(data.Path, [repo.Path]);
+        await app.WaitUntilReadyAsync();
+        var repository = await GraphShownAsync(app);
+        var parts = Parts(app);
+        Assert.Equal("Ready", parts.Status.Text);
+
+        var peer = ControlAutomationPeer.CreatePeerForElement(parts.Status);
+        var names = new List<(object? Old, object? New)>();
+        peer.PropertyChanged += (_, change) =>
+        {
+            if (change.Property == AutomationElementIdentifiers.NameProperty)
+            {
+                names.Add((change.OldValue, change.NewValue));
+            }
+        };
+
+        const int Steps = 20;
+        var next = Enumerable.Range(0, Steps + 1).Select(_ => new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously)).ToArray();
+        var fetching = repository.Queue.RunAsync(new GitOperation("Fetch origin", "Fetching from origin…", OperationKind.Network, RefreshScope.None, async context =>
+        {
+            for (var step = 1; step <= Steps; step++)
+            {
+                await next[step - 1].Task.WaitAsync(context.CancellationToken);
+                var percent = step * 100 / Steps;
+                context.Progress.Report(new OperationProgress("Receiving objects", percent, $"Receiving objects: {percent}% ({step}/{Steps})"));
+            }
+
+            await next[Steps].Task.WaitAsync(context.CancellationToken);
+            return OperationReport.Done("Fetched from origin");
+        }));
+        await app.WaitForAsync(() => parts.Status.Text == "Fetching from origin…", "the running text");
+        for (var step = 1; step <= Steps; step++)
+        {
+            next[step - 1].SetResult();
+            var shown = $"Fetching from origin… Receiving objects {step * 100 / Steps}%";
+            await app.WaitForAsync(() => parts.Status.Text == shown, $"\"{shown}\"");
+            Assert.Equal(shown, peer.GetName());
+        }
+
+        next[Steps].SetResult();
+        await fetching;
+        await app.WaitForAsync(() => parts.Status.Text == "Fetched from origin", "the result");
+        app.Settle();
+
+        Assert.Equal(
+            [((object?)"Ready", (object?)"Fetching from origin…"), ("Fetching from origin…", "Fetched from origin")],
+            names);
+        Assert.Equal("Fetched from origin", peer.GetName());
+        Assert.Equal(AutomationLiveSetting.Polite, peer.GetLiveSetting());
+    }
+
     /// <summary>A network operation that waits for <paramref name="held"/> or its cancel, and then succeeds.</summary>
     private static GitOperation HeldNetwork(string title, string running, TaskCompletionSource held) =>
         new(title, running, OperationKind.Network, RefreshScope.None, async context =>
