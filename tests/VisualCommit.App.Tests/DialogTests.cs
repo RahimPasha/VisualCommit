@@ -400,6 +400,25 @@ public class DialogTests
         Assert.False(dialog.IsClosed);
     }
 
+    [Fact]
+    public async Task Copy_output_stays_enabled_while_a_busy_clipboard_holds_the_copy()
+    {
+        // A disabled button loses the keyboard focus (docs/phase-8a-design.md 8.3.1); the clipboard
+        // answers late while another program holds it open.
+        var held = new TaskCompletionSource();
+        var clipboard = new FakeClipboard { Hold = held.Task };
+        var dialog = new ErrorDialogViewModel("Push rejected", "Pull first, then push again.", "sync", "! [rejected] main -> main (fetch first)", clipboard: clipboard);
+
+        var copying = dialog.CopyOutputCommand.ExecuteAsync(null);
+
+        Assert.False(copying.IsCompleted, "The copy did not wait for the clipboard.");
+        Assert.True(dialog.CopyOutputCommand.CanExecute(null), "Copy output is disabled while the clipboard holds the copy.");
+        held.SetResult();
+        await copying;
+        Assert.True(dialog.CopyOutputCommand.CanExecute(null));
+        Assert.Equal(["! [rejected] main -> main (fetch first)"], clipboard.Texts);
+    }
+
     // ---- The finishing dialog ------------------------------------------------------------
 
     [Fact]
