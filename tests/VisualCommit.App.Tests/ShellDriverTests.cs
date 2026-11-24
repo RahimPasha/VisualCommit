@@ -6,8 +6,10 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
 using VisualCommit.App.Services;
+using VisualCommit.App.ViewModels.Workspaces;
 using VisualCommit.Core;
 using VisualCommit.Core.Session;
+using VisualCommit.Core.Workspaces;
 using VisualCommit.Testing;
 using VisualCommit.Testing.Headless;
 using Xunit;
@@ -343,6 +345,55 @@ public class ShellDriverTests
         Assert.Equal(state.Window, saved.Window);
         Assert.Equal(state.LeftPanelWidth, saved.LeftPanelWidth);
         Assert.Equal(state.RightPanelWidth, saved.RightPanelWidth);
+    }
+
+    /// <summary>
+    /// WaitForDashboardReadAsync (docs/phase-6-design.md 2.10, 17.2) when the read's pass ends
+    /// without its line, as it rightly does once its only read is overdue (WD35): the row's open is
+    /// held past <see cref="DashboardViewModel.GitCallPatience"/> on a read clock the test moves, so
+    /// the pass ends with nothing counted and logs nothing, and the read ends after it. The wait
+    /// returns once the row has read, from the start and from a mark taken before; from a mark
+    /// taken after that read it still fails, since no row has read since (CI's run 44851353430).
+    /// </summary>
+    [AvaloniaFact]
+    public async Task A_dashboard_read_whose_pass_ended_without_its_line_is_waited_for_until_its_row_has_read()
+    {
+        using var data = new TempDirectory("data");
+        using var repo = await Scenarios.LinearAsync();
+        var clock = new ManualTimeProvider();
+        var held = new HeldGitRunner();
+        held.HoldNext("rev-parse");
+        ShellDriver.WriteWorkspaces(data.Path, new WorkspaceList { Workspaces = [new Workspace("solo", "Solo", [new WorkspaceRepository(repo.Path)])] });
+        ShellDriver.WriteSession(data.Path, new SessionState { Tabs = [new TabState(null, "solo")] });
+        try
+        {
+            using var app = ShellDriver.Start(data.Path, readClock: clock, gitProbe: held.Probe);
+            var dashboard = app.ActiveDashboard ?? throw new InvalidOperationException("The app did not start on the dashboard.");
+            var row = Assert.Single(dashboard.Rows);
+            await app.WaitForAsync(() => held.Started.IsCompleted, "the row's open to be held");
+            var call = await held.Started;
+            Assert.True(SameFolder(repo.Path, call.WorkingDirectory), $"The held call is \"{call.DisplayText}\" in {call.WorkingDirectory}, not the row's open.");
+            var before = app.LogMark();
+
+            // The open's patience runs out by the read clock: the pass ends without the row's read
+            // and logs no line; the read ends after it, once its call is let go.
+            clock.Advance(DashboardViewModel.GitCallPatience);
+            await app.WaitForAsync(() => !dashboard.IsPassRunning, "the pass to end without the held read");
+            Assert.True(row.IsReading, "The row's read ended before its call was let go.");
+            held.Release();
+            await app.WaitForAsync(() => !row.IsReading, "the row's read to end");
+            Assert.True(row.HasRepository, "The row has not been read.");
+            Assert.Equal(0, app.CountLogLines(ShellDriver.ReadPassLine("Solo")));
+
+            await app.WaitForDashboardReadAsync(timeout: TimeSpan.FromSeconds(5));
+            await app.WaitForDashboardReadAsync(before, TimeSpan.FromSeconds(5));
+            var after = app.LogMark();
+            await Assert.ThrowsAsync<TimeoutException>(() => app.WaitForDashboardReadAsync(after, TimeSpan.FromSeconds(1)));
+        }
+        finally
+        {
+            held.Release();
+        }
     }
 
     /// <summary>
