@@ -63,9 +63,11 @@ window. The keys are fixed.
 
 ## The command palette
 
-The command palette reaches every command by typing, with the active repository's branches, tags,
-stashes and remotes, your other tabs, your recent repositories, the repositories of your workspaces
-and the workspaces themselves. Open it with Ctrl+Shift+P (Cmd+Shift+P on macOS), type part of a
+The command palette reaches VisualCommit's main commands by typing, and the items of the menus of
+the active repository's branches, tags, stashes, remotes and pull requests, of the selected
+commits, of the **Working changes** row, of the open diff (all but its hunks' items) and of what is
+selected on an open file history, blame or reflog page. It also lists your other tabs, your recent
+repositories, the repositories of your workspaces and the workspaces themselves. Open it with Ctrl+Shift+P (Cmd+Shift+P on macOS), type part of a
 name, move with the arrows and press Enter. A command's key, if it has one, stands at its right,
 and its detail, such as the branch it acts on, beside its name.
 

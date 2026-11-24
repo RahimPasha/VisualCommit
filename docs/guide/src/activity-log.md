@@ -1,8 +1,8 @@
 # The activity log
 
-The activity log lists what VisualCommit did in the repository, and every git command it ran for
-it, with git's output and how long it took, since VisualCommit started: it is not kept when
-VisualCommit closes. It holds the last 500 operations of all your repositories; a very long output
+The activity log lists what VisualCommit did in the repository in this session, with the git
+commands it ran for it, git's output and how long each took: it is not kept when VisualCommit
+closes. It holds the last 500 operations of all your repositories; a very long output
 is cut off, and when older commands have to make room, their operation reads
 `Its git commands are no longer kept.` Open or close it with the **Activity log** button at the
 right of the status bar, or with Ctrl+J (Cmd+J on macOS). It opens below the graph.

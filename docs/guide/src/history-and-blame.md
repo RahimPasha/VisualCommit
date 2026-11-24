@@ -2,17 +2,18 @@
 
 ## A file's history
 
-To see every commit that changed a file:
+To see the commits that changed a file:
 
 - right-click the file, in the working changes, in a commit's changed files or in its diff, and
   choose **File history**; or
 - with the file's diff open, press Ctrl+Shift+H (Cmd+Shift+H on macOS).
 
 The page **History of** *file* takes the graph's place. It lists the commits that changed the
-file, newest first, each with its change's letter (`A` added, `M` modified, and so on), short SHA
-and subject, and it follows the file across renames. Click a commit to see what it changed in the
-file, beside the list (below it when the page is narrow); **Inline** and **Side by side** work as
-in any diff.
+file in the history of HEAD, or of the commit whose file you chose (for a stash, the commit it was
+taken on), newest first, each with its change's letter (`A` added, `M` modified, and so on), short
+SHA and subject, and it follows the file across renames. Commits only on other branches are not in
+it. Click a commit to see what it changed in the file, beside the list (below it when the page is
+narrow); **Inline** and **Side by side** work as in any diff.
 
 <img src="pictures/file-history-light.png" srcset="pictures/file-history-light.png 2x" alt="The page History of units.py in the folder station, listing five commits from dd8e6e1 Round to the configured digits down to 29cf672 Add unit conversions, the first selected, with its diff of units.py on the right changing the function round_reading; the page's Blame button and close button at the top right.">
 <img src="pictures/file-history-dark.png" srcset="pictures/file-history-dark.png 2x" alt="The page History of units.py in the folder station, listing five commits from dd8e6e1 Round to the configured digits down to 29cf672 Add unit conversions, the first selected, with its diff of units.py on the right changing the function round_reading; the page's Blame button and close button at the top right.">

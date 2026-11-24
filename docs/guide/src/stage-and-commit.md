@@ -51,8 +51,9 @@ Ctrl+Shift+M (Cmd+Shift+M on macOS) selects the **Working changes** row and goes
 message from anywhere in the repository, while there are changes to commit and the conflict
 resolver is closed. It does nothing while the settings screen, the command palette, another dialog
 or a menu is open, or while you drag a branch.
-While nothing is staged, the button reads **Stage files to commit** and is disabled, whatever the
-summary holds; once files are staged, it stays disabled until the summary has text.
+Unless **Amend previous commit** is ticked or a merge, rebase, cherry-pick or revert waits to be
+finished, the button reads **Stage files to commit** and is disabled while nothing is staged,
+whatever the summary holds; once files are staged, it stays disabled until the summary has text.
 
 ## Amend the last commit
 

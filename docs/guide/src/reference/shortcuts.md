@@ -1,8 +1,8 @@
 # Keyboard shortcuts
 
 VisualCommit's keys are fixed: no setting changes them. The settings screen's
-**Keyboard shortcuts** section lists them as on your system, and every menu, tooltip and the
-command palette show an action's key beside it.
+**Keyboard shortcuts** section lists them as on your system, and the menus, the command palette
+and most tooltips show an action's key beside it.
 
 On macOS, Cmd mostly takes the place of Ctrl, and Option that of Alt; the tables give each key as
 each system has it. Ctrl+Tab, for example, is Ctrl on every system. The text boxes' usual keys,

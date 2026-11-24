@@ -53,5 +53,6 @@ Each row says what moved HEAD or the branch, to which commit. Right-click a row 
 back: **Create branch here…**, **Check out this commit**, **Reset** your branch **to this
 commit…** or **Cherry-pick onto** your branch. Click a row to see its commit in the right panel.
 Double-click a row, or choose **Show in graph**, to see its commit in the graph; a commit that no
-branch, tag or remote branch reaches any more is not in the graph, and its row has a warning sign.
+branch, tag, remote branch or HEAD reaches any more is not in the graph, and its row has a warning
+sign.
 Close the page with Esc or its **×**.

@@ -3,8 +3,8 @@
 VisualCommit is a desktop Git client for Windows, macOS and Linux. It shows a repository's
 history as a graph of commits, branches, tags and stashes, and lets you stage, commit, branch,
 merge, rebase, resolve conflicts, fetch, pull and push with clicks, right-clicks, double-clicks
-and drag and drop. It drives the real `git` program installed on your computer, so everything it
-does is what git itself does, and a terminal sees the same repository.
+and drag and drop. It drives the real `git` program installed on your computer, so a terminal sees
+the same repository.
 
 <img src="pictures/main-window-light.png" srcset="pictures/main-window-light.png 2x" alt="The main window with the weather-station repository open: the tab and toolbar at the top, the left panel with local branches, remotes, tags and the stash, the commit graph in the middle with the commit Show the battery level selected on main, and its commit details on the right.">
 <img src="pictures/main-window-dark.png" srcset="pictures/main-window-dark.png 2x" alt="The main window with the weather-station repository open: the tab and toolbar at the top, the left panel with local branches, remotes, tags and the stash, the commit graph in the middle with the commit Show the battery level selected on main, and its commit details on the right.">
@@ -28,8 +28,8 @@ What it does:
 - Groups repositories into workspaces with a dashboard that fetches or pulls them all at once.
 - With a GitHub, GitLab or Azure DevOps account, lists and creates pull requests (merge requests on
   GitLab) and clones your repositories.
-- Has a command palette and a fixed set of keyboard shortcuts for every main action, and dark and
-  light themes.
+- Has a command palette that runs commands and menu items by name, a fixed set of keyboard
+  shortcuts, and dark and light themes.
 
 VisualCommit is free and open source, under the MIT License. It sends no telemetry and needs no
 account: signing in to a hosting service only adds that service's features. Its source code, its

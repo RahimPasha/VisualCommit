@@ -39,7 +39,8 @@ The **Filter** box at the top narrows the lists to names that contain what you t
 - **Tags** and **Stashes**.
 
 Click a row to select its commit in the graph; double-click a branch to check it out, or a stash
-to apply it. Right-click any row for what you can do with it.
+to apply it. Right-click a branch, a remote, a tag, a stash, a pull request or the heading of
+**Local branches**, **Remotes**, **Tags** or **Stashes** for what you can do with it.
 
 ## The graph
 

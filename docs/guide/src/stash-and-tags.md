@@ -2,7 +2,8 @@
 
 ## Stash your changes
 
-A stash puts your uncommitted changes aside and leaves the working tree clean.
+A stash puts your uncommitted changes aside and leaves the working tree clean, except that files
+git does not track yet stay unless **Include untracked files** is ticked.
 
 1. Press **Stash** in the toolbar, or Ctrl+Shift+S (Cmd+Shift+S on macOS), or choose
    **Stash changes…** in a menu.

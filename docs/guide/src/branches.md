@@ -2,7 +2,8 @@
 
 The left panel lists your branches under **Local branches** and each remote's under **Remotes**.
 In the graph, a branch's label stands beside the commit it points to. Right-click a branch's row or
-label for everything you can do with it.
+label for what you can do with it, or drag it onto another branch for what the two allow
+([Merge](merge.md)).
 
 <img src="pictures/branch-menu-light.png" srcset="pictures/branch-menu-light.png 2x" alt="The menu of the branch feature/forecast in the left panel: Check out feature/forecast, two Merge feature/forecast into main items, Rebase main onto feature/forecast, Interactive rebase of main onto feature/forecast…, a dimmed Fast-forward item, Push feature/forecast to origin/feature/forecast, Force push feature/forecast…, Create branch here…, Create tag here…, Rename feature/forecast…, Delete feature/forecast…, Change upstream…, Stop tracking origin/feature/forecast, Compare feature/forecast with main, Show reflog of feature/forecast, Hide feature/forecast, Solo feature/forecast and Copy branch name.">
 <img src="pictures/branch-menu-dark.png" srcset="pictures/branch-menu-dark.png 2x" alt="The menu of the branch feature/forecast in the left panel: Check out feature/forecast, two Merge feature/forecast into main items, Rebase main onto feature/forecast, Interactive rebase of main onto feature/forecast…, a dimmed Fast-forward item, Push feature/forecast to origin/feature/forecast, Force push feature/forecast…, Create branch here…, Create tag here…, Rename feature/forecast…, Delete feature/forecast…, Change upstream…, Stop tracking origin/feature/forecast, Compare feature/forecast with main, Show reflog of feature/forecast, Hide feature/forecast, Solo feature/forecast and Copy branch name.">
