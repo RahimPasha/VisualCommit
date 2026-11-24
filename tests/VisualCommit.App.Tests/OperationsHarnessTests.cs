@@ -35,6 +35,27 @@ public class OperationsHarnessTests
         }
     }
 
+    /// <summary>
+    /// The open itself (git's rev-parse) keeps the watchdog's limit: a limit of nothing given to the
+    /// harness's steps meets the first read, whose status read is held, and not the open before it.
+    /// </summary>
+    [Fact]
+    public async Task The_open_before_the_first_read_is_not_held_to_the_step_limit_a_test_gives()
+    {
+        using var repo = await Scenarios.OperationsAsync();
+        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        try
+        {
+            var thrown = await Assert.ThrowsAsync<TimeoutException>(
+                () => OperationsHarness.OpenAsync(repo, prompts: null, wrap: git => HeldStatusReads.Wrap(git, gate.Task), stepLimit: TimeSpan.Zero));
+            Assert.StartsWith($"OperationsHarness: the first read of {repo.Path} did not end within 0 s: ", thrown.Message, StringComparison.Ordinal);
+        }
+        finally
+        {
+            gate.TrySetResult();
+        }
+    }
+
     [Fact]
     public async Task A_queue_that_stays_busy_fails_its_wait_by_name_with_the_operation_it_runs()
     {
