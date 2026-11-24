@@ -60,7 +60,15 @@ public sealed class GitAccess
         _log = NullAppLog.Instance;
         _detection = detection;
         _ = detection.ContinueWith(
-            ended => Ended(ended.IsCompletedSuccessfully ? ended.Result : null),
+            ended =>
+            {
+                if (ended.IsCompletedSuccessfully)
+                {
+                    Volatile.Write(ref _known, ended.Result);
+                }
+
+                Tell();
+            },
             CancellationToken.None,
             TaskContinuationOptions.ExecuteSynchronously,
             TaskScheduler.Default);
@@ -219,7 +227,9 @@ public sealed class GitAccess
     /// search that ran when it was asked for, if any, has ended; and hands its result, its
     /// cancellation or its failure to <paramref name="search"/> as well as to the caller. It resumes
     /// where it was started (the window's start-up or "Check again", on the UI thread), so
-    /// <see cref="Detection"/> ends there.
+    /// <see cref="Detection"/> ends there. <see cref="Known"/> is set before <paramref name="search"/>
+    /// is given the outcome, never after: a search that waits for this one starts as soon as it is
+    /// given, maybe on another thread, and what that search finds must stay the one known.
     /// </summary>
     private async Task<GitDetection> SearchAsync(
         TaskCompletionSource<GitDetection> search,
@@ -228,7 +238,6 @@ public sealed class GitAccess
         Task<GitDetection>? before,
         CancellationToken cancellationToken)
     {
-        GitDetection? found = null;
         try
         {
             if (before is not null)
@@ -243,7 +252,7 @@ public sealed class GitAccess
             }
 
             WarnOfStandIn(lookup!);
-            found = await _probe!.DetectAsync(lookup!, _callLog, _log, _recordClock, _environment, cancellationToken);
+            var found = await _probe!.DetectAsync(lookup!, _callLog, _log, _recordClock, _environment, cancellationToken);
             Volatile.Write(ref _known, found);
             search.TrySetResult(found);
             return found;
@@ -262,7 +271,7 @@ public sealed class GitAccess
         }
         finally
         {
-            Ended(found);
+            Tell();
         }
     }
 
@@ -280,17 +289,12 @@ public sealed class GitAccess
     }
 
     /// <summary>
-    /// A search ended with <paramref name="found"/> (null when it failed or was cancelled): keeps it
-    /// and says so to each listener in turn. It never throws: it runs in the search's
-    /// <c>finally</c>, where a listener's exception would replace the search's own result.
+    /// A search ended, however it ended, and what it found is kept: says so to each listener in
+    /// turn. It never throws: it runs in the search's <c>finally</c>, where a listener's exception
+    /// would replace the search's own result.
     /// </summary>
-    private void Ended(GitDetection? found)
+    private void Tell()
     {
-        if (found is not null)
-        {
-            Volatile.Write(ref _known, found);
-        }
-
         if (Changed is not { } changed)
         {
             return;
