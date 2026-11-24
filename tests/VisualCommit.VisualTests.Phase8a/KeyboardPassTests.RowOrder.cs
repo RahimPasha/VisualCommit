@@ -24,8 +24,9 @@ namespace VisualCommit.VisualTests.Phase8a;
 /// scrolled so that controls are made again). The lists make their rows' controls as they are needed
 /// and add the control of an inserted row last, and Avalonia's Tab follows the controls. Each fact
 /// walks one list from the stop before it, with Tab through every stop its rows hold to the stop
-/// after it, and back with Shift+Tab; a stop is written by its automation id and its row's key. The
-/// activity log's list is one stop (its Tab navigation is <c>Once</c>): its fact is a guard.
+/// after it, and back with Shift+Tab; a stop is written by its automation id and its row's key. Two
+/// facts are guards, which held before: the stage panel's two lists walked as one when no stop lies
+/// between them, and the activity log's list, which is one stop (its Tab navigation is <c>Once</c>).
 /// </summary>
 public sealed partial class KeyboardPassTests
 {
@@ -207,6 +208,48 @@ public sealed partial class KeyboardPassTests
         var forward = unstaged.SelectMany(row => (string[])[$"StageFileRow {row.Key}", $"RowStageButton {row.Key}", $"RowDiscardButton {row.Key}"]).ToList();
         var backward = unstaged.Reverse().Select(row => $"StageFileRow {row.Key}").ToList();
         AssertWalk(app, "DiscardAllButton", forward, "UnstageAllButton", backward);
+    }
+
+    /// <summary>
+    /// "changes" with 0-a.txt made and 0-b.txt made and staged outside the app, so that each list's
+    /// first row has its control after the others, and Unstage all disabled (as it is while its own
+    /// run goes on), so that no stop lies between the stage panel's two lists: from Discard all, Tab
+    /// goes through the unstaged rows and on through the staged rows from their first, each row's own
+    /// button and its Unstage, to the summary; Shift+Tab goes back over the rows' own buttons, from
+    /// the staged list's last row and from its first into the unstaged list's last, to Discard all.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task Tab_goes_from_the_unstaged_list_straight_into_the_staged_list_when_no_stop_lies_between_them()
+    {
+        using var repo = await Scenarios.ChangesAsync();
+        using var data = new TempDirectory("data");
+        using var app = await OpenAsync(data, repo.Path);
+        await ShowStagePanelAsync(app);
+        var changes = Repository(app).Changes;
+        repo.WriteFile("0-a.txt", "a\n");
+        repo.WriteFile("0-b.txt", "b\n");
+        await repo.GitAsync("add", "--", "0-b.txt");
+        await app.WaitForAsync(
+            () => changes.Unstaged.Rows is [{ Key: "0-a.txt" }, ..] && changes.Staged.Rows is [{ Key: "0-b.txt" }, ..],
+            "0-a.txt first in the unstaged list and 0-b.txt first in the staged list");
+        await app.WaitForIdleAsync();
+        await app.WaitForWatchersQuietAsync();
+        app.Settle();
+        app.Find<Button>("UnstageAllButton").IsEnabled = false;
+        app.Find<Button>("DiscardAllButton").Focus(NavigationMethod.Tab);
+        app.Settle();
+
+        string[] forward =
+        [
+            .. changes.Unstaged.Rows.SelectMany(row => (string[])[$"StageFileRow {row.Key}", $"RowStageButton {row.Key}", $"RowDiscardButton {row.Key}"]),
+            .. changes.Staged.Rows.SelectMany(row => (string[])[$"StageFileRow {row.Key}", $"RowUnstageButton {row.Key}"]),
+        ];
+        string[] backward =
+        [
+            .. Enumerable.Reverse(changes.Staged.Rows).Select(row => $"StageFileRow {row.Key}"),
+            .. Enumerable.Reverse(changes.Unstaged.Rows).Select(row => $"StageFileRow {row.Key}"),
+        ];
+        AssertWalk(app, "DiscardAllButton", forward, "CommitSummary", backward);
     }
 
     /// <summary>
