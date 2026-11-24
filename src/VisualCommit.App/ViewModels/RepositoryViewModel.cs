@@ -1450,7 +1450,9 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
 
         // The real-window pass, which cannot see the graph's rows, waits for this line.
         _log.Debug(string.Create(CultureInfo.InvariantCulture, $"{Name}: working tree: {status.Staged.Count} staged, {status.Unstaged.Count} unstaged"));
-        if (had != status.HasChanges && offset > 0)
+        // An offset the graph control draws as its top (it rounds to a whole pixel) is the top: the
+        // row that comes shows there, and the offset stays (D60).
+        if (had != status.HasChanges && Math.Round(offset) > 0)
         {
             ScrollOffset = Math.Max(0, offset + (status.HasChanges ? GraphRowHeight : -GraphRowHeight));
         }
