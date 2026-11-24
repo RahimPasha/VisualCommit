@@ -70,7 +70,7 @@ public enum AppStartMode
 /// <param name="WaitWhileClosing">How long a second start waits for a closing holder to let the lock go.</param>
 public sealed record SingleInstanceOptions(TimeSpan Connect, TimeSpan Reply, TimeSpan WaitWhileClosing)
 {
-    /// <summary>5 s to connect, 3 s for a reply, 30 s for a closing instance: at most about 8.5 s before a second start gives up, the lock's 250 ms included.</summary>
+    /// <summary>5 s to connect, 3 s for a reply, 30 s for a closing instance: at most about 8.5 s before a second start gives up, the lock's 250 ms before the ask and 250 ms after it included.</summary>
     public static SingleInstanceOptions Default { get; } = new(TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(3), TimeSpan.FromSeconds(30));
 }
 
@@ -296,15 +296,17 @@ public sealed partial class SingleInstanceGuard : IDisposable
     /// <summary>
     /// A <see cref="GuardOutcome.Held"/> start's whole request, which <c>Program.Main</c> and the
     /// notice's "Try again" both make: <see cref="AskToComeForward"/>, whose
-    /// <see cref="ForwardAnswer.Activated"/> or <see cref="ForwardAnswer.Starting"/> hands over and
-    /// whose <see cref="ForwardAnswer.Closing"/> is waited for (<see cref="WaitToTake"/>).
+    /// <see cref="ForwardAnswer.Activated"/> or <see cref="ForwardAnswer.Starting"/> hands over, whose
+    /// <see cref="ForwardAnswer.Closing"/> is waited for (<see cref="WaitToTake"/>), and whose
+    /// <see cref="ForwardAnswer.NotAnswered"/> has the lock tried again for 250 ms
+    /// (<see cref="TakeAfterNoAnswer"/>).
     /// </summary>
     /// <exception cref="InvalidOperationException">The guard is not <see cref="GuardOutcome.Held"/>.</exception>
     public HeldResolution ResolveHeld() => AskToComeForward() switch
     {
         ForwardAnswer.Activated or ForwardAnswer.Starting => HeldResolution.HandedOver,
         ForwardAnswer.Closing => WaitToTake(),
-        _ => HeldResolution.NotAnswered,
+        _ => TakeAfterNoAnswer(),
     };
 
     /// <summary>
@@ -389,6 +391,33 @@ public sealed partial class SingleInstanceGuard : IDisposable
     }
 
     private static string Seconds(TimeSpan span) => span.TotalSeconds.ToString("0.###", CultureInfo.InvariantCulture);
+
+    /// <summary>
+    /// After an ask that got no answer: the lock tried again for 250 ms, as the first attempt is,
+    /// since a holder that ended during the ask (closed, crashed, or ended by the user as the notice
+    /// advises) has let it go, and the notice would then name a VisualCommit that no longer runs.
+    /// <see cref="HeldResolution.Taken"/>, or <see cref="HeldResolution.NotAnswered"/> while another
+    /// process still holds it.
+    /// </summary>
+    private HeldResolution TakeAfterNoAnswer()
+    {
+        var clock = Stopwatch.StartNew();
+        while (true)
+        {
+            if (TryTakeNow())
+            {
+                _log.Info($"The data folder {Folder} is free now; this start goes on.");
+                return HeldResolution.Taken;
+            }
+
+            if (clock.Elapsed >= FirstOpenRetries)
+            {
+                return HeldResolution.NotAnswered;
+            }
+
+            Thread.Sleep(FirstOpenPause);
+        }
+    }
 
     /// <summary>The first attempt: the folder, the lock (tried for 250 ms while the file exists), then <see cref="BeginServing"/>.</summary>
     private void TakeFirst()
