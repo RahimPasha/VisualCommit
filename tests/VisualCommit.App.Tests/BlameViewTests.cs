@@ -330,24 +330,15 @@ public class BlameViewTests
     /// line from a line the user sees (docs/phase-8a-design.md 13.1, ruling 100): with the text
     /// scrolled across and down until line 46, run 1's first, is the last line in view, a click on
     /// run 0's line 40, whose first line is far above the view, puts the caret on the first of run
-    /// 0's lines that is wholly in view, not on line 1, and the next Down takes it one line down with
-    /// the text where it was and run 0 still picked (on line 1, that Down scrolled the text up to
-    /// line 2 and back across); a click on line 46 puts it on line 46, the text still where it was.
+    /// 0's lines in view, the one drawn at the view's top, not on line 1, and the next Down takes it
+    /// one line down with the text where it was and run 0 still picked (on line 1, that Down scrolled
+    /// the text up to line 2 and back across); a click on line 46 puts it on line 46, the text still
+    /// where it was.
     /// </summary>
     [AvaloniaFact]
     public async Task A_click_in_the_gutter_moves_no_text_however_far_its_runs_first_line_lies()
     {
-        var first = BlameCommitOf(AddParserSha, "Mira Kovac", 1, "src/Parser.cs");
-        var second = BlameCommitOf(AddTracingSha, "Jonas Berg", 4, "src/Parser.cs");
-        var repository = new PageFakeRepository
-        {
-            Blame = (_, _) => new BlameResult(
-            [
-                .. Enumerable.Range(1, 45).Select(line => new BlameLine($"// line {line} {new string('x', 150)}", first)),
-                .. Enumerable.Range(46, 40).Select(line => new BlameLine($"// line {line}", second)),
-            ]),
-        };
-        using var page = new BlameViewModel(new RecordingPageHost(repository), new BlameRequest("src/Reader.cs", null));
+        using var page = TwoLongRuns();
         var view = new BlameView { DataContext = page };
         using var host = DiffHost.Show(view, 700, 400, ThemeVariant.Dark);
         await page.LoadAsync();
@@ -363,7 +354,7 @@ public class BlameViewTests
         Assert.Equal(46, text.LineAt(text.TextView.TranslatePoint(new Point(0, text.TextView.Bounds.Height - 2), text)!.Value.Y));
         Assert.NotNull(text.LineAt(text.TextView.TranslatePoint(new Point(0, text.TextView.GetVisualTopByDocumentLine(40) - text.VerticalOffset + 4), text)!.Value.Y));
 
-        var firstInView = Enumerable.Range(1, 46).First(line => text.TextView.GetVisualTopByDocumentLine(line) >= text.VerticalOffset - 0.5);
+        var firstInView = text.LineAt(text.TextView.TranslatePoint(default, text)!.Value.Y) ?? throw new InvalidOperationException("No line is drawn at the view's top.");
         Assert.InRange(firstInView, 2, 40);
 
         host.Click(gutter, GutterPoint(text, gutter, 40));
@@ -393,6 +384,69 @@ public class BlameViewTests
 
         Assert.Equal(45, text.TextArea.Caret.Line);
         Assert.Equal(0, page.SelectedRun?.Index);
+    }
+
+    /// <summary>
+    /// A run whose first line shows only in part at the view's top (docs/phase-8a-design.md 13.1,
+    /// ruling 100): that line is in view, so a click on the run's line 50 in the gutter puts the caret
+    /// on line 46, the run's first, with the text where it was; the next Down takes it to line 47 and
+    /// scrolls nothing; and after the same click, one Up picks the run above.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task A_click_on_a_run_whose_first_line_shows_in_part_at_the_top_puts_the_caret_there_and_one_Up_picks_the_run_above()
+    {
+        using var page = TwoLongRuns();
+        var view = new BlameView { DataContext = page };
+        using var host = DiffHost.Show(view, 700, 400, ThemeVariant.Dark);
+        await page.LoadAsync();
+        DiffHost.Settle();
+        var text = Text(view);
+        var gutter = Gutter(view);
+        Assert.True(text.TextArea.Focus());
+        var scroller = text.GetVisualDescendants().OfType<Avalonia.Controls.ScrollViewer>().First();
+        scroller.Offset = new Vector(0, text.TextView.GetVisualTopByDocumentLine(46) + 6);
+        DiffHost.Settle();
+        var scrolled = (text.HorizontalOffset, text.VerticalOffset);
+        Assert.Equal(46, text.LineAt(text.TextView.TranslatePoint(default, text)!.Value.Y));
+        Assert.True(text.TextView.GetVisualTopByDocumentLine(46) < text.VerticalOffset - 5, "Line 46 lies wholly in view.");
+
+        host.Click(gutter, GutterPoint(text, gutter, 50));
+        DiffHost.Settle();
+
+        Assert.Equal(1, page.SelectedRun?.Index);
+        Assert.Equal(46, text.TextArea.Caret.Line);
+        Assert.Equal(scrolled, (text.HorizontalOffset, text.VerticalOffset));
+
+        host.PressKey(Avalonia.Input.Key.Down);
+        DiffHost.Settle();
+
+        Assert.Equal(47, text.TextArea.Caret.Line);
+        Assert.Equal(1, page.SelectedRun?.Index);
+        Assert.Equal(scrolled, (text.HorizontalOffset, text.VerticalOffset));
+
+        host.Click(gutter, GutterPoint(text, gutter, 50));
+        DiffHost.Settle();
+        host.PressKey(Avalonia.Input.Key.Up);
+        DiffHost.Settle();
+
+        Assert.Equal(45, text.TextArea.Caret.Line);
+        Assert.Equal(0, page.SelectedRun?.Index);
+    }
+
+    /// <summary>A blame of 85 lines in two runs: lines 1 to 45, each over 150 characters long, "Add the parser"; lines 46 to 85, short, "Add tracing".</summary>
+    private static BlameViewModel TwoLongRuns()
+    {
+        var first = BlameCommitOf(AddParserSha, "Mira Kovac", 1, "src/Parser.cs");
+        var second = BlameCommitOf(AddTracingSha, "Jonas Berg", 4, "src/Parser.cs");
+        var repository = new PageFakeRepository
+        {
+            Blame = (_, _) => new BlameResult(
+            [
+                .. Enumerable.Range(1, 45).Select(line => new BlameLine($"// line {line} {new string('x', 150)}", first)),
+                .. Enumerable.Range(46, 40).Select(line => new BlameLine($"// line {line}", second)),
+            ]),
+        };
+        return new BlameViewModel(new RecordingPageHost(repository), new BlameRequest("src/Reader.cs", null));
     }
 
     /// <summary>The point 20 right of the gutter's left edge, 4 below the top of line <paramref name="line"/> as the text draws it now.</summary>
