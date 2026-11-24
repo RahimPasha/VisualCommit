@@ -31,7 +31,14 @@ public sealed record GitSetupServices(
     IDialogService Dialogs,
     IFileLauncher? Launcher,
     IClipboardService? Clipboard,
-    IAppLog Log);
+    IAppLog Log)
+{
+    /// <summary>The window's lifetime, read when Choose probes a file, which ends that probe; null for none.</summary>
+    public Func<CancellationToken>? Lifetime { get; init; }
+
+    /// <summary>How long Choose's probe of a file may take; null for <see cref="GitSetupViewModel.ChosenProbeLimit"/>. A test's seam.</summary>
+    public TimeSpan? ProbeLimit { get; init; }
+}
 
 /// <summary>
 /// The first-run screen (R4, D405, D423, D453), one per window: it stands in the welcome page's
@@ -43,6 +50,9 @@ public sealed record GitSetupServices(
 /// </summary>
 public sealed partial class GitSetupViewModel : ObservableObject
 {
+    /// <summary>How long the probe of a chosen git program may take (Choose's and the settings row's Browse's).</summary>
+    public static readonly TimeSpan ChosenProbeLimit = TimeSpan.FromSeconds(10);
+
     private readonly GitSetupServices _services;
     private Task<GitGuidance>? _guidanceRead;
     private GitGuidance? _guidance;

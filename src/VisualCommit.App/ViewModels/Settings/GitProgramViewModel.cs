@@ -29,7 +29,8 @@ public sealed partial class GitProgramViewModel : ObservableObject
     /// <param name="probe">What a chosen file would give as the git (<c>GitAccess.ProbeAsync</c>); null: Browse finds no git.</param>
     /// <param name="folders">The file dialog of Browse….</param>
     /// <param name="lifetime">The screen's lifetime, which ends a probe that still runs.</param>
-    public GitProgramViewModel(string? saved, GitDetection? inUse, Func<string, CancellationToken, Task<GitDetection>>? probe, IFolderPicker folders, CancellationToken lifetime)
+    /// <param name="probeLimit">How long Browse's probe may take; null for <see cref="GitSetupViewModel.ChosenProbeLimit"/>. A test's seam.</param>
+    public GitProgramViewModel(string? saved, GitDetection? inUse, Func<string, CancellationToken, Task<GitDetection>>? probe, IFolderPicker folders, CancellationToken lifetime, TimeSpan? probeLimit = null)
     {
         ArgumentNullException.ThrowIfNull(folders);
         _saved = saved;

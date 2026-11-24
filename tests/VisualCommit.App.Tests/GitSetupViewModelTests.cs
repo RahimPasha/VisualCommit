@@ -337,6 +337,61 @@ public class GitSetupViewModelTests
     }
 
     [Fact]
+    public async Task Choose_stops_a_probe_that_does_not_answer_in_time_and_says_so_leaving_the_settings()
+    {
+        // A program that does not exit on --version (a program with a window, say): its probe is
+        // stopped at the limit, which stops the program (GitRunner's cancel).
+        var file = Path.Combine(Path.GetTempPath(), "Tools", OperatingSystem.IsWindows() ? "gitk.exe" : "gitk");
+        var probing = new TaskCompletionSource<CancellationToken>(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var lab = new Lab(probe: HangingProbe(probing), probeLimit: TimeSpan.FromMilliseconds(200));
+        await lab.Screen.ShowAsync(Missing, null);
+        lab.Folders.AnswerFile(file);
+
+        var choosing = lab.Screen.ChooseCommand.ExecuteAsync(null);
+        var token = await probing.Task.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+        Assert.True(token.CanBeCanceled, "Choose's probe was given a token nothing can cancel.");
+        await choosing.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+
+        Assert.Equal("This file did not report its version within 10 seconds, so VisualCommit stopped it.", lab.Screen.ErrorText);
+        Assert.True(lab.Screen.ShowsError);
+        Assert.False(lab.Screen.IsChoiceBeingChecked);
+        Assert.True(token.IsCancellationRequested);
+        Assert.True(lab.Screen.ChooseCommand.CanExecute(null));
+        Assert.Null(lab.Settings.Current.GitExecutable);
+        Assert.Equal(0, lab.ChecksAgain);
+        Assert.Equal(10, GitSetupViewModel.ChosenProbeLimit.TotalSeconds);
+    }
+
+    [Fact]
+    public async Task Choose_ends_its_probe_with_the_windows_lifetime_and_says_nothing_more()
+    {
+        using var lifetime = new CancellationTokenSource();
+        var probing = new TaskCompletionSource<CancellationToken>(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var lab = new Lab(probe: HangingProbe(probing), lifetime: lifetime.Token);
+        await lab.Screen.ShowAsync(Missing, null);
+        lab.Folders.AnswerFile(Path.Combine(Path.GetTempPath(), "Tools", OperatingSystem.IsWindows() ? "gitk.exe" : "gitk"));
+
+        var choosing = lab.Screen.ChooseCommand.ExecuteAsync(null);
+        var token = await probing.Task.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+        Assert.True(token.CanBeCanceled, "Choose's probe was given a token nothing can cancel.");
+        await lifetime.CancelAsync();
+        await choosing.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+
+        Assert.True(token.IsCancellationRequested);
+        Assert.Null(lab.Settings.Current.GitExecutable);
+        Assert.Equal(0, lab.ChecksAgain);
+    }
+
+    /// <summary>A probe that tells <paramref name="probing"/> its token and answers only by ending cancelled.</summary>
+    private static Func<string, CancellationToken, Task<GitDetection>> HangingProbe(TaskCompletionSource<CancellationToken> probing) =>
+        async (_, token) =>
+        {
+            probing.TrySetResult(token);
+            await Task.Delay(Timeout.InfiniteTimeSpan, token);
+            throw new InvalidOperationException("The probe ended without its token.");
+        };
+
+    [Fact]
     public async Task Use_the_git_on_the_path_removes_the_setting_and_checks_again()
     {
         using var lab = new Lab();
@@ -425,7 +480,9 @@ public class GitSetupViewModelTests
             GitGuidance? guidance = null,
             Func<Task<GitGuidance>>? read = null,
             Func<string, CancellationToken, Task<GitDetection>>? probe = null,
-            Func<Task>? checkAgain = null)
+            Func<Task>? checkAgain = null,
+            TimeSpan? probeLimit = null,
+            CancellationToken lifetime = default)
         {
             var fixedGuidance = guidance ?? new GitGuidance(GuidancePlatform.Windows, Winget, null);
             var command = new AsyncRelayCommand(() =>
@@ -450,7 +507,11 @@ public class GitSetupViewModelTests
                 Dialogs,
                 Launcher,
                 Clipboard,
-                Log));
+                Log)
+            {
+                ProbeLimit = probeLimit,
+                Lifetime = () => lifetime,
+            });
         }
 
         public GitSetupViewModel Screen { get; }

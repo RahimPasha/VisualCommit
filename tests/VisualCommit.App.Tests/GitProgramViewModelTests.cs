@@ -204,6 +204,36 @@ public class GitProgramViewModelTests
         Assert.False(cancelled.ShowsStatus);
     }
 
+    [Fact]
+    public async Task Browse_stops_a_probe_that_does_not_answer_in_time_and_says_so()
+    {
+        var probing = new TaskCompletionSource<CancellationToken>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var row = new GitProgramViewModel(
+            null,
+            OnPath,
+            async (_, token) =>
+            {
+                probing.TrySetResult(token);
+                await Task.Delay(Timeout.InfiniteTimeSpan, token);
+                throw new InvalidOperationException("The probe ended without its token.");
+            },
+            new FakeFolderPicker().AnswerFile(Chosen),
+            CancellationToken.None,
+            TimeSpan.FromMilliseconds(200));
+
+        var browsing = row.BrowseCommand.ExecuteAsync(null);
+        var token = await probing.Task.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+        Assert.True(token.CanBeCanceled, "Browse's probe was given a token nothing can cancel.");
+        await browsing.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+
+        Assert.Equal("This file did not report its version within 10 seconds, so VisualCommit stopped it.", row.StatusText);
+        Assert.True(row.IsStatusRefusal);
+        Assert.True(token.IsCancellationRequested);
+        Assert.Null(row.Choice);
+        Assert.False(row.IsChanged);
+        Assert.Equal("Found on the PATH.", row.NoteText);
+    }
+
     private static GitProgramViewModel Row(string? saved, GitDetection? inUse, FakeFolderPicker? folders = null, Func<string, CancellationToken, Task<GitDetection>>? probe = null) =>
         new(saved, inUse, probe, folders ?? new FakeFolderPicker(), CancellationToken.None);
 
