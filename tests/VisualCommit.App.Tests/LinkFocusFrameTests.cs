@@ -385,7 +385,7 @@ public class LinkFocusFrameTests
         Assert.True(text.TextDecorations is { Count: > 0 }, $"{id} is not underlined while focused.");
         var accent = Colour(app, "VcAccentBrush");
         Assert.Equal(accent, Assert.IsAssignableFrom<ISolidColorBrush>(text.Foreground).Color);
-        var problems = LinkFrame.Problems(unfocused, focused, InDevicePixels(app.BoundsOf(text), scale), accent, Colour(app, "VcPanelBackgroundBrush"), Colour(app, "SystemControlFocusVisualPrimaryBrush"), id);
+        var problems = LinkFrame.Problems(unfocused, focused, InDevicePixels(app.BoundsOf(text), scale), accent, Colour(app, "VcPanelBackgroundBrush"), Colour(app, "SystemControlFocusVisualPrimaryBrush"), id, scale);
         Assert.True(problems.Count == 0, Text($"At a scaling of {scale}:\n") + string.Join('\n', problems));
     }
 

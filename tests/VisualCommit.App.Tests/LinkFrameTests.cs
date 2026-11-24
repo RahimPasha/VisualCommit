@@ -15,7 +15,7 @@ namespace VisualCommit.App.Tests;
 /// is drawn ("Or create a legacy token, filled in", Inter at 12.5 px, dark): a text box 200 by 16 with
 /// the letters' bodies above the underline and two letters (its g and y) crossing the underline's two
 /// rows, the underline thinner than a pixel over those rows (Windows' shares, 0.257 and 0.595 of a
-/// pixel), Fluent's frame 4 left and right and 3 above and below. Avalonia 12.1.3's underline skips
+/// pixel), Fluent's frame 4 outside the box on every side. Avalonia 12.1.3's underline skips
 /// the ink of a letter that crosses it (<c>TextDecoration.Draw</c>: a gap of the line's thickness,
 /// 0.852 here, each side of the glyph's outline just under the line), so the line is drawn in pieces
 /// whose ends lie inside a column; measured for the legacy link on Windows: 371.000 to 452.008,
@@ -98,6 +98,37 @@ public class LinkFrameTests
         Assert.Contains("shows no underline", problem, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// At a display scaling of 2 the line is about two pixels thick and lies across three rows (About's
+    /// links' underline there: about 0.5, 1 and 0.15 of a pixel): no fault at 2, while at 1, where the
+    /// line is thinner than a pixel, three changed rows are more than an underline.
+    /// </summary>
+    [AvaloniaFact]
+    public void An_underline_across_three_rows_passes_at_a_scaling_of_2_and_not_at_1()
+    {
+        var pictures = Draw(shares: [0.5, 1.0, 0.15]);
+        Assert.Empty(Problems(pictures, scale: 2));
+        var problem = Assert.Single(Problems(pictures, scale: 1));
+        Assert.Contains("in the rows 23, 24, 25", problem, StringComparison.Ordinal);
+        Assert.Contains("an underline of at most 2 rows", problem, StringComparison.Ordinal);
+    }
+
+    /// <summary>Four changed rows are more than an underline at 2 too.</summary>
+    [AvaloniaFact]
+    public void Four_changed_rows_fail_at_a_scaling_of_2()
+    {
+        var problem = Assert.Single(Problems(Draw(shares: [0.3, 1.0, 1.0, 0.3], firstRow: UnderlineRow - 1), scale: 2));
+        Assert.Contains("in the rows 22, 23, 24, 25", problem, StringComparison.Ordinal);
+        Assert.Contains("an underline of at most 3 rows", problem, StringComparison.Ordinal);
+    }
+
+    [AvaloniaFact]
+    public void The_underlines_rows_grow_with_the_scaling()
+    {
+        Assert.Equal([2, 3, 3, 3, 3], new[] { 1, 1.25, 1.5, 1.75, 2 }.Select(LinkFrame.UnderlineRowsAt));
+        Assert.Throws<ArgumentOutOfRangeException>(() => LinkFrame.UnderlineRowsAt(0.75));
+    }
+
     /// <summary>A frame's line over the underline's rows (as Fluent's frame lay on the link's bounds): no column holds the link's colour there.</summary>
     [AvaloniaFact]
     public void An_underline_covered_by_a_frame_s_line_fails()
@@ -108,9 +139,14 @@ public class LinkFrameTests
         Assert.Contains("20: #FFFFFF + #FFFFFF (#FFFFFF, #FFFFFF), beside 19: past the text's ends and 21: #FFFFFF + #FFFFFF", underline, StringComparison.Ordinal);
     }
 
-    /// <summary>The same window with and without the focus; the letters' bodies above the line, the g's and y's tails crossing it.</summary>
-    private static (Screenshot Unfocused, Screenshot Focused) Draw((int From, int To)? yTail = null, (double From, double To)[]? pieces = null, bool cover = false)
+    /// <summary>
+    /// The same window with and without the focus; the letters' bodies above the line, the g's and y's
+    /// tails crossing it; the line's share of a pixel in each row from <paramref name="firstRow"/>,
+    /// <paramref name="shares"/> (<see cref="RowShares"/> from <see cref="UnderlineRow"/> when not given).
+    /// </summary>
+    private static (Screenshot Unfocused, Screenshot Focused) Draw((int From, int To)? yTail = null, (double From, double To)[]? pieces = null, bool cover = false, double[]? shares = null, int firstRow = UnderlineRow)
     {
+        var rowShares = shares ?? RowShares;
         var letters = Enumerable.Range(0, 33).Select(i => (From: 20 + (6 * i), To: 24 + (6 * i))).Append((From: 216, To: 220)).ToList();
         (int From, int To)[] tails = [(79, 84), yTail ?? (150, 154)];
         var plain = new Color[Width, Height];
@@ -128,21 +164,21 @@ public class LinkFrameTests
         for (var x = 0; x < Width; x++)
         {
             var covered = (pieces ?? Pieces).Sum(piece => Math.Max(0, Math.Min(piece.To, x + 1) - Math.Max(piece.From, x)));
-            for (var row = 0; row < RowShares.Length; row++)
+            for (var row = 0; row < rowShares.Length; row++)
             {
-                if (covered > 0 && focused[x, UnderlineRow + row] == Background)
+                if (covered > 0 && focused[x, firstRow + row] == Background)
                 {
-                    focused[x, UnderlineRow + row] = Mix(RowShares[row] * covered);
+                    focused[x, firstRow + row] = Mix(rowShares[row] * covered);
                 }
             }
         }
 
-        // Fluent's frame: 2 of its colour outside, 1 inside, round the box grown by 4 and 3.
+        // Fluent's frame: 2 of its colour outside, 1 inside, round the box grown by 4.
         for (var x = 16; x < 224; x++)
         {
-            for (var y = 7; y < 29; y++)
+            for (var y = 6; y < 30; y++)
             {
-                var ring = Math.Min(Math.Min(x - 16, 223 - x), Math.Min(y - 7, 28 - y));
+                var ring = Math.Min(Math.Min(x - 16, 223 - x), Math.Min(y - 6, 29 - y));
                 if (ring < 2)
                 {
                     focused[x, y] = Frame;
@@ -166,8 +202,8 @@ public class LinkFrameTests
         return (Picture(plain), Picture(focused));
     }
 
-    private static IReadOnlyList<string> Problems((Screenshot Unfocused, Screenshot Focused) pictures) =>
-        LinkFrame.Problems(pictures.Unfocused, pictures.Focused, TextBox, Accent, Background, Frame, "the link");
+    private static IReadOnlyList<string> Problems((Screenshot Unfocused, Screenshot Focused) pictures, double scale = 1) =>
+        LinkFrame.Problems(pictures.Unfocused, pictures.Focused, TextBox, Accent, Background, Frame, "the link", scale);
 
     /// <summary>The link's colour over the background with <paramref name="share"/> of a pixel, each channel rounded.</summary>
     private static Color Mix(double share)
