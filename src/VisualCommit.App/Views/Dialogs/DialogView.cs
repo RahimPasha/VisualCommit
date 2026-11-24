@@ -128,6 +128,7 @@ public class DialogView : UserControl
                 if (this.FindControl<Button>("ConfirmButton") is { IsEffectivelyVisible: true, IsEffectivelyEnabled: true, Command: { } command } confirm
                     && command.CanExecute(confirm.CommandParameter))
                 {
+                    FollowFromSource(e, command);
                     command.Execute(confirm.CommandParameter);
                     e.Handled = true;
                 }
@@ -145,8 +146,22 @@ public class DialogView : UserControl
         if (this.FindControl<Button>("ConfirmButton") is { IsEffectivelyVisible: true, IsEffectivelyEnabled: true, Command: { } command } confirm
             && command.CanExecute(confirm.CommandParameter))
         {
+            FollowFromSource(e, command);
             command.Execute(confirm.CommandParameter);
             e.Handled = true;
+        }
+    }
+
+    /// <summary>
+    /// The confirm run by a key in <paramref name="e"/>'s source (a box, a row, an option): a run
+    /// that keeps the dialog open and disables that source while it lasts (a refused save) gives it
+    /// the focus back (D462).
+    /// </summary>
+    private static void FollowFromSource(KeyEventArgs e, System.Windows.Input.ICommand command)
+    {
+        if (e.Source is InputElement source)
+        {
+            FocusReturn.AfterKeyboardAction(source, command);
         }
     }
 
@@ -172,6 +187,7 @@ public class DialogView : UserControl
         if (this.FindControl<Button>("ConfirmButton") is { IsEffectivelyVisible: true, IsEffectivelyEnabled: true, Command: { } confirm } button
             && confirm.CanExecute(button.CommandParameter))
         {
+            FollowFromSource(e, confirm);
             confirm.Execute(button.CommandParameter);
         }
 

@@ -14,7 +14,7 @@ namespace VisualCommit.App.Views;
 /// opener disabled; a row the command removed while one of its buttons had the focus; or a button
 /// the command hid.
 /// </summary>
-public static class FocusReturn
+public static partial class FocusReturn
 {
     /// <summary>
     /// When <paramref name="command"/>'s current or next run ends, once the layout has followed (at

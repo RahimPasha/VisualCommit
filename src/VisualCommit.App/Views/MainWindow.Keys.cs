@@ -50,7 +50,8 @@ public partial class MainWindow : IWindowKeyActions
 
     /// <summary>
     /// The window's data context is set (once, by the session): the window's actions are its
-    /// view model's (6.3), and from then on each region remembers its last focused element (6.6).
+    /// view model's (6.3), from then on each region remembers its last focused element (6.6), and a
+    /// press by the keys that takes the focus away puts it somewhere (D462).
     /// </summary>
     protected override void OnDataContextChanged(EventArgs e)
     {
@@ -59,6 +60,9 @@ public partial class MainWindow : IWindowKeyActions
         {
             _focusFollowed = true;
             AddHandler(GotFocusEvent, (_, args) => _regions.Remember(args.Source), RoutingStrategies.Bubble, handledEventsToo: true);
+
+            // A press by the keys that takes the focus away puts it somewhere (D462).
+            FocusReturn.FollowKeyboardPresses(this);
         }
 
         if (DataContext is MainWindowViewModel shell)
@@ -150,7 +154,7 @@ public partial class MainWindow : IWindowKeyActions
 
         var target = before.Role != KeyRegionRole.GraphArea && _shell.ActiveTab.HasRepository
             && before.Root.IsEffectivelyVisible && before.Root.IsAttachedToVisualTree()
-            ? _regions.MarkedTargetIn(before.Role, before.Root)
+            ? KeyRegionNavigator.MarkedTargetIn(before.Role, before.Root)
             : null;
         target ??= this.GetVisualDescendants().OfType<CommitGraphView>().FirstOrDefault(view => view.IsEffectivelyVisible)?.GraphAreaFocusTarget();
         if (target is { IsEffectivelyVisible: true, IsEffectivelyEnabled: true })
