@@ -811,9 +811,9 @@ public partial class Phase8aRealWindowPass(Phase8aRun fixture) : IClassFixture<P
 
 /// <summary>
 /// The 8a pass's order and picture names (docs/phase-8a-design.md 12.4), and the rules of its steps that
-/// need no window (B1 (a)'s extraction from the built executable), with no app and no window: the class
-/// constructs no fixture of the pass and touches nothing of the desktop. It runs in the whole pass,
-/// outside D246's filter, and alone with <c>--filter-class "*Phase8aOrderTests"</c>.
+/// need no window (B1 (a)'s extraction from the built executable, B2's taskbar buttons), with no app and
+/// no window: the class constructs no fixture of the pass and touches nothing of the desktop. It runs in
+/// the whole pass, outside D246's filter, and alone with <c>--filter-class "*Phase8aOrderTests"</c>.
 /// </summary>
 public class Phase8aOrderTests
 {
@@ -839,6 +839,26 @@ public class Phase8aOrderTests
         var (compared, differing, examples) = Phase8aRealWindowPass.PixelsAgainstFrame(image, frame);
         Assert.True(compared > 0, "No pixel of the executable's icon is at alpha 255.");
         Assert.True(differing == 0, $"{differing} of {compared} opaque pixels differ from the .ico's {size} px frame: {string.Join("; ", examples)}");
+    }
+
+    /// <summary>
+    /// B2's taskbar step (design 12.3.4 launch 3): none found and one found are no failure (run.txt's "Not
+    /// run" line, and the button captured); two or more fail, naming each button with its bounds and taskbar
+    /// and saying to close the other VisualCommit.
+    /// </summary>
+    [Fact]
+    public void More_than_one_taskbar_button_named_VisualCommit_fails_naming_each()
+    {
+        var launch = new RealApp.TaskbarEntry("VisualCommit - 1 running window", new Rectangle(2154, 1904, 88, 96), "Shell_TrayWnd");
+        var other = launch with { ScreenBounds = new Rectangle(2066, 1904, 88, 96) };
+
+        Assert.Null(Phase8aRealWindowPass.MoreThanOneTaskbarButton([]));
+        Assert.Null(Phase8aRealWindowPass.MoreThanOneTaskbarButton([launch]));
+        var failure = Phase8aRealWindowPass.MoreThanOneTaskbarButton([other, launch]);
+        Assert.NotNull(failure);
+        Assert.StartsWith("B2's taskbar button: 2 taskbar buttons named " + B.TaskbarButtonNameStart, failure, StringComparison.Ordinal);
+        Assert.Contains("Close every other VisualCommit", failure, StringComparison.Ordinal);
+        Assert.Contains($"\"{other.Name}\" at {other.ScreenBounds} on Shell_TrayWnd; \"{launch.Name}\" at {launch.ScreenBounds} on Shell_TrayWnd", failure, StringComparison.Ordinal);
     }
 
     /// <summary>

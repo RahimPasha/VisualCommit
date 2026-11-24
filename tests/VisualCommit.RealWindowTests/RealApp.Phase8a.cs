@@ -328,25 +328,29 @@ public sealed partial class RealApp
     }
 
     /// <summary>
-    /// The taskbar's button whose UI Automation name starts with <paramref name="nameStart"/>, looked for
+    /// The taskbar's buttons whose UI Automation names start with <paramref name="nameStart"/>, looked for
     /// from UI Automation's desktop root (the taskbars, <c>Shell_TrayWnd</c> and on another monitor
     /// <c>Shell_SecondaryTrayWnd</c>, and their buttons) every 100 ms for at most
-    /// <paramref name="limit"/>: its name and its bounds on the screen, or null when none came.
+    /// <paramref name="limit"/>, until a look finds one: every such button of that look, with its name, its
+    /// bounds on the screen and its taskbar, or none when none came. A button does not say whose process it
+    /// is: Windows groups the buttons by the executable's path, so each other running VisualCommit has a
+    /// button of its own, with the same name.
     /// </summary>
-    public TaskbarEntry? TaskbarButton(string nameStart, TimeSpan limit)
+    public IReadOnlyList<TaskbarEntry> TaskbarButtons(string nameStart, TimeSpan limit)
     {
         ArgumentException.ThrowIfNullOrEmpty(nameStart);
         var clock = Stopwatch.StartNew();
         while (true)
         {
-            if (FindTaskbarButton(nameStart) is { } found)
+            var found = FindTaskbarButtons(nameStart);
+            if (found.Count > 0)
             {
                 return found;
             }
 
             if (clock.Elapsed >= limit)
             {
-                return null;
+                return [];
             }
 
             Thread.Sleep(PollInterval);
@@ -524,35 +528,42 @@ public sealed partial class RealApp
         return managed.ToBitmap();
     }
 
-    /// <summary>One look for <see cref="TaskbarButton"/>: the first button on a taskbar whose name starts with <paramref name="nameStart"/>, with non-empty bounds.</summary>
-    private TaskbarEntry? FindTaskbarButton(string nameStart)
+    /// <summary>
+    /// One look for <see cref="TaskbarButtons"/>: every button on a taskbar whose name starts with
+    /// <paramref name="nameStart"/>, with non-empty bounds, in UI Automation's order. None when the taskbar
+    /// changed while it was walked, so that a look never counts part of it.
+    /// </summary>
+    private List<TaskbarEntry> FindTaskbarButtons(string nameStart)
     {
+        List<TaskbarEntry> found = [];
         try
         {
             var bars = _automation.GetDesktop()
                 .FindAllChildren(condition => condition.ByClassName("Shell_TrayWnd").Or(condition.ByClassName("Shell_SecondaryTrayWnd")));
             foreach (var bar in bars)
             {
+                var taskbar = bar.Properties.ClassName.ValueOrDefault ?? "a taskbar";
                 foreach (var button in bar.FindAllDescendants(condition => condition.ByControlType(ControlType.Button)))
                 {
                     var name = button.Properties.Name.ValueOrDefault;
                     if (name is not null && name.StartsWith(nameStart, StringComparison.Ordinal) && button.BoundingRectangle is { Width: > 0, Height: > 0 } bounds)
                     {
-                        return new TaskbarEntry(name, bounds);
+                        found.Add(new TaskbarEntry(name, bounds, taskbar));
                     }
                 }
             }
         }
         catch (Exception ex) when (ex is COMException or FlaUI.Core.Exceptions.ElementNotAvailableException)
         {
-            // The taskbar redrew while it was walked: the next look reads it again.
+            // The taskbar redrew while it was walked: the next look reads it again, whole.
+            return [];
         }
 
-        return null;
+        return found;
     }
 
-    /// <summary>A button of the taskbar: its UI Automation name and its bounds on the screen, in real pixels.</summary>
-    public sealed record TaskbarEntry(string Name, Rectangle ScreenBounds);
+    /// <summary>A button of the taskbar: its UI Automation name, its bounds on the screen, in real pixels, and the class of the taskbar it lies on (<c>Shell_TrayWnd</c>, or <c>Shell_SecondaryTrayWnd</c> on another display).</summary>
+    public sealed record TaskbarEntry(string Name, Rectangle ScreenBounds, string Taskbar);
 
     /// <summary>
     /// The window's icons (<see cref="WindowIcons"/>): <c>ICON_SMALL</c>'s and <c>ICON_BIG</c>'s images
