@@ -403,6 +403,66 @@ public sealed class SingleInstanceGuardTests
     }
 
     [Fact]
+    public async Task A_new_holder_that_is_closing_too_is_waited_for_within_what_is_left_and_the_log_says_how_long()
+    {
+        using var root = new TempDirectory("guard");
+        var paths = DataFolder(root);
+        Directory.CreateDirectory(paths.DataDirectory);
+        var closing = FreeEndpoint();
+        var next = FreeEndpoint();
+        const int NextProcess = NoProcess - 2;
+        using var limit = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        limit.CancelAfter(WaitLimit);
+
+        // The waiter's expected result is that its wait runs out, so the wait is short. It asks the
+        // new holder at its first look, since that holder's file is in place before the closing one
+        // answers.
+        var options = new SingleInstanceOptions(Patient.Connect, Patient.Reply, TimeSpan.FromSeconds(5));
+
+        // The test is both holders, both closing, and holds the lock throughout.
+        var held = new FileStream(paths.InstanceLockFile, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
+        var first = new NamedPipeServerStream(closing, PipeDirection.InOut, 1, PipeTransmissionMode.Byte, SingleInstanceGuard.ServerPipeOptions);
+        var second = new NamedPipeServerStream(next, PipeDirection.InOut, 1, PipeTransmissionMode.Byte, SingleInstanceGuard.ServerPipeOptions);
+        try
+        {
+            WriteInstanceFile(paths, InstanceJson(NoProcess, closing));
+            var log = new RecordingLog();
+            using var waiter = SingleInstanceGuard.TryTake(paths, log, options);
+            Assert.Equal(GuardOutcome.Held, waiter.Outcome);
+
+            var resolution = Task.Factory.StartNew(() => waiter.ResolveHeld(), CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+            await AwaitRequestAsync(first, limit.Token);
+            WriteInstanceFile(paths, InstanceJson(NextProcess, next));
+            await AnswerClosingAsync(first, limit.Token);
+            await AwaitRequestAsync(second, limit.Token);
+            await AnswerClosingAsync(second, limit.Token);
+
+            Assert.Equal(HeldResolution.NotAnswered, await resolution);
+            var lines = log.Entries.Select(Line).ToList();
+            Assert.Contains(Info($"VisualCommit on the data folder {paths.DataDirectory} (process {NoProcess}) is closing; this start waits up to 5 s for it."), lines);
+
+            // The second is told what is left of the one wait, and the line that ends it names the same.
+            var closingToo = Assert.Single(lines, line => line.Contains($"(process {NextProcess}) is closing", StringComparison.Ordinal));
+            var told = Regex.Match(closingToo, "^" + Regex.Escape(Info($"VisualCommit on the data folder {paths.DataDirectory} (process {NextProcess}) is closing; this start waits up to ")) + @"(?<seconds>[0-9]+(\.[0-9]+)?) s for it\.$");
+            Assert.True(told.Success, $"\"{closingToo}\" is not the line of an instance that is closing.");
+            var seconds = told.Groups["seconds"].Value;
+            Assert.True(double.Parse(seconds, CultureInfo.InvariantCulture) < options.WaitWhileClosing.TotalSeconds, $"The second closing instance was told that this start waits up to {seconds} s for it, the whole wait, though part of it had passed.");
+            Assert.Equal(Warning($"The other VisualCommit did not close within {seconds} s."), lines[^1]);
+        }
+        finally
+        {
+            first.Dispose();
+            second.Dispose();
+            held.Dispose();
+            if (!OperatingSystem.IsWindows())
+            {
+                File.Delete(closing);
+                File.Delete(next);
+            }
+        }
+    }
+
+    [Fact]
     public void A_lock_left_unheld_and_a_stale_endpoint_give_the_next_guard_the_folder_and_it_serves()
     {
         using var root = new TempDirectory("guard");
