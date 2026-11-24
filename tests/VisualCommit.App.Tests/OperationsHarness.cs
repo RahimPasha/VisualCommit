@@ -35,14 +35,19 @@ namespace VisualCommit.App.Tests;
 /// Every public operation completes when its operation and its refresh have ended, so a test
 /// asserts right after awaiting it.
 /// <para>
-/// The harness's own steps (the open, the first read, <see cref="WaitForIdleAsync"/>) are held to
-/// a limit: what the hang watchdog leaves the test, less <see cref="WatchdogMargin"/>, or, for the
-/// first read and <see cref="WaitForIdleAsync()"/>, the limit the test gave the open
-/// (<c>stepLimit</c>). A step past it fails with a
-/// <see cref="TimeoutException"/> that names it and says what
-/// ran meanwhile (the git calls that ended, the queue's operation), so that a step that stalls is
-/// told from one that crawls before the watchdog stops the whole test process, and a step that
-/// only crawls fails only when the watchdog was about to stop the test anyway.
+/// The harness's own steps (the open, the first read, <see cref="WaitForIdleAsync()"/>) are held to
+/// a limit: what the hang watchdog leaves the test, less <see cref="WatchdogMargin"/> and at least
+/// <see cref="LeastStepLimit"/>, or, for the first read and <see cref="WaitForIdleAsync()"/>, the
+/// limit the test gave the open (<c>stepLimit</c>). A step past it fails with a
+/// <see cref="TimeoutException"/> that names it and says what ran meanwhile (the git calls that
+/// ended, the queue's operation), so that a step that stalls is told from one that crawls, and the
+/// test fails alone with a stack instead of the watchdog stopping the whole test process.
+/// </para>
+/// <para>
+/// The limit tightens what a test may take: a step of the harness still running
+/// <see cref="WatchdogMargin"/> before the watchdog's limit fails by name. With the watchdog's
+/// 3 minutes, a test whose harness step ends between 165 and 180 s counted, which passed before the
+/// harness had limits, now fails.
 /// </para>
 /// <para>
 /// The awaits the harness does not hold to a limit, above all the operations a test runs through
