@@ -125,22 +125,23 @@ public class GitProgramViewModelTests
         Assert.Equal("Found on the PATH.", row.NoteText);
         Assert.False(row.ShowsUsePath);
 
-        // Dropping the chosen git in use: the row still shows it, and says what the next start uses.
+        // Dropping the chosen git in use: the row still shows it, and says that the next start looks
+        // for git again (on the PATH, then in the usual install folders, so the note names neither).
         var chosenInUse = Row(Chosen, OnPath with { ExecutablePath = Chosen, Source = GitSource.Setting });
         chosenInUse.UsePathCommand.Execute(null);
         Assert.Equal(Chosen, chosenInUse.PathText);
-        Assert.Equal("Chosen here. VisualCommit uses the Git on the PATH from its next start.", chosenInUse.NoteText);
+        Assert.Equal("Chosen here. VisualCommit looks for Git again at its next start.", chosenInUse.NoteText);
     }
 
     [Fact]
-    public void A_dropped_choice_that_is_the_git_in_use_says_what_the_next_start_uses_also_on_reopening()
+    public void A_dropped_choice_that_is_the_git_in_use_says_that_the_next_start_looks_again_also_on_reopening()
     {
         var chosenInUse = OnPath with { ExecutablePath = Chosen, Source = GitSource.Setting };
 
         // Saved without a choice, the session still on the chosen git: the screen reopened.
         var reopened = Row(null, chosenInUse);
         Assert.Equal(Chosen, reopened.PathText);
-        Assert.Equal("Chosen here. VisualCommit uses the Git on the PATH from its next start.", reopened.NoteText);
+        Assert.Equal("Chosen here. VisualCommit looks for Git again at its next start.", reopened.NoteText);
         Assert.False(reopened.ShowsUsePath);
 
         // A chosen git in use that does not work: Save looks for git again at once.
