@@ -132,10 +132,12 @@ public partial class MainWindow : IWindowKeyActions
     /// After a switch of tabs that took the focus away from a region (nothing, the window or an
     /// element no longer shown has it, and no dialog is open): the focus goes to that region's
     /// target in the tab now shown, as F6 would give it without its memory of the other tab's
-    /// element (D213), when the tab shows the same panel; else to the graph area's target. It comes
-    /// with the keyboard's frame when the element that lost it had the frame. A tab still opening
-    /// has no graph area's target, and the focus stays where it is; a focus the user or a view has
-    /// placed meanwhile stays too.
+    /// element (D213), when the tab shows the same panel with a repository of its own; else to the
+    /// graph area's target. A tab without a repository (a welcome page, the first-run screen, a tab
+    /// still opening) shows only the panels' empty stand-ins, so its graph area's target is taken
+    /// there. It comes with the keyboard's frame when the element that lost it had the frame. A tab
+    /// still opening has no graph area's target, and the focus stays where it is; a focus the user
+    /// or a view has placed meanwhile stays too.
     /// </summary>
     private void FocusAfterSwitch((KeyRegionRole Role, Control Root, bool Framed) before)
     {
@@ -146,7 +148,8 @@ public partial class MainWindow : IWindowKeyActions
             return;
         }
 
-        var target = before.Role != KeyRegionRole.GraphArea && before.Root.IsEffectivelyVisible && before.Root.IsAttachedToVisualTree()
+        var target = before.Role != KeyRegionRole.GraphArea && _shell.ActiveTab.HasRepository
+            && before.Root.IsEffectivelyVisible && before.Root.IsAttachedToVisualTree()
             ? _regions.MarkedTargetIn(before.Role, before.Root)
             : null;
         target ??= this.GetVisualDescendants().OfType<CommitGraphView>().FirstOrDefault(view => view.IsEffectivelyVisible)?.GraphAreaFocusTarget();

@@ -157,8 +157,8 @@ public sealed class KeyRegionNavigator
 
     /// <summary>
     /// The element <paramref name="root"/>'s region gives the focus to when it remembers none: the
-    /// first of 6.6's marks that can take it, else its first focusable element (the graph area's
-    /// own target first); null when nothing in it can take it.
+    /// first of the region's marks (<see cref="Marks"/>) that can take it, else its first focusable
+    /// element (the graph area's own target first); null when nothing in it can take it.
     /// </summary>
     public InputElement? MarkedTargetIn(KeyRegionRole role, Control root)
     {
