@@ -345,7 +345,8 @@ public sealed partial class SingleInstanceGuard : IDisposable
                 return HeldResolution.NotAnswered;
             }
 
-            // A missing file is the closing instance's, deleted before it lets the lock go: tried again.
+            // No file: the closing instance deleted its own before letting the lock go, and no new
+            // holder has written one yet. The lock is tried again.
             if (ReadInstanceFile() is { } holder && holder.Endpoint != _askedEndpoint)
             {
                 _log.Info("Another VisualCommit took the data folder while this start waited; it is asked instead.");
