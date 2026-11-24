@@ -253,11 +253,10 @@ public sealed class GuideScenario
         files.CheckWiring();
         await repo.CommitAsync(Alex, At(12, 15, 9, 50), "Check the sensor wiring at start", files, "station/sensors.py").ConfigureAwait(false);
 
-        // origin/main: one commit main lacks.
-        await repo.GitAsync(Alex, At(12, 17, 14, 0), "checkout", "--quiet", "-b", "origin-main").ConfigureAwait(false);
-        var originFiles = files.Copy();
-        await repo.CommitAsync(Sam, At(12, 17, 14, 10), "Add a French readme", originFiles.WithFrenchReadme(), "README.fr.md").ConfigureAwait(false);
-        await repo.GitAsync(Alex, At(12, 17, 15, 0), "checkout", "--quiet", "main").ConfigureAwait(false);
+        // origin/main: one commit main lacks, made without moving HEAD, so that HEAD's reflog (the
+        // reflog's picture) holds no checkout of the helper branch that carries it to the remote.
+        var originFiles = files.Copy().WithFrenchReadme();
+        await repo.CommitBesideAsync(Sam, At(12, 17, 14, 10), "Add a French readme", "origin-main", originFiles, "README.fr.md").ConfigureAwait(false);
 
         // main: one commit origin lacks.
         files.ShowBatteryLevel();
@@ -407,6 +406,32 @@ public sealed class GuideScenario
         {
             await GitAsync(author, date, ["add", "--", .. paths]).ConfigureAwait(false);
             await GitAsync(author, date, "commit", "--quiet", "-m", message).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Commits the named files from <paramref name="files"/> on top of the checked-out branch's
+        /// commit into the new branch <paramref name="branch"/>, without moving HEAD and leaving the
+        /// index and the working tree as they were: the files written and staged, the tree written,
+        /// the files taken out again, the commit made with <c>git commit-tree</c> (the same object
+        /// <c>git commit</c> makes on a checkout of the branch).
+        /// </summary>
+        public async Task CommitBesideAsync(GuideAuthor author, DateTimeOffset date, string message, string branch, WeatherStationFiles files, params string[] paths)
+        {
+            foreach (var path in paths)
+            {
+                WriteText(path, files.Text(path));
+            }
+
+            await GitAsync(author, date, ["add", "--", .. paths]).ConfigureAwait(false);
+            var tree = (await GitAsync(author, date, "write-tree").ConfigureAwait(false)).StandardOutput.Trim();
+            await GitAsync(author, date, ["rm", "--cached", "--quiet", "--", .. paths]).ConfigureAwait(false);
+            foreach (var path in paths)
+            {
+                File.Delete(System.IO.Path.Combine(Path, path.Replace('/', System.IO.Path.DirectorySeparatorChar)));
+            }
+
+            var commit = (await GitAsync(author, date, "commit-tree", tree, "-p", "HEAD", "-m", message).ConfigureAwait(false)).StandardOutput.Trim();
+            await GitAsync(author, date, "update-ref", "refs/heads/" + branch, commit).ConfigureAwait(false);
         }
 
         public Task TagAsync(GuideAuthor author, DateTimeOffset date, string name, string message) =>

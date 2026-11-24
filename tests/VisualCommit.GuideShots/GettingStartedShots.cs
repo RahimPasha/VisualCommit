@@ -108,7 +108,16 @@ public sealed class GettingStartedShots
     [MemberData(nameof(GuideCamera.Themes), MemberType = typeof(GuideCamera))]
     public Task Welcome_page(GuideTheme theme) =>
         GuideCamera.ShootAsync(GuideShotCatalogue.WelcomePage, theme, GuideStart.Welcome, run =>
-            Task.FromResult(GuideFrame.Of(Welcome(run.App))));
+        {
+            // The page's width, from the heading down to the recent repositories, with the room the
+            // page keeps at its sides above and below them, so that its empty bands stay out.
+            var welcome = Welcome(run.App);
+            var page = run.App.BoundsOf(welcome);
+            var heading = Heading(run.App, welcome);
+            var recent = run.App.BoundsOf(welcome.GetVisualDescendants().OfType<ItemsControl>().First(list => list.Name == "RecentList" && list.IsEffectivelyVisible));
+            var top = heading.Top - WelcomeRoom;
+            return Task.FromResult(GuideFrame.Area(new Rect(page.Left, top, page.Width, recent.Bottom + WelcomeRoom - top)));
+        });
 
     /// <summary>The welcome page's clone form, filled in.</summary>
     [AvaloniaTheory]
@@ -132,7 +141,7 @@ public sealed class GettingStartedShots
             // keeps at its sides above and below them, so that its empty bands stay out.
             var welcome = Welcome(app);
             var page = app.BoundsOf(welcome);
-            var heading = app.BoundsOf(welcome.GetVisualDescendants().OfType<TextBlock>().First(text => text.IsEffectivelyVisible && text.Text == "No repository open"));
+            var heading = Heading(app, welcome);
             var form = app.BoundsOf(welcome.GetVisualDescendants().OfType<StackPanel>().First(panel => panel.Name == "CloneForm" && panel.IsEffectivelyVisible));
             var top = heading.Top - WelcomeRoom;
             return GuideFrame.Area(new Rect(page.Left, top, page.Width, form.Bottom + WelcomeRoom - top));
@@ -150,6 +159,10 @@ public sealed class GettingStartedShots
 
     private static WelcomeView Welcome(ShellDriver app) =>
         app.Window.GetVisualDescendants().OfType<WelcomeView>().First(view => view.IsEffectivelyVisible);
+
+    /// <summary>The bounds of the welcome page's heading, "No repository open".</summary>
+    private static Rect Heading(ShellDriver app, WelcomeView welcome) =>
+        app.BoundsOf(welcome.GetVisualDescendants().OfType<TextBlock>().First(text => text.IsEffectivelyVisible && text.Text == "No repository open"));
 
     /// <summary>Replaces a text box's text by typing, as a user does: the box focused, its text selected, the new text typed.</summary>
     private static void SetText(ShellDriver app, string automationId, string text)
