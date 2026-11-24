@@ -154,12 +154,16 @@ What every part of phase 8a relies on; each part's conventions add to these.
   twin's name and compares it with the twin, at most 3 % of the pixels different (the share in
   run.txt), the twin having to exist on the machine; and it ends with the app closed by its window and
   exit code 0, unless the method asserts another.
-  The notice's captures go through `CompareMasked`: the capture's height divided by the scaling must
-  equal the twin's within 1 px, else the method fails with `The notice is {h} high and its scripted
-  twin {t}: their layouts differ, so the masked comparison cannot hold.`; then `InstanceNoticeFolder`'s UI
-  Automation bounds are painted one flat colour in the capture and, divided by the scaling, in a copy of
-  the twin in the test's temporary folder (the scripted file never changes), and the two are compared at
-  3 %; the folder's text is asserted through UI Automation. Ink in a capture (`InkOf`, 12.3.3) is
+  The notice's captures go through `CompareMasked`: the capture's height divided by the scaling must lie
+  within 3 px of the twin's (D459: the notice sizes itself to its content, and at 200 % its rows round
+  to half pixels where the twin's round to whole ones), else the method fails with `The notice is {h}
+  high and its scripted twin {t}: their layouts differ, so the masked comparison cannot hold.`; then
+  `InstanceNoticeFolder`'s UI Automation bounds are painted one flat colour in the capture and, divided
+  by the scaling, in a copy of the twin in the test's temporary folder (the scripted file never
+  changes), and the two are compared at 5 %, the notice's own limit (D459: a small window that holds
+  little but text); the folder's text is asserted through UI Automation, and so are the notice's
+  heading, its body texts and its buttons' names, each of which fails the launch when UI Automation does
+  not give it. Ink in a capture (`InkOf`, 12.3.3) is
   `TextInk.Of`'s rule at the capture's scale, with `TextInk.Tolerance` and the twin's "replaced"
   colour, in the element's UI Automation bounds inset to hold the text alone; a box is read unfocused,
   except the text typed into the focused `FilterBox` in launch 1 (L1's and L2's `sea`), which is read
@@ -716,19 +720,22 @@ The notice is never sized; its captures are compared with `CompareMasked`.
    with `FileShare.None` and holds it, with no `instance.json`. `RealApp.Launch(D)` without a session:
    neither `session.json` nor `settings.json` is written into D before the start, since the notice's
    twin has none (the notice is then dark, 4.3.4). Within 15 s the process's main window is the notice.
-   `InstanceNoticeFolder`'s automation name is D's path; `CompareMasked` with `i2a-notice-dark`. Before
-   any key: the notice is the foreground window (`ForegroundIsThis`) and `InstanceNoticeTryAgain` has
-   the keyboard focus (UI Automation's focused element). If either fails, a real click on the notice's
-   title bar (its non-client area, which gives no control the focus) and both asserted again within
-   5 s; else the method fails before it sends any key, with `The notice is not the foreground window
-   with Try again focused: a real Enter would reach another window.` Then a real Enter, as the scripted
-   twin presses it (4.6; the lead's ruling of 2026-11-20); while `InstanceNoticeTryAgain` reads
-   `Trying…` and is disabled, `CompareMasked` with `i2b-notice-trying`. Within 10 s
-   `InstanceNoticeStatus` reads `It still did not answer.`; `CompareMasked` with `i2c-notice-no-answer`.
-   A real click on `InstanceNoticeClose`: the process exits with code 2 within 5 s; D holds
-   `instance.lock`, `logs/` and the launch's own `harness/`, nothing else (no session started, nothing
-   written); D's log holds the Warning `VisualCommit holds the data folder {D} but did not answer (no
-   instance.json).`
+   `InstanceNoticeFolder`'s automation name is D's path. Before the first picture and any key (D459; the
+   first runs took `i2a` with the notice behind another window): the notice is the foreground window
+   (`ForegroundIsThis`) and `InstanceNoticeTryAgain` has the keyboard focus (UI Automation's focused
+   element). If either fails, a real click on the notice's title bar (its non-client area, which gives
+   no control the focus) and both asserted again within 5 s; else the method fails before any picture
+   and any key, with `The notice is not the foreground window with Try again focused: a real Enter would
+   reach another window.` Then the notice's words are read by name through UI Automation and held to the
+   twin's (`InstanceNoticeHeading`, `InstanceNoticeBody`, `InstanceNoticeIfNoWindow`,
+   `InstanceNoticeClose`, `InstanceNoticeTryAgain`; a word that is not given fails), and `CompareMasked`
+   with `i2a-notice-dark`. Then a real Enter, as the scripted twin presses it (4.6; the lead's ruling of
+   2026-11-20); while `InstanceNoticeTryAgain` reads `Trying…` and is disabled, `CompareMasked` with
+   `i2b-notice-trying`. Within 10 s `InstanceNoticeStatus` reads `It still did not answer.`;
+   `CompareMasked` with `i2c-notice-no-answer`. A real click on `InstanceNoticeClose`: the process exits
+   with code 2 within 5 s; D holds `instance.lock`, `logs/` and the launch's own `harness/`, nothing
+   else (no session started, nothing written); D's log holds the Warning `VisualCommit holds the data
+   folder {D} but did not answer (no instance.json).`
 6. `Check_I2_notice_try_again_starts_here`. As launch 5 up to the notice, without a session as there.
    The test releases the lock; the guard of launch 5 (the notice the foreground window and
    `InstanceNoticeTryAgain` focused, the title-bar click only if not, no key until both hold); a real
@@ -870,7 +877,7 @@ launches, five captures.
 - **Pictures.** Dark and 1100×700 unless a check names light (F1's `f1b`). Each picture passes
   `AssertNoClippedText`, and in each no tooltip is open and `GitSetupButton` is not hovered (open point
   19: the neutral point lies in the status bar). The pointer rests at the neutral point before every
-  picture (no part F picture keeps it).
+  picture (no part F picture keeps it). Two pictures rest it at part F's own point instead, (400, 687), on the status bar clear of every control: `f5a` and `f10c`, where the neutral point lies on `GitStatus`'s text, whose tooltip a real pointer resting there would open in `f5a`'s real-window twin (design 12.3.5's first ruling); the two scripted pictures are the same files as before.
 - **Routes** are those earlier checks use: the settings screen by `Ctrl+,` (`OpenSettingsAsync(SettingsOpening.Key)`)
   and a click on `SettingsNavGit` or `SettingsNavAccounts`, waiting for the screen's reads; its Save, a
   click on `ConfirmButton` (`Save`); Esc closes it unsaved (phase 6's part S); the scope switch's
@@ -1442,32 +1449,39 @@ path, the stand-in's path and whether it holds a space. Each launch ends closed 
 7. `Check_F_missing_offers_keys_and_choose` (twin: method 1; one tab on a copy of "graph", restored;
    `StandInEnvironment("none")`). Before the app starts, the test looks for winget as the app does,
    `ProgramSearch.FindOnPath("winget.exe", PATH, ';', File.Exists)` over its own `PATH`, which
-   `RealApp.Launch` passes on unchanged; none: the method fails with `winget.exe is not on this machine's
-   PATH: F1, F2 and F5 need it (install App Installer from the Microsoft Store).` (D449, D453; never "Not
-   run"). F1: the restore fails as the twin's; a wait (12.3.1: `WaitFor` within the pass's
+   `RealApp.Launch` passes on unchanged; none: the method fails with `winget.exe is not on this
+   machine's PATH: F1, F2 and F5 need it (install App Installer from the Microsoft Store).` (D449, D453;
+   never "Not run"). F1: the restore fails as the twin's; a wait (12.3.1: `WaitFor` within the pass's
    `StepTimeout`; `Find` alone throws at once) until `GitSetupGuidance`'s UI Automation name is Missing
    W's guidance from `Phase8aExpectations.F`, `GitSetupChooseButton`'s name is `Choose git.exe…` and
    `GitSetupWingetButton` is in the window (the conventions' "Waiting for the screen"); then the
    screen's title, body and buttons as F1's, `GitSetupWingetButton` among them; `GitStatus` `Git not
-   found`; `GitSetupButton` `Set up Git…`; capture `f1a-missing-windows`. The log holds the stand-in's Warning for `none` once (this report's
-   addition, from 1.14; open point 24). F2: a real click on `GitSetupWingetButton`; the confirm `Install
-   Git with winget?`; `f2a-winget-confirm`; a real click on the confirm's `CancelButton`; no
-   `ConfirmationDialog` within 5 s, else the method fails before any further key; the log has no
-   `Started in a terminal:` line and `NativeMethods.Processes()` lists no `cmd.exe` or `winget.exe` whose
-   parent is the app (ruling 6); the screen unchanged. F13: one real F6 without looking, then a real F6
-   again while `GitSetupWingetButton` is not UI Automation's focused element, at most four presses, each
-   followed by a wait (within `StepTimeout`) until the focused element is `GitSetupWingetButton` or
-   another element than before the press; if the button does not have the focus after the fourth, the
-   method fails before any further key. After F2's Cancel the button may already hold the focus (D104;
-   open point 28), so the first F6 is always sent. Then real Tab through F13's order
-   (`GitSetupDownloadButton`, `GitSetupChooseButton`, `GitSetupCheckAgainButton`), each Tab followed by `WaitForFocusedElement` of the next id, whose failure
-   ends the method before any further key; Enter only once the focus is on `GitSetupCheckAgainButton`:
-   one more search logged, still Missing; once it ends `GitSetupCheckAgainButton` has the focus again.
-   F4: a real click on `GitSetupChooseButton`; `ChooseFileInDialog("Choose git.exe", git, 30 s)`, `git`
-   being D446's, `GitLocator.FindExecutable(GitSearchContext.FromSystem())` in the test process; within
-   60 s the screen is gone and the restored repository's `loaded` and working-tree lines are logged;
-   `GitStatus` `Git {v}`, its help text `{git}, chosen in Settings`; `settings.json`'s `gitExecutable` is
-   `git`; `f4a-found-again`.
+   found`; `GitSetupButton` `Set up Git…`; capture `f1a-missing-windows`. The log holds the stand-in's
+   Warning for `none` once (this report's addition, from 1.14; open point 24). F2: a real click on
+   `GitSetupWingetButton`; the confirm `Install Git with winget?`; `f2a-winget-confirm`; a real click on
+   the confirm's `CancelButton`; no `ConfirmationDialog` within 5 s, else the method fails before any
+   further key; the log has no `Started in a terminal:` line and `NativeMethods.Processes()` lists no
+   `cmd.exe` or `winget.exe` whose parent is the app (ruling 6); the screen unchanged. F13: one real F6
+   without looking, then a real F6 again while `GitSetupWingetButton` is not UI Automation's focused
+   element, at most four presses, each followed by a wait (within `StepTimeout`) until the focused
+   element is `GitSetupWingetButton` or another element than before the press; if the button does not
+   have the focus after the fourth, the method fails before any further key. After F2's Cancel the
+   button may already hold the focus (D104; open point 28), so the first F6 is always sent. Then real
+   Tab through F13's order (`GitSetupDownloadButton`, `GitSetupChooseButton`,
+   `GitSetupCheckAgainButton`), each Tab followed by `WaitForFocusedElement` of the next id, whose
+   failure ends the method before any further key; Enter only once the focus is on
+   `GitSetupCheckAgainButton`: one more search logged, still Missing; once it ends
+   `GitSetupCheckAgainButton` has the focus again. F4: a real click on `GitSetupChooseButton`;
+   `ChooseFileInDialogGuarded("Choose git.exe", git, 30 s)`, S14's helper in a guarded form (the path
+   set through the file box's value alone; the Enter sent only while Windows' dialog is the foreground
+   window with that box focused, else nothing is sent and the method fails), `git` being D446's,
+   `GitLocator.FindExecutable(GitSearchContext.FromSystem())` in the test process; within 60 s the
+   screen is gone and the restored repository's `loaded` and working-tree lines are logged; `GitStatus`
+   `Git {v}`, its help text `{chosen}, chosen in Settings` and `settings.json`'s `gitExecutable`
+   `{chosen}`, exactly, where `{chosen}` is the path the dialog handed the app (the probe's log line
+   `Using Git {v} at {chosen}.`), which is `git`, case and separators aside; `f4a-found-again`.
+   Confirming Windows' Open dialog leaves `git.exe` and its folder in the user's recent lists of the
+   common file dialog, outside the launch's data folder, as phase 6's S14 does; run.txt says so.
 8. `Check_F5_too_old_stand_in` (twin: method 4, to `f5a`; one empty tab; `StandInEnvironment(StandInPath,
    version: "git version 2.29.0")`). Winget looked for first, as in launch 7, with the same failure. The
    same wait as launch 7's, with TooOld W's guidance, `Choose git.exe…` and `GitSetupWingetButton` in
@@ -2017,7 +2031,7 @@ the focus. Before each Shift+F10 the real pointer rests at the neutral point, an
 open menu keeps it there (1.17's lesson from L4 a). No step presses anything of 12.3.2's list: K2's
 menu is closed by Esc, `Copy SHA` is never pressed. run.txt gets each launch's start and end and every value below. The UI Automation names
 the walk meets are §9's from its merge (`Stage {0}` on a row's button, 1.12); the walk asserts ids and
-the rows' names (their paths), not the buttons' names.
+the rows' names (their paths), not the buttons' names. K1's caret keys (Ctrl+Home, the Downs, the second Shift+Down) wait on the focus in `DiffText` and on the toolbar's buttons, the diff's caret not being in UI Automation, and git's `--numstat` lines prove the rows. In `k2a` the method also reads three spots of the blame's gutter, 2 px inside its right edge at the centres of lines 4, 1 and 3: `#DDE1FA` for the picked run, `#F5F6F8` for an even run and `#FFFFFF` for an odd one, since the 3 % comparison, which matches colours within 48 a channel, cannot tell them apart.
 
 11. `Check_K1_hunk_by_keys` (twin: method 1; "changes", one tab, dark). A real click on graph row 0; a
     real F6, then `StageFileRow` `README.md` focused; 18 real Tabs through the order of K1's step 4,
@@ -2778,13 +2792,14 @@ within the pass's `StepTimeout` (12.3.1). In the launch's order:
 
 3. `Check_A_and_B_about_and_icon` (part A's twins: method 1 for A1 and A4; method 3, A3's, for A1's
    capture at 1920×1080).
-   - **Before the first key.** B1 presses nothing, so A1's `Ctrl+Shift+P` is the launch's first input,
-     a key: the method first asserts `ForegroundIsThis`, as launches 5 and 6 do (12.3.3 reads "launches
-     3, 5 and 6"). If it does not hold, one real click on the window's title bar (after B1's captures),
-     away from its left end (where the icon opens the system menu) and from the caption buttons, then
-     `ForegroundIsThis` asserted again within 5 s, else the method fails before any key (12.3.5's second
-     ruling, for the main window too). No click at the neutral point. run.txt says whether the click was
-     needed (open point 72).
+   - **Before the first key.** B1 presses nothing, so A1's `Ctrl+Shift+P` is the launch's first input, a
+     key: the method first asserts `ForegroundIsThis`, as launches 5 and 6 do (12.3.3 reads "launches 3,
+     5 and 6"). If it does not hold, one real click on the window's title bar (after B1 (a) and (b) and
+     before B1 (c)'s capture, so that the dark title bar's picture shows the active caption as the light
+     one does), away from its left end (where the icon opens the system menu) and from the caption
+     buttons, then `ForegroundIsThis` asserted again within 5 s, else the method fails before any key
+     (12.3.5's second ruling, for the main window too). No click at the neutral point. run.txt says
+     whether the click was needed (open point 72).
    - **A1.** The pointer at the neutral point; a real `Ctrl+Shift+P`; a wait until `CommandPaletteBox` is
      UI Automation's focused element; `about` typed on the real keyboard; a wait until
      `CommandPaletteList` holds one `CommandPaletteItem`; the selected row's name asserted to be
@@ -4559,6 +4574,35 @@ silent) wrote 84 pictures that are byte for byte those of the branch's last run,
 opened in the pass before the merge (design 13.1, rulings 94 and 95) or by its checkers; the book built
 with mdBook 0.5.4, and `scripts/check-guide-links.py` found nothing in it (its self-test: 117 cases).
 
+### §12, the real-window part: no earlier picture, no earlier test; part F's resting point (design 12.3.5, 12.6; rulings 96 to 98; D459)
+
+**Earlier pictures and tests.** None changed. The package's diff lies under
+`tests/VisualCommit.RealWindowTests` but for three files of 8a's walk-through that part F's resting
+point changes (`Phase8aExpectations.F.cs`, `Phase8aChecks.F.cs`, `Phase8aChecks.F.Helpers.cs`): the
+scripted `f5a-too-old` and `f10c-ubuntu-too-old` rest the pointer at (400, 687) and assert that no
+tooltip and no button lies there, and both are the same files as before (SHA-256 `81593fe4…` and
+`5c715132…`, from the walk-through of §11's merge and from the one made in the package's worktree).
+`RealApp.Launch`'s start information moved into `StartInfoFor` unchanged; phase 0's
+`Check_8_the_real_window_matches_the_scripted_walk_through`, run alone on 2026-11-23, passed (0.30 %).
+
+**This report's real-window texts that changed, and why** (the lead, after the part's first runs on
+2026-11-23; each is also in "Changed in this report after its first commit"). (1) The notice: its
+comparison allows a height within 3 px and 5 % of its pixels, its words are held by name, and its guard
+comes before its first picture (D459): at 200 % the notice is 216 high against its twin's 218, and its
+three pictures differ by 3.19, 3.00 and 2.90 %, letters' edges throughout. (2) Launch 3's guard and its
+click on the title bar come before B1 (c)'s capture: the app's window was not the foreground window at
+the launch's start, and a title bar captured then is the inactive one. (3) F4 confirms Windows' Open
+dialog only while the dialog is the foreground window with its file box focused, and holds the help text
+and the setting exactly to the path the dialog handed the app: a review of the unrun code found the
+earlier helper's Enter sent with no look at the foreground window. (4) K2's gutter is read at three
+spots: the comparison cannot tell its three light colours apart. (5) Part F's resting point, above.
+
+**For the gate's inspection.** The framed captures (`b1-title-bar-dark-with-frame`,
+`b2-title-bar-light-with-frame`, and phase 0's) show a pale line about 170 logical pixels long at the
+screen's top centre, over the window's top edge: it is the desktop's, not the app's, and was in phase
+0's framed capture before this phase. A 1920×1080 window does not fit the laptop's work area at 200 %,
+so A1's capture at that size is not run there (run.txt says so).
+
 ### Changed in this report after its first commit
 
 - **L6, method 5, step 6 and its expected result** (2026-11-20, `24d335f`): the step now waits for the
@@ -4717,6 +4761,13 @@ with mdBook 0.5.4, and `scripts/check-guide-links.py` found nothing in it (its s
   `48f403c`, and the row list's fix that followed it, `bad98b1`: "CI's two failures after the link frame's
   merge, and the row list" below); the sweep's state 05 and this step wait for the reload beside that, so that
   each reads a panel that has come to rest. A step waits for more; no expected result changes.
+
+- **The real-window texts of parts I, A, F and K, and the conventions' `CompareMasked`** (2026-11-23,
+  after §12's first runs; D459, design 13.1's rulings 96 to 98). Changed: the notice's comparison (a
+  height within 3 px for 1 px, 5 % for 3 %, the notice's words held by name, the guard before `i2a`);
+  launch 3's guard before B1 (c)'s capture; F4's guarded dialog and its exact reading of the chosen
+  path; K1's caret keys' waits and K2's three gutter spots; part F's resting point for `f5a` and `f10c`.
+  The reasons are in "§12, the real-window part" above. No scripted expected result changed.
 
 ### Wave 1's comparison with phase 7b's references (2026-11-20)
 

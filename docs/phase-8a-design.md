@@ -5294,9 +5294,12 @@ window", the method of each.
 
 ### 12.6 Earlier pictures
 
-None changed by this package: its diff is under `tests/VisualCommit.RealWindowTests` alone, so no
-scripted picture can change, and `StartInfoFor` changes no launch. Proof: `git diff --stat <base>
-wip/p8a-realwindow -- . ':(exclude)tests/VisualCommit.RealWindowTests'` prints nothing; at the gate the
+None changed by this package: its diff is under `tests/VisualCommit.RealWindowTests` but for the three
+files of 8a's walk-through that 12.3.5's first ruling changes (`Phase8aExpectations.F.cs`,
+`Phase8aChecks.F.cs`, `Phase8aChecks.F.Helpers.cs`; ruling 96), whose two scripted pictures stay the
+same files, so no scripted picture can change, and `StartInfoFor` changes no launch. Proof: `git diff
+--stat <base> wip/p8a-realwindow -- . ':(exclude)tests/VisualCommit.RealWindowTests'` prints those three
+files alone; at the gate the
 earlier captures differ from phase 7b's only as 0.7 names (§2's, §7's three framed and §2's placeholder in the same three, §8's eight, the two
 palette captures). New files: the 31 captures above (32 where 1920×1080 fits) and their 25 (26) difference pictures in
 `artifacts/visual/phase-8a/real-window/`, with run.txt.
@@ -5346,6 +5349,48 @@ takes no picture (9.5); launch 13 closes the resolver by a real click on `Resolv
 since Esc in the resolver's result closes nothing (the lead at §9's merge, 2026-11-21; 12.3.4);
 winget is on the laptop's `PATH` (the lead, 2026-11-19; 13.4 item 7). No open point is §12's: 13.4
 item 7's by-hand try of the terminal window is §5's, before its merge.
+
+### 12.10 As built and first run (the lead, 2026-11-23)
+
+**Built** (run `wf_b0d89b0f-cab`; `wip/p8a-realwindow`, 20 commits from `f0b4f8a`, the last
+`83f3f6b`; rulings 96 to 98, D459). As 12.2 to 12.5 have it, with these differences.
+`RealApp.Phase8a.cs` holds more than 12.2 lists: `FocusedElement`, `FocusedId` and `WaitForFocusOn`,
+`ClickTitleBar` (one click at the title bar's middle, refused when that point belongs to another
+window), `SetPointerOnTitleBar`, `VisibleFrameOffset` (the window manager's frame, for B1's crop),
+`ChooseFileInDialogGuarded`, `BuiltProductVersion`, `ReadOr` and `IsReadFailure` (reads that never
+throw), and the result types of its helpers; its calls into the app have a limit
+(`SendMessageTimeoutW`, `ShowWindowAsync`). `StartBeside` returns a wrapper that stops a second
+start left running. Every key goes through `Keys`, `KeysOn` or `TypeKeys`: the foreground window
+asserted before each, never F1, an Enter or a Space only on an element that is none of 12.3.2's list
+(to which the update confirm's `Update` is added) and, where a key is meant for one element, only
+while that element has the focus. `RecordSelectedRowEvents` uses no cache request: FlaUI 5.0.0
+passes none when it registers a handler, so each sender's id is read outside the handlers. `Compare`
+is split into `Capture`, the reads, `Compare` and the reads' assertions, so that a failed read never
+hides the comparison's share. Launches 8 to 10 write no session, as their twins have none. B1's icon
+results are asserted at launch 3's end.
+
+**Launch 5 as built** (D459, amending 12.3.4's paragraph): the guard with its click on the notice's
+title bar, then the notice's five words by name, then `i2a`; `CompareMasked` accepts a height within
+3 px and 5 %; the status line's words before `i2c`. **Launch 7's F4**: the guarded dialog, and the
+help text and the setting held exactly to the path the dialog handed the app. **Launch 11**: the
+caret keys wait on the focus and the toolbar's buttons (ruling 96). **Launch 12**: the gutter's
+three spots. **Launch 3**: the guard before B1 (c).
+
+**Run** (12.8 items 3 and 4). The twins made in the worktree (phase 0's checks, 7 tests; 8a's
+walk-through, 154 tests); then each method alone, the owner told in the chat before each round: on
+`b6fdd8a` at 21:15 to 21:24, 11 of 13 green (launches 5 and 13 failed in the harness, ruling 97); on
+`83f3f6b` at 22:28 to 22:38, 13 of 13 and phase 0's method (ruling 98). The 28 compared captures of
+the main window differ from their twins by 0.14 to 1.76 %, the same shares in both rounds; the
+notice's three by 2.90 to 3.19 %. What run.txt settles of 12.9's unverified points: the taskbar's
+button is found from the desktop root, named `VisualCommit - 1 running window`; `WM_GETICON` gives
+32 and 48 px icons at the window's 192 DPI and the executable's icon is 64 px, each equal to its
+frame of the `.ico`; the build's `ProductVersion` holds `+<commit>` and About shows `0.1.0
+(<seven>)`; a LiveRegionChanged from `GraphSelectedRow` reaches FlaUI at each move; the notice is
+the process's main window; the stand-in's files land in the pass's output; F4's dialog is titled
+`Choose git.exe` and its box takes the path by its value. A 1920×1080 window does not fit the
+laptop's work area. The runs' files are in `D:/Projects/Personal/phase8-work/wave4/realwindow/`
+(`run1/`, `run2/`). Left for the merge and the gate: 12.8 items 1, 2 and 5 (CI on the merge; D246's
+two runs).
 
 ## 13. The lead's rulings, what waits on the owner, and the open points
 
@@ -5666,6 +5711,20 @@ failed D448's precondition, the notice 216 high against its twin's 218; D459 set
 within 3 px, 5 % for the notice alone, its words held by name, the guard before the first picture).
 The fixes and the inspection of the 28 captures are run `wf_1d035720-312`'s; the lead then runs
 launches 5 and 13 again, the owner told.
+
+**§12's second runs (the lead, 2026-11-23, 22:28 to 22:38, the owner told).** 98. After the fixes
+(`b7a6281`, `20d1d38`, then `7618b73`, `4795797` and `83f3f6b` for what the checker of the fix and
+the inspectors of the first runs' captures found), each of the 13 methods ran alone again, on
+`83f3f6b`: all passed, and so did phase 0's
+`Check_8_the_real_window_matches_the_scripted_walk_through` alone (12.4). The inspectors opened the
+30 captures of the eleven methods that had passed and found no fault of the app; the lead took their
+points: run.txt notes every value a launch asserts, each exit code among them; K2's gutter is read
+at three spots, which the 3 % cannot tell apart; a word of the notice that UI Automation does not
+give fails; the dead cache request is gone. Launch 5 in full: its three pictures differ by 3.19,
+3.00 and 2.90 % under D459's 5 %, the heights 216 against 218 and 237.5 against 240. Launch 13 in
+full: each of Up, Down, Down raised one LiveRegionChanged from `GraphSelectedRow`, beside one Name
+change (D450). 12.8's items 3 and 4 hold; items 1, 2 and 5 are the merge's and the gate's. 12.10 has
+the part as built.
 
 ### 13.2 What the integration settled
 

@@ -326,8 +326,12 @@ Wave 4 and the review:
   merged** (`aedb12f`; the bounds `23bea54`; D458; design 14.10; the report's "The restore order's
   proof"): the probe and the alternated series, 13:36 to 14:52, the lagged list at the merge 948
   tests, none failed.
-- [ ] 18. §12, the real-window part for 8a's checks (`Phase8aRealWindowPass`, D442 to D446): built
-  on the Windows machine, each of its 13 methods run alone, the owner told before each.
+- [x] 18. §12, the real-window part for 8a's checks (`Phase8aRealWindowPass`, D442 to D446): built
+  on the Windows machine, each of its 13 methods run alone, the owner told before each. **Done on
+  2026-11-23** on `wip/p8a-realwindow` (`83f3f6b`; design 12.10, rulings 96 to 98, D459): built and
+  read for what real input could reach, never run by an agent; the lead ran each method alone twice,
+  11 of 13 green at 21:15 and, after the fixes, 13 of 13 with phase 0's method at 22:28; the
+  captures inspected. It is reviewed in step 19 and merged last, in that step.
 - [ ] 19. (With it, the lead's ruling of 2026-11-20: Ctrl+Tab from a stage row gives the focus to
   the graph area's target; Notes, "Wave 2 is built and merged".) An independent review of the code
   before the gate, each finding verified, the confirmed
@@ -804,36 +808,30 @@ series, merged, the lagged list at the merge 948 tests with none failed, and pus
 (`5e23aba`); CI's run 45286046457 on that push is green in all six jobs (the CI section). The push
 of §11's merge is `f0b4f8a`: CI's run 45306019513 is green in all six jobs and the guide workflow's
 first run, 45306019644, is green, no deploy job run and its `guide-site` looked at (the CI section),
-so **step 17 is done**. **§12 is built, and 11 of its 13 methods passed their first runs** (step 18;
-run `wf_b0d89b0f-cab`, 18:40 to 21:06; worktree `D:/Projects/Personal/vc-wt/p8a-realwindow` on
-`wip/p8a-realwindow`, from `f0b4f8a`, 15 commits, the last `b6fdd8a`; rulings 96 and 97, D459):
-written and compiled by four builders, read by three reviewers for what a real key or click could
-reach (one major, an Enter into Windows' Open dialog without a look at the foreground window, and 20
-minors, all fixed), never run by an agent. The lead made the twins in the worktree (phase 0's
-checks, 7 tests; 8a's walk-through, 154) and ran each method alone on the desktop, the owner told,
-21:15 to 21:24: launches 1 to 4 and 6 to 12 passed; launch 5 (the notice's pictures) and launch 13
-(the graph row's events) failed in the harness. **Under way** since 21:35 (run `wf_1d035720-312`,
-script `…/workflows/scripts/phase8a-realwindow-round1-wf_1d035720-312.js`): a fixer for the two with
-a checker of the fix, and three inspectors for the 28 captures of the eleven that passed. **Next for
-the lead, when that run ends:** read its result; with no agent at work and the owner told in the
-chat, run launches 5 and 13 again (`bash
-D:/Projects/Personal/phase8-work/wave4/realwindow/run_methods.sh run2 <method> <method>`, which
-copies each method's captures and run.txt out), and any method a fix touched; then phase 0's
-`Check_8_the_real_window_matches_the_scripted_walk_through` alone (12.4); look at the new captures;
-rule on what the inspectors found; then tick step 18. The package is reviewed with the rest in step
-19 and merged last, in that step. The three finished worktrees (`p8a-restore`, `p8a-restore-base`,
-`p8a-guide`) are removed; their `wip/` branches stay local (D396). §11's builders got with their
-briefs: mdBook at `D:/Projects/Personal/phase8-work/tools/mdbook-0.5.4/mdbook.exe` and the Linux
-archive's SHA-256 for `guide.yml` (Notes, "Wave 4"); the references
-`D:/Projects/Personal/phase8-work/references/wave3/`; rulings 80 (stop and report if the first-run
-link's frame touches its ink), 82 (the facts no check shows) and 83 (the rename, the comments); and
-what part G's open point 103 leaves for it to report. What step 16 ended with: the three packages
-merged, §10 (`86ecb3a`), §8 (`f014b2b`, its fixes after the merge `85e2884`) and §9 (`769f459`); the
-lagged list, the whole default run and the pictures on `85e2884`, whose one fault
-(`a1b-about-link-focus`) is fixed (`fcf8c1e`); the references of the later merges,
-`D:/Projects/Personal/phase8-work/references/wave3/` (1,235 scripted pictures); three "before"
-series, two probes, two panels and **D457** (the bounds `0bfbe92`, two backlog rows, the restore
-order as ruling 76, a change in wave 4); CI's two failures on the link frame's merge fixed
+so **step 17 is done**. **§12 is built and run: step 18 is done** (`wip/p8a-realwindow`, 20 commits
+from `f0b4f8a`, the last `83f3f6b`, in the worktree `D:/Projects/Personal/vc-wt/p8a-realwindow`;
+design 12.10, rulings 96 to 98, D459). Written and compiled by run `wf_b0d89b0f-cab` and read for
+what a real key or click could reach; the lead ran each of its 13 methods alone on the desktop, the
+owner told: 11 of 13 green at 21:15, and, after the fixes of runs `wf_1d035720-312` and
+`wf_44f114fb-844`, 13 of 13 with phase 0's method at 22:28. The captures were inspected: no fault of
+the app. **Next is step 19:** first the owner is asked again for the Narrator listen (D455; "Waiting
+on the owner"); then the independent review of the code before the gate, whose list the Notes hold
+("More for step 19's list", "Timeouts of older tests", "Wave 4" and every "For step 19's list"),
+each finding verified and the confirmed ones fixed with tests; then §12's merge with the lead's
+CLAUDE.md rows, the lagged list and the whole default run. The package is reviewed with the rest in
+step 19 and merged last, in that step. The three finished worktrees (`p8a-restore`,
+`p8a-restore-base`, `p8a-guide`) are removed; their `wip/` branches stay local (D396). §11's
+builders got with their briefs: mdBook at
+`D:/Projects/Personal/phase8-work/tools/mdbook-0.5.4/mdbook.exe` and the Linux archive's SHA-256 for
+`guide.yml` (Notes, "Wave 4"); the references `D:/Projects/Personal/phase8-work/references/wave3/`;
+rulings 80 (stop and report if the first-run link's frame touches its ink), 82 (the facts no check
+shows) and 83 (the rename, the comments); and what part G's open point 103 leaves for it to report.
+What step 16 ended with: the three packages merged, §10 (`86ecb3a`), §8 (`f014b2b`, its fixes after
+the merge `85e2884`) and §9 (`769f459`); the lagged list, the whole default run and the pictures on
+`85e2884`, whose one fault (`a1b-about-link-focus`) is fixed (`fcf8c1e`); the references of the
+later merges, `D:/Projects/Personal/phase8-work/references/wave3/` (1,235 scripted pictures); three
+"before" series, two probes, two panels and **D457** (the bounds `0bfbe92`, two backlog rows, the
+restore order as ruling 76, a change in wave 4); CI's two failures on the link frame's merge fixed
 (`70a8fc0`, `809b77f`); and, after a review of the second of those fixes, **the row list's fix,
 merged at `bad98b1`**: CI's run 45133434382 on it is green in all six jobs, the whole default run on
 `c1bc69b`, whose code is the merge's, passed with 8,514 tests and none failed, and each of its 54
@@ -1048,7 +1046,17 @@ every commit.
   the machine's git; launches 3 and 6 met a window that was not the foreground window at their start
   and their click on the title bar mended it. The notice's comparison, applied by hand
   (`…/wave4/realwindow/notice_difference.ps1`): 3.19 % (D459). Wave 4's runs so far: 24.8M tokens
-  with §12's build.
+  with §12's build. **§12's fixes and second runs (21:27 to 22:40).** Run `wf_1d035720-312` (5
+  agents, 1.31M tokens): the fixer of launches 5 and 13, a checker of the fix, and three inspectors
+  who opened the 30 captures of the eleven passing methods with their twins and difference pictures
+  and read each run.txt against the report: no fault of the app; eight minor points of the harness
+  and the report. Run `wf_44f114fb-844` (3 agents, 0.69M tokens): those points applied (the notice's
+  unread words fail; every asserted value noted; K2's gutter read at three spots; the dead cache
+  request removed), checked, and one more guard read made safe. The second runs are in
+  `…/wave4/realwindow/run2/`. What they show beyond design 12.10: at each of the notice launches and
+  at launch 3 the app's window was not the foreground window when the launch began (Windows keeps a
+  process started by the test host behind), and the one click on the title bar brought it forward
+  each time. Wave 4's runs so far: 26.8M tokens.
 - **Wave 3 is under way (2026-11-21).** The owner's word that day: "Continue", all of wave 3 now, and
   the three takeovers of the desktop (the spike, §10's first run, the "before" series) each as soon
   as it is ready. **The checks** of parts A and U were written by a writer each, reviewed by two
