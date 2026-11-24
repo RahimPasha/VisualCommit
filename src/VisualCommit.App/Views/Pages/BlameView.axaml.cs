@@ -6,6 +6,8 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
 using AvaloniaEdit;
+using AvaloniaEdit.Document;
+using AvaloniaEdit.Rendering;
 using VisualCommit.App.Controls.Blame;
 using VisualCommit.App.ViewModels.Menus;
 using VisualCommit.App.ViewModels.Pages;
@@ -18,8 +20,8 @@ namespace VisualCommit.App.Views.Pages;
 /// fills the text and the gutter from the view model, keeps the gutter's width by the page's
 /// (130, or 200 from a page 700 wide), turns a click on a run, in the gutter or on its text, into
 /// picking it and a double-click into "Show in graph", picks the caret's run after an arrow key as
-/// a click would (a run picked in the gutter or by a right-click takes the caret to its first line,
-/// so that the arrows go on from it), opens a run's menu (a right-click picks the run first, BD9),
+/// a click would (a run picked in the gutter or by a right-click takes the caret to the first of
+/// its lines in view, so that the arrows go on from it), opens a run's menu (a right-click picks the run first, BD9),
 /// gives the text the keyboard focus when the page opens (BD10), and closes the page on Esc
 /// (<see cref="EscapeOrder.Page"/>) unless a diff covers it or a text box has the focus.
 /// </summary>
@@ -212,11 +214,13 @@ public partial class BlameView : UserControl
     }
 
     /// <summary>
-    /// A run picked by the pointer, in the gutter or by a right-click, takes the caret to its first
-    /// line, as a click on the text takes it to the line clicked: the caret is not drawn, and the
-    /// arrows pick the run of the line they take it to, so they go on from the run the user picked,
-    /// not from where the caret was left. The text does not scroll to the caret (a run's first line
-    /// may lie above the view) until an arrow moves it.
+    /// A run picked by the pointer, in the gutter or by a right-click, takes the caret to the first of
+    /// its lines that is in view (its first line when that one is), at the view's left edge, as a
+    /// click on the text takes it to the line clicked: the caret is not drawn, and the arrows pick
+    /// the run of the line they take it to, so they go on from the run the user picked, not from
+    /// where the caret was left. Nothing scrolls: the text does not scroll to the caret, and the next
+    /// arrow moves it one line from a line the user sees, so that AvaloniaEdit, which brings the
+    /// moved caret into view, scrolls only when that line is out of view.
     /// </summary>
     private void PutCaretOn(BlameRun run)
     {
@@ -226,15 +230,62 @@ public partial class BlameView : UserControl
         }
 
         var area = BlameText.TextArea;
+        var view = area.TextView;
+        var line = Math.Clamp(FirstLineInView(view), run.FirstLine, Math.Min(run.LastLine, document.LineCount));
         area.ClearSelection();
-        area.Caret.Position = new TextViewPosition(run.FirstLine, 1);
-        area.Caret.DesiredXPos = double.NaN;
+        var (position, desiredX) = AtLeftEdge(view, document, line);
+        area.Caret.Position = position;
+        area.Caret.DesiredXPos = desiredX;
+    }
+
+    /// <summary>
+    /// The first line in view: the one drawn at the view's top, also when part of it lies above, so
+    /// that one Up from a run whose first line shows picks the run above; 1 before the text is laid out.
+    /// It is read from the lines' heights, which a redraw leaves as they were, not from the view's
+    /// lines, which a redraw (of a selection cleared, of colours come) leaves out of date until the
+    /// next layout.
+    /// </summary>
+    private static int FirstLineInView(TextView view) =>
+        view.Document is not null && view.GetDocumentLineByVisualTop(view.ScrollOffset.Y) is { } top ? top.LineNumber : 1;
+
+    /// <summary>
+    /// Where the caret stands on <paramref name="line"/> at the view's left edge, and the x that Up
+    /// and Down keep for it: column 1 and no x of its own while the text is not scrolled across; else
+    /// the first caret position at or right of that edge and its x, so that Up and Down move no text
+    /// across. On a line that ends left of the edge (an empty one, or "}") the caret stands at its end,
+    /// out of view, and the x kept is half a space right of the edge, which AvaloniaEdit rounds on the
+    /// next line to the nearest caret position, one at or right of the edge: the caret's own x would
+    /// scroll the text back across. An arrow onto a line that itself ends left of the edge still
+    /// scrolls across to show the caret, as on any line. The line is built also while the view's
+    /// lines are out of date, as AvaloniaEdit's own caret moves build it: clearing a selection, just
+    /// before, redraws the selection's lines.
+    /// </summary>
+    private static (TextViewPosition Position, double DesiredX) AtLeftEdge(TextView view, TextDocument document, int line)
+    {
+        var edge = view.ScrollOffset.X;
+        if (edge <= 0)
+        {
+            return (new TextViewPosition(line, 1), double.NaN);
+        }
+
+        var visualLine = view.GetOrConstructVisualLine(document.GetLineByNumber(line));
+        var textLine = visualLine.TextLines[0];
+        var column = visualLine.GetVisualColumn(textLine, edge, allowVirtualSpace: false);
+        var x = visualLine.GetTextLineVisualXPosition(textLine, column);
+        if (x < edge
+            && visualLine.GetNextCaretPosition(column, LogicalDirection.Forward, CaretPositioningMode.Normal, allowVirtualSpace: false) is var next and >= 0)
+        {
+            column = next;
+            x = visualLine.GetTextLineVisualXPosition(textLine, column);
+        }
+
+        return (visualLine.GetTextViewPosition(column), x >= edge ? x : edge + view.WideSpaceWidth / 2);
     }
 
     /// <summary>
     /// A run's menu (BD8, BD9): a right-click on the gutter or the text picks the run, with the caret
-    /// on its first line (one on the text inside its selection leaves the selection and the caret as
-    /// they were), then opens it at the pointer; the Menu key or Shift+F10 at the top of the
+    /// on the first of its lines in view (one on the text inside its selection leaves the selection
+    /// and the caret as they were), then opens it at the pointer; the Menu key or Shift+F10 at the top of the
     /// text, for the picked run, or the caret's while none is picked (a page just opened has run 0's).
     /// </summary>
     private void OnContextRequested(object? sender, ContextRequestedEventArgs e)

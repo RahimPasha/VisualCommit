@@ -74,8 +74,8 @@ public sealed partial class Phase8aExpectationTests
             [GitSetupTexts.WingetLine, GitSetupTexts.InstallConfirmTitle, GitSetupTexts.UpdateConfirmTitle, GitSetupTexts.ConfirmQuestion, GitSetupTexts.InstallConfirmDetail, GitSetupTexts.UpdateConfirmDetail, GitSetupTexts.Install, GitSetupTexts.Update]);
         Assert.Equal(F.Cancel, new VisualCommit.App.ViewModels.Dialogs.ConfirmationRequest("t", "q", "d", "c").CancelText);
         Assert.Equal(
-            [F.ChooseGitExeTitle, F.ChooseGitProgramTitle, F.ChooseTooOldFormat, F.ChooseNoVersionFormat, F.ChooseNotStartedFormat, F.StartFailedFormat],
-            [GitSetupTexts.ChooseGitExeTitle, GitSetupTexts.ChooseGitProgramTitle, GitSetupTexts.ChooseTooOldFormat, GitSetupTexts.ChooseNoVersionFormat, GitSetupTexts.ChooseNotStartedFormat, GitSetupTexts.StartFailedFormat]);
+            [F.ChooseGitExeTitle, F.ChooseGitProgramTitle, F.ChooseTooOldFormat, F.ChooseNoVersionFormat, F.ChooseNotStartedFormat, F.ChooseNoAnswer, F.StartFailedFormat],
+            [GitSetupTexts.ChooseGitExeTitle, GitSetupTexts.ChooseGitProgramTitle, GitSetupTexts.ChooseTooOldFormat, GitSetupTexts.ChooseNoVersionFormat, GitSetupTexts.ChooseNotStartedFormat, GitSetupTexts.ChooseNoAnswer, GitSetupTexts.StartFailedFormat]);
         Assert.Equal((F.ProgramMissing, F.ProgramNotExe), (OperationTexts.SettingsTexts.ProgramMissing, OperationTexts.SettingsTexts.ProgramNotExe));
 
         // The ellipsis is the one character U+2026.
@@ -92,8 +92,8 @@ public sealed partial class Phase8aExpectationTests
             [F.FoundOnPathTipFormat, F.FoundInGitForWindowsFolderTipFormat, F.FoundInUsualFolderTipFormat, F.ChosenInSettingsTipFormat, F.StandInTipFormat, F.SetUpGit, F.Details],
             [GitSetupTexts.FoundOnPathTipFormat, GitSetupTexts.FoundInGitForWindowsFolderTipFormat, GitSetupTexts.FoundInUsualFolderTipFormat, GitSetupTexts.ChosenInSettingsTipFormat, GitSetupTexts.StandInTipFormat, GitSetupTexts.SetUpGit, GitSetupTexts.Details]);
         Assert.Equal(
-            [F.GitProgramLabel, F.NoneFound, F.FoundOnPathNote, F.FoundInGitForWindowsFolderNote, F.FoundInUsualFolderNote, F.ChosenHereNote, F.ChosenGoneNote, F.ChosenNotRunnableNote, F.StandInNote, F.NoGitFoundNote, F.NextStartSuffix, F.WhenYouSaveSuffix, F.Browse],
-            [GitSetupTexts.GitProgramLabel, GitSetupTexts.NoneFound, GitSetupTexts.FoundOnPathNote, GitSetupTexts.FoundInGitForWindowsFolderNote, GitSetupTexts.FoundInUsualFolderNote, GitSetupTexts.ChosenHereNote, GitSetupTexts.ChosenGoneNote, GitSetupTexts.ChosenNotRunnableNote, GitSetupTexts.StandInNote, GitSetupTexts.NoGitFoundNote, GitSetupTexts.NextStartSuffix, GitSetupTexts.WhenYouSaveSuffix, GitSetupTexts.Browse]);
+            [F.GitProgramLabel, F.NoneFound, F.FoundOnPathNote, F.FoundInGitForWindowsFolderNote, F.FoundInUsualFolderNote, F.ChosenHereNote, F.ChosenGoneNote, F.ChosenNotRunnableNote, F.StandInNote, F.NoGitFoundNote, F.NextStartSuffix, F.NextStartLooksAgainSuffix, F.WhenYouSaveSuffix, F.Browse],
+            [GitSetupTexts.GitProgramLabel, GitSetupTexts.NoneFound, GitSetupTexts.FoundOnPathNote, GitSetupTexts.FoundInGitForWindowsFolderNote, GitSetupTexts.FoundInUsualFolderNote, GitSetupTexts.ChosenHereNote, GitSetupTexts.ChosenGoneNote, GitSetupTexts.ChosenNotRunnableNote, GitSetupTexts.StandInNote, GitSetupTexts.NoGitFoundNote, GitSetupTexts.NextStartSuffix, GitSetupTexts.NextStartLooksAgainSuffix, GitSetupTexts.WhenYouSaveSuffix, GitSetupTexts.Browse]);
         Assert.Equal((F.NetrcNoteFormat, F.Dismiss), (GitSetupTexts.NetrcNoteFormat, GitSetupTexts.Dismiss));
         Assert.Equal((F.StartedInTerminalLineFormat, F.StartedLineFormat), (GitSetupTexts.StartedInTerminalFormat, GitSetupTexts.StartedFormat));
         Assert.Equal((F.ChosenNotFullPathLineFormat, F.ChosenNotExeLineFormat), (GitSetupTexts.ChosenNotFullPathFormat, GitSetupTexts.ChosenNotExeFormat));

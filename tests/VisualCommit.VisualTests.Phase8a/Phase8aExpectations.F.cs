@@ -104,6 +104,7 @@ public static partial class Phase8aExpectations
         public const string ChooseTooOldFormat = "Git {0} at this path is too old: VisualCommit needs {1} or newer.";
         public const string ChooseNoVersionFormat = "This Git did not report its version. Git said: {0}";
         public const string ChooseNotStartedFormat = "This file could not be started: {0}";
+        public const string ChooseNoAnswer = "This file did not report its version within 10 seconds, so VisualCommit stopped it.";
         public const string ProgramMissing = "There is no file at this path.";
         public const string ProgramNotExe = "Choose the program itself (an .exe file): a .cmd or .bat file would run through cmd.exe.";
         public const string StartFailedFormat = "{0} could not be started: {1}";
@@ -138,6 +139,7 @@ public static partial class Phase8aExpectations
         public const string StandInNote = "From VISUALCOMMIT_GIT_STAND_IN, a test switch.";
         public const string NoGitFoundNote = "No Git was found on the PATH or in the usual install folders.";
         public const string NextStartSuffix = " VisualCommit uses it from its next start.";
+        public const string NextStartLooksAgainSuffix = " VisualCommit looks for Git again at its next start.";
         public const string WhenYouSaveSuffix = " VisualCommit looks for Git again when you save.";
         public const string Browse = "Browse…";
         public const string NetrcNoteFormat = "Your home folder has a .netrc or _netrc file. With Git {0}, an entry in that file for a host can answer git's requests to it before your signed-in account. Git 2.46 or later stops this for git's own requests; git-lfs reads the file with every version of Git.";

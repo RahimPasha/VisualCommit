@@ -79,8 +79,9 @@ public sealed partial class InstanceNoticeViewModel : ObservableObject
     /// <summary>
     /// The status line's text: <see cref="Status"/> once a try went unanswered, empty before. The line
     /// is a polite live region (D435), but it shows with this text in one step, before any screen
-    /// reader can have reached it: a reader finds the words when it reads the notice, and is not told
-    /// of them as they come.
+    /// reader can have reached it, so a reader is not told of the words as they come. Try again's
+    /// help text is this text too (D463): the focus comes back to Try again after the try, and a
+    /// reader hears the words with it.
     /// </summary>
     public string StatusLine => ShowsStatus ? Status : string.Empty;
 

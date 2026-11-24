@@ -22,7 +22,9 @@
       <!-- The title and the error line are polite live regions (D435), and nothing else here: a
            reader that has read the screen hears the title of a state a search ends on, and one that
            has reached the error line while Choose checks hears the refusal. The error line shows
-           with its "Checking…", which therefore reaches no reader. -->
+           with its "Checking…", which therefore reaches no reader as it comes. So the buttons that
+           get the focus back after these outcomes are described by them (D463): Choose by the
+           error line, Check again by the title, which a reader hears with the focus. -->
       <TextBlock Name="GitSetupTitle"
                  Text="{Binding Title}"
                  FontSize="16" FontWeight="SemiBold"
@@ -138,7 +140,8 @@
                 Command="{Binding ChooseCommand}"
                 IsVisible="{Binding ShowsChoose}"
                 AutomationProperties.AutomationId="GitSetupChooseButton"
-                AutomationProperties.Name="{Binding ChooseText}" />
+                AutomationProperties.Name="{Binding ChooseText}"
+                AutomationProperties.HelpText="{Binding ErrorText}" />
         <Button Name="GitSetupUsePathButton"
                 Theme="{StaticResource VcActionButton}"
                 kr:KeyRegion.IsMain="True"
@@ -153,7 +156,8 @@
                 Content="{Binding CheckAgainText}"
                 Command="{Binding CheckAgainCommand}"
                 AutomationProperties.AutomationId="GitSetupCheckAgainButton"
-                AutomationProperties.Name="{Binding CheckAgainText}" />
+                AutomationProperties.Name="{Binding CheckAgainText}"
+                AutomationProperties.HelpText="{Binding Title}" />
         <Button Name="GitSetupContinueButton"
                 Theme="{StaticResource VcActionButton}"
                 kr:KeyRegion.IsMain="True"

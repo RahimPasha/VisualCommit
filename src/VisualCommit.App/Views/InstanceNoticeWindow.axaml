@@ -47,8 +47,9 @@
                  Text="{Binding IfNoWindow}"
                  AutomationProperties.AutomationId="InstanceNoticeIfNoWindow" />
       <!-- A polite live region (D435). It shows with its text after the first unanswered try, before
-           a screen reader can have reached it, so a reader finds the words when it reads the notice
-           and is not told of them as they come. -->
+           a screen reader can have reached it, so a reader is not told of the words as they come:
+           Try again, which gets the focus back then, is described by them (D463), and a reader
+           hears them with the focus. -->
       <TextBlock Name="InstanceNoticeStatus"
                  Classes="dialogWarning"
                  Text="{Binding StatusLine}"
@@ -65,7 +66,8 @@
                 AutomationProperties.Name="{Binding CloseText}" />
         <!-- Try again never gets narrower than it has been drawn, so that it keeps its width through
              a try and Close beside it stays where it is: it opens with the longer of its two texts,
-             and "Trying…", with the border of the disabled look, fits in that width. -->
+             and "Trying…", with the border of the disabled look, fits in that width. Its help text
+             is the status, none before an unanswered try (D463). -->
         <Button Name="InstanceNoticeTryAgain"
                 Theme="{StaticResource VcPrimaryButton}"
                 MinWidth="{Binding $self.Bounds.Width}"
@@ -73,7 +75,8 @@
                 Command="{Binding TryAgainCommand}"
                 IsDefault="True"
                 AutomationProperties.AutomationId="InstanceNoticeTryAgain"
-                AutomationProperties.Name="{Binding TryAgainText}" />
+                AutomationProperties.Name="{Binding TryAgainText}"
+                AutomationProperties.HelpText="{Binding StatusLine}" />
       </StackPanel>
     </StackPanel>
   </Border>

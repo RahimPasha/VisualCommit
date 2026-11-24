@@ -325,26 +325,20 @@ public class BlameViewTests
     }
 
     /// <summary>
-    /// The caret put on a picked run's first line moves no text (phase 5's and 8a's blame pictures
-    /// stay as they were), though AvaloniaEdit scrolls toward a caret it is given: with the text
+    /// The caret put on a picked run moves no text (phase 5's and 8a's blame pictures stay as they
+    /// were), though AvaloniaEdit scrolls toward a caret it is given, and the next arrow moves it one
+    /// line from a line the user sees (docs/phase-8a-design.md 13.1, ruling 100): with the text
     /// scrolled across and down until line 46, run 1's first, is the last line in view, a click on
-    /// run 0's line 40, whose first line is far above the view, and one on line 46 leave the text
-    /// where it was; the caret is on line 1, then on line 46.
+    /// run 0's line 40, whose first line is far above the view, puts the caret on the first of run
+    /// 0's lines in view, the one drawn at the view's top, not on line 1, and the next Down takes it
+    /// one line down with the text where it was and run 0 still picked (on line 1, that Down scrolled
+    /// the text up to line 2 and back across); a click on line 46 puts it on line 46, the text still
+    /// where it was.
     /// </summary>
     [AvaloniaFact]
     public async Task A_click_in_the_gutter_moves_no_text_however_far_its_runs_first_line_lies()
     {
-        var first = BlameCommitOf(AddParserSha, "Mira Kovac", 1, "src/Parser.cs");
-        var second = BlameCommitOf(AddTracingSha, "Jonas Berg", 4, "src/Parser.cs");
-        var repository = new PageFakeRepository
-        {
-            Blame = (_, _) => new BlameResult(
-            [
-                .. Enumerable.Range(1, 45).Select(line => new BlameLine($"// line {line} {new string('x', 150)}", first)),
-                .. Enumerable.Range(46, 40).Select(line => new BlameLine($"// line {line}", second)),
-            ]),
-        };
-        using var page = new BlameViewModel(new RecordingPageHost(repository), new BlameRequest("src/Reader.cs", null));
+        using var page = TwoLongRuns();
         var view = new BlameView { DataContext = page };
         using var host = DiffHost.Show(view, 700, 400, ThemeVariant.Dark);
         await page.LoadAsync();
@@ -360,11 +354,21 @@ public class BlameViewTests
         Assert.Equal(46, text.LineAt(text.TextView.TranslatePoint(new Point(0, text.TextView.Bounds.Height - 2), text)!.Value.Y));
         Assert.NotNull(text.LineAt(text.TextView.TranslatePoint(new Point(0, text.TextView.GetVisualTopByDocumentLine(40) - text.VerticalOffset + 4), text)!.Value.Y));
 
+        var firstInView = text.LineAt(text.TextView.TranslatePoint(default, text)!.Value.Y) ?? throw new InvalidOperationException("No line is drawn at the view's top.");
+        Assert.InRange(firstInView, 2, 40);
+
         host.Click(gutter, GutterPoint(text, gutter, 40));
         DiffHost.Settle();
 
         Assert.Equal(0, page.SelectedRun?.Index);
-        Assert.Equal(1, text.TextArea.Caret.Line);
+        Assert.Equal(firstInView, text.TextArea.Caret.Line);
+        Assert.Equal(scrolled, (text.HorizontalOffset, text.VerticalOffset));
+
+        host.PressKey(Avalonia.Input.Key.Down);
+        DiffHost.Settle();
+
+        Assert.Equal(firstInView + 1, text.TextArea.Caret.Line);
+        Assert.Equal(0, page.SelectedRun?.Index);
         Assert.Equal(scrolled, (text.HorizontalOffset, text.VerticalOffset));
 
         host.Click(gutter, GutterPoint(text, gutter, 46));
@@ -373,6 +377,173 @@ public class BlameViewTests
         Assert.Equal(1, page.SelectedRun?.Index);
         Assert.Equal(46, text.TextArea.Caret.Line);
         Assert.Equal(scrolled, (text.HorizontalOffset, text.VerticalOffset));
+
+        // From a run whose first line is in view, one Up picks the run above.
+        host.PressKey(Avalonia.Input.Key.Up);
+        DiffHost.Settle();
+
+        Assert.Equal(45, text.TextArea.Caret.Line);
+        Assert.Equal(0, page.SelectedRun?.Index);
+    }
+
+    /// <summary>
+    /// A run whose first line shows only in part at the view's top (docs/phase-8a-design.md 13.1,
+    /// ruling 100): that line is in view, so a click on the run's line 50 in the gutter puts the caret
+    /// on line 46, the run's first, with the text where it was; the next Down takes it to line 47 and
+    /// scrolls nothing; and after a click on its line 52, one Up picks the run above.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task A_click_on_a_run_whose_first_line_shows_in_part_at_the_top_puts_the_caret_there_and_one_Up_picks_the_run_above()
+    {
+        using var page = TwoLongRuns();
+        var view = new BlameView { DataContext = page };
+        using var host = DiffHost.Show(view, 700, 400, ThemeVariant.Dark);
+        await page.LoadAsync();
+        DiffHost.Settle();
+        var text = Text(view);
+        var gutter = Gutter(view);
+        Assert.True(text.TextArea.Focus());
+        var scroller = text.GetVisualDescendants().OfType<Avalonia.Controls.ScrollViewer>().First();
+        scroller.Offset = new Vector(0, text.TextView.GetVisualTopByDocumentLine(46) + 6);
+        DiffHost.Settle();
+        var scrolled = (text.HorizontalOffset, text.VerticalOffset);
+        Assert.Equal(46, text.LineAt(text.TextView.TranslatePoint(default, text)!.Value.Y));
+        Assert.True(text.TextView.GetVisualTopByDocumentLine(46) < text.VerticalOffset - 5, "Line 46 lies wholly in view.");
+
+        host.Click(gutter, GutterPoint(text, gutter, 50));
+        DiffHost.Settle();
+
+        Assert.Equal(1, page.SelectedRun?.Index);
+        Assert.Equal(46, text.TextArea.Caret.Line);
+        Assert.Equal(scrolled, (text.HorizontalOffset, text.VerticalOffset));
+
+        host.PressKey(Avalonia.Input.Key.Down);
+        DiffHost.Settle();
+
+        Assert.Equal(47, text.TextArea.Caret.Line);
+        Assert.Equal(1, page.SelectedRun?.Index);
+        Assert.Equal(scrolled, (text.HorizontalOffset, text.VerticalOffset));
+
+        // Line 52, not 50 again: two presses at one spot within the double-tap time are a double-click.
+        host.Click(gutter, GutterPoint(text, gutter, 52));
+        DiffHost.Settle();
+        Assert.Equal(46, text.TextArea.Caret.Line);
+        host.PressKey(Avalonia.Input.Key.Up);
+        DiffHost.Settle();
+
+        Assert.Equal(45, text.TextArea.Caret.Line);
+        Assert.Equal(0, page.SelectedRun?.Index);
+    }
+
+    /// <summary>
+    /// The caret put on a picked run's first line in view keeps the text where it was also when that
+    /// line ends left of the view's edge (docs/phase-8a-design.md 13.1, ruling 100): with the text
+    /// scrolled 60 across and line 20, an empty line of run 0, drawn at the view's top, a click on
+    /// run 0's line 30 puts the caret on line 20, out of view at its end, and the next Down takes it
+    /// to line 21, a long one, with the text where it was. Before, Down took the x of the caret on
+    /// line 20, the view's far left, and scrolled the text back across to it.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task A_click_in_the_gutter_moves_no_text_across_when_the_runs_first_line_in_view_is_empty()
+    {
+        using var page = TwoLongRuns(everySecondLineEmpty: true);
+        var view = new BlameView { DataContext = page };
+        using var host = DiffHost.Show(view, 700, 400, ThemeVariant.Dark);
+        await page.LoadAsync();
+        DiffHost.Settle();
+        var text = Text(view);
+        var gutter = Gutter(view);
+        Assert.True(text.TextArea.Focus());
+        var scroller = text.GetVisualDescendants().OfType<Avalonia.Controls.ScrollViewer>().First();
+        scroller.Offset = new Vector(60, text.TextView.GetVisualTopByDocumentLine(20) + 2);
+        DiffHost.Settle();
+        var scrolled = (text.HorizontalOffset, text.VerticalOffset);
+        Assert.True(scrolled.HorizontalOffset > 0, $"The text did not scroll across: {scrolled}.");
+        Assert.Equal(20, text.LineAt(text.TextView.TranslatePoint(default, text)!.Value.Y));
+        Assert.Equal(string.Empty, text.Document.GetText(text.Document.GetLineByNumber(20)));
+
+        host.Click(gutter, GutterPoint(text, gutter, 30));
+        DiffHost.Settle();
+
+        Assert.Equal(0, page.SelectedRun?.Index);
+        Assert.Equal(20, text.TextArea.Caret.Line);
+        Assert.Equal(scrolled, (text.HorizontalOffset, text.VerticalOffset));
+
+        host.PressKey(Avalonia.Input.Key.Down);
+        DiffHost.Settle();
+
+        Assert.Equal(21, text.TextArea.Caret.Line);
+        Assert.Equal(0, page.SelectedRun?.Index);
+        Assert.Equal(scrolled, (text.HorizontalOffset, text.VerticalOffset));
+    }
+
+    /// <summary>
+    /// A pick that clears a selection in view keeps the text where it was (docs/phase-8a-design.md
+    /// 13.1, ruling 100): AvaloniaEdit redraws the lines of a selection it clears, and the view's
+    /// lines stay out of date until the next layout, but the caret is still put at the view's left
+    /// edge. With the text scrolled 60 across, part of line 30 selected and a click on run 0's line
+    /// 40 in the gutter, the caret goes to the first of run 0's lines in view, the selection goes,
+    /// and the next Down scrolls nothing. Before, the caret went to column 1 there, and Down
+    /// scrolled the text back across to it.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task A_click_in_the_gutter_that_clears_a_selection_in_view_moves_no_text_across()
+    {
+        using var page = TwoLongRuns();
+        var view = new BlameView { DataContext = page };
+        using var host = DiffHost.Show(view, 700, 400, ThemeVariant.Dark);
+        await page.LoadAsync();
+        DiffHost.Settle();
+        var text = Text(view);
+        var gutter = Gutter(view);
+        Assert.True(text.TextArea.Focus());
+        var scroller = text.GetVisualDescendants().OfType<Avalonia.Controls.ScrollViewer>().First();
+        scroller.Offset = new Vector(60, text.TextView.GetVisualTopByDocumentLine(47) - text.TextView.Bounds.Height);
+        DiffHost.Settle();
+        var firstInView = text.LineAt(text.TextView.TranslatePoint(default, text)!.Value.Y) ?? throw new InvalidOperationException("No line is drawn at the view's top.");
+        Assert.InRange(firstInView, 2, 29);
+        var selected = text.Document.GetLineByNumber(30);
+        text.TextArea.Selection = AvaloniaEdit.Editing.Selection.Create(text.TextArea, selected.Offset + 12, selected.Offset + 40);
+        DiffHost.Settle();
+        var scrolled = (text.HorizontalOffset, text.VerticalOffset);
+        Assert.True(scrolled.HorizontalOffset > 0, $"The text did not scroll across: {scrolled}.");
+        Assert.False(text.TextArea.Selection.IsEmpty);
+        Assert.True(text.TextView.VisualLinesValid);
+
+        host.Click(gutter, GutterPoint(text, gutter, 40));
+        DiffHost.Settle();
+
+        Assert.Equal(0, page.SelectedRun?.Index);
+        Assert.Equal(firstInView, text.TextArea.Caret.Line);
+        Assert.True(text.TextArea.Selection.IsEmpty);
+        Assert.Equal(scrolled, (text.HorizontalOffset, text.VerticalOffset));
+
+        host.PressKey(Avalonia.Input.Key.Down);
+        DiffHost.Settle();
+
+        Assert.Equal(firstInView + 1, text.TextArea.Caret.Line);
+        Assert.Equal(scrolled, (text.HorizontalOffset, text.VerticalOffset));
+    }
+
+    /// <summary>
+    /// A blame of 85 lines in two runs: lines 1 to 45, each over 150 characters long, "Add the parser"
+    /// (with <paramref name="everySecondLineEmpty"/>, its even lines empty); lines 46 to 85, short, "Add tracing".
+    /// </summary>
+    private static BlameViewModel TwoLongRuns(bool everySecondLineEmpty = false)
+    {
+        var first = BlameCommitOf(AddParserSha, "Mira Kovac", 1, "src/Parser.cs");
+        var second = BlameCommitOf(AddTracingSha, "Jonas Berg", 4, "src/Parser.cs");
+        var repository = new PageFakeRepository
+        {
+            Blame = (_, _) => new BlameResult(
+            [
+                .. Enumerable.Range(1, 45).Select(line => new BlameLine(
+                    everySecondLineEmpty && line % 2 == 0 ? string.Empty : $"// line {line} {new string('x', 150)}",
+                    first)),
+                .. Enumerable.Range(46, 40).Select(line => new BlameLine($"// line {line}", second)),
+            ]),
+        };
+        return new BlameViewModel(new RecordingPageHost(repository), new BlameRequest("src/Reader.cs", null));
     }
 
     /// <summary>The point 20 right of the gutter's left edge, 4 below the top of line <paramref name="line"/> as the text draws it now.</summary>
