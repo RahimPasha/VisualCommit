@@ -539,6 +539,110 @@ public class RowCollectionTests
         Assert.All(Enumerable.Range(0, more.Count), i => Assert.Same(more[i], longer[i]));
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Rows_that_change_themselves_at_both_ends_of_a_rebuild_that_inserts_a_row_stay_with_their_new_versions_and_the_view_is_told_of_the_insert_alone(bool rowsOfOneHeight)
+    {
+        // r00, the first row (a section's header, whose count grows), and r09, the last, show a new
+        // version, which they show themselves; x is new after r04 (a branch created).
+        var list = Updatable(10);
+        var before = list.ToList();
+        List<Changing> rebuilt = [Next(before[0]), .. before.Skip(1).Take(4).Select(Same), new Changing("x", 0, 0), .. before.Skip(5).Take(4).Select(Same), Next(before[9])];
+        var changes = RecordRuns(list);
+
+        Replace(list, rebuilt, Changing.ShowSame, Changing.SameItem, rowsOfOneHeight);
+
+        Assert.Equal([(NotifyCollectionChangedAction.Add, 5, 1)], changes);
+        Assert.Same(rebuilt[5], list[5]);
+        Assert.All(Enumerable.Range(0, 5), i => Assert.Same(before[i], list[i]));
+        Assert.All(Enumerable.Range(5, 5), i => Assert.Same(before[i], list[i + 1]));
+        Assert.Equal(1, list[0].Version);
+        Assert.Equal(1, list[10].Version);
+        Assert.All(Enumerable.Range(0, rebuilt.Count), i => Assert.True(Changing.ShowSame(list[i], rebuilt[i]), $"Row {i} does not show what its rebuilt row shows."));
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void A_row_that_changes_itself_right_above_rows_a_rebuild_removes_stays_with_its_new_version_and_the_view_is_told_of_the_remove_alone(bool rowsOfOneHeight)
+    {
+        // r02 shows a new version itself (a folder closed); r03 to r05, below it, are gone (its rows).
+        var list = Updatable(10);
+        var before = list.ToList();
+        List<Changing> rebuilt = [Same(before[0]), Same(before[1]), Next(before[2]), .. before.Skip(6).Select(Same)];
+        var changes = RecordRuns(list);
+
+        Replace(list, rebuilt, Changing.ShowSame, Changing.SameItem, rowsOfOneHeight);
+
+        Assert.Equal([(NotifyCollectionChangedAction.Remove, 3, 3)], changes);
+        Assert.All(Enumerable.Range(0, 3), i => Assert.Same(before[i], list[i]));
+        Assert.All(Enumerable.Range(3, 4), i => Assert.Same(before[i + 3], list[i]));
+        Assert.Equal(1, list[2].Version);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Sixty_five_rows_inserted_together_or_removed_together_are_told_of_in_one_change_that_resets_nothing(bool rowsOfOneHeight)
+    {
+        // Sixty-five new rows after r03 (a folder or a section of 65 opened), then gone again.
+        var list = Rows(10);
+        var before = list.ToList();
+        List<Row> opened = [.. before.Take(4).Select(Copy), .. Enumerable.Range(0, 65).Select(i => new Row(string.Create(System.Globalization.CultureInfo.InvariantCulture, $"n{i:D2}"), 0)), .. before.Skip(4).Select(Copy)];
+        var changes = RecordRuns(list);
+
+        Replace(list, opened, Row.ShowSame, Row.SameItem, rowsOfOneHeight);
+
+        Assert.Equal([(NotifyCollectionChangedAction.Add, 4, 65)], changes);
+        Assert.Equal(opened, list);
+        Assert.All(Enumerable.Range(0, 4), i => Assert.Same(before[i], list[i]));
+        Assert.All(Enumerable.Range(4, 6), i => Assert.Same(before[i], list[i + 65]));
+        Assert.All(Enumerable.Range(4, 65), i => Assert.Same(opened[i], list[i]));
+
+        changes.Clear();
+        Replace(list, [.. before.Select(Copy)], Row.ShowSame, Row.SameItem, rowsOfOneHeight);
+
+        Assert.Equal([(NotifyCollectionChangedAction.Remove, 4, 65)], changes);
+        AssertKept(before, list, changed: []);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void A_tree_folder_of_a_file_list_closed_and_opened_again_keeps_its_row_and_tells_the_view_of_its_files_alone(bool stageList)
+    {
+        // A stage list reads its files again and again (keepFolders); the commit details show a
+        // commit's files once. Either way, a folder's toggle changes the folder's row in place.
+        var files = new ChangedFileList();
+        files.SetMode(FileListMode.Tree);
+        ChangedFile[] changed = [new("a/one.txt", FileChangeKind.Modified), new("a/three.txt", FileChangeKind.Modified), new("a/two.txt", FileChangeKind.Modified), new("b.txt", FileChangeKind.Added)];
+        files.Show(changed, keepFolders: stageList);
+        var before = files.Rows.ToList();
+        var folder = before[0];
+        Assert.True(folder is { IsFolder: true, Key: "a", IsOpen: true }, "The tree does not start with the open folder a.");
+        var told = new List<string?>();
+        folder.PropertyChanged += (_, e) => told.Add(e.PropertyName);
+        var changes = RecordRuns(files.Rows);
+
+        folder.ToggleCommand.Execute(null);
+
+        Assert.Equal([(NotifyCollectionChangedAction.Remove, 1, 3)], changes);
+        Assert.Same(folder, files.Rows[0]);
+        Assert.False(folder.IsOpen);
+        Assert.Contains(nameof(ChangedFileRow.IsOpen), told);
+        Assert.Same(before[4], files.Rows[1]);
+
+        changes.Clear();
+        files.Rows[0].ToggleCommand.Execute(null);
+
+        Assert.Equal([(NotifyCollectionChangedAction.Add, 1, 3)], changes);
+        Assert.Same(folder, files.Rows[0]);
+        Assert.True(folder.IsOpen);
+        Assert.Equal(["a", "a/one.txt", "a/three.txt", "a/two.txt", "b.txt"], files.Rows.Select(row => row.Key));
+        Assert.Same(before[4], files.Rows[4]);
+    }
+
     [Fact]
     public void The_form_for_rows_of_mixed_heights_is_told_what_the_same_item_is()
     {
@@ -668,6 +772,19 @@ public class RowCollectionTests
     {
         var changes = new List<(NotifyCollectionChangedAction Action, int Index)>();
         list.CollectionChanged += (_, e) => changes.Add((e.Action, e.Action == NotifyCollectionChangedAction.Remove ? e.OldStartingIndex : e.NewStartingIndex));
+        return changes;
+    }
+
+    /// <summary>What the view is told from now on: each change's kind, its first index and its number of rows (-1 and 0 for a reset).</summary>
+    private static List<(NotifyCollectionChangedAction Action, int Index, int Count)> RecordRuns(INotifyCollectionChanged list)
+    {
+        var changes = new List<(NotifyCollectionChangedAction Action, int Index, int Count)>();
+        list.CollectionChanged += (_, e) => changes.Add(e.Action switch
+        {
+            NotifyCollectionChangedAction.Reset => (e.Action, -1, 0),
+            NotifyCollectionChangedAction.Remove => (e.Action, e.OldStartingIndex, e.OldItems!.Count),
+            _ => (e.Action, e.NewStartingIndex, e.NewItems!.Count),
+        });
         return changes;
     }
 

@@ -296,6 +296,87 @@ public class LeftPanelScrollTests
             bounds: new ShiftBounds(Offset: 5, Extent: 5));
     }
 
+    [AvaloniaFact]
+    public async Task Creating_a_branch_below_the_view_of_a_scrolled_left_panel_keeps_the_header_the_rows_in_view_and_the_click_under_a_press()
+    {
+        // 60 branches scrolled by 400 px: b15 to b40 or so in view, the header far above them. b99,
+        // made outside the app, sorts after b60, below the view, and the header's count grows by one.
+        // The header shows its count itself, so the list is told of b99's row alone. Before, the
+        // header ended the rows kept at the list's start, and the rows from it down to b99, 61
+        // removed and 62 inserted, reset the list: every row in view got a new control, and the
+        // press lost its click.
+        using var repo = await ManyBranchesAsync(60);
+        using var data = new TempDirectory("data");
+        using var app = ShellDriver.StartWithTabs(data.Path, [repo.Path], width: 1100, height: 700);
+        var repository = await app.WaitForRepositoryAsync();
+        await app.WaitForWatchersQuietAsync();
+        await app.WaitForIdleAsync();
+        app.MoveToNeutral();
+        var list = app.Find<ItemsControl>("RefList");
+        var scroller = list.GetVisualDescendants().OfType<ScrollViewer>().First();
+        scroller.Offset = new Vector(0, 400);
+        app.Settle();
+        list.ItemsPanelRoot!.InvalidateMeasure();
+        app.Settle();
+        var offsetBefore = scroller.Offset.Y;
+        Assert.Equal(400, offsetBefore);
+        var header = repository.LeftPanel.Rows[0];
+        var rowsBefore = repository.LeftPanel.Rows.ToList();
+        var before = InView(app, list, scroller);
+        Assert.DoesNotContain(before, entry => entry.Row is RefSectionRow);
+        var target = before[4].Row;
+        var point = app.BoundsOf(before[4].Button).Center;
+        app.PressMouse(point);
+
+        await repo.GitAsync("branch", "b99");
+        await repository.RefreshAsync();
+        await app.WaitForIdleAsync();
+        await app.WaitForGraphReloadAsync();
+        await app.WaitForWatchersQuietAsync();
+        app.Settle();
+        Assert.True(HasBranch(repository, "b99"), "The left panel does not show b99.");
+
+        var after = InView(app, list, scroller).ToDictionary(entry => entry.Row.Key, StringComparer.Ordinal);
+        var problems = new List<string>();
+        if (!ReferenceEquals(repository.LeftPanel.Rows[0], header) || ((RefSectionRow)header).Count != 62)
+        {
+            problems.Add($"the header is {(ReferenceEquals(repository.LeftPanel.Rows[0], header) ? "the same row" : "another row")} with the count {((RefSectionRow)repository.LeftPanel.Rows[0]).Count}");
+        }
+
+        var others = rowsBefore.Where(row => !repository.LeftPanel.Rows.Contains(row)).Select(row => row.Text).ToList();
+        if (others.Count > 0)
+        {
+            problems.Add($"{others.Count} rows were made again: {string.Join(", ", others.Take(5))}");
+        }
+
+        if (scroller.Offset.Y != offsetBefore)
+        {
+            problems.Add(string.Create(CultureInfo.InvariantCulture, $"offset {scroller.Offset.Y} for {offsetBefore}"));
+        }
+
+        foreach (var (shown, y, button) in before)
+        {
+            if (!after.TryGetValue(shown.Key, out var now))
+            {
+                problems.Add($"{shown.Text} is no longer in view");
+            }
+            else if (now.Y != y || !ReferenceEquals(now.Row, shown) || !ReferenceEquals(now.Button, button))
+            {
+                problems.Add(string.Create(CultureInfo.InvariantCulture, $"{shown.Text} at y {now.Y} for {y}, {(ReferenceEquals(now.Row, shown) ? "the same row" : "another row")}, {(ReferenceEquals(now.Button, button) ? "the same button" : "another button")}"));
+            }
+        }
+
+        app.ReleaseMouse(point);
+        await app.WaitForIdleAsync();
+        var selected = repository.LeftPanel.Rows.OfType<RefItemRow>().Where(item => item.IsSelected).Select(item => item.Text).ToList();
+        if (selected is not [var only] || only != target.Text)
+        {
+            problems.Add($"the press on {target.Text} selected {(selected.Count == 0 ? "nothing" : string.Join(", ", selected))}");
+        }
+
+        Assert.True(problems.Count == 0, $"After b99 was created: {string.Join("; ", problems)}. In view before: {Describe(before)}.");
+    }
+
     /// <summary>
     /// The app on a repository with the local branches b01 to b<paramref name="branches"/> and main,
     /// and with <paramref name="remoteBranches"/> its remote origin's main and r01 on, fetched with

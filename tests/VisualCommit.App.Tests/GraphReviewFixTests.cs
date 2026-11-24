@@ -179,14 +179,16 @@ public class GraphReviewFixTests
         panel.Rows.CollectionChanged += (_, e) => changes.Add(e.Action);
 
         var folder = panel.Rows.OfType<RefItemRow>().Single(row => row.Text == "group");
+        var added = new List<int>();
+        panel.Rows.CollectionChanged += (_, e) => added.Add(e.NewItems?.Count ?? 0);
         panel.Activate(folder);
 
-        // The folder's own row changes (its chevron opens) and its 40 tags come in under it; the
-        // rows above and below are left alone.
-        Assert.DoesNotContain(NotifyCollectionChangedAction.Reset, changes);
-        Assert.Equal(1, changes.Count(action => action == NotifyCollectionChangedAction.Remove));
-        Assert.Equal(41, changes.Count(action => action == NotifyCollectionChangedAction.Add));
-        Assert.True(panel.Rows.OfType<RefItemRow>().Single(row => row.Text == "group").IsOpen);
+        // The folder's own row stays and shows itself open (its chevron), and its 40 tags come in
+        // under it, told of together; the rows above and below are left alone.
+        Assert.Equal([NotifyCollectionChangedAction.Add], changes);
+        Assert.Equal([40], added);
+        Assert.Same(folder, panel.Rows.OfType<RefItemRow>().Single(row => row.Text == "group"));
+        Assert.True(folder.IsOpen);
     }
 
     private static (Window Window, CommitGraphControl Control) Show(CommitGraphData data, double width, double height)
