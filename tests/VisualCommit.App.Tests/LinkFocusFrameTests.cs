@@ -2,6 +2,7 @@ using System.Globalization;
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
+using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
 using Avalonia.Media;
@@ -25,17 +26,74 @@ namespace VisualCommit.App.Tests;
 /// around them, not over them, in About (dark and light) and in the sign-in dialog (GitLab's, with
 /// both its links, 4 apart); the frame moves nothing, a link not focused draws nothing outside its
 /// bounds, and the frame takes no pointer: a hover or a click on it is none on the link; and the
-/// frame is the keyboard's alone: a link focused by a click is underlined without it. The
+/// frame is the keyboard's alone: a link focused by a click is underlined without it; and the
+/// frame keeps clear of the text at every display scaling from 1 to 2 in steps of 0.25. The
 /// headless app, its pictures read with <see cref="LinkFrame"/>;
 /// <see cref="TestPictures"/> saves them when asked.
 /// </summary>
 public class LinkFocusFrameTests
 {
     /// <summary>
-    /// How far the frame reaches outside the link's bounds: left and right 1 of air, Fluent's 1 and 2;
-    /// above and below Fluent's 1 and 2, the line box keeping the text and its underline clear.
+    /// How far the frame reaches outside the link's bounds on each side: 1 of air, Fluent's 1 and 2.
+    /// Above and below, where the line box keeps the text and its underline 2 and 1 px clear at a
+    /// scaling of 1, the air is no less: with 3 the frame's lines lay on the text's first and last
+    /// rows at 1.5 and touched them at 1.75, the 3 px rounding to 4 and 5 device pixels there and
+    /// the 2 and 1 px lines to 3 + 2 and 4 + 2.
     /// </summary>
-    private static readonly (int X, int Y) FrameReach = (4, 3);
+    private static readonly (int X, int Y) FrameReach = (4, 4);
+
+    /// <summary>Windows' display scalings from 100 % to 200 %.</summary>
+    private static readonly double[] Scalings = [1, 1.25, 1.5, 1.75, 2];
+
+    /// <summary>About's two links, each with the Tabs from the section's button that focus it, at each of <see cref="Scalings"/>.</summary>
+    public static TheoryData<string, int, double> AboutLinksScaled => Scaled(("AboutRepositoryLink", 3), ("AboutGuideLink", 4));
+
+    /// <summary>GitLab's sign-in links, each with the Shift+Tabs from the token box that focus it, at each of <see cref="Scalings"/>.</summary>
+    public static TheoryData<string, int, double> SignInLinksScaled => Scaled(("SignInLegacyTokenLink", 1), ("SignInTokenLink", 2));
+
+    /// <summary>
+    /// About's links focused by Tab at every scaling from 1 to 2 in steps of 0.25, dark (the card's
+    /// background, Fluent's white frame): by <see cref="LinkFrame"/>'s rule in the window's device
+    /// pixels, the text's ink all there, the underline under it and the frame's outer line whole
+    /// around them, with a line of the background between the frame and the ink on each side. About's
+    /// guide link is the one part G's G3 frames.
+    /// </summary>
+    [AvaloniaTheory]
+    [MemberData(nameof(AboutLinksScaled))]
+    public async Task An_About_link_keeps_its_frame_clear_of_its_text_at_every_scaling(string id, int tabs, double scale)
+    {
+        using var data = new TempDirectory("data");
+        using var app = await StartOnAboutAsync(data, dark: true, scale);
+        var unfocused = app.Capture();
+
+        for (var i = 0; i < tabs; i++)
+        {
+            app.PressKey(Key.Tab);
+        }
+
+        await WaitForFocusAsync(app, id);
+        TestPictures.Save(app, Text($"link-frame-{id}-{scale:0.00}"));
+        AssertFramed(app, unfocused, app.Capture(), Link(app, id), id, scale);
+    }
+
+    /// <summary>GitLab's sign-in links, 4 apart, focused by Shift+Tab, at the same scalings, as About's.</summary>
+    [AvaloniaTheory]
+    [MemberData(nameof(SignInLinksScaled))]
+    public async Task A_sign_in_link_keeps_its_frame_clear_of_its_text_at_every_scaling(string id, int tabs, double scale)
+    {
+        using var data = new TempDirectory("data");
+        using var app = await StartOnGitLabSignInAsync(data, scale);
+        var unfocused = app.Capture();
+
+        for (var i = 0; i < tabs; i++)
+        {
+            app.PressKey(Key.Tab, RawInputModifiers.Shift);
+        }
+
+        await WaitForFocusAsync(app, id);
+        TestPictures.Save(app, Text($"link-frame-{id}-{scale:0.00}"));
+        AssertFramed(app, unfocused, app.Capture(), Link(app, id), id, scale);
+    }
 
     [AvaloniaTheory]
     [InlineData("AboutRepositoryLink", 3, true)]
@@ -223,11 +281,43 @@ public class LinkFocusFrameTests
         AssertFocusedByPointerWithoutFrame(app, unfocused, Link(app, id), id);
     }
 
+    /// <summary>Each of <paramref name="links"/> at each of <see cref="Scalings"/>.</summary>
+    private static TheoryData<string, int, double> Scaled(params (string Id, int Presses)[] links)
+    {
+        var data = new TheoryData<string, int, double>();
+        foreach (var (id, presses) in links)
+        {
+            foreach (var scale in Scalings)
+            {
+                data.Add(id, presses, scale);
+            }
+        }
+
+        return data;
+    }
+
+    /// <summary>
+    /// The app started on <paramref name="data"/>, its window's render scaling set to
+    /// <paramref name="scale"/> before the pointer first moves (set later, the scaling re-reads the
+    /// pointer's last place in the new scaling's pixels and hovers what lies there).
+    /// </summary>
+    private static ShellDriver StartScaled(TempDirectory data, double scale)
+    {
+        var app = ShellDriver.Start(data.Path);
+        if (scale != 1)
+        {
+            app.Window.SetRenderScaling(scale);
+            app.Settle();
+        }
+
+        return app;
+    }
+
     /// <summary>The app on the settings screen's About, its reads ended, the focus on its section button, the pointer at rest.</summary>
-    private static async Task<ShellDriver> StartOnAboutAsync(TempDirectory data, bool dark)
+    private static async Task<ShellDriver> StartOnAboutAsync(TempDirectory data, bool dark, double scale = 1)
     {
         new JsonSettingsStore(Path.Combine(data.Path, "settings.json")).Update(settings => settings with { Theme = dark ? AppTheme.Dark : AppTheme.Light });
-        var app = ShellDriver.Start(data.Path);
+        var app = StartScaled(data, scale);
         try
         {
             await app.WaitUntilReadyAsync();
@@ -248,9 +338,9 @@ public class LinkFocusFrameTests
     }
 
     /// <summary>"Add GitLab account" over the empty tab, dark, on a session that makes no request; the focus in its token box, the pointer at rest.</summary>
-    private static async Task<ShellDriver> StartOnGitLabSignInAsync(TempDirectory data)
+    private static async Task<ShellDriver> StartOnGitLabSignInAsync(TempDirectory data, double scale = 1)
     {
-        var app = ShellDriver.Start(data.Path);
+        var app = StartScaled(data, scale);
         try
         {
             await app.WaitUntilReadyAsync();
@@ -280,18 +370,36 @@ public class LinkFocusFrameTests
     /// The focused link (<c>:focus-visible</c>, not hovered) in <paramref name="focused"/> against itself
     /// in <paramref name="unfocused"/>, by <see cref="LinkFrame"/>: the text's ink all there, the
     /// underline under it, the frame's outer line whole around them in Fluent's colour of the theme.
+    /// The pictures are the window's at its render scaling <paramref name="scale"/>, whose device
+    /// pixels the text's bounds are read in.
     /// </summary>
-    private static void AssertFramed(ShellDriver app, Screenshot unfocused, Screenshot focused, Button link, string id)
+    private static void AssertFramed(ShellDriver app, Screenshot unfocused, Screenshot focused, Button link, string id, double scale = 1)
     {
         Assert.True(app.FocusVisible, $"{id} has the focus without the keyboard's frame.");
         Assert.False(link.IsPointerOver, $"{id} is hovered.");
         Assert.Same(Application.Current!.FindResource("VcLinkButton"), link.Theme);
+        Assert.True(
+            focused.Width == (int)Math.Round(app.Window.ClientSize.Width * scale) && focused.Height == (int)Math.Round(app.Window.ClientSize.Height * scale),
+            Text($"The picture is {focused.Width} x {focused.Height}, not the window's {app.Window.ClientSize} at a scaling of {scale}."));
         var text = link.GetVisualDescendants().OfType<TextBlock>().Single();
         Assert.True(text.TextDecorations is { Count: > 0 }, $"{id} is not underlined while focused.");
         var accent = Colour(app, "VcAccentBrush");
         Assert.Equal(accent, Assert.IsAssignableFrom<ISolidColorBrush>(text.Foreground).Color);
-        var problems = LinkFrame.Problems(unfocused, focused, app.BoundsOf(text), accent, Colour(app, "VcPanelBackgroundBrush"), Colour(app, "SystemControlFocusVisualPrimaryBrush"), id);
-        Assert.True(problems.Count == 0, string.Join('\n', problems));
+        var problems = LinkFrame.Problems(unfocused, focused, InDevicePixels(app.BoundsOf(text), scale), accent, Colour(app, "VcPanelBackgroundBrush"), Colour(app, "SystemControlFocusVisualPrimaryBrush"), id);
+        Assert.True(problems.Count == 0, Text($"At a scaling of {scale}:\n") + string.Join('\n', problems));
+    }
+
+    /// <summary>
+    /// <paramref name="bounds"/>, in the window's logical pixels, in its device pixels at
+    /// <paramref name="scale"/>; an edge that lies within a thousandth of a whole pixel there is that
+    /// pixel (the layout's rounding puts edges on whole device pixels, which the product misses by the
+    /// floating point's error: 372.571… × 1.75 is 652.0000000000001).
+    /// </summary>
+    private static Rect InDevicePixels(Rect bounds, double scale)
+    {
+        static double Snap(double value) => Math.Abs(value - Math.Round(value)) < 0.001 ? Math.Round(value) : value;
+        var (left, top, right, bottom) = (Snap(bounds.Left * scale), Snap(bounds.Top * scale), Snap(bounds.Right * scale), Snap(bounds.Bottom * scale));
+        return new Rect(left, top, right - left, bottom - top);
     }
 
     /// <summary>
