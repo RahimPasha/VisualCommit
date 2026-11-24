@@ -19,11 +19,12 @@ namespace VisualCommit.App.Tests;
 /// holds the link's: while a radio button has the keyboard's frame, the frame is only drawn, never
 /// hit, so a pointer on it reaches what lies under it, and a hover or a click just outside the
 /// button is none on it (a frame that took the pointer checked Hard, the Reset dialog's destructive
-/// choice, on a click in the gap above it). The frame moves nothing and draws exactly its own box
-/// (inside it for Theme's options, whose frame the settings screen's scroller cuts off above them),
-/// and in the Reset dialog no other control lies under it. In the Reset dialog (three stretched
-/// radios 10 apart) and the settings screen's Pull options (left-aligned, 8 apart) and Theme options
-/// (left-aligned, in a row, the section's note 4 below them).
+/// choice, on a click in the gap above it). The frame moves nothing and draws exactly its own box,
+/// whole: Theme's options too, which stand at the top of the settings screen's scroller, whose clip
+/// once cut off the frame's 4 px above them; and in the Reset dialog no other control lies under
+/// it. In the Reset dialog (three stretched radios 10 apart) and the settings screen's Pull options
+/// (left-aligned, 8 apart) and Theme options (left-aligned, in a row, the section's note 4 below
+/// them, under the frame's last 2 px).
 /// The headless app; <see cref="TestPictures"/> saves its pictures when asked.
 /// </summary>
 public class RadioFocusFrameTests
@@ -82,9 +83,14 @@ public class RadioFocusFrameTests
         AssertRingHitsAsWithoutFocus(app, radio, unfocused, id);
         Assert.Equal(places, Places(app, scroller));
 
-        // Theme's options stand at the top of the section's scroller, which cuts off the frame's
-        // 4 px above them: the frame draws inside its box there, whole elsewhere.
-        AssertDrawsItsFrame(app, radio, id, exactly: section == "Git");
+        // Theme's options stand at the top of the section's scroller, its offset 0: their frame's
+        // 4 px above them lie above the scroller and are drawn too.
+        if (section == "General")
+        {
+            Assert.Equal(0, scroller.Offset.Y);
+        }
+
+        AssertDrawsItsFrame(app, radio, id);
     }
 
     /// <summary>
@@ -229,10 +235,10 @@ public class RadioFocusFrameTests
     }
 
     /// <summary>
-    /// The focused button draws in its frame's box and nothing outside it, exactly that box when
-    /// <paramref name="exactly"/> (the frame whole); its picture against the one with its opacity 0.
+    /// The focused button draws exactly its frame's box, the frame whole and nothing outside it; its
+    /// picture against the one with its opacity 0.
     /// </summary>
-    private static void AssertDrawsItsFrame(ShellDriver app, RadioButton radio, string id, bool exactly = true)
+    private static void AssertDrawsItsFrame(ShellDriver app, RadioButton radio, string id)
     {
         var frame = PixelBox(app, FocusFrame(radio));
         var with = app.Capture();
@@ -261,9 +267,7 @@ public class RadioFocusFrameTests
         }
 
         var drawn = new Box(left, top, right, bottom);
-        Assert.True(
-            exactly ? drawn == frame : left >= frame.Left && top >= frame.Top && right <= frame.Right && bottom <= frame.Bottom && left < right,
-            Text($"{id} focused draws in {drawn}, not {(exactly ? "exactly" : "inside")} its frame's box {frame}."));
+        Assert.True(drawn == frame, Text($"{id} focused draws in {drawn}, not exactly its frame's box {frame}."));
     }
 
     /// <summary>
