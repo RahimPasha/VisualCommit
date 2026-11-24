@@ -106,7 +106,8 @@ public sealed record SettingsScreenServices(
 /// (<see cref="DialogHostViewModel.CancelAll"/>) cancel its token, which stops the reads, the
 /// editor search, the global writes before their next key and a repository write that waits; a
 /// Save that closes the screen cancels it too, once its own writes and read back have ended, which
-/// stops the Git program row's probe and About's reads that still run. While
+/// stops the Git program row's probe that still runs, and About's texts, which wait for a Save that
+/// runs, then show no dialog. While
 /// the global writes run (no queue holds them), <see cref="GlobalWrites"/> lets the window's close
 /// wait for them (3.7).
 /// </para>
@@ -150,7 +151,7 @@ public sealed partial class SettingsDialogViewModel : DialogViewModel<bool>
             services.Log,
             readText: services.ReadText,
             lifetime: _lifetime.Token,
-            canShow: () => !IsClosed && !ConfirmCommand.IsRunning);
+            saving: () => ConfirmCommand.ExecutionTask);
         General.PropertyChanged += OnSectionChanged;
         Git.Global.PropertyChanged += OnSectionChanged;
         Git.Repository.PropertyChanged += OnSectionChanged;
