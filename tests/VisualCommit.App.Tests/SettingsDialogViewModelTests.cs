@@ -598,23 +598,67 @@ public class SettingsDialogViewModelTests
         var screen = new Screen();
         var writing = new TaskCompletionSource();
         screen.Git.WriteHold = writing.Task;
+        var read = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        screen.ReadText = _ =>
+        {
+            read.TrySetResult();
+            return "MIT License\n";
+        };
         var dialog = await screen.OpenAsync(SettingsSection.About);
         dialog.Git.Global.UserName = "Ann";
 
         var saving = dialog.ConfirmCommand.ExecuteAsync(null);
-        var until = DateTime.UtcNow.AddSeconds(30);
-        while (!dialog.IsWriting)
-        {
-            Assert.True(DateTime.UtcNow < until, "Save's global write did not start.");
-            await Task.Delay(5, TestContext.Current.CancellationToken);
-        }
+        await WaitForWritingAsync(dialog);
 
-        await dialog.About.ShowLicenseCommand.ExecuteAsync(null);
+        // The press waits for Save (8.3.1), so it is let go only once Save has ended.
+        var showing = dialog.About.ShowLicenseCommand.ExecuteAsync(null);
+        await read.Task.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
         writing.SetResult();
         await saving;
+        await showing.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
 
         Assert.True(dialog.IsClosed);
         Assert.Empty(screen.Dialogs.Open);
+    }
+
+    [Fact]
+    public async Task Show_license_pressed_while_a_save_runs_that_keeps_the_screen_open_shows_its_dialog_once_after_the_save()
+    {
+        // docs/phase-8a-design.md 8.3.1: a press during Save is not dropped; it waits for Save, and a
+        // Save that fails keeps the screen open, its error dialog first. A second press while the
+        // first waits opens nothing more.
+        var screen = new Screen();
+        var writing = new TaskCompletionSource();
+        screen.Git.WriteHold = writing.Task;
+        var read = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        screen.ReadText = _ =>
+        {
+            read.TrySetResult();
+            return "MIT License\n";
+        };
+        var dialog = await screen.OpenAsync(SettingsSection.About);
+        dialog.Git.Global.UserName = "Ann";
+
+        var saving = dialog.ConfirmCommand.ExecuteAsync(null);
+        await WaitForWritingAsync(dialog);
+        var showing = dialog.About.ShowLicenseCommand.ExecuteAsync(null);
+        await read.Task.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+
+        // The texts are read while Save writes; a press that is dropped has ended by now.
+        await Task.WhenAny(showing, Task.Delay(TimeSpan.FromMilliseconds(500), TestContext.Current.CancellationToken));
+        var again = dialog.About.ShowLicenseCommand.ExecuteAsync(null);
+        writing.SetException(new GitException("git config --global --replace-all user.name Ann", 255, "error: could not lock config file C:/x/global.gitconfig: File exists\n"));
+        var error = await screen.WaitForDialogAsync<ErrorDialogViewModel>();
+        Assert.Empty(screen.Dialogs.Open.OfType<TextDocumentDialogViewModel>());
+        error.ConfirmCommand.Execute(null);
+        await saving;
+        await showing.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+        await again.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+
+        Assert.False(dialog.IsClosed);
+        var text = Assert.IsType<TextDocumentDialogViewModel>(screen.Dialogs.Current);
+        Assert.Equal("MIT License", text.Title);
+        Assert.Equal<DialogViewModel>([dialog, text], screen.Dialogs.Open);
     }
 
     [Fact]
@@ -664,6 +708,17 @@ public class SettingsDialogViewModelTests
         await browsing.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
         Assert.Null(dialog.GitProgram.Choice);
         Assert.Null(screen.Settings.Current.GitExecutable);
+    }
+
+    /// <summary>Waits until Save's global writes run (<see cref="SettingsDialogViewModel.IsWriting"/>).</summary>
+    private static async Task WaitForWritingAsync(SettingsDialogViewModel dialog)
+    {
+        var until = DateTime.UtcNow.AddSeconds(30);
+        while (!dialog.IsWriting)
+        {
+            Assert.True(DateTime.UtcNow < until, "Save's global write did not start.");
+            await Task.Delay(5, TestContext.Current.CancellationToken);
+        }
     }
 
     /// <summary>The screen's services over fakes, and a way to open it and answer its dialogs.</summary>
