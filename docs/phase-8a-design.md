@@ -342,7 +342,7 @@ round (1,150 scripted, 200 real-window captures, 3 framed captures, 198 differen
 | The Git program row (§5) | 40 | 9 scripted: `s14c`, `s14i`, `s18a`, `s18d`, `s19a`, `s19d`, `s20b`, `l31e-settings-git-dark`, `l31e-settings-git-light` | the global scope's bottom |
 | The About nav button (§8) | 3, 14, D409 | 83 scripted, 8 captures | x 140–317, y 255–285 at 1100×700 (x 550–727, y 415–445 at 1920×1080) |
 | Two palette commands (§8, §11) | 54 | 4 scripted (`k10a`, `k10f`, `l31c` dark, light), 2 captures; K10's constants and `CommandPaletteViewTests`' count (and, from §11, a fourth PageDown in both, D452; 11.4) | the scroll thumb, x 837–838 |
-| The shortcuts list's "Help" group (§11) | 62 | `s14f-shortcuts-end`; `s14e-shortcuts-top` in the section's scroll bar only, if at all (§11's builder measures it) | the list's end; the scroll bar |
+| The shortcuts list's "Help" group (§11) | 62 | `s14f-shortcuts-end`; `s14e-shortcuts-top` in the section's scroll bar only: its thumb's lower end, (955, 260) to (957, 265) at 1100×700, the builder's measure, confirmed at §11's merge | the list's end; the scroll bar |
 
 Every one but the framed captures is in the 1,333, so about 1,336 of 1,353 earlier files change. The
 three framed captures also change in the left panel's `FilterBox` placeholder (§2, 1.5), outside the
@@ -4651,7 +4651,7 @@ outside the solution. `AssemblyInfo.cs`: `AvaloniaTestApplication(typeof(Headles
   `[AvaloniaTheory]` over dark and light: a fresh `ShellDriver.Start`, then
   `Session.Shell.UseTheme(Dark or Light)` and its wait before the state is set up, so no switch closes
   a menu; `SetRenderScaling(Scale)`, `Settle`, `Capture`; a crop to the control's bounds times the
-  scale plus 8 pixels; `LeakGuard`; saved as `<name>-dark.png` or `-light.png`. First-run shots:
+  scale plus 8 pixels (as built the 8 pixels stand only round a dialog's card or a menu, 11.10); `LeakGuard`; saved as `<name>-dark.png` or `-light.png`. First-run shots:
   `FakeGitSetupProbe`, a fixed `GitGuidance` per platform (ruling 48), git at
   `C:\Program Files\Git\cmd\git.exe` or `/usr/bin/git`.
 - `LeakGuard`: fails the shot, saving nothing, when `VisibleTexts.In(window)` or a visible `TextBox`
@@ -4804,6 +4804,59 @@ first run. Real-window pass: nothing.
   app's links answer "not found".
 - Ruling 44: Git for Windows' own updater stays out of the guide; nobody confirmed it at its source.
 - Open points: 13.4, items 19 to 21.
+
+### 11.10 As built and merged (the lead, 2026-11-23)
+
+**Built** (run `wf_7dddbd2e-deb`, three builders one after the other, five reviewers, a fixer; 18
+commits, the last `982f5e5`). As 11.3 has it, with these departures. *The site*: `book.toml` turns
+mdBook's print page off, because `print.html` rewrites a raw image's `src` for the root and leaves
+its `srcset`, which then points outside the site, and the links' check finds it; `guide.css` hides
+the other theme's picture by the theme class on `html`, verified on the built pages with 11.9's
+other five points; `SUMMARY.md` has the introduction and "What VisualCommit does not do" as prefix
+chapters; the shortcuts page writes a group's note once when both platforms share it and otherwise
+each with its column's name. *The workflow*: as 11.3.4, its push trigger gaining
+`tests/Directory.Build.props`, which names `RepoRoot`. *The shots*: `SetRenderScaling` right after
+the theme's wait and before the state, since a scaling set later re-reads the pointer's last place
+and hovered a row; a `DelegatingHandler` that adds `/api/v3` in front of the in-process fake of
+GitHub, with GitLab and Azure DevOps given their endpoints and no handler, so the Accounts section
+lists all three and nothing leaves the process; Git reported as 2.43.0 at its usual path in every
+shot but the first-run ones; `LeakGuard`'s floor of three characters for the machine's name too;
+files beyond 11.2's list in the project's own folder (`GuideRun.cs`, `GuideSteps.cs`,
+`WeatherStationFiles.cs`, `GuideSettingsTests.cs`); `status-bar-git` without its tooltip, which
+opens in a top level of its own; the demo's functions spelled the American way. *The tests*:
+`AppLinksTests` counts an anchor only as `{ #id }` at the end of a heading, outside code and
+comments; `GuideCatalogueTests` reads what an `<img>` loads, each dark image's own `srcset` too;
+`GuideSettings` clears only the catalogue's files from a folder the variable names;
+`ShortcutTextTests`' table gained F1's row.
+
+**Checked statement by statement, and corrected** (ruling 94 and 95; runs `wf_be89944c-5a7`,
+`wf_3220124e-9d8` and `wf_28644568-d81`; 17 commits, the last `bc24568`). The reviewers had sampled
+the pages; the pass read all of them: 1,157 statements and 131 universal claims against the source,
+84 pictures opened. Corrected: 73 statements and 11 texts that did not match their picture, 9 more
+of the same kinds the fixers saw, 11 universal claims, and 9 points of the checkers; 14 framing
+faults of pictures and two more the checkers found. *The frames, as built*: `GuideFrame.Of` and
+`GuideFrame.Area` end at the control's or the area's own edges, and only `GuideFrame.Card`, a
+dialog's card or a menu, keeps the 8 pixels (11.3.5 gave them to every frame, and a panel's frame
+then showed a strip of its neighbour); a graph's picture ends at its last whole row; a menu that
+would reach past the graph's area fails its shot; the welcome page and the clone form are framed
+from the heading to their last control; the reflog and the drag menu are shot 1440 wide; the stash's
+picture shows its changed file. *The demo*: `origin/main`'s own commit is made with `commit-tree`,
+without a checkout, so that the reflog holds no helper branch; its SHA stays. Left as the app draws
+it: the graph's widest dates touching the scroll bar, and the resolver's scroll bar across the
+conflict's last line (ruling 95's list).
+
+**Merged** (`57ad86e`; 11.8). On it, with no agent at work: 11.4's classes with `KeyRouterTests` and
+`ShortcutTextTests`, 81 of 81; `VisualCommit.VisualTests.Phase6` whole, 133 of 133 in 12 min 13 s;
+`.Phase6Look` whole, 19 of 19 in 2 min 36 s; `.Phase8a` whole with part G, 154 of 154 in 5 min 51 s;
+the comparison with wave 3's references by `--expected` (the report's "§11's merge"): of the 287
+pictures those three runs wrote, 253 are the references' files, 4 are part G's new ones, the 8
+expected ones changed in their boxes (three of them also in a caret or an edge pixel), and 22 others
+differ in the kinds that vary from run to run; none changed size. The lead's run of GuideShots
+through `scripts/heavy-run.sh` with the root `C:\demo`: 119 of 119 in 6 min 13 s (441 s with the
+lock), `LeakGuard` silent, and its 84 pictures are byte for byte the ones opened on the branch. The
+book built and the links' check found nothing (its self-test 117 cases). The lead's lines of 11.2
+are in CLAUDE.md and `VisualCommit.slnx`. CI's run and the guide workflow's first run on the push
+are in status.md's CI section (11.8 item 4); the site's hand check stays the gate's (ruling 79).
 
 ## 12. realwindow: the real-window part for 8a's checks
 
@@ -5551,6 +5604,35 @@ restored tab about 5 s, ten about 5 to 7 s) and says that the tab in front opens
 itself, not in the guide, goes on the same list: a repository picked under Recent repositories opens
 in that page's tab even when another tab shows it.
 
+**§11 as built (the lead, 2026-11-23, at its merge; 11.8).** 95. The package stands as built,
+reviewed and corrected (`wip/p8a-guide`, 35 commits from `124337a`, the last `bc24568`; merge
+`57ad86e`), with its departures from section 11, which 11.10 lists: mdBook's print page is off; a
+shot sets the render scaling before its state; the 8 pixels of margin stand only round a dialog's
+card or a menu; the hosting shots put a prefix handler in front of the fake of GitHub and list
+GitLab and Azure DevOps with every request refused; `LeakGuard` holds the machine's name to the same
+floor of three characters as the user's; every shot but the first-run ones reports Git 2.43.0; the
+window is 1440 wide for the diffs, the file pages, the drag menu and the reflog; `guide.yml` is also
+started by `tests/Directory.Build.props`; a pictures folder named by the variable loses only the
+catalogue's files. Ruling 80: the first-run links' frame touches no ink (0 pixels differ inside the
+ink's box of either link text, 1,146 and 918 outside it). Ruling 82: `AppShortcutsTests`' router
+table runs no key under a menu or a drag; `KeyRouterTests`' three facts that every key declines
+under a menu, a dialog and a branch drag press every tunnelling key, F1 among them since its
+binding, and `OpenUserGuideCommandTests` keeps four facts in App.Tests (the two that started the app
+on "ops" repeated those and went, D416). Part G's open point 103: no read of the settings screen
+lands after G1's step 7 mark; typing `guide` makes no git call; `ExactStateAsync`'s own git does not
+reach the session's call log. After ruling 94's pass one more pass settled nine statements its
+fixers had seen and left and swept the pages' universal claims (run `wf_28644568-d81`: 131 claims,
+11 narrowed, one of them major: the file history lists the commits in the history of HEAD or of the
+chosen commit, not every commit that changed the file). For the list of the review before the gate:
+the resolver's overlay scroll bar lies across the last line of a conflict that ends at the panes'
+end (seen in the guide's `resolver` picture, which stays); whether ruling 7's sentence that an old
+OpenSSH asks "in the terminal VisualCommit was started from" holds on Windows, where the app is a
+window program and starts git without a console; and the guide's About page, which names mdBook, the
+fonts and Font Awesome but not highlight.js, which the site also ships. From the gate commit on
+`docs/guide/**` stays docs (0.4): a correction to a page is checked by the guide's workflow, and a
+change to the app's words, keys or behaviour needs its page's change, which no test finds but for
+the pages, anchors and key tables that the two App.Tests classes hold.
+
 ### 13.2 What the integration settled
 
 Beyond moving the packages' contracts into section 1: the broker's `gitVersion` goes at §3's merge,
@@ -5682,7 +5764,9 @@ on the review, and item 22 is the review's question for the owner (13.5).
     `86ecb3a`, the floor job's git 2.34.1 among them, so no job counted more than 23 git calls for a
     fast-forward or a merge, and the budget stays 23 (`status.md`'s CI section).
 19. The region of `s14e-shortcuts-top`'s scroll bar: §11's builder measures it, the lead adds it to
-    0.7. At §11's merge.
+    0.7. At §11's merge. **Settled (the lead, at §11's merge on 2026-11-23):** the thumb's lower
+    end, (955, 260) to (957, 265); the track lies at x 955 to 956. 0.7's row has it, and the merge's
+    comparison found the change there and nowhere else in the picture.
 20. mdBook publishes no checksum: the lead downloads the Linux archive once, pins its SHA-256 with
     the date in the report, and puts mdBook 0.5.4 for Windows, hashed, in
     `D:/Projects/Personal/phase8-work/tools/`. Before §11. **Settled (the lead, 2026-11-23, before
@@ -5695,7 +5779,8 @@ on the review, and item 22 is the review's question for the owner (13.5).
     `D:/Projects/Personal/phase8-work/tools/mdbook-0.5.4/` (SHA-256
     `ffa917c9b6b608aa8b6189dcb38a548ff2615832113ad6c6e26f6ef9c8d77a44`).
 21. The 42 shots may cost more than planned; the lead may drop a shot whose state is too costly and
-    keep its page's text. During §11.
+    keep its page's text. During §11. **Settled (the lead, at §11's merge):** no shot is dropped: a
+    shot takes 2 to 15 s and the whole project takes 5 to 7 minutes on the laptop.
 22. Whether winget is offered for a git that is too old or not working: the owner's D405 offers the
     winget install when git is missing, too old or not working, and ruling 44 and D423 narrowed it to
     a missing git. (a) For a missing and a too-old git, the lead's recommendation, since winget's

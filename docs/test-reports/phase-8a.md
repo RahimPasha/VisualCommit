@@ -4382,9 +4382,10 @@ returns). `ActivityLogView.axaml` changes only if 6.3.8's test fails. K10's four
 - **Earlier pictures: the shortcuts list's end** (ruling 62; 0.7's row "The shortcuts list's 'Help'
   group"; 11.6). `s14f-shortcuts-end` shows the list's end with the group `Help` and its row
   `Open the user guide` · `F1` below `Dialogs and menus`: the section's column changes (11.6: confirmed).
-  `s14e-shortcuts-top` changes at most in the section's scroll bar, whose thumb the longer list
-  shortens; §11's builder measures that region and the lead adds it to 0.7 at §11's merge (13.4 item
-  19; open point 107). The list's top keeps its look: no settings row links to the guide (11.3.1).
+  14e-shortcuts-top` changes at most in the section's scroll bar, whose thumb the longer list shortens;
+  §11's builder measures that region and the lead adds it to 0.7 at §11's merge (13.4 item 19; open
+  point 107). Measured by the builder and found so at the merge: the thumb's lower end, (955, 260) to
+  (957, 265) at 1100×700, 10 pixels. The list's top keeps its look: no settings row links to the guide (11.3.1).
 - **8a's own pictures** (0.7). `k3a-palette-cancel` and `l3a-palette-placeholder` change in the
   palette's scroll thumb, x 837–838, at §11's merge, their second move after §8's; the lead's
   `--expected` file for §11's merge names them (open point 106, since 11.6 names neither). No other
@@ -4450,6 +4451,19 @@ returns). `ActivityLogView.axaml` changes only if 6.3.8's test fails. K10's four
      press Down and expect row 0); Up from row 0 wraps to 34, then 33; its comment "PageDown three
      times" says four. Reason: ruling 54, D452.
 
+  7. `ShortcutTextTests` (App.Tests, phase 6's): its table of every binding's words gains
+     `[AppCommand.OpenUserGuide] = ("F1", "F1", "F1", "F1")`. Its fact
+     `Every_binding_is_written_in_each_platforms_words` asks a row of every binding and failed once F1
+     was bound; 11.4 does not name the class. Reason: D417 (1.8). With it the comments the builder
+     corrected beyond 11.4's list: `PaletteEntriesTests` and `CommandPaletteViewTests` (the counts),
+     `SettingsDialogViewTests` `:308` and `AppShortcutsTests`' comment on the keyless list.
+
+  Not an earlier test: `KeyRouterTests`' three facts that every key declines while a menu or a dialog is
+  open and during a branch drag are unchanged and press every tunnelling key, so from §11's merge they
+  hold F1 too (ruling 82's answer); `OpenUserGuideCommandTests` (new, App.Tests) keeps four facts, the
+  Info line without a launcher, the Error line when it throws, and F1's route on a welcome tab and on a
+  dashboard.
+
   `AppLinksTests` (WP0's) is extended, not changed (11.4): per `GuidePage`, its `.md` exists under
   `docs/guide/src`, `SUMMARY.md` links it, and its anchor stands once as `{ #anchor }`; its earlier
   assertions stand. Not changed: 8a's `AboutEntryTests`, which asserts the row before `About
@@ -4514,6 +4528,36 @@ drop starts no lookup and that the lookup follows the first load to end, whichev
 **No other earlier test changes.** `TabServices`, `AppSession.Start` and `ShellDriver`'s `Start` and
 `StartWithTabs` gain the optional `restoreClock`, last in each list, each passing it on to the next
 (ruling 87); no other earlier caller changes.
+
+### §11's merge: the comparison with wave 3's references (2026-11-23; design 11.6, 11.8; ruling 84)
+
+On `57ad86e`, with no agent at work, the lead ran 11.4's App.Tests classes with `KeyRouterTests` and
+`ShortcutTextTests` (81 tests), then `VisualCommit.VisualTests.Phase6` (133 tests), `.Phase6Look` (19)
+and `.Phase8a` (154, part G's four checks and six expectation tests among them) whole, one after the
+other through `scripts/heavy-run.sh`; none failed. Each run's pictures were copied out before the next,
+since Phase6 and Phase6Look share a folder that each run empties, and the 287 pictures were compared
+with wave 3's references by `scripts/compare-pictures.py --expected` with the builder's boxes
+(`D:/Projects/Personal/phase8-work/wave4/guide/expected-guide.json`; the output in
+`D:/Projects/Personal/phase8-work/wave4/guide/merge/compare/`). 253 are the references' files; 4 are
+new, part G's `g1a`, `g1b`, `g2a` and `g3a`; no picture changed size, and no expected picture stayed
+unchanged. **The eight expected pictures changed, each in its boxes**: the palette's scroll thumb at x
+837 to 838 in `k10a`, `k10f`, `l31c-palette-dark`, `l31c-palette-light` and 8a's `k3a` and `l3a`; the
+section's column and its scroll bar in `s14f-shortcuts-end`; the scroll bar's thumb, (955, 260) to (957,
+265), in `s14e-shortcuts-top`. Three of them also differ outside their boxes, in kinds that vary from
+run to run: the palette box's caret, 1 by 16 pixels at (268, 111), in `k10a`, `l31c-palette-light` and
+`k3a`, and in `k3a` three anti-aliased edge pixels of the palette's card. **22 other pictures differ,
+all in those kinds**: a text box's caret (7: `l26b-clone-form-light`, `l27f-name-dialog-light`,
+`l27g-push-dialog-light`, `l31e-settings-git-light`, `l31g-credentials-dark`, which also caught the
+status bar's progress bar at another moment, `w6a` and 8a's `l3d`); a temporary folder's random name (9:
+`k10e`, `l30c` dark and light, `l32a` dark and light, `l32b` dark and light, `w1e`,
+`w3a-ten-rows-wide-light`); a fake's port in a clone form's address (1: 8a's `k5a`); anti-aliased edge
+pixels, 1 to 8 in a picture, 1 to 22 levels apart (5: `g23i`, `l27e-menu-item-tooltip-dark`,
+`l27g-push-dialog-dark`, `l31g-credentials-light`, 8a's `u3b`). Nothing else differs, so nothing stops
+the merge (11.6). **The guide's own pictures** lie outside `artifacts/visual`: the lead's run of
+`tests/VisualCommit.GuideShots` on the laptop (the root `C:\demo`; 119 tests in 6 min 13 s, `LeakGuard`
+silent) wrote 84 pictures that are byte for byte those of the branch's last run, each of which was
+opened in the pass before the merge (design 13.1, rulings 94 and 95) or by its checkers; the book built
+with mdBook 0.5.4, and `scripts/check-guide-links.py` found nothing in it (its self-test: 117 cases).
 
 ### Changed in this report after its first commit
 

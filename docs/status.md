@@ -756,36 +756,41 @@ nine majors and 20 minors, all fixed but the page's ten-tab row. Its reviewers h
 sampling, so **before the merge the lead had every statement of the pages and every picture
 checked** (run `wf_be89944c-5a7`, read only; ruling 94): 1,157 statements, 73 confirmed faults in
 the text, six of them major, 11 texts that do not match their picture, 14 framing defects of
-pictures, no leak. **The fixes are under way** since 16:05 (run `wf_3220124e-9d8`, script
-`…/workflows/scripts/phase8a-guide-fixes-wf_3220124e-9d8.js`): a fixer of the pages, a fixer of the
-shots who retakes all 84 pictures, two checkers and a last fixer. GuideShots' local root is
-`C:\demo`. While agents run processes, the lead starts no heavy run and no series (ruling 23). **The
-restore order's section is the design's section 14** (drafted, reviewed and corrected by run
-`wf_e8daca0e-d5c`; the lead's rulings 86 to 90 on its 18 choices written in and the whole section
-rechecked against D457 and the code by run `wf_d117ae19-e9c`, 17 findings, all applied; Notes, "Wave
-4"). 0.4's row and files, 13.1's rulings, 13.3's row for the proof (about 50 minutes of the rested
-desktop, about 70 with a trial of two at once, about 80 when four stays after it) and CLAUDE.md's
-docs map are brought up to it. **`restore` is proven and merged** (step 17b; `aedb12f`, the bounds
-`23bea54`; D458, rulings 91 to 93; design 14.10; the report's "The restore order's proof"): built
-and reviewed on `wip/p8a-restore` (run `wf_abcee249-c0e`), proven on the desktop from 13:36 to 14:52
-by the lead's probe and the alternated series, merged, the lagged list at the merge 948 tests with
-none failed, and pushed with its docs (`5e23aba`); CI's run 45286046457 on that push is green in all
-six jobs (the CI section). **Next for the lead, when the fixes' run ends:** read its result, its
-diff since `982f5e5` and the changed pictures; then §11's merge with its checks (11.4's classes and
-part G, then Phase6, Phase6Look and 8a's project whole through `scripts/heavy-run.sh`, the
-comparison with wave 3's references by `--expected`, the lead's own run of GuideShots), the lead's
-lines of 11.2, the report's part G results, the push, CI and the guide's workflow (step 17); then
-§12 (step 18). §11's builders got with their briefs: mdBook at
-`D:/Projects/Personal/phase8-work/tools/mdbook-0.5.4/mdbook.exe` and the Linux archive's SHA-256 for
-`guide.yml` (Notes, "Wave 4"); the references `D:/Projects/Personal/phase8-work/references/wave3/`;
-rulings 80 (stop and report if the first-run link's frame touches its ink), 82 (the facts no check
-shows) and 83 (the rename, the comments); and what part G's open point 103 leaves for it to report.
-What step 16 ended with: the three packages merged, §10 (`86ecb3a`), §8 (`f014b2b`, its fixes after
-the merge `85e2884`) and §9 (`769f459`); the lagged list, the whole default run and the pictures on
-`85e2884`, whose one fault (`a1b-about-link-focus`) is fixed (`fcf8c1e`); the references of the
-later merges, `D:/Projects/Personal/phase8-work/references/wave3/` (1,235 scripted pictures); three
-"before" series, two probes, two panels and **D457** (the bounds `0bfbe92`, two backlog rows, the
-restore order as ruling 76, a change in wave 4); CI's two failures on the link frame's merge fixed
+pictures, no leak. **The fixes are in and §11 is merged** (`57ad86e`; rulings 94 and 95; design
+11.10): 98 confirmed findings applied by run `wf_3220124e-9d8` (15 commits), nine statements more
+and 11 universal claims by run `wf_28644568-d81` (2 commits); the branch's last commit is `bc24568`.
+The merge's checks on `57ad86e` passed: 11.4's classes 81 of 81; Phase6 (133), Phase6Look (19) and
+8a's project (154) whole, none failed; the comparison with wave 3's references by `--expected` shows
+the eight expected pictures changed in their boxes and nothing else but the kinds that vary from run
+to run; the lead's run of GuideShots, 119 of 119, wrote the 84 pictures that were opened on the
+branch, byte for byte; the book builds and the links' check finds nothing. The lead's lines of 11.2
+are in. GuideShots' local root is `C:\demo`. **The restore order's section is the design's section
+14** (drafted, reviewed and corrected by run `wf_e8daca0e-d5c`; the lead's rulings 86 to 90 on its
+18 choices written in and the whole section rechecked against D457 and the code by run
+`wf_d117ae19-e9c`, 17 findings, all applied; Notes, "Wave 4"). 0.4's row and files, 13.1's rulings,
+13.3's row for the proof (about 50 minutes of the rested desktop, about 70 with a trial of two at
+once, about 80 when four stays after it) and CLAUDE.md's docs map are brought up to it. **`restore`
+is proven and merged** (step 17b; `aedb12f`, the bounds `23bea54`; D458, rulings 91 to 93; design
+14.10; the report's "The restore order's proof"): built and reviewed on `wip/p8a-restore` (run
+`wf_abcee249-c0e`), proven on the desktop from 13:36 to 14:52 by the lead's probe and the alternated
+series, merged, the lagged list at the merge 948 tests with none failed, and pushed with its docs
+(`5e23aba`); CI's run 45286046457 on that push is green in all six jobs (the CI section). **Next for
+the lead:** read CI's run and the guide workflow's first run on the push of §11's merge and record
+them (11.8 item 4: the workflow green, its step "App's links" included, no deploy job run,
+`guide-site` looked at; CI's Windows job builds GuideShots), which ticks step 17; then §12, the
+real-window part (step 18): its builder builds it in Release and never runs it, and the lead runs
+each of its 13 methods alone, the owner told in the chat before each. §11's builders got with their
+briefs: mdBook at `D:/Projects/Personal/phase8-work/tools/mdbook-0.5.4/mdbook.exe` and the Linux
+archive's SHA-256 for `guide.yml` (Notes, "Wave 4"); the references
+`D:/Projects/Personal/phase8-work/references/wave3/`; rulings 80 (stop and report if the first-run
+link's frame touches its ink), 82 (the facts no check shows) and 83 (the rename, the comments); and
+what part G's open point 103 leaves for it to report. What step 16 ended with: the three packages
+merged, §10 (`86ecb3a`), §8 (`f014b2b`, its fixes after the merge `85e2884`) and §9 (`769f459`); the
+lagged list, the whole default run and the pictures on `85e2884`, whose one fault
+(`a1b-about-link-focus`) is fixed (`fcf8c1e`); the references of the later merges,
+`D:/Projects/Personal/phase8-work/references/wave3/` (1,235 scripted pictures); three "before"
+series, two probes, two panels and **D457** (the bounds `0bfbe92`, two backlog rows, the restore
+order as ruling 76, a change in wave 4); CI's two failures on the link frame's merge fixed
 (`70a8fc0`, `809b77f`); and, after a review of the second of those fixes, **the row list's fix,
 merged at `bad98b1`**: CI's run 45133434382 on it is green in all six jobs, the whole default run on
 `c1bc69b`, whose code is the merge's, passed with 8,514 tests and none failed, and each of its 54
@@ -966,9 +971,25 @@ every commit.
   page's tab even when another tab shows it, where Open, Ctrl+O, the palette and a dashboard's row
   switch to the tab; and `index.md`'s two loosely worded items that the pass did not report ("from
   the toolbar", and refusing to overwrite ignored files, which holds only while Keep ignored files
-  is on and not for a hard reset), which the lead corrects at the merge. Wave 4's runs so far: 5.7M
-  tokens before the builds, §11's build 5.42M, `restore`'s 1.74M, the write-up's check 0.50M, the
-  guide's pass 5.24M; the fixes' run not counted yet.
+  is on and not for a hard reset), which the lead corrects at the merge. **§11's fixes and merge
+  (16:05 to 18:35).** Run `wf_3220124e-9d8` (5 agents, 1.56M tokens, 1 h 23 min): the pages' fixer
+  applied all 73 text findings and the 11 texts from the pictures in ten commits, checking each
+  replacement against the source; the shots' fixer mended 13 of the 14 framing faults (the camera's
+  8 pixels now stand only round a dialog's card or a menu) and retook the 84 pictures, 40 files
+  changed and the rest byte for byte as before; two checkers read 148 changed sentences and 66
+  pictures and found nine points, which a last fixer applied (the welcome page's frame, and the
+  scenario's helper branch out of the reflog, among them). Left as the app draws it: the resolver's
+  scroll bar across the conflict's last line. Run `wf_28644568-d81` (3 agents, 0.59M tokens, 28
+  min): nine statements the fixers had seen and left, and a sweep of 131 universal claims on the
+  pages, 11 of them narrowed. The results are kept in
+  `D:/Projects/Personal/phase8-work/wave4/guide/` (`fixes-result.json`, `residual-result.json`).
+  **The merge `57ad86e`** and its checks, 17:58 to 18:32, in `…/wave4/guide/merge/` (`checks.log`,
+  each command's output, `compare/`, the two lists of the pictures' hashes). **For step 19's list,
+  from §11** (ruling 95): the resolver's overlay scroll bar over a conflict's last line; whether
+  ruling 7's sentence on an old OpenSSH and "the terminal VisualCommit was started from" holds on
+  Windows; the guide's About page without highlight.js. Wave 4's runs so far: 5.7M tokens before the
+  builds, §11's build 5.42M, `restore`'s 1.74M, the write-up's check 0.50M, the guide's pass 5.24M,
+  its fixes 1.56M and 0.59M: 20.8M in all.
 - **Wave 3 is under way (2026-11-21).** The owner's word that day: "Continue", all of wave 3 now, and
   the three takeovers of the desktop (the spike, §10's first run, the "before" series) each as soon
   as it is ready. **The checks** of parts A and U were written by a writer each, reviewed by two

@@ -19,7 +19,9 @@
          Windows-only, so it must never run as part of "dotnet test" at the repo root.
          VisualCommit.LiveHostingTests is left out on purpose too: it acts on the owner's accounts
          of GitHub, Azure DevOps and GitLab with tokens from the environment and runs only by its
-         own command (D250, D346). -->
+         own command (D250, D346). VisualCommit.GuideShots is left out too: it makes the user
+         guide's pictures, needs a demo root outside the repository and runs by its own command
+         and in the guide's workflow (D439). -->
     <Project Path="tests/VisualCommit.App.Tests/VisualCommit.App.Tests.csproj" />
     <Project Path="tests/VisualCommit.Git.Tests/VisualCommit.Git.Tests.csproj" />
     <!-- The stand-in for git of the first-run checks: a small program that answers only the
