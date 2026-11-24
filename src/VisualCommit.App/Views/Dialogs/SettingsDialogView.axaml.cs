@@ -18,7 +18,9 @@ namespace VisualCommit.App.Views.Dialogs;
 /// The settings screen (<c>SettingsDialog</c>, docs/phase-6-design.md 7.1): its first focus is
 /// the shown section's button, never a text box; Up and Down move between the section buttons;
 /// the shown section starts at its top; a field the view model names takes the focus (the first
-/// wrong one after a refused Save, Other…'s program box).
+/// wrong one after a refused Save, Other…'s program box). The Git program row's Browse…, disabled
+/// while its file dialog is open and its file is probed, takes the focus back once its run has
+/// ended with the focus lost, as by Tab when it had the keyboard outline as it was pressed.
 /// </summary>
 public partial class SettingsDialogView : DialogView
 {
@@ -37,6 +39,24 @@ public partial class SettingsDialogView : DialogView
         AboutIcon.Source = AboutImage.Value;
         DataContextChanged += (_, _) => Follow(DataContext as SettingsDialogViewModel);
         SettingsNav.AddHandler(KeyDownEvent, OnNavKeyDown, RoutingStrategies.Tunnel);
+        GitProgramBrowseButton.Click += OnGitProgramBrowseClick;
+    }
+
+    /// <summary>Runs before Browse…'s command: the focus back on the button once its run has ended with the focus lost.</summary>
+    private void OnGitProgramBrowseClick(object? sender, RoutedEventArgs e)
+    {
+        if (_model is not { } model)
+        {
+            return;
+        }
+
+        var withKeys = GitProgramBrowseButton.IsFocused && GitProgramBrowseButton.Classes.Contains(":focus-visible");
+        FocusReturn.AfterRun(
+            model.GitProgram.BrowseCommand,
+            this,
+            () => GitProgramBrowseButton,
+            withKeys ? NavigationMethod.Tab : NavigationMethod.Unspecified,
+            FocusReturn.LostFrom(TopLevel.GetTopLevel(this), GitProgramBrowseButton, static () => true));
     }
 
     /// <summary>The settings screen gives its first focus to a section button, not a text box (7.1).</summary>

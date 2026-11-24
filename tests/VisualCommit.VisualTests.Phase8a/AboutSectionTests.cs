@@ -92,6 +92,48 @@ public sealed class AboutSectionTests
         Assert.True(app.SettingsDialog is { ShowsAbout: true }, "Esc closed more than the text dialog.");
     }
 
+    /// <summary>
+    /// Copy all pressed with Enter while another program holds the clipboard: the copy answers late,
+    /// and the button keeps the focus with its keyboard frame meanwhile and after it (a disabled
+    /// button would lose it, design 8.3.1). The text is copied once.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task Copy_all_by_Enter_keeps_the_focus_while_a_busy_clipboard_holds_the_copy()
+    {
+        using var data = new TempDirectory("data");
+        using var app = await StartOnAboutAsync(data);
+        app.PressKey(Key.Tab);
+        Assert.Equal(A.ShowLicenseId, app.FocusedAutomationId());
+        app.PressKey(Key.Enter);
+        var dialog = await app.WaitForDialogAsync<TextDocumentDialogViewModel>();
+        await app.WaitForAsync(() => app.FocusedAutomationId() == A.TextId, "the focus in the license's text");
+        var copy = (Button)app.FindByAutomationId(app.TopDialogView!, "TextDocumentCopyButton");
+        Assert.True(copy.Focus(NavigationMethod.Tab), "Copy all takes no focus.");
+        app.Settle();
+        Assert.True(app.FocusedAutomationId() == "TextDocumentCopyButton" && app.FocusVisible, "Copy all is not focused with the keyboard's frame before Enter.");
+        var held = new TaskCompletionSource();
+        app.Clipboard.Hold = held.Task;
+
+        app.PressKey(Key.Enter);
+        await app.WaitForAsync(() => app.Clipboard.Texts.Count == 1, "the copy");
+
+        Assert.True(dialog.CopyAllCommand.IsRunning, "Copy all does not wait for the clipboard.");
+        AssertCopyFocused(app, copy, "while the clipboard holds the copy");
+        held.SetResult();
+        await app.WaitForAsync(() => !dialog.CopyAllCommand.IsRunning, "Copy all to end");
+        app.Settle();
+        AssertCopyFocused(app, copy, "after the copy");
+        Assert.Equal([EmbeddedTexts.Read(EmbeddedTexts.License)], app.Clipboard.Texts);
+        Assert.False(dialog.IsClosed);
+
+        static void AssertCopyFocused(ShellDriver app, Button copy, string when)
+        {
+            Assert.True(copy.IsEffectivelyEnabled, $"Copy all is disabled {when}.");
+            Assert.True(app.FocusedAutomationId() == "TextDocumentCopyButton", $"The focus is on {app.FocusedAutomationId() ?? "nothing"}, not Copy all, {when}.");
+            Assert.True(app.FocusVisible, $"Copy all has the focus without the keyboard's frame {when}.");
+        }
+    }
+
     [AvaloniaFact]
     public async Task Enter_in_the_licenses_text_closes_the_dialog_as_Close_does_and_gives_the_focus_back()
     {

@@ -67,7 +67,11 @@ public partial class MainWindowViewModel
             _tabServices.Dialogs,
             _tabServices.Launcher,
             _tabServices.Clipboard,
-            _log));
+            _log)
+        {
+            // Read when Choose probes a file: the start sets it after the screen is made.
+            Lifetime = () => _lifetime,
+        });
     }
 
     /// <summary>

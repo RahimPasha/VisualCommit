@@ -31,7 +31,14 @@ public sealed record GitSetupServices(
     IDialogService Dialogs,
     IFileLauncher? Launcher,
     IClipboardService? Clipboard,
-    IAppLog Log);
+    IAppLog Log)
+{
+    /// <summary>The window's lifetime, read when Choose probes a file, which ends that probe; null for none.</summary>
+    public Func<CancellationToken>? Lifetime { get; init; }
+
+    /// <summary>How long Choose's probe of a file may take; null for <see cref="GitSetupViewModel.ChosenProbeLimit"/>. A test's seam.</summary>
+    public TimeSpan? ProbeLimit { get; init; }
+}
 
 /// <summary>
 /// The first-run screen (R4, D405, D423, D453), one per window: it stands in the welcome page's
@@ -43,6 +50,9 @@ public sealed record GitSetupServices(
 /// </summary>
 public sealed partial class GitSetupViewModel : ObservableObject
 {
+    /// <summary>How long the probe of a chosen git program may take (Choose's and the settings row's Browse's).</summary>
+    public static readonly TimeSpan ChosenProbeLimit = TimeSpan.FromSeconds(10);
+
     private readonly GitSetupServices _services;
     private Task<GitGuidance>? _guidanceRead;
     private GitGuidance? _guidance;
@@ -214,21 +224,24 @@ public sealed partial class GitSetupViewModel : ObservableObject
     /// <summary>The command of "Install the Command Line Tools": macOS asks the user itself, so the app asks nothing first.</summary>
     public static LaunchCommand CommandLineToolsLaunch { get; } = new("/usr/bin/xcode-select", ["--install"]);
 
-    [RelayCommand]
+    // The launches and Copy keep their buttons enabled while they run: the launcher starts a
+    // program off the UI thread and the clipboard can be held by another program, and a button
+    // disabled meanwhile would lose the keyboard focus. A second press starts the same thing again.
+    [RelayCommand(AllowConcurrentExecutions = true)]
     private Task CommandLineToolsAsync() => StartAsync(CommandLineToolsLaunch, "xcode-select");
 
-    [RelayCommand]
+    [RelayCommand(AllowConcurrentExecutions = true)]
     private Task DownloadAsync() => OpenAsync(GitSetupTexts.DownloadForWindows);
 
-    [RelayCommand]
+    [RelayCommand(AllowConcurrentExecutions = true)]
     private Task MoreLinkAsync() =>
         OpenAsync(_guidance?.Platform == GuidancePlatform.MacOS ? GitSetupTexts.InstallOnMacOS : GitSetupTexts.InstallOnLinux);
 
-    [RelayCommand]
+    [RelayCommand(AllowConcurrentExecutions = true)]
     private Task GuideLinkAsync() => Content is { } content ? OpenAsync(AppLinks.Guide(content.Page)) : Task.CompletedTask;
 
     /// <summary>Shows the file git could not read, in the file manager.</summary>
-    [RelayCommand]
+    [RelayCommand(AllowConcurrentExecutions = true)]
     private async Task ShowFileAsync()
     {
         if (_git?.ConfigFault is not { } fault || _services.Launcher is not { } launcher)
@@ -247,7 +260,7 @@ public sealed partial class GitSetupViewModel : ObservableObject
     }
 
     /// <summary>Copy: the command shown, to the clipboard.</summary>
-    [RelayCommand]
+    [RelayCommand(AllowConcurrentExecutions = true)]
     private async Task CopyAsync()
     {
         if (Command is { } command && _services.Clipboard is { } clipboard)
@@ -258,9 +271,10 @@ public sealed partial class GitSetupViewModel : ObservableObject
 
     /// <summary>
     /// "Choose git.exe…": the file dialog, then the file's checks: on Windows an <c>.exe</c> only,
-    /// unrun; then the probe, with <c>Checking…</c> meanwhile. A git that is found and new enough is
-    /// written as <c>gitExecutable</c> and searched for again; otherwise the settings stay as they
-    /// were and <c>GitSetupError</c> says why.
+    /// unrun; then the probe, with <c>Checking…</c> meanwhile, at most <see cref="ChosenProbeLimit"/>
+    /// and no longer than the window. A git that is found and new enough is written as
+    /// <c>gitExecutable</c> and searched for again; otherwise the settings stay as they were and
+    /// <c>GitSetupError</c> says why.
     /// </summary>
     [RelayCommand]
     private async Task ChooseAsync()
@@ -272,7 +286,18 @@ public sealed partial class GitSetupViewModel : ObservableObject
             return;
         }
 
-        var refusal = await CheckChosenAsync(file, _services.ProbeGit, text => ErrorText = text, CancellationToken.None);
+        var lifetime = _services.Lifetime?.Invoke() ?? CancellationToken.None;
+        string? refusal;
+        try
+        {
+            refusal = await CheckChosenAsync(file, _services.ProbeGit, text => ErrorText = text, lifetime, _services.ProbeLimit);
+        }
+        catch (OperationCanceledException) when (lifetime.IsCancellationRequested)
+        {
+            // The window is closing.
+            return;
+        }
+
         if (refusal is not null)
         {
             ErrorText = refusal;
@@ -293,8 +318,9 @@ public sealed partial class GitSetupViewModel : ObservableObject
     }
 
     /// <summary>
-    /// "Check again" for a setting just changed, once a search that runs now has ended: that search
-    /// went by the setting it read when it started, and a call while it runs would join it.
+    /// "Check again" for a setting just changed, once a run of the command that searches now has
+    /// ended: the command runs one search at a time, and the search it starts then reads the
+    /// setting just changed.
     /// </summary>
     public static async Task CheckAgainAfterRunningAsync(IAsyncRelayCommand checkAgain)
     {
@@ -320,12 +346,16 @@ public sealed partial class GitSetupViewModel : ObservableObject
     /// The checks of a chosen git program, Choose's and the settings row's Browse's: on Windows an
     /// <c>.exe</c> only, unrun; then <paramref name="probe"/>, <paramref name="checking"/> told
     /// <c>Checking…</c> meanwhile. Null when the file is a git that is found and new enough; else why not.
+    /// The probe is stopped after <paramref name="limit"/> (<see cref="ChosenProbeLimit"/> when null),
+    /// which stops the program it runs (a program that does not exit on <c>--version</c>), and is
+    /// refused then; <paramref name="cancellationToken"/>'s cancel is thrown.
     /// </summary>
     public static async Task<string?> CheckChosenAsync(
         string file,
         Func<string, CancellationToken, Task<GitDetection>> probe,
         Action<string> checking,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        TimeSpan? limit = null)
     {
         ArgumentNullException.ThrowIfNull(file);
         ArgumentNullException.ThrowIfNull(probe);
@@ -336,10 +366,16 @@ public sealed partial class GitSetupViewModel : ObservableObject
         }
 
         checking(GitSetupTexts.Checking);
+        using var limited = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        limited.CancelAfter(limit ?? ChosenProbeLimit);
         GitDetection found;
         try
         {
-            found = await probe(file, cancellationToken);
+            found = await probe(file, limited.Token);
+        }
+        catch (OperationCanceledException) when (limited.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
+        {
+            return GitSetupTexts.ChooseNoAnswer;
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {

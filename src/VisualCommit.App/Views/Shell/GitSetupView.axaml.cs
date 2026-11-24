@@ -13,8 +13,10 @@ namespace VisualCommit.App.Views.Shell;
 /// The first-run screen's view. "Check again" is disabled while it searches, which drops the
 /// keyboard focus: when the search ends with the focus on nothing or on the window, the button
 /// takes it again (as by Tab when it had the keyboard outline as it was pressed), or, the screen
-/// gone, the graph area's focus target does. The screen hidden while it holds the focus gives it
-/// to the graph area's target too.
+/// gone, the graph area's focus target does. "Choose git.exe…" is disabled while its file dialog
+/// is open and its file is probed: a cancelled pick or a refused file starts no search, so the
+/// button takes the focus back itself once its run has ended, in the same way. The screen hidden
+/// while it holds the focus gives it to the graph area's target too.
 /// </summary>
 public partial class GitSetupView : UserControl
 {
@@ -32,6 +34,28 @@ public partial class GitSetupView : UserControl
         InitializeComponent();
         DataContextChanged += (_, _) => Watch(DataContext as GitSetupViewModel);
         GitSetupCheckAgainButton.Click += OnCheckAgainClick;
+        GitSetupChooseButton.Click += OnChooseClick;
+    }
+
+    /// <summary>
+    /// Runs before Choose's command: once the run has ended with the focus lost (a cancelled pick, a
+    /// refused file), the button takes it back, as by Tab when it had the keyboard outline as it was
+    /// pressed. A run that found git hides the button, and the search's end has placed the focus.
+    /// </summary>
+    private void OnChooseClick(object? sender, RoutedEventArgs e)
+    {
+        if (_viewModel is not { } viewModel)
+        {
+            return;
+        }
+
+        var withKeys = GitSetupChooseButton.IsFocused && GitSetupChooseButton.Classes.Contains(":focus-visible");
+        FocusReturn.AfterRun(
+            viewModel.ChooseCommand,
+            this,
+            () => GitSetupChooseButton,
+            withKeys ? NavigationMethod.Tab : NavigationMethod.Unspecified,
+            FocusReturn.LostFrom(TopLevel.GetTopLevel(this), GitSetupChooseButton, static () => true));
     }
 
     private void Watch(GitSetupViewModel? viewModel)

@@ -125,6 +125,65 @@ public class GitAccessTests
     }
 
     [Fact]
+    public async Task A_search_asked_for_with_another_lookup_while_one_runs_does_not_join_it_but_searches_after_it()
+    {
+        // A git chosen while a search runs (D423): that search was told the old setting.
+        var chosen = (string?)null;
+        var file = Path.Combine(Path.GetTempPath(), "PortableGit", OperatingSystem.IsWindows() ? "git.exe" : "git");
+        var found = new GitDetection(GitAvailability.Available, file, new GitVersion(2, 47, 1), new NoRunner()) { Source = GitSource.Setting };
+        var probe = new QueuedProbe(found);
+        var access = new GitAccess(probe, () => new GitLookup(chosen, null), null, new RecordingLog(), null, null);
+        var held = probe.Hold();
+        var first = access.DetectAsync(TestContext.Current.CancellationToken);
+        var firstDetection = access.Detection;
+
+        chosen = file;
+        var second = access.DetectAsync(TestContext.Current.CancellationToken);
+        var waiting = access.GetRunnerAsync(TestContext.Current.CancellationToken);
+
+        // The second waits for the first before it asks the probe; a runner asked for meanwhile is the second's.
+        Assert.NotSame(firstDetection, access.Detection);
+        Assert.Single(probe.Lookups);
+        held.SetResult(NotFound);
+        Assert.Same(NotFound, await first);
+        Assert.Same(found, await second);
+        Assert.Same(found.Runner, await waiting);
+        Assert.Equal([new GitLookup(null, null), new GitLookup(file, null)], probe.Lookups);
+        Assert.Same(found, await access.Detection);
+        Assert.Same(found, access.Known);
+    }
+
+    [Fact]
+    public async Task The_search_that_ended_last_stays_known_when_the_one_it_waited_for_finishes_after_it_on_another_thread()
+    {
+        // A search asked for with another lookup starts once the running one's result is handed
+        // over, not once that search has finished: off the UI thread the two finish on different
+        // threads, in either order. Here the first search's thread is kept, as it hands its result
+        // to the continuations of its task, until the second search has ended.
+        var chosen = (string?)null;
+        var file = Path.Combine(Path.GetTempPath(), "PortableGit", OperatingSystem.IsWindows() ? "git.exe" : "git");
+        var found = new GitDetection(GitAvailability.Available, file, new GitVersion(2, 47, 1), new NoRunner()) { Source = GitSource.Setting };
+        var probe = new QueuedProbe(found);
+        var access = new GitAccess(probe, () => new GitLookup(chosen, null), null, new RecordingLog(), null, null);
+        var held = probe.Hold();
+        var first = access.DetectAsync(TestContext.Current.CancellationToken);
+        var firstDetection = access.Detection;
+        chosen = file;
+        var second = access.DetectAsync(TestContext.Current.CancellationToken);
+        var changes = 0;
+        access.Changed += (_, _) => Interlocked.Increment(ref changes);
+        _ = firstDetection.ContinueWith(_ => { }, CancellationToken.None, TaskContinuationOptions.None, new HoldingScheduler(second));
+
+        held.SetResult(NotFound);
+
+        Assert.Same(NotFound, await first);
+        Assert.Same(found, await second);
+        Assert.Same(found, await access.Detection);
+        Assert.Same(found, access.Known);
+        Assert.Equal(2, Volatile.Read(ref changes));
+    }
+
+    [Fact]
     public async Task Each_search_is_told_what_the_lookup_gives_when_it_starts()
     {
         var probe = new QueuedProbe(NotFound);
@@ -249,6 +308,26 @@ public class GitAccessTests
         }
 
         public GitGuidance ReadGuidance() => new(GuidancePlatform.Linux, null, null);
+    }
+
+    /// <summary>
+    /// A scheduler for one continuation that keeps the thread which completes the continuation's
+    /// task until <paramref name="until"/> has completed (30 seconds at most): a task hands a
+    /// continuation to its scheduler on the thread that completes it, also when the task's source
+    /// runs its continuations asynchronously.
+    /// </summary>
+    private sealed class HoldingScheduler(Task until) : TaskScheduler
+    {
+        protected override void QueueTask(Task task)
+        {
+            // A wait that times out is seen by the test's own awaits; a throw here would be swallowed.
+            ((IAsyncResult)until).AsyncWaitHandle.WaitOne(TimeSpan.FromSeconds(30));
+            TryExecuteTask(task);
+        }
+
+        protected override bool TryExecuteTaskInline(Task task, bool taskWasPreviouslyQueued) => false;
+
+        protected override IEnumerable<Task> GetScheduledTasks() => [];
     }
 
     /// <summary>A runner that is never run.</summary>

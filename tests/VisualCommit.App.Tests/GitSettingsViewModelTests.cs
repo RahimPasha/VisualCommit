@@ -761,9 +761,17 @@ public class GitSettingsViewModelTests
 
         public string? Variable(string name) => Variables.TryGetValue(name, out var value) ? value : null;
 
+        /// <summary>While set, a global write is recorded at once and ends when this task ends; null ends it at once.</summary>
+        public Task? WriteHold { get; set; }
+
         public Task WriteGlobalAsync(IReadOnlyList<GitConfigWrite> writes, CancellationToken cancellationToken = default)
         {
             GlobalWrites.Add(writes);
+            if (WriteHold is { } hold)
+            {
+                return hold;
+            }
+
             return WriteFailure is { } failure ? Task.FromException(failure) : Task.CompletedTask;
         }
 

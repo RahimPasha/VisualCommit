@@ -11,6 +11,9 @@ namespace VisualCommit.Testing.Headless;
 /// and checks no program; <see cref="EditFailure"/> makes the next start throw, as a program that
 /// cannot start does (12.7). A program start (<see cref="IFileLauncher.StartAsync"/>) is recorded
 /// the same way and starts nothing; <see cref="StartFailure"/> makes the next one throw.
+/// While <see cref="Hold"/> is set, a request to show a file, open an address or start a program
+/// is recorded at once and answers only when that task ends, as the real launcher, which starts
+/// the program off the UI thread, answers late.
 /// </summary>
 public sealed class FakeFileLauncher : IFileLauncher
 {
@@ -18,6 +21,31 @@ public sealed class FakeFileLauncher : IFileLauncher
     private readonly List<FileLaunch> _requests = [];
     private Exception? _editFailure;
     private Exception? _startFailure;
+    private Task? _hold;
+
+    /// <summary>
+    /// While set, <see cref="RevealAsync"/>, <see cref="OpenUrlAsync"/> and <see cref="StartAsync"/>
+    /// record their request at once and answer when this task ends (a start's failure after it);
+    /// null answers at once.
+    /// </summary>
+    public Task? Hold
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _hold;
+            }
+        }
+
+        set
+        {
+            lock (_gate)
+            {
+                _hold = value;
+            }
+        }
+    }
 
     /// <summary>Everything the app asked for, in order.</summary>
     public IReadOnlyList<FileLaunch> Requests
@@ -135,25 +163,49 @@ public sealed class FakeFileLauncher : IFileLauncher
     {
         ArgumentNullException.ThrowIfNull(command);
         Exception? failure;
+        Task? hold;
         lock (_gate)
         {
             _requests.Add(new FileLaunch(FileLaunchKind.Start, command.FileName, command));
             failure = _startFailure;
             _startFailure = null;
+            hold = _hold;
         }
 
-        return failure is null ? Task.CompletedTask : Task.FromException(failure);
+        return After(hold, failure);
     }
 
     private Task Record(FileLaunch request)
     {
         ArgumentNullException.ThrowIfNull(request.FullPath);
+        Task? hold;
         lock (_gate)
         {
             _requests.Add(request);
+            hold = _hold;
         }
 
-        return Task.CompletedTask;
+        return After(hold, null);
+    }
+
+    /// <summary>A request's answer: at once without a hold, else once the hold has ended; <paramref name="failure"/> thrown then.</summary>
+    private static Task After(Task? hold, Exception? failure)
+    {
+        if (hold is null)
+        {
+            return failure is null ? Task.CompletedTask : Task.FromException(failure);
+        }
+
+        return AfterHoldAsync(hold, failure);
+
+        static async Task AfterHoldAsync(Task hold, Exception? failure)
+        {
+            await hold.ConfigureAwait(false);
+            if (failure is not null)
+            {
+                throw failure;
+            }
+        }
     }
 }
 

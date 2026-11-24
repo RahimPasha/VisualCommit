@@ -125,10 +125,28 @@ public class GitProgramViewModelTests
         Assert.Equal("Found on the PATH.", row.NoteText);
         Assert.False(row.ShowsUsePath);
 
-        // Dropping the chosen git in use: it gives way at the next start.
+        // Dropping the chosen git in use: the row still shows it, and says what the next start uses.
         var chosenInUse = Row(Chosen, OnPath with { ExecutablePath = Chosen, Source = GitSource.Setting });
         chosenInUse.UsePathCommand.Execute(null);
-        Assert.Equal("Chosen here. VisualCommit uses it from its next start.", chosenInUse.NoteText);
+        Assert.Equal(Chosen, chosenInUse.PathText);
+        Assert.Equal("Chosen here. VisualCommit uses the Git on the PATH from its next start.", chosenInUse.NoteText);
+    }
+
+    [Fact]
+    public void A_dropped_choice_that_is_the_git_in_use_says_what_the_next_start_uses_also_on_reopening()
+    {
+        var chosenInUse = OnPath with { ExecutablePath = Chosen, Source = GitSource.Setting };
+
+        // Saved without a choice, the session still on the chosen git: the screen reopened.
+        var reopened = Row(null, chosenInUse);
+        Assert.Equal(Chosen, reopened.PathText);
+        Assert.Equal("Chosen here. VisualCommit uses the Git on the PATH from its next start.", reopened.NoteText);
+        Assert.False(reopened.ShowsUsePath);
+
+        // A chosen git in use that does not work: Save looks for git again at once.
+        var tooOld = Row(Chosen, chosenInUse with { Availability = GitAvailability.TooOld, Version = new GitVersion(2, 29, 0) });
+        tooOld.UsePathCommand.Execute(null);
+        Assert.Equal("Chosen here. VisualCommit looks for Git again when you save.", tooOld.NoteText);
     }
 
     [Fact]
@@ -184,6 +202,36 @@ public class GitProgramViewModelTests
         await cancelled.BrowseCommand.ExecuteAsync(null);
         Assert.Null(cancelled.Choice);
         Assert.False(cancelled.ShowsStatus);
+    }
+
+    [Fact]
+    public async Task Browse_stops_a_probe_that_does_not_answer_in_time_and_says_so()
+    {
+        var probing = new TaskCompletionSource<CancellationToken>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var row = new GitProgramViewModel(
+            null,
+            OnPath,
+            async (_, token) =>
+            {
+                probing.TrySetResult(token);
+                await Task.Delay(Timeout.InfiniteTimeSpan, token);
+                throw new InvalidOperationException("The probe ended without its token.");
+            },
+            new FakeFolderPicker().AnswerFile(Chosen),
+            CancellationToken.None,
+            TimeSpan.FromMilliseconds(200));
+
+        var browsing = row.BrowseCommand.ExecuteAsync(null);
+        var token = await probing.Task.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+        Assert.True(token.CanBeCanceled, "Browse's probe was given a token nothing can cancel.");
+        await browsing.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+
+        Assert.Equal("This file did not report its version within 10 seconds, so VisualCommit stopped it.", row.StatusText);
+        Assert.True(row.IsStatusRefusal);
+        Assert.True(token.IsCancellationRequested);
+        Assert.Null(row.Choice);
+        Assert.False(row.IsChanged);
+        Assert.Equal("Found on the PATH.", row.NoteText);
     }
 
     private static GitProgramViewModel Row(string? saved, GitDetection? inUse, FakeFolderPicker? folders = null, Func<string, CancellationToken, Task<GitDetection>>? probe = null) =>

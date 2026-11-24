@@ -23,13 +23,15 @@ public sealed partial class GitProgramViewModel : ObservableObject
     private readonly Func<string, CancellationToken, Task<GitDetection>>? _probe;
     private readonly IFolderPicker _folders;
     private readonly CancellationToken _lifetime;
+    private readonly TimeSpan? _probeLimit;
 
     /// <param name="saved">The git chosen in Settings when the screen opened; null for none.</param>
     /// <param name="inUse">What the session's last search found; null while none has ended.</param>
     /// <param name="probe">What a chosen file would give as the git (<c>GitAccess.ProbeAsync</c>); null: Browse finds no git.</param>
     /// <param name="folders">The file dialog of Browse….</param>
     /// <param name="lifetime">The screen's lifetime, which ends a probe that still runs.</param>
-    public GitProgramViewModel(string? saved, GitDetection? inUse, Func<string, CancellationToken, Task<GitDetection>>? probe, IFolderPicker folders, CancellationToken lifetime)
+    /// <param name="probeLimit">How long Browse's probe may take; null for <see cref="GitSetupViewModel.ChosenProbeLimit"/>. A test's seam.</param>
+    public GitProgramViewModel(string? saved, GitDetection? inUse, Func<string, CancellationToken, Task<GitDetection>>? probe, IFolderPicker folders, CancellationToken lifetime, TimeSpan? probeLimit = null)
     {
         ArgumentNullException.ThrowIfNull(folders);
         _saved = saved;
@@ -37,6 +39,7 @@ public sealed partial class GitProgramViewModel : ObservableObject
         _probe = probe;
         _folders = folders;
         _lifetime = lifetime;
+        _probeLimit = probeLimit;
         Choice = saved;
     }
 
@@ -67,7 +70,11 @@ public sealed partial class GitProgramViewModel : ObservableObject
     /// <summary><c>GitProgramPath</c>: the pending choice, else the git in use, else <c>None found</c>.</summary>
     public string PathText => Choice ?? InUsePath ?? GitSetupTexts.NoneFound;
 
-    /// <summary><c>GitProgramNote</c>: where the shown git came from, then, while the choice differs from the git in use, when it applies.</summary>
+    /// <summary>
+    /// <c>GitProgramNote</c>: where the shown git came from, then, while the choice differs from the
+    /// git in use, when it applies; for a chosen git in use that works, its choice dropped, that the
+    /// next start uses the Git on the PATH.
+    /// </summary>
     public string NoteText
     {
         get
@@ -90,6 +97,12 @@ public sealed partial class GitProgramViewModel : ObservableObject
             {
                 // The gone choice dropped and no other git found: none is in use.
                 note = GitSetupTexts.NoGitFoundNote;
+            }
+            else if (ChoiceInUse is not null && GitWorks)
+            {
+                // The chosen git in use dropped: the row still shows it, so the note says what
+                // the next start uses instead (D423).
+                return GitSetupTexts.SourceNote(_inUse, windows) + GitSetupTexts.NextStartPathSuffix;
             }
             else
             {
@@ -144,7 +157,8 @@ public sealed partial class GitProgramViewModel : ObservableObject
                 file,
                 _probe ?? ((_, _) => Task.FromResult(new GitDetection(GitAvailability.NotFound, null, null, null))),
                 text => StatusText = text,
-                _lifetime);
+                _lifetime,
+                _probeLimit);
         }
         catch (OperationCanceledException) when (_lifetime.IsCancellationRequested)
         {

@@ -59,6 +59,25 @@ public sealed class TextDocumentDialogViewModelTests
     }
 
     [Fact]
+    public async Task Copy_all_stays_enabled_while_a_busy_clipboard_holds_the_copy()
+    {
+        // A disabled button loses the keyboard focus (docs/phase-8a-design.md 8.3.1); the clipboard
+        // answers late while another program holds it open.
+        var held = new TaskCompletionSource();
+        var clipboard = new FakeClipboard { Hold = held.Task };
+        var dialog = new TextDocumentDialogViewModel("MIT License", [Parts()[0]], clipboard, NullAppLog.Instance);
+
+        var copying = dialog.CopyAllCommand.ExecuteAsync(null);
+
+        Assert.False(copying.IsCompleted, "The copy did not wait for the clipboard.");
+        Assert.True(dialog.CopyAllCommand.CanExecute(null), "Copy all is disabled while the clipboard holds the copy.");
+        held.SetResult();
+        await copying;
+        Assert.True(dialog.CopyAllCommand.CanExecute(null));
+        Assert.Equal([Parts()[0].Text], clipboard.Texts);
+    }
+
+    [Fact]
     public async Task A_copy_that_fails_is_a_warning()
     {
         var log = new RecordingLog();

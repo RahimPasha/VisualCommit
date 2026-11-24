@@ -217,6 +217,48 @@ public class GitSetupViewModelTests
         Assert.Equal(["C:/Users/demo/.gitconfig"], lab.Launcher.Revealed);
     }
 
+    public static TheoryData<string> LateAnswers => ["Show the file", "Install the Command Line Tools", "Download", "Other ways to install Git", "the guide's page", "Copy"];
+
+    /// <summary>
+    /// The real launcher shows a file and starts a program off the UI thread, and opens an address
+    /// through the window's launcher; the clipboard can be held by another program. A command that
+    /// waits for them stays enabled while it runs: a disabled button loses the keyboard focus
+    /// (docs/phase-8a-design.md 5.3, 8.3.1).
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(LateAnswers))]
+    public async Task A_button_whose_launch_or_copy_answers_late_stays_enabled_while_it_runs(string button)
+    {
+        var mac = button is "Install the Command Line Tools" or "Other ways to install Git" or "Copy";
+        using var lab = new Lab(guidance: mac ? new GitGuidance(GuidancePlatform.MacOS, null, null) : null);
+        await lab.Screen.ShowAsync(
+            button == "Show the file"
+                ? new GitDetection(GitAvailability.Broken, WindowsGit, null, null) { ErrorText = "fatal: bad config line 1 in file C:/Users/demo/.gitconfig", ExitCode = 128, ConfigFault = new("C:/Users/demo/.gitconfig", 1) }
+                : Missing with { CommandLineToolsMissing = mac },
+            null);
+        var held = new TaskCompletionSource();
+        lab.Launcher.Hold = held.Task;
+        lab.Clipboard.Hold = held.Task;
+        IAsyncRelayCommand command = button switch
+        {
+            "Show the file" => lab.Screen.ShowFileCommand,
+            "Install the Command Line Tools" => lab.Screen.CommandLineToolsCommand,
+            "Download" => lab.Screen.DownloadCommand,
+            "Other ways to install Git" => lab.Screen.MoreLinkCommand,
+            "the guide's page" => lab.Screen.GuideLinkCommand,
+            _ => lab.Screen.CopyCommand,
+        };
+
+        var running = command.ExecuteAsync(null);
+
+        Assert.False(running.IsCompleted, $"{button} did not wait for its answer.");
+        Assert.True(command.CanExecute(null), $"{button} is disabled while its answer is held.");
+        held.SetResult();
+        await running;
+        Assert.True(command.CanExecute(null));
+        Assert.Equal(1, lab.Launcher.Requests.Count + lab.Clipboard.Texts.Count);
+    }
+
     [Fact]
     public async Task Choose_refuses_a_too_old_git_and_leaves_the_settings_then_writes_one_that_works_and_checks_again()
     {
@@ -293,6 +335,61 @@ public class GitSetupViewModelTests
 
         Assert.Null(lab.Settings.Current.GitExecutable);
     }
+
+    [Fact]
+    public async Task Choose_stops_a_probe_that_does_not_answer_in_time_and_says_so_leaving_the_settings()
+    {
+        // A program that does not exit on --version (a program with a window, say): its probe is
+        // stopped at the limit, which stops the program (GitRunner's cancel).
+        var file = Path.Combine(Path.GetTempPath(), "Tools", OperatingSystem.IsWindows() ? "gitk.exe" : "gitk");
+        var probing = new TaskCompletionSource<CancellationToken>(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var lab = new Lab(probe: HangingProbe(probing), probeLimit: TimeSpan.FromMilliseconds(200));
+        await lab.Screen.ShowAsync(Missing, null);
+        lab.Folders.AnswerFile(file);
+
+        var choosing = lab.Screen.ChooseCommand.ExecuteAsync(null);
+        var token = await probing.Task.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+        Assert.True(token.CanBeCanceled, "Choose's probe was given a token nothing can cancel.");
+        await choosing.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+
+        Assert.Equal("This file did not report its version within 10 seconds, so VisualCommit stopped it.", lab.Screen.ErrorText);
+        Assert.True(lab.Screen.ShowsError);
+        Assert.False(lab.Screen.IsChoiceBeingChecked);
+        Assert.True(token.IsCancellationRequested);
+        Assert.True(lab.Screen.ChooseCommand.CanExecute(null));
+        Assert.Null(lab.Settings.Current.GitExecutable);
+        Assert.Equal(0, lab.ChecksAgain);
+        Assert.Equal(10, GitSetupViewModel.ChosenProbeLimit.TotalSeconds);
+    }
+
+    [Fact]
+    public async Task Choose_ends_its_probe_with_the_windows_lifetime_and_says_nothing_more()
+    {
+        using var lifetime = new CancellationTokenSource();
+        var probing = new TaskCompletionSource<CancellationToken>(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var lab = new Lab(probe: HangingProbe(probing), lifetime: lifetime.Token);
+        await lab.Screen.ShowAsync(Missing, null);
+        lab.Folders.AnswerFile(Path.Combine(Path.GetTempPath(), "Tools", OperatingSystem.IsWindows() ? "gitk.exe" : "gitk"));
+
+        var choosing = lab.Screen.ChooseCommand.ExecuteAsync(null);
+        var token = await probing.Task.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+        Assert.True(token.CanBeCanceled, "Choose's probe was given a token nothing can cancel.");
+        await lifetime.CancelAsync();
+        await choosing.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+
+        Assert.True(token.IsCancellationRequested);
+        Assert.Null(lab.Settings.Current.GitExecutable);
+        Assert.Equal(0, lab.ChecksAgain);
+    }
+
+    /// <summary>A probe that tells <paramref name="probing"/> its token and answers only by ending cancelled.</summary>
+    private static Func<string, CancellationToken, Task<GitDetection>> HangingProbe(TaskCompletionSource<CancellationToken> probing) =>
+        async (_, token) =>
+        {
+            probing.TrySetResult(token);
+            await Task.Delay(Timeout.InfiniteTimeSpan, token);
+            throw new InvalidOperationException("The probe ended without its token.");
+        };
 
     [Fact]
     public async Task Use_the_git_on_the_path_removes_the_setting_and_checks_again()
@@ -383,7 +480,9 @@ public class GitSetupViewModelTests
             GitGuidance? guidance = null,
             Func<Task<GitGuidance>>? read = null,
             Func<string, CancellationToken, Task<GitDetection>>? probe = null,
-            Func<Task>? checkAgain = null)
+            Func<Task>? checkAgain = null,
+            TimeSpan? probeLimit = null,
+            CancellationToken lifetime = default)
         {
             var fixedGuidance = guidance ?? new GitGuidance(GuidancePlatform.Windows, Winget, null);
             var command = new AsyncRelayCommand(() =>
@@ -408,7 +507,11 @@ public class GitSetupViewModelTests
                 Dialogs,
                 Launcher,
                 Clipboard,
-                Log));
+                Log)
+            {
+                ProbeLimit = probeLimit,
+                Lifetime = () => lifetime,
+            });
         }
 
         public GitSetupViewModel Screen { get; }

@@ -173,11 +173,15 @@ public sealed class ProbeHold
     /// <summary>Completes once the held lookup has come.</summary>
     public Task Started => _started.Task;
 
+    /// <summary>The token the held lookup was given (once <see cref="Started"/> has completed): its cancel ends the hold.</summary>
+    public CancellationToken Token { get; private set; }
+
     /// <summary>Lets the held lookup answer.</summary>
     public void Release() => _released.TrySetResult();
 
     internal Task WaitAsync(CancellationToken cancellationToken)
     {
+        Token = cancellationToken;
         _started.TrySetResult();
         return _released.Task.WaitAsync(cancellationToken);
     }

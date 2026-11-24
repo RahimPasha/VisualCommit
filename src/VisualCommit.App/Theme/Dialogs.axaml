@@ -12,13 +12,15 @@
          The keyboard focus (:focus-visible, as the theme's focus frame shows it) is a frame round
          the ring and the content, in the colours of the theme's frame (2 px, and 1 px inside it),
          drawn outside the button's bounds: the theme's own frame lies on the bounds, which are as
-         high as the first line, and cut through the ring (phase 3's gate, 29c). FocusFrame takes
-         no room: its negative margin gives back what its borders and padding take, so the rows
-         and the dialogs keep their sizes, and the frame lies in the space between the rows (at
-         least 8: StackPanel spacing). It reaches 7 left and right of the button, 4 above it and 6
-         below (the ring sits 2 below the top), so the button does not clip and neither may what
-         holds it: an ItemsControl clips by default and needs ClipToBounds="False".
-         Without the focus its borders have no brush, so they draw nothing and take no clicks. -->
+         high as the first line, and cut through the ring (phase 3's gate, 29c). FocusFrame is laid
+         over the ring and the content, in the cell they fill, and takes no room: its negative
+         margin reaches 7 left and right of them, 4 above and 6 below (the ring sits 2 below the
+         top), so the rows and the dialogs keep their sizes and the frame lies in the space between
+         the rows (at least 8: StackPanel spacing). The button does not clip, and neither may what
+         holds it: an ItemsControl clips by default and needs ClipToBounds="False". The frame is
+         only drawn, never hit (IsHitTestVisible False), as VcLinkButton's: a pointer on it
+         reaches what lies under it, so a hover or a click just outside the button is none on it,
+         focused or not. Without the focus its borders have no brush and draw nothing. -->
     <ControlTheme x:Key="VcRadioButton" TargetType="RadioButton">
       <Setter Property="Foreground" Value="{DynamicResource VcTextPrimaryBrush}" />
       <Setter Property="Background" Value="Transparent" />
@@ -29,32 +31,31 @@
       <Setter Property="Template">
         <ControlTemplate>
           <Panel Background="{TemplateBinding Background}">
-            <Border Name="FocusFrame"
-                    HorizontalAlignment="Left"
-                    Margin="-7,-4,-7,-6"
-                    BorderThickness="2">
-              <Border Name="FocusFrameInner"
-                      BorderThickness="1"
-                      Padding="4,1,4,3">
-                <Grid ColumnDefinitions="Auto,*">
-                  <Border Name="Ring"
-                          Width="14" Height="14"
-                          Margin="0,2,0,0"
-                          CornerRadius="7"
-                          BorderThickness="1"
-                          BorderBrush="{DynamicResource VcTextSecondaryBrush}"
-                          Background="{DynamicResource VcControlBackgroundBrush}"
-                          VerticalAlignment="Top">
-                    <Ellipse Name="Dot" Width="6" Height="6" Fill="{DynamicResource VcAccentTextBrush}" IsVisible="False" />
-                  </Border>
-                  <ContentPresenter Grid.Column="1"
-                                    Margin="8,0,0,0"
-                                    Content="{TemplateBinding Content}"
-                                    ContentTemplate="{TemplateBinding ContentTemplate}"
-                                    VerticalAlignment="Top" />
-                </Grid>
+            <Grid HorizontalAlignment="Left">
+              <Grid ColumnDefinitions="Auto,*">
+                <Border Name="Ring"
+                        Width="14" Height="14"
+                        Margin="0,2,0,0"
+                        CornerRadius="7"
+                        BorderThickness="1"
+                        BorderBrush="{DynamicResource VcTextSecondaryBrush}"
+                        Background="{DynamicResource VcControlBackgroundBrush}"
+                        VerticalAlignment="Top">
+                  <Ellipse Name="Dot" Width="6" Height="6" Fill="{DynamicResource VcAccentTextBrush}" IsVisible="False" />
+                </Border>
+                <ContentPresenter Grid.Column="1"
+                                  Margin="8,0,0,0"
+                                  Content="{TemplateBinding Content}"
+                                  ContentTemplate="{TemplateBinding ContentTemplate}"
+                                  VerticalAlignment="Top" />
+              </Grid>
+              <Border Name="FocusFrame"
+                      Margin="-7,-4,-7,-6"
+                      BorderThickness="2"
+                      IsHitTestVisible="False">
+                <Border Name="FocusFrameInner" BorderThickness="1" />
               </Border>
-            </Border>
+            </Grid>
           </Panel>
         </ControlTemplate>
       </Setter>
