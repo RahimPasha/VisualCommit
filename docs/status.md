@@ -390,6 +390,18 @@ Phase 8a's runs on `phase/8a-release-readiness`, the newest first. CI has six jo
 `e04762b`: the sixth, "ubuntu 22.04 container, git 2.34 (the floor)", did not fail the run until
 `bba59c7`, which made it required after its first green run.
 
+- [45452648787](https://github.com/RahimPasha/VisualCommit/actions/runs/45452648787), for `4e01e1f`
+  (step 19's second round, `950ca7d`, `39c632f` and `db7fbce`, with the docs of the first round):
+  **success in all six jobs.** `windows-latest`: 8,752 tests, 8,745 passed, 7 skipped, Test step 44
+  min 12 s of 70. `macos-latest`: 8,749 tests, 8,746 passed, 3 skipped, Test step 41 min 18 s of 70.
+  `ubuntu-latest`: 8,749 tests, 8,745 passed, 4 skipped, Test step 7 min 52 s. The floor's job (git
+  2.34.1): 8,749 tests with 4 skipped, Test step 6 min 34 s; the two containers 8,749 tests with 4
+  skipped each, Test steps 7 min 7 s with Microsoft's installer and 8 min 20 s with Ubuntu's
+  packages, and the Secret Service's test passed in both. The Windows and macOS keychain steps
+  passed. 50 tests more than the run before, the second round's; among them the 30 scaled cases of
+  `LinkFocusFrameTests`, which had run on Windows alone, passed on macOS and Linux at their first
+  run there (ruling 101). **The guide's workflow** on the same push,
+  [45452648478](https://github.com/RahimPasha/VisualCommit/actions/runs/45452648478): **success**.
 - [45432651867](https://github.com/RahimPasha/VisualCommit/actions/runs/45432651867), for `e3002ac`
   (the guard's modes test corrected after the run below): **success in all six jobs.**
   `windows-latest`: 8,702 tests, 8,695 passed, 7 skipped, Test step 35 min 7 s of 70.
