@@ -2,8 +2,11 @@ using System.ComponentModel;
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
+using Avalonia.Controls.Presenters;
+using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using Avalonia.Threading;
@@ -21,9 +24,18 @@ namespace VisualCommit.App.Views.Dialogs;
 /// wrong one after a refused Save, Other…'s program box). The Git program row's Browse…, disabled
 /// while its file dialog is open and its file is probed, takes the focus back once its run has
 /// ended with the focus lost, as by Tab when it had the keyboard outline as it was pressed.
+/// While the shown section is at its top, its scroller lets what is drawn just above its first row
+/// show, so that a radio button there shows its whole keyboard frame.
 /// </summary>
 public partial class SettingsDialogView : DialogView
 {
+    /// <summary>
+    /// How far above the section's top what its first row draws may show while the section is at its
+    /// top: a radio button's keyboard frame reaches 4 above the button (<c>VcRadioButton</c>), and
+    /// General's Theme options are its first row.
+    /// </summary>
+    private const double SectionTopReach = 4;
+
     /// <summary>About's image: the app's mark at 96 pixels, drawn at 48 × 48 so that it stays sharp at 200 %; decoded once.</summary>
     private static readonly Lazy<Bitmap> AboutImage = new(() =>
     {
@@ -33,6 +45,9 @@ public partial class SettingsDialogView : DialogView
 
     private SettingsDialogViewModel? _model;
 
+    /// <summary>The section scroller's presenter, once its template is applied.</summary>
+    private ScrollContentPresenter? _sectionPresenter;
+
     public SettingsDialogView()
     {
         InitializeComponent();
@@ -40,6 +55,60 @@ public partial class SettingsDialogView : DialogView
         DataContextChanged += (_, _) => Follow(DataContext as SettingsDialogViewModel);
         SettingsNav.AddHandler(KeyDownEvent, OnNavKeyDown, RoutingStrategies.Tunnel);
         GitProgramBrowseButton.Click += OnGitProgramBrowseClick;
+        SectionScroller.TemplateApplied += OnSectionScrollerTemplateApplied;
+        SectionScroller.PropertyChanged += OnSectionClipChanged;
+    }
+
+    /// <summary>
+    /// The section scroller and its presenter clip to their bounds, which cut off the keyboard frame
+    /// of what stands at the section's top. While the content is at its top (offset 0) both clip to
+    /// their bounds grown by <see cref="SectionTopReach"/> upward instead, where nothing but such a
+    /// frame is drawn (the 14 above the section are the card's); scrolled, they clip to their bounds
+    /// as before, so that no row scrolled out of view shows there. Their bottoms and sides stay where
+    /// their bounds end.
+    /// </summary>
+    private void OnSectionScrollerTemplateApplied(object? sender, TemplateAppliedEventArgs e)
+    {
+        _sectionPresenter = e.NameScope.Find<ScrollContentPresenter>("PART_ContentPresenter");
+        if (_sectionPresenter is { } presenter)
+        {
+            presenter.PropertyChanged += OnSectionClipChanged;
+        }
+
+        ClipSection();
+    }
+
+    private void OnSectionClipChanged(object? sender, AvaloniaPropertyChangedEventArgs change)
+    {
+        var scroller = ReferenceEquals(sender, SectionScroller);
+        var presenter = sender is not null && ReferenceEquals(sender, _sectionPresenter);
+        if ((scroller || presenter) && (change.Property == BoundsProperty || (presenter && change.Property == ScrollContentPresenter.OffsetProperty)))
+        {
+            ClipSection();
+        }
+    }
+
+    private void ClipSection()
+    {
+        if (_sectionPresenter is not { } presenter)
+        {
+            return;
+        }
+
+        var atTop = presenter.Offset.Y <= 0;
+        foreach (var clipping in new Control[] { SectionScroller, presenter })
+        {
+            if (atTop)
+            {
+                clipping.ClipToBounds = false;
+                clipping.Clip = new RectangleGeometry(new Rect(0, -SectionTopReach, clipping.Bounds.Width, clipping.Bounds.Height + SectionTopReach));
+            }
+            else
+            {
+                clipping.ClearValue(ClipToBoundsProperty);
+                clipping.ClearValue(ClipProperty);
+            }
+        }
     }
 
     /// <summary>Runs before Browse…'s command: the focus back on the button once its run has ended with the focus lost.</summary>

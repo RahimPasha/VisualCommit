@@ -156,6 +156,57 @@ public class SettingsDialogViewTests
         }
     }
 
+    /// <summary>
+    /// The section's scroller lets what its first row draws above it show only while the section is
+    /// at its top (a Theme option's keyboard frame, <see cref="RadioFocusFrameTests"/>): with
+    /// Keyboard shortcuts scrolled by 8, its intro's middle rows lie in the 4 rows above the scroller,
+    /// which still show the card's background alone, as at the top, before and after; a point there
+    /// hits the card, never the section's text.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task A_scrolled_section_shows_none_of_its_rows_above_its_top()
+    {
+        using var data = new TempDirectory("data");
+        using var app = ShellDriver.Start(data.Path);
+        await app.WaitUntilReadyAsync();
+        await app.OpenSettingsAsync();
+        app.ChooseSection(SettingsSection.KeyboardShortcuts);
+        app.MoveToNeutral();
+        var scroller = Find<ScrollViewer>(app.Window, "SectionScroller");
+        var intro = app.FindByAutomationId(app.TopDialogView!, "ShortcutsIntro");
+        var background = Brush(app, "VcPanelBackgroundBrush");
+        var section = app.BoundsOf(scroller);
+        var (left, right, top) = ((int)Math.Ceiling(section.Left), (int)Math.Floor(section.Right), (int)Math.Round(section.Top));
+        Assert.True(scroller.Extent.Height > scroller.Viewport.Height + 8, "Keyboard shortcuts does not scroll.");
+
+        foreach (var offset in new[] { 0.0, 8.0, 0.0 })
+        {
+            scroller.Offset = new Vector(0, offset);
+            app.Settle();
+            Assert.Equal(offset, scroller.Offset.Y);
+            var introAt = app.BoundsOf(intro);
+            Assert.Equal(section.Top - offset, introAt.Top);
+
+            var picture = app.Capture();
+            var shown = new List<string>();
+            for (var y = top - 4; y < top; y++)
+            {
+                for (var x = left; x < right; x++)
+                {
+                    if (picture.PixelAt(x, y) != background)
+                    {
+                        shown.Add($"({x}, {y}) {picture.PixelAt(x, y)}");
+                    }
+                }
+
+                var hit = app.Window.InputHitTest(new Point(introAt.Left + 10.5, y + 0.5)) as Visual;
+                Assert.False(hit is not null && hit.GetSelfAndVisualAncestors().Contains(intro), $"At the offset {offset} a point {top - y} above the section hits its intro.");
+            }
+
+            Assert.True(shown.Count == 0, $"At the offset {offset} the 4 rows above the section show {shown.Count} pixels that are not the card's background, the first {string.Join("; ", shown.Take(3))}.");
+        }
+    }
+
     [AvaloniaFact]
     public async Task The_first_focus_is_the_section_button_up_and_down_move_and_enter_shows_without_saving()
     {
