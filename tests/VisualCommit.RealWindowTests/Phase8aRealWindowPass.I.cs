@@ -1,16 +1,18 @@
 // Part I's three launches of the 8a pass (docs/test-reports/phase-8a.md, I1, I2 and "The real window (part
-// I)"; docs/phase-8a-design.md 1.11, 4.3, 12.3.4 launches 4 to 6, 12.3.5; D421, D422, D443, D448): a second
-// start on the same data folder hands over to the first and exits 0; the notice a start shows when the
-// folder's lock is held and no instance answers, its "Try again" left unanswered and its "Close" ending
+// I)"; docs/phase-8a-design.md 1.11, 4.3, 12.3.4 launches 4 to 6, 12.3.5; D421, D422, D443, D448, D459): a
+// second start on the same data folder hands over to the first and exits 0; the notice a start shows when
+// the folder's lock is held and no instance answers, its "Try again" left unanswered and its "Close" ending
 // the process with 2; and "Try again" starting the app in the same process once the lock is free. The
-// notice is never sized; its captures are compared with their twins with the folder line masked. No
-// launch writes anything into its data folder before the start but launch 4's session.
+// notice is never sized; its captures are taken once it is in front with Try again focused, compared with
+// their twins with the folder line masked, and its words are read by name beside them (D459). No launch
+// writes anything into its data folder before the start but launch 4's session.
 using System.Diagnostics;
 using System.Globalization;
 using System.Text.Json;
 using FlaUI.Core.AutomationElements;
 using FlaUI.Core.WindowsAPI;
 using VisualCommit.Core;
+using VisualCommit.Core.Git;
 using Xunit;
 using static VisualCommit.VisualTests.Phase8a.Phase8aExpectations;
 
@@ -100,20 +102,26 @@ public partial class Phase8aRealWindowPass
     }
 
     /// <summary>
-    /// Launch 5 (design 12.3.4; the twin of part I's method 1, <c>Check_I2_notice_dark_try_unanswered</c>): a
-    /// new data folder D whose <c>instance.lock</c> the test holds, with no <c>instance.json</c>, no session
-    /// and no settings; the app started on D, not sized.
+    /// Launch 5 (design 12.3.4 as D459 amends it; the twin of part I's method 1,
+    /// <c>Check_I2_notice_dark_try_unanswered</c>): a new data folder D whose <c>instance.lock</c> the test
+    /// holds, with no <c>instance.json</c>, no session and no settings; the app started on D, not sized.
     /// <list type="number">
-    /// <item>The process's main window is the notice within 15 s; <c>InstanceNoticeFolder</c>'s name D's path;
-    /// a wait of at most 5 s, read only, for the notice in front with Try again focused, as the twin waits
-    /// for the focus before its picture, its result noted; <c>i2a-notice-dark</c>, the folder line masked.</item>
-    /// <item>The notice the foreground window with <c>Try again</c> focused, else one real click on its title
-    /// bar and a wait of 5 s, else the method fails before any key.</item>
+    /// <item>The process's main window is the notice within 15 s; <c>InstanceNoticeFolder</c>'s name D's
+    /// path.</item>
+    /// <item>Before any capture and any key: the notice the foreground window with <c>Try again</c> UI
+    /// Automation's focused element, as its twin shows it, else one real click on its title bar and a wait
+    /// of at most 5 s, else the method fails here with the guard's message.</item>
+    /// <item>The notice's words by name: its heading, its body, its sentence and its two buttons read through
+    /// UI Automation against the twin's texts (a text UI Automation does not give is noted as not readable,
+    /// not failed); <c>i2a-notice-dark</c>, the folder line masked; then the words asserted.</item>
     /// <item>A real Enter: while <c>Try again</c> reads <c>Trying…</c>, disabled, <c>i2b-notice-trying</c>;
-    /// within 10 s of the Enter <c>It still did not answer.</c>; <c>i2c-notice-no-answer</c>.</item>
+    /// within 10 s of the Enter <c>It still did not answer.</c>, read by name and noted;
+    /// <c>i2c-notice-no-answer</c>.</item>
     /// <item>A real click on <c>Close</c>: exit code 2 within 5 s; D holds <c>harness</c>,
     /// <c>instance.lock</c> and <c>logs</c> alone; the log's Warning that no instance.json answered.</item>
     /// </list>
+    /// Each picture is compared masked (<c>CompareMasked</c>): its height within 3 px of the twin's and at
+    /// most 5 % of its pixels differing (D459).
     /// </summary>
     [Fact]
     public void Check_I2_notice_and_exit_code_2()
@@ -125,14 +133,21 @@ public partial class Phase8aRealWindowPass
         using var held = HoldInstanceLock(paths);
         using var app = LaunchNotice(data);
 
-        // i2a as its twin takes it, once Try again has the keyboard focus (the notice posts it as it
-        // loads): read only, at most the guard's 5 s, so that when the notice is not in front the guard
-        // below still makes its one click. Its result is noted, and i2a is taken either way.
-        NoteNoticeSettled(app);
-        NoticePicture(app, I.I2aNoticeDark);
+        // Before i2a and any key (D459): the notice in front with Try again focused, as its twin shows it;
+        // else one click on its title bar and a wait of 5 s; else the method fails here.
+        EnsureForegroundBeforeFirstKey(app, () => NoticeReady(app), NoticeReadyWhat, I.NotForegroundMessage, $"before {I.I2aNoticeDark} and the first key");
 
-        // Before any key: the notice in front with Try again focused.
-        EnsureForegroundBeforeFirstKey(app, () => NoticeReady(app), NoticeReadyWhat, I.NotForegroundMessage);
+        // The notice's words by name, as its twin asserts them (D459); i2a; then the words asserted.
+        var words = ReadNoticeWords(
+            app,
+            I.I2aNoticeDark,
+            (I.HeadingId, I.Heading),
+            (I.BodyId, I.Body),
+            (I.IfNoWindowId, I.IfNoWindow(GuidancePlatform.Windows)),
+            (I.CloseId, I.Close),
+            (I.TryAgainId, I.TryAgain));
+        NoticePicture(app, I.I2aNoticeDark);
+        Assert.True(words.Count == 0, string.Join('\n', words));
 
         // A real Enter, as the twin presses it: Trying…, disabled; i2b while it lasts.
         KeysOn(app, new FocusTarget(I.TryAgainId, I.TryAgain), VirtualKeyShort.RETURN);
@@ -153,7 +168,8 @@ public partial class Phase8aRealWindowPass
             CompareMasked(app, trying, I.I2bNoticeTrying);
         }
 
-        // Within 10 s of the Enter: the status; then Try again back, enabled and focused; i2c.
+        // Within 10 s of the Enter: the status, waited for by its name; then Try again back, enabled and
+        // focused; the status's words noted as i2a's are (D459); i2c.
         var left = I.StatusShowsWithin - sinceEnter.Elapsed;
         app.WaitForText(I.StatusId, I.StillNoAnswer, left > TimeSpan.Zero ? left : TimeSpan.Zero);
         Note(string.Create(CultureInfo.InvariantCulture, $"\"{I.StillNoAnswer}\" after {sinceEnter.Elapsed.TotalSeconds:0.0} s"));
@@ -161,7 +177,9 @@ public partial class Phase8aRealWindowPass
             () => app.Find(I.TryAgainId) is var button && button.Name == I.TryAgain && button.IsEnabled && app.FocusedId() == I.TryAgainId,
             $"{I.TryAgainId} to read \"{I.TryAgain}\" again, enabled and UI Automation's focused element",
             StepTimeout);
+        var status = ReadNoticeWords(app, I.I2cNoticeNoAnswer, (I.StatusId, I.StillNoAnswer));
         NoticePicture(app, I.I2cNoticeNoAnswer);
+        Assert.True(status.Count == 0, string.Join('\n', status));
 
         // A real click on Close: exit code 2; the data folder as the notice leaves it.
         Press(app, app.Find(I.CloseId));
@@ -236,23 +254,35 @@ public partial class Phase8aRealWindowPass
     private static bool NoticeReady(RealApp app) => app.ForegroundIsThis && app.FocusedId() == I.TryAgainId;
 
     /// <summary>
-    /// Before i2a, read only: waits at most <see cref="Phase8aExpectations.I.ForegroundAgainWithin"/> for
-    /// <see cref="NoticeReady"/>, as the twin waits for Try again's focus before its picture, and notes
-    /// whether it came. Nothing is clicked or sent here: when it does not come, the picture is taken
-    /// without it and the guard before the first key makes its one click.
+    /// The notice's words held by name before <paramref name="picture"/> (D459), since its picture's share is
+    /// wider than a main window's: each of <paramref name="words"/>' elements, the one on screen with that
+    /// automation id, read through UI Automation (its name: a text's text, a button's label) and compared with
+    /// the twin's text, as <c>Phase8aChecksI</c> asserts it. Each is noted in run.txt as held, not held or not
+    /// readable. A text UI Automation does not give (no such element on screen, a read that fails, an empty
+    /// name) is noted as not readable and is no problem; one that reads otherwise is. Returns the problems, for
+    /// the caller to assert after the picture's comparison, so that run.txt holds both.
     /// </summary>
-    private void NoteNoticeSettled(RealApp app)
+    private List<string> ReadNoticeWords(RealApp app, string picture, params (string Id, string Text)[] words)
     {
-        var clock = Stopwatch.StartNew();
-        try
+        List<string> problems = [];
+        foreach (var (id, text) in words)
         {
-            app.WaitFor(() => NoticeReady(app), NoticeReadyWhat, I.ForegroundAgainWithin);
-            Note(string.Create(CultureInfo.InvariantCulture, $"before {I.I2aNoticeDark}: {NoticeReadyWhat} after {clock.Elapsed.TotalSeconds:0.0} s"));
+            var name = RealApp.ReadOr<string?>(() => app.ShownElements(id) is [var element] ? element.Properties.Name.ValueOrDefault : null, null);
+            if (string.IsNullOrEmpty(name))
+            {
+                Note($"before {picture}: {id} not readable through UI Automation (the twin's \"{text}\"): noted, not failed (D459)");
+                continue;
+            }
+
+            var held = string.Equals(name, text, StringComparison.Ordinal);
+            Note($"before {picture}: {id} reads \"{name}\", the twin's \"{text}\": {(held ? "held" : "not held")}");
+            if (!held)
+            {
+                problems.Add($"{id} reads \"{name}\" before {picture}, not its twin's \"{text}\".");
+            }
         }
-        catch (TimeoutException)
-        {
-            Note(string.Create(CultureInfo.InvariantCulture, $"before {I.I2aNoticeDark}: not {NoticeReadyWhat} within {I.ForegroundAgainWithin.TotalSeconds:0} s (the foreground window {app.ForegroundIsThis}, the focus on {app.FocusedId() ?? "nothing"}); {I.I2aNoticeDark} taken as it is, the guard to follow"));
-        }
+
+        return problems;
     }
 
     /// <summary>

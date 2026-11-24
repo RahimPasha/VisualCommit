@@ -140,23 +140,24 @@ public partial class Phase8aRealWindowPass
     }
 
     /// <summary>
-    /// The guard before a launch's first key (design 12.3.3, 12.3.4 launches 3, 5 and 6, 12.3.5): when
+    /// The guard before a launch's first key (design 12.3.3, 12.3.4 launches 3, 5 and 6, 12.3.5), and in
+    /// launch 5 before its first capture too (D459): when
     /// <paramref name="ready"/> does not hold, one real click on the window's title bar, away from its left
     /// end and its caption buttons (<see cref="RealApp.ClickTitleBar"/>), then a wait of at most 5 s until
     /// it holds, else the method fails with <paramref name="failure"/> before any key. When another window
     /// lies over the point the click would land on, nothing is clicked and the method fails with
-    /// <paramref name="failure"/> and that window's words. run.txt says whether the click was needed.
-    /// Returns it.
+    /// <paramref name="failure"/> and that window's words. run.txt says whether the click was needed, each line
+    /// starting with <paramref name="when"/>. Returns it.
     /// </summary>
-    private bool EnsureForegroundBeforeFirstKey(RealApp app, Func<bool> ready, string what, string failure)
+    private bool EnsureForegroundBeforeFirstKey(RealApp app, Func<bool> ready, string what, string failure, string when = "before the first key")
     {
         if (ready())
         {
-            Note($"before the first key: {what}, with no click");
+            Note($"{when}: {what}, with no click");
             return false;
         }
 
-        Note($"before the first key: not {what}; one real click on the title bar");
+        Note($"{when}: not {what}; one real click on the title bar");
         try
         {
             app.ClickTitleBar();
@@ -177,7 +178,7 @@ public partial class Phase8aRealWindowPass
             throw new XunitException(failure);
         }
 
-        Note($"before the first key: {what} after the click on the title bar");
+        Note($"{when}: {what} after the click on the title bar");
         return true;
     }
 
