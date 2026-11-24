@@ -22,13 +22,13 @@ namespace VisualCommit.RealWindowTests;
 
 public partial class Phase8aRealWindowPass
 {
-    /// <summary>Launch 3's failure before its first key when its window does not become the foreground window (design 12.3.4 launch 3; 12.3.5's second ruling).</summary>
+    /// <summary>Launch 3's failure before its first key when its window does not become the foreground window (design 12.3.4 launch 3, 12.3.5).</summary>
     private const string MainNotForegroundMessage = "The app's window is not the foreground window, even after a click on its title bar: a real Ctrl+Shift+P would reach another window.";
 
     /// <summary>Launch 3's failure when the pass's Release build carries no commit (design 12.3.4 launch 3; the report's open point 65); {0} the product version, {1} what About shows.</summary>
-    private const string NoCommitMessage = "The built VisualCommit.dll's ProductVersion is \"{0}\", which names no commit, so About shows \"{1}\" without the short commit that ruling 59 asks for: the lead rules (design 12.3.4 launch 3).";
+    private const string NoCommitMessage = "The built VisualCommit.dll's ProductVersion is \"{0}\", which names no commit, so About shows \"{1}\" without the short commit (design 1.6): the lead rules (design 12.3.4 launch 3).";
 
-    /// <summary>A spot of the left panel clear of every text and control at 1100×700 on the welcome page, where phase 0's check 8 reads the panel's colour: B2's wait for the light theme drawn.</summary>
+    /// <summary>A spot of the left panel clear of every text and control at 1100×700 on the welcome page, where <c>Phase0RealWindowPass</c> reads the panel's colour: B2's wait for the light theme drawn.</summary>
     private static readonly PointF LeftPanelClear = new(130, 700 - 66);
 
     /// <summary>
@@ -126,8 +126,8 @@ public partial class Phase8aRealWindowPass
 
     /// <summary>
     /// Waits until the empty tab's welcome page shows: the status bar names the git found (the start's
-    /// work has ended, phase 6's wait) and the welcome page's <c>OpenRepoButton</c> is shown, each within
-    /// <see cref="LoadTimeout"/>.
+    /// work has ended, <see cref="RealApp.WaitForGitFound"/>) and the welcome page's <c>OpenRepoButton</c>
+    /// is shown, each within <see cref="LoadTimeout"/>.
     /// </summary>
     private static void WaitForWelcome(RealApp app)
     {
@@ -136,11 +136,11 @@ public partial class Phase8aRealWindowPass
     }
 
     /// <summary>
-    /// The guard before a launch's first key (design 12.3.3, 12.3.4 launches 3, 5 and 6; 12.3.5's second
-    /// ruling): when <paramref name="ready"/> does not hold, one real click on the window's title bar, away
-    /// from its left end and its caption buttons (<see cref="RealApp.ClickTitleBar"/>), then a wait of at
-    /// most 5 s until it holds, else the method fails with <paramref name="failure"/> before any key.
-    /// run.txt says whether the click was needed. Returns it.
+    /// The guard before a launch's first key (design 12.3.3, 12.3.4 launches 3, 5 and 6, 12.3.5): when
+    /// <paramref name="ready"/> does not hold, one real click on the window's title bar, away from its left
+    /// end and its caption buttons (<see cref="RealApp.ClickTitleBar"/>), then a wait of at most 5 s until
+    /// it holds, else the method fails with <paramref name="failure"/> before any key. run.txt says whether
+    /// the click was needed. Returns it.
     /// </summary>
     private bool EnsureForegroundBeforeFirstKey(RealApp app, Func<bool> ready, string what, string failure)
     {
@@ -169,7 +169,7 @@ public partial class Phase8aRealWindowPass
     /// <summary>
     /// Waits until the keyboard focus is in the text <paramref name="textId"/>, an AvaloniaEdit editor
     /// (<c>TextDocumentText</c>, <c>DiffText</c>, <c>BlameText</c>), whose inner <c>TextArea</c> takes the
-    /// focus and has no automation id of its own (the lead, 2026-11-21): UI Automation's focused element is
+    /// focus and has no automation id of its own (design 12.3.4 launch 3): UI Automation's focused element is
     /// the text itself, or lies inside its bounds and is no button. Notes in run.txt which of the two held
     /// and what the focused element was; returns that note. Part K's text waits use it too.
     /// </summary>
@@ -390,7 +390,7 @@ public partial class Phase8aRealWindowPass
     /// B2's wait for the title bar (the report's open point 50), after the light theme is drawn in the
     /// client area: until the title bar's middle, in a capture of the window with its frame, is no longer
     /// <paramref name="dark"/>, the colour B1 (c) read there, at most <see cref="StepTimeout"/>. The title
-    /// bar's colour is Windows' and only inspected (as phase 0's check 5 found it turning light), so a
+    /// bar's colour is Windows' and only inspected (as <c>Phase0RealWindowPass</c>'s framed captures show it turning light), so a
     /// title bar that stays as it was is noted in run.txt and B2's pictures are taken all the same.
     /// </summary>
     private void WaitForTitleBarRedrawn(RealApp app, Color dark)
@@ -503,7 +503,7 @@ public partial class Phase8aRealWindowPass
     }
 
     /// <summary>
-    /// <c>AboutVersion</c>'s automation name against the built app (ruling 59; the report's open point 65):
+    /// <c>AboutVersion</c>'s automation name against the built app (design 1.6, 12.3.4 launch 3; the report's open point 65):
     /// <see cref="RealApp.BuiltProductVersion"/> and the name in run.txt; a build that names no commit
     /// fails saying so; then the name equals <see cref="RealApp.BuiltVersionDisplay"/> and ends with a space
     /// and seven hexadecimal digits in brackets.
@@ -529,7 +529,7 @@ public partial class Phase8aRealWindowPass
     /// A1's second capture (the report's open point 64): where a 1920×1080 client area fits the screen, the
     /// window sized so, a wait until <c>SettingsNavAbout</c> lies at A3's place, <c>a3a-about-1920</c>
     /// compared with A3's picture, then the window sized 1100×700 again and a wait until the button lies at
-    /// A1's place; otherwise run.txt's line in phase 0's form.
+    /// A1's place; otherwise run.txt's line in <c>Phase0RealWindowPass</c>'s form.
     /// </summary>
     private void AboutAtFullSize(RealApp app)
     {

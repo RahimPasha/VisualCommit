@@ -247,8 +247,8 @@ public partial class Phase8aRealWindowPass
     /// Starts the app on <paramref name="data"/>, whose lock the test holds, with no session and not sized
     /// (design 12.3.4 launch 5): the process's main window must be the notice (<c>InstanceNotice</c>), found
     /// within <see cref="Phase8aExpectations.I.NoticeShowsWithin"/>, and <c>InstanceNoticeFolder</c>'s
-    /// automation name D's full path. run.txt gets the time and the notice's size. Disposes the app when that
-    /// fails.
+    /// automation name D's full path. run.txt gets the time, the notice's size and, once in the run, the
+    /// display. Disposes the app when that fails.
     /// </summary>
     private RealApp LaunchNotice(string data)
     {
@@ -257,6 +257,14 @@ public partial class Phase8aRealWindowPass
         try
         {
             var took = clock.Elapsed;
+
+            // The display, once, as Sized notes it, so that a launch run alone has it in run.txt too.
+            if (!fixture.DisplayNoted)
+            {
+                Run.NoteDisplay(app);
+                fixture.DisplayNoted = true;
+            }
+
             var id = app.Window.AutomationId;
             Note(string.Create(CultureInfo.InvariantCulture, $"the process's main window \"{id}\" after {took.TotalSeconds:0.0} s, its client area {app.ClientSize.Width:0.#}x{app.ClientSize.Height:0.#} logical pixels at {app.Scaling:0.##}"));
             Assert.Equal(I.NoticeId, id);
