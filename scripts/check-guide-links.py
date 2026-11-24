@@ -627,6 +627,12 @@ _LOADING_ELEMENTS = (
     ("link search", "<link href>", '<link rel="search" type="application/opensearchdescription+xml" href="{url}">'),
     ("link alternate stylesheet", "<link href>", '<link rel="alternate stylesheet" href="{url}">'),
     ("link without a rel", "<link href>", '<link href="{url}">'),
+    # Firefox prefetches a link to the next page as it does rel=prefetch.
+    ("link next", "<link href>", '<link rel="next" href="{url}">'),
+    # SVG's presentation attributes that take url() load as their CSS properties do.
+    ("svg cursor", "<rect cursor> url()", '<svg><rect cursor="url({url}), auto"/></svg>'),
+    ("svg mask", "<rect mask> url()", '<svg><rect mask="url({url})"/></svg>'),
+    ("svg fill", "<rect fill> url()", '<svg><rect fill="url({url}#p) red"/></svg>'),
     # A refresh goes to its address by itself; a frame's srcdoc is a page of its own.
     ("meta refresh", "<meta refresh>", '<meta http-equiv="refresh" content="0; url={url}">'),
     ("iframe srcdoc", "<iframe srcdoc> <img src>", '<iframe srcdoc="<img src=&quot;{url}&quot; alt=&quot;x&quot;>"></iframe>'),
@@ -695,6 +701,9 @@ def _cases():
     case("base path to no file", {"404.html": _page('<a href="/Site/missing.html">m</a>', '<base href="/Site/">')}, NO_SUCH_FILE)
     case("root path without a base", {"index.html": _page('<a href="/elsewhere/page.html">e</a>')}, ROOT_PATH)
     case("base on another host", {"index.html": _page("", '<base href="https://example.com/">')}, BASE_ELSEWHERE)
+    # A frame's srcdoc with a base of its own on another host loads its relative addresses from there.
+    for url, _ in _HOSTS:
+        case("iframe srcdoc with a base at {}".format(url), {"index.html": _page('<iframe srcdoc="<base href=&quot;{}&quot;><img src=&quot;ok.png&quot; alt=&quot;x&quot;>"></iframe>'.format(url))}, BASE_ELSEWHERE)
     # Nothing that loads names another host or a protocol-relative address: each element, rel and
     # style form, once with a host and once without a scheme. Each also passes with a file of the site.
     for name, what, template in _LOADING_ELEMENTS:
@@ -731,6 +740,8 @@ def _cases():
     case("cite to no file", {"index.html": _page('<q cite="missing.html">q</q>')}, NO_SUCH_FILE)
     case("ping to no file", {"index.html": _page('<a href="other.html" ping="missing.html">p</a>')}, NO_SUCH_FILE)
     case("svg use of no id", {"index.html": _page('<svg><use href="#nope"/></svg>')}, NO_SUCH_ID.format(target="index.html"))
+    case("svg fill of a gradient in the page", {"index.html": _page('<svg><linearGradient id="g"/><rect fill="url(#g)" stroke="currentColor"/></svg>')}, None)
+    case("svg fill of no id", {"index.html": _page('<svg><rect fill="url(#nope)"/></svg>')}, NO_SUCH_ID.format(target="index.html"))
     case("meta refresh to no file", {"index.html": _page("", '<meta http-equiv="refresh" content="5; URL=\'missing.html\'">')}, NO_SUCH_FILE)
     # mdBook's playground: its script fetches from play.rust-lang.org for every such element.
     case("mdBook's playground", {"index.html": _page('<pre class="playground"><code class="language-rust">fn main() {}</code></pre>')}, PLAYGROUND)
