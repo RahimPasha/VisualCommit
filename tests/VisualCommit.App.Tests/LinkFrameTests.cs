@@ -100,13 +100,13 @@ public class LinkFrameTests
 
     /// <summary>
     /// At a display scaling of 2 the line is about two pixels thick and lies across three rows (About's
-    /// links' underline there: about 0.5, 1 and 0.15 of a pixel): no fault at 2, while at 1, where the
+    /// links' underline there: about 0.5, 1 and 0.25 of a pixel): no fault at 2, while at 1, where the
     /// line is thinner than a pixel, three changed rows are more than an underline.
     /// </summary>
     [AvaloniaFact]
     public void An_underline_across_three_rows_passes_at_a_scaling_of_2_and_not_at_1()
     {
-        var pictures = Draw(shares: [0.5, 1.0, 0.15]);
+        var pictures = Draw(shares: [0.5, 1.0, 0.25]);
         Assert.Empty(Problems(pictures, scale: 2));
         var problem = Assert.Single(Problems(pictures, scale: 1));
         Assert.Contains("in the rows 23, 24, 25", problem, StringComparison.Ordinal);

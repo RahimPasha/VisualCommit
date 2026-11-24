@@ -53,7 +53,7 @@ public static class LinkFrame
     /// <paramref name="scale"/>: the line, about one pixel thick at 1, is about
     /// <paramref name="scale"/> device pixels thick there and lies across a row more than the whole
     /// pixels it reaches into; <see cref="UnderlineRows"/> at 1, 3 from 1.25 to 2 (at 2 About's links'
-    /// underline lies across three rows, about 0.5, 1 and 0.15 of a pixel).
+    /// underline lies across three rows, about 0.5, 1 and 0.25 of a pixel).
     /// </summary>
     /// <exception cref="ArgumentOutOfRangeException"><paramref name="scale"/> is less than 1.</exception>
     public static int UnderlineRowsAt(double scale)
