@@ -309,6 +309,36 @@ public sealed class SingleInstanceGuardTests
     }
 
     [Fact]
+    public void A_folder_copied_while_its_instance_runs_leaves_that_instances_endpoint_to_it()
+    {
+        using var root = new TempDirectory("guard");
+        var original = DataFolder(root);
+        var copy = new AppPaths(root.Combine("copied data folder"));
+        var runningLog = new RecordingLog();
+        using var running = SingleInstanceGuard.TryTake(original, runningLog, Patient);
+        Assert.Equal(GuardOutcome.Taken, running.Outcome);
+
+        // The copy's lock is free, and its instance.json names the running instance's live endpoint.
+        Directory.CreateDirectory(copy.DataDirectory);
+        File.Copy(original.InstanceFile, copy.InstanceFile);
+        using (var onCopy = SingleInstanceGuard.TryTake(copy, new RecordingLog(), Patient))
+        {
+            Assert.Equal(GuardOutcome.Taken, onCopy.Outcome);
+            Assert.NotEqual(running.Endpoint, onCopy.Endpoint);
+        }
+
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.True(File.Exists(running.Endpoint), $"The running instance's socket {running.Endpoint} was deleted by a start on a copy of its data folder.");
+        }
+
+        using var asker = SingleInstanceGuard.TryTake(original, new RecordingLog(), Patient);
+        Assert.Equal(GuardOutcome.Held, asker.Outcome);
+        Assert.Equal(ForwardAnswer.Starting, asker.AskToComeForward());
+        Assert.DoesNotContain(runningLog.Entries, entry => entry.Level == LogLevel.Warning);
+    }
+
+    [Fact]
     public async Task An_ask_that_reads_a_stale_endpoint_reaches_the_holder_once_its_file_is_back()
     {
         using var root = new TempDirectory("guard");
