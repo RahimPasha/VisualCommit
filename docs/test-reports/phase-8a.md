@@ -167,8 +167,13 @@ What every part of phase 8a relies on; each part's conventions add to these.
   `TextInk.Of`'s rule at the capture's scale, with `TextInk.Tolerance` and the twin's "replaced"
   colour, in the element's UI Automation bounds inset to hold the text alone; a box is read unfocused,
   except the text typed into the focused `FilterBox` in launch 1 (L1's and L2's `sea`), which is read
-  less the caret's column (12.3.3; the lead's ruling of 2026-11-20); where no such rectangle exists the
-  comparison carries the colour and run.txt says so; a miss is reported to the lead, never met by a
+  less the caret's column (12.3.3; the lead's ruling of 2026-11-20). Every text read has its
+  rectangle: `LabelArea`, `BoxTextArea` and `TypedArea` always give one (a label whose text element UI
+  Automation does not give is read in the element's inset bounds, and run.txt says so); for L6 a to c,
+  read in the rectangle of `main`'s text element, a missing rectangle is a problem, noted in run.txt and
+  asserted after the picture's comparison, because the comparison matches colours within 48 a channel
+  (D58) and cannot tell `#7C8CFF` from `#8B9AFF` (step 19's fix, `c80689d` and `902288e` on
+  `wip/p8a-realwindow`; ruling 100). A miss is reported to the lead, never met by a
   wider tolerance. No step presses anything that leaves the app (12.3.2); parts L and I touch none of
   its controls. No key is sent to a window that is not the foreground window: launch 3 (part A) and
   part I's launches 5 and 6, whose first input is a key, assert first that their window, the main
@@ -1570,19 +1575,21 @@ six captures in two launches.
   its release, so a fetch shows running, without a percentage, with Cancel. A held fetch's shell gives
   up when its rounds are over, `FetchHold.HeldFor` after it started (`rounds` × 0.5 s of `sleep`: 60 s
   for the default 120 rounds, longer on Windows, where each `sleep` is a process, `FetchHold.cs`), at a
-  look that finds no release, and leaves a `gave-up-` marker, on which `WaitForHeldAsync`, `Release()`
-  and `Dispose()` fail; a shell that saw the release goes on without looking again, so that `Arm()`,
-  which deletes `release`, never makes it give up (`f019688`, open point 42). On Linux and macOS a
-  cancel kills git alone (`GitRunner.Kill`, D36), so a cancelled held fetch's shell keeps waiting until
-  a release: a cancel does not stop that clock. Method 3 therefore installs the hold with `rounds: 300`
+  look that finds no release, and leaves a `gave-up-` marker, on which `WaitForHeldAsync` and
+  `Release()` fail; `Dispose()` releases and never fails (`84fb824`, open point 94), so each check that
+  holds a fetch ends with its own look at the hold (`Assert.Empty(hold.GaveUp())`); a shell that saw
+  the release goes on without looking again, so that `Arm()`, which deletes `release`, never makes it
+  give up (`f019688`, open point 42). On Linux and macOS a cancel kills git alone (`GitRunner.Kill`,
+  D36), so a cancelled held fetch's shell keeps waiting until a release: a cancel does not stop that
+  clock. Method 3 therefore installs the hold with `rounds: 300`
   (`FetchHold.Install(data.Path, rounds: 300)`, `HeldFor` 150 s, under the hang watchdog's 3 minutes),
-  so that it outlasts K8's walks of up to 200 Tabs on a slow runner; it releases (`Release()`) once
-  each cancelled fetch has ended and been checked (K3's step 6, K8's step 9), so that a cancelled
-  fetch's shell goes on; `Arm()` holds again before the next fetch (K8's step 7); and the method
-  disposes the hold (a release) in a `finally`. On Linux and macOS K3's cancelled shell may not look
-  at `release` between step 6's release and step 7's `Arm()`, when both fall within one of its sleeps:
-  it then waits on through K8's hold until step 9, which does no harm, since its marker is in `Arm()`'s
-  baseline and not counted, and its rounds started only seconds before K8's fetch's.
+  so that it outlasts K8's walks of up to 200 Tabs on a slow runner; it releases (`Release()`) once each
+  cancelled fetch has ended and been checked (K3's step 6, K8's step 9), so that a cancelled fetch's
+  shell goes on; `Arm()` holds again before the next fetch (K8's step 7); and the method disposes the
+  hold (a release) by its `using`. On Linux and macOS K3's cancelled shell may not look at `release`
+  between step 6's release and step 7's `Arm()`, when both fall within one of its sleeps: it then waits
+  on through K8's hold until step 9, which does no harm, since its marker is in `Arm()`'s baseline and
+  not counted, and its rounds started only seconds before K8's fetch's.
   `HeldGitRunner` (1.15) stands for a slow git: an
   `IGitRunner` over the found git, given to the session as the detection's `Runner` by a probe over
   `MachineGitSetupProbe`, that holds the next call whose first argument is the word the step names
@@ -2100,7 +2107,8 @@ this part reads the owner's mark (7.8): §7 writes no placeholder, so no picture
   sheet's rows fit 1100×700). `IconFile` and `PngHeader` (Testing, plain .NET, 1.15) read the files in
   both harnesses. §12's code is
   `Phase8aRealWindowPass.AB.cs` with `RealApp.Phase8a.cs`'s `ExecutablePath`, `WindowIcons`,
-  `CaptureScreen` and `TaskbarButton` (12.2).
+  `CaptureScreen`, `TaskbarButtons` and `DisplayBounds` (12.2; the last two since step 19's fix: §12
+  built `TaskbarButton`, which returned one button).
 - **The masters, and what each file is made from** (7.3, 7.8; D429, D447). Round 2's three masters,
   copied unchanged into `assets/brand/`, each with the first comment `<!-- VisualCommit's mark, chosen by
   the owner on 2026-11-20 (D407). -->`. The mark (round 2's README): a blue tile `#4C5BE0` with rounded
@@ -2154,7 +2162,8 @@ this part reads the owner's mark (7.8): §7 writes no placeholder, so no picture
   the composition over the background, not only the pupil at the centre (open point 47).
 - **By hand** (7.8, 1.17; 7.5): the look-alike check, made by eye against Git's logo and the well-known
   Git clients' icons, with no image search (the owner, 2026-11-20; round 2's README), recorded with the
-  report's checks by hand; and B2's taskbar button when the real window finds none (below).
+  report's checks by hand; and B2's taskbar button when the real window finds none on the display that
+  holds the app's window (below).
 - **Shown by no check.** The notice window's icon (§4's window, 7.2) is proven by `WindowIconTests` item
   2; I2's real captures are its client area and show no title bar. The executable's icon in Explorer,
   Start and Alt+Tab is no check's. X11's window icon, an unbundled app's Dock icon and `icon-macos.svg`
@@ -2257,14 +2266,18 @@ and no labels. The files' names and sizes are 7.3's: the `.ico`'s 16, 20, 24, 30
 `icon_128x128`, `icon_128x128@2x`, `icon_256x256`, `icon_256x256@2x`, `icon_512x512` and
 `icon_512x512@2x`. The real window's: the taskbar button's UI Automation name, which starts with
 `VisualCommit` (7.5); run.txt's line `B2's taskbar button: Not run (no taskbar button named VisualCommit
-was found within 10 s).` (12.3.4).
+was found within 10 s).` (12.3.4); and, since step 19's fix, B2's second "Not run" line and its failure
+for more than one button (in "The real window (part B)", B2), which are the real-window project's own
+texts (`NoTaskbarButtonOnDisplay`, `MoreThanOneTaskbarButtonMessage` in `Phase8aRealWindowPass.AB.cs`),
+not `Phase8aExpectations.B`'s.
 
 #### The real window (part B)
 
 One launch, shared with part A (12.3.4 launch 3; 7.5; 12.5: of parts A and B together, 4 of 8 checks
 repeated, 2 captures compared, 3 where 1920×1080 fits, and 6 captures without a twin, all six part B's).
 `Check_A_and_B_about_and_icon` in `Phase8aRealWindowPass.AB.cs`, the third method of `Phase8aOrder`, uses
-`RealApp.Phase8a.cs`'s `ExecutablePath`, `WindowIcons`, `CaptureScreen` and `TaskbarButton`, `IconFile`
+`RealApp.Phase8a.cs`'s `ExecutablePath`, `WindowIcons`, `CaptureScreen`, `TaskbarButtons` and
+`DisplayBounds` (`TaskbarButton` until step 19's fix), `IconFile`
 and, by the link, `Phase8aExpectations.B` (7.5, 12.2). Each capture is saved by `Run.Save` under its
 name, compared with none and inspected. Part B presses nothing but `ThemeSwitch` (12.3.2). Its steps, in
 the launch's order:
@@ -2273,11 +2286,18 @@ the launch's order:
    `RealApp.Launch(D, session)` with a session of one empty tab written into a new data folder D before
    the start (D442), and no `settings.json` (so dark); `Sized` 1100×700 (200 % on the laptop); wait until
    the welcome page shows.
-   - **B1 (a)**, the executable's icon (`ApplicationIcon`): `Icon.ExtractAssociatedIcon` of
-     `ExecutablePath`, the built `VisualCommit.exe`; its size goes into run.txt. The `.ico` (`IconFile.Read`
-     of `src/VisualCommit.App/Assets/Icon/VisualCommit.ico` under the `RepoRoot` metadata) has a frame of
-     that size, and every pixel of the extracted icon at alpha 255 equals that frame's pixel within 2 per
-     channel (open point 48).
+   - **B1 (a)**, the executable's icon (`ApplicationIcon`): `Icon.ExtractIcon(ExecutablePath, 0, 64)`
+     (`ExecutableIconAt`), the built `VisualCommit.exe`'s first icon asked at 64 pixels, a frame the
+     `.ico` holds, whatever the display's scaling; the size asked and the size got go into run.txt. The
+     `.ico` (`IconFile.Read` of `src/VisualCommit.App/Assets/Icon/VisualCommit.ico` under the `RepoRoot`
+     metadata) has a frame of the size got, and every pixel of the extracted icon at alpha 255 equals
+     that frame's pixel within 2 per channel (open point 48). Since step 19's fix (`3e32b9b` on
+     `wip/p8a-realwindow`; ruling 100); until then the step took `Icon.ExtractAssociatedIcon`, which
+     gives the icon at `SM_CXICON` for the test host's DPI (32 scaled by it: 56 at 175 %), a size the
+     `.ico` lacks, so the step would have failed there with a correct icon (reasoned, not measured: the
+     laptop runs at 200 %, where that size is 64).
+     `Phase8aOrderTests.The_executables_icon_comes_at_the_size_asked_and_equals_that_frame` holds the
+     extraction at 64, 48 and 96 against their frames, with no app and no window.
    - **B1 (b)**, the window's icons: `WindowIcons()` sends `WM_GETICON` with `ICON_SMALL` and with
      `ICON_BIG` to the app's window, and each gives an icon. Their sizes, the window's DPI, and
      `GetSystemMetricsForDpi` of `SM_CXSMICON` and of `SM_CXICON` at that DPI go into run.txt. Each of
@@ -2314,22 +2334,51 @@ the launch's order:
      check 5 found it turning light with the theme), and the mark, sharp, left of `VisualCommit`, as in
      B1 (c); where the white line reaches the tile's edges it may meet a light title bar (round 2's
      README), which is the mark, not a cut.
-   - **B2**, the taskbar button: `TaskbarButton("VisualCommit", 10 s)`, the button whose UI Automation
-     name starts with `VisualCommit`, looked for from UI Automation's desktop root for 10 s. Found within 10 s: its existence and
-     bounds asserted (it exists, its bounds not empty), and it is captured from the screen by its bounds (`CaptureScreen`) as
-     `b2-taskbar-button`, and four times enlarged, nearest-neighbour, as `b2-taskbar-button-enlarged`;
-     its name and bounds go into run.txt. The pointer stays at the neutral point, inside the app's window,
-     so no preview or tooltip of the taskbar opens. Inspected: the owner's mark, not .NET's default icon,
-     whichever frame Windows draws (the small drawing at 32 pixels and below, the full one above). None found within 10 s (a hidden taskbar, or no button): the method does not fail on it, run.txt says `B2's taskbar button: Not run (no
-     taskbar button named VisualCommit was found within 10 s).`, the report marks B2's taskbar button
-     "Not run" with that reason, and the gate checks the button by hand (open point 51).
+   - **B2**, the taskbar button: the pointer at the neutral point, inside the app's window, so no
+     preview or tooltip of the taskbar opens. `DisplayBounds`, the display that holds the app's window
+     (`MonitorFromWindow`, `GetMonitorInfo`'s `rcMonitor`, in screen pixels), goes into run.txt as `B2's
+     taskbar button: the display that holds the app's window at {display} (screen pixels)`, `{display}`
+     its rectangle as .NET writes it. `TaskbarButtons("VisualCommit", 10 s, display)` looks from UI
+     Automation's desktop root every 100 ms at the buttons of every taskbar (`Shell_TrayWnd`, and
+     `Shell_SecondaryTrayWnd` on another display) whose UI Automation names start with `VisualCommit`,
+     until one lies on that display (its centre inside it) or 10 s have passed. Every button found goes
+     into run.txt with its name, bounds, taskbar and whether it lies on the window's display; only those
+     on it count. Exactly one there: its bounds asserted not empty, and it is captured from the screen
+     by its bounds (`CaptureScreen`) as `b2-taskbar-button`, and four times enlarged, nearest-neighbour,
+     as `b2-taskbar-button-enlarged`. Inspected: the owner's mark, not .NET's default icon, whichever
+     frame Windows draws (the small drawing at 32 pixels and below, the full one above). None found
+     within 10 s (a hidden taskbar, or no button): the method does not fail on it, and run.txt says
+     `B2's taskbar button: Not run (no taskbar button named VisualCommit was found within 10 s).` Found,
+     but none on the window's display: the method does not fail on it either, and run.txt says `B2's
+     taskbar button: Not run (taskbar buttons named VisualCommit were found within 10 s, but none on the
+     display that holds the app's window, at {display} (screen pixels); each is noted above).` In both
+     the report marks B2's taskbar button "Not run" with that reason, and the gate checks the button by
+     hand (open point 51). More than one on the window's display: none is captured, each is noted, and
+     the launch fails at its end, before the app is closed, with B1's problems if it has any and `B2's
+     taskbar button: {n} taskbar buttons named VisualCommit lie on the display that holds the app's
+     window, so none was captured: another VisualCommit is running (or is pinned to the taskbar), and
+     its button cannot be told from this launch's. Close every other VisualCommit, or unpin it, and run
+     the launch again. The buttons: {each one's name, bounds and taskbar}.` Since step 19's fix
+     (`e3c0884` and `82922f5` on `wip/p8a-realwindow`; ruling 100); until then the first button named so
+     was captured, wherever it lay. Reason: a button does not say whose process it is, and Windows gives
+     each executable's path a button of its own, so another running or pinned VisualCommit's button
+     could have been captured as this launch's; and Windows shows a window's button on every display's
+     taskbar by default ("When using multiple displays, show my taskbar apps on: All taskbars"), so a
+     count over every taskbar would fail with no other VisualCommit running. `Phase8aOrderTests`'
+     `More_than_one_taskbar_button_named_VisualCommit_fails_naming_each` and
+     `B2_counts_only_the_taskbar_buttons_on_the_display_that_holds_the_window` hold the choice with no
+     window; the multi-display case is reasoned from Windows' setting, not measured (the laptop has one
+     display).
    - The app closed by its window: exit code 0.
 
 Unverified until the builder's first runs and D246's (7.9 items 2 and 5; 12.9): that Avalonia 12.1.3's
 Win32 icon takes the `.ico`'s bitmaps and PNG and picks a frame per DPI (B1 (b)'s sizes against
-`SM_CXSMICON`, read in (c), show it); `WM_GETICON`'s and `ExtractAssociatedIcon`'s sizes under
-per-monitor DPI; the taskbar button's name and its reach from the desktop root; a capture outside the
-window (the taskbar's). 12.9 no longer counts the
+`SM_CXSMICON`, read in (c), show it); `WM_GETICON`'s sizes under per-monitor DPI (B1 (a)'s icon, asked
+at 64 since step 19's fix, comes at the size asked whatever the scaling, which `Phase8aOrderTests` holds
+with no window; until then `ExtractAssociatedIcon`'s size was on this list); the taskbar button's name
+and its reach from the desktop root, and with a second display which taskbars show the window's button
+(B2's rule per display, reasoned, not measured); a capture outside the window (the taskbar's). 12.9 no
+longer counts the
 owner's icon as a risk: the owner chose the mark before §7 was built (1.17, 7.8), so D246's runs
 already capture it.
 
@@ -2866,7 +2915,7 @@ is (U1); a name on every interactive control, proven by the sweep `AutomationSwe
 the app (U2); and the fixed names of 1.12's table, read with every tooltip, help text and key as they
 were (U3). Checks U1 to U3, design 9.5's list, with its six pictures. Its R steps (9.5, 12.3.4 launch
 13, 12.5): U1's rows and U3's names, on a stopped merge, one launch, no capture. The Narrator
-walk-through, 21 steps by the owner, is this part's check by hand (9.3.9; D411, D450).
+walk-through, 21 steps and step 21a by the owner, is this part's check by hand (9.3.9; D411, D450).
 
 #### Conventions of part U
 
@@ -3331,9 +3380,10 @@ the start line sets, so that the dates heard are 9.3.5's (open point 85). Expect
 10. A branch clicked in the left panel (`Local branches › feature` opened, then `alpha`): its commit's
     row, "Alpha two, Test Author, {date}, branch feature/alpha, remote branch origin/feature/alpha",
     though the focus stays on the left panel's row (9.3.4). Narrator may also read the focused branch
-    row, "alpha, button", now with its help text, the ref's full name, "feature/alpha" (D456 (3)); and
-    as the folder opens it may name a row "Avalonia.Controls.DockPanel" for a moment (the spike's S4;
-    open point 93). Whatever is heard is written down as heard.
+    row, "alpha, button", now with its help text, the ref's full name, "feature/alpha" (D456 (3)). As
+    the folder opens it keeps its row, and its button the name "feature" (D462 (3)), so no row is named
+    "Avalonia.Controls.DockPanel" for a moment, as in the spike's S4 (open point 93): hearing that name
+    is a finding. Whatever is heard is written down as heard.
 11. F6 to the right panel, twice from the left panel: the first F6 gives the graph, "Commit graph,
     list" and Alpha two's row once more (9.3.4: the graph takes the focus with a row exposed; Narrator
     may read the List's selection, or the row twice, 9.9 item 2: note which); the second puts the focus
@@ -3347,9 +3397,10 @@ the start line sets, so that the dates heard are 9.3.5's (open point 85). Expect
 12. Ctrl+Shift+M (the commit message), Shift+Tab to README.md's row ("README.md, button"), then Tab:
     "Stage README.md, button" (D425: Tab from a row's own button reaches its Stage).
 13. The status bar's toggle: "Activity log, button, Ctrl+J".
-14. Ctrl+Shift+F: the result, `Fetched from all remotes` (`OperationStatus`, a polite live region, 9.3.7).
-    Are the progress steps read (`Fetching from all remotes…`, git's percentage; 9.9 item 4)? Note how
-    many.
+14. Ctrl+Shift+F: the start, `Fetching from all remotes…`, and the result, `Fetched from all remotes`,
+    are read (`OperationStatus`, a polite live region, 9.3.7). git's stages and percentages are not
+    spoken (D463 (1)), but this local fetch reports none, so `StatusBarTests` alone holds that. Note
+    whether the start is heard.
 15. Ctrl+F, a word (9.3.9 names none; this report takes `alpha`, which matches Alpha one and Alpha two,
     the message search ignoring case; open point 86), Enter: the match's row, its name and ", matches
     the search" if its hint is read; the focus stays in `SearchBox`.
@@ -3370,9 +3421,30 @@ the start line sets, so that the dates heard are 9.3.5's (open point 85). Expect
     "VisualCommit needs Git", and its body,
     "VisualCommit works through the Git installed on this computer, and it found none: not on the PATH,
     nor in Git for Windows' usual install folders." (5.3; part F's F1).
-21. Tab to "Check again", Enter: its result is spoken (no Git found again, the focus back on "Check
-    again"): while the search runs the button reads "Checking…", and once it ends "Check again, button",
-    the focus given back (5.3; open point 86).
+21. Tab to "Check again", Enter: no "Checking…" is read while the search runs (the button is disabled
+    and without the focus then, and its text is no live region; if Narrator names the window as the
+    focus leaves the button, note it); when the search ends the focus is given back, and Narrator reads
+    "Check again, button" and, as the button's description, the title of the state the search ended
+    on, here "VisualCommit needs Git" (5.3; open point 86; D463 (3); step 19's second round). Note what
+    is heard.
+
+    21a. Shift+Tab to "Choose git.exe…" (the button before "Check again"), Enter, and in Windows' Open
+    dialog choose `C:\Windows\System32\whoami.exe`, a program every Windows has, which answers
+    `--version` with an error of its own and exits. Choose runs the chosen file itself, whatever the
+    stand-in says (`GitAccess.ProbeAsync`), and refuses it: `GitSetupError` shows `This Git did not
+    report its version. Git said: {first line}` (`GitSetupTexts.ChooseNoVersionFormat`, `{first line}`
+    the first line whoami printed), nothing is written into `settings.json`, the focus comes back to
+    "Choose git.exe…", and Narrator reads "Choose git.exe…, button" with the refusal as its description
+    (D463 (3); step 19's second round). Note what is heard.
+
+The single-instance notice is not in the walk-through. After an unanswered try its Try again gets the
+focus back, and with step 19's second round it is described by the status, `It still did not answer.`
+(D463 (3)). An unanswered try needs a process that holds the data folder's `instance.lock` and answers
+nothing, as part I's launch 5 does in its test process (the file opened with `FileShare.None`, no
+`instance.json`); the walk-through stages none. Until the second round adds the assertion of that
+description, `InstanceNoticeLiveRegionTests` alone holds what a reader is told there: the status a
+polite live region that a client reaches only once a try went unanswered, and the focus back on Try
+again.
 
 Silence where a row's name is expected (step 3's rows, step 5's Home and End) means that the live
 region does not reach Narrator (9.9 item 1): a finding that reopens the route, by a decision and a
@@ -4006,7 +4078,7 @@ its own, with no scripted twin); "Real window" says "n/a" for a check the pass d
 | K7 | A held commit: `CommitButton` `Committing…`, Amend disabled, the status bar `Ready`, the summary still editable and focused; `Next` typed meanwhile stays, HEAD's message `First` (D392); "changes", dark, 1100×700 | Not run yet | n/a | `k7a-committing`, `k7b-committed` | Not R. Method 7. Its pictures depend on `HeldGitRunner` holding the tab's calls (6.4). Open points 34 and 40 |
 | K8 | The walks: from the right panel Tab reaches the status bar's Cancel within 200 Tabs, Enter cancels a second held fetch; Tab reaches `LeftSplitter`, Right widens the left panel by 10, to 270, remembered in the session (D427); "graph", dark, 1100×700 | Not run yet | n/a | `k8a-splitter` | Not R. Method 3, after K3; the hold installed with `rounds: 300` and released after each cancel. The two walks' numbers of Tabs go here at the gate. Open points 35 and 42 |
 | B1 | The icon at its sizes, dark: the `.ico`'s 14 frames (16 to 256) and nine generated PNGs, each at its own pixel size on `#14161B`, its centre its file's own, its top-left pixel `#14161B`, the gaps `#14161B`; the owner's mark, Lens, the same at every size (D407, D428 to D430, D447); the sheet, 1100×700 | Not run yet | Not run yet | `b1-icon-sizes-dark`; real window `b1-title-bar-dark-with-frame`, `b1-title-bar-icon-dark` (no twin, inspected) | R: steps of its own, not a repeat of the sheet: (a) the executable's icon and (b) the window's two icons against the `.ico`'s frames, within 2 per channel; (c) the title bar, dark (launch 3, with part A). Method 1 |
-| B2 | The icon at its sizes, light: the same on `#FFFFFF`; the sheet, 1100×700 | Not run yet | Not run yet | `b2-icon-sizes-light`; real window `b2-title-bar-light-with-frame`, `b2-title-bar-icon-light`, `b2-taskbar-button`, `b2-taskbar-button-enlarged` (no twin, inspected) | R: after a real click on `ThemeSwitch`, the light title bar and the taskbar button (launch 3). No button found within 10 s: that step "Not run", the button checked by hand at the gate. Method 2 |
+| B2 | The icon at its sizes, light: the same on `#FFFFFF`; the sheet, 1100×700 | Not run yet | Not run yet | `b2-icon-sizes-light`; real window `b2-title-bar-light-with-frame`, `b2-title-bar-icon-light`, `b2-taskbar-button`, `b2-taskbar-button-enlarged` (no twin, inspected) | R: after a real click on `ThemeSwitch`, the light title bar and the taskbar button (launch 3). No button found within 10 s, or none on the display that holds the window: that step "Not run", the button checked by hand at the gate; more than one there: none captured, and the launch fails, saying to close or unpin the other VisualCommit (step 19's fix). Method 2 |
 | A1 | About from the palette, dark: one row `About VisualCommit…`, no key, no detail; six section buttons, `About` last at (141, 255), selected and focused; the icon, `VisualCommit`, `Created by Rahim Khajei`, `0.1.0 (1a2b3c4)`, `Copyright (c) 2026 Rahim Khajei`, `MIT License` with `Show license…`, the notices' note with `Show third-party notices…`, `github.com/RahimPasha/VisualCommit`, `Open the user guide`; no scroll, nothing clipped, no `@`; Tab to the repository link, underlined, Enter opens exactly `https://github.com/RahimPasha/VisualCommit` (D398, D409, D417, D431); one empty tab, dark, 1100×700 | Not run yet | Not run yet | `a1a-about-dark`, `a1b-about-link-focus`; real window `a1a-about-dark`, and `a3a-about-1920` where 1920×1080 fits | R: steps 1 to 3 by real keys, the highlighted row read before Enter, `AboutVersion`'s name the built version, ending with ` (`, seven hexadecimal digits and `)`, and a second capture at 1920×1080 where `app.Fits(1920, 1080)`, compared with A3's picture, otherwise "Not run" for that capture with run.txt's line (launch 3, with part B); no link pressed. Method 1. Open points 56, 57, 64, 65, 72 |
 | A2 | About in light: A1's texts, the links `#4353D8` on `#F5F6F8`, the secondary texts `#5C6572` (D409); one empty tab, light, 1100×700 | Not run yet | n/a | `a2a-about-light` | Not R. Method 2 |
 | A3 | About at 1920×1080 by `Ctrl+,`, five Downs and Enter: `About` at (551, 415), selected and focused, the section whole (D409); one empty tab, dark | Not run yet | n/a | `a3a-about-1920` | Not R: its picture is the scripted twin of A1's real-window capture at 1920×1080 where it fits (launch 3). Method 3. Open points 56, 64, 71 |
@@ -4029,8 +4101,8 @@ owner; each is recorded here when the gate runs. Result values as under "Checks"
 |---|---|---|---|
 | The icon's look-alike comparison: the owner's mark, by eye, against Git's logo and the well-known Git clients' icons, with no image search (the owner's wish, 2026-11-20) | Part B (design 1.17, 7.8; 13.4 item 11) | Not yet | |
 | A second start of the app while another window is in front of the first, from the lead's isolating start file; what came to the front is noted | Part I (design 4.6; part I's conventions, "By hand at the gate") | Not yet | macOS's second start is 8b's Mac checklist |
-| The taskbar button's icon, if B2 could not find the button: the owner's mark, not .NET's default icon | Part B (B2; design 7.5, 12.3.4; open point 51) | Not yet | Only if B2's taskbar step is "Not run" |
-| The Narrator walk-through, 21 steps, by the owner (about 20 minutes): the graph's row, the names, About, and, started with `VISUALCOMMIT_GIT_STAND_IN=none` after the first app has closed (D421), the first-run screen | Part U (D411, D450; design 9.3.9, 13.3, 13.4 item 16) | Not yet | The steps and the words expected at each: part U's "The Narrator walk-through by hand". Each step "as expected", or the words heard. Started on two tabs (the ops copy active, the stopped merge second) with `VISUALCOMMIT_TIME_ZONE=UTC`. Silence where a row's name is expected (step 3's rows, step 5's Home and End) is a finding that reopens the route (9.9 item 1); step 2's "Commit graph, list" alone, no row being selected, is none. Open points 85 and 86 |
+| The taskbar button's icon, if B2 found no button on the display that holds the window: the owner's mark, not .NET's default icon | Part B (B2; design 7.5, 12.3.4; open point 51) | Not yet | Only if B2's taskbar step is "Not run" |
+| The Narrator walk-through, 21 steps and step 21a, by the owner (about 20 minutes): the graph's row, the names, About, and, started with `VISUALCOMMIT_GIT_STAND_IN=none` after the first app has closed (D421), the first-run screen | Part U (D411, D450; design 9.3.9, 13.3, 13.4 item 16) | Not yet | The steps and the words expected at each: part U's "The Narrator walk-through by hand". Each step "as expected", or the words heard. Started on two tabs (the ops copy active, the stopped merge second) with `VISUALCOMMIT_TIME_ZONE=UTC`. Silence where a row's name is expected (step 3's rows, step 5's Home and End) is a finding that reopens the route (9.9 item 1); step 2's "Commit graph, list" alone, no row being selected, is none. Open points 85 and 86 |
 | Phase 6's System step: with System chosen in the settings screen, Windows' app mode switched while the app runs; the window, its title bar and the open views follow within a second | Phase 6 (D224; phase 6's report, "By hand on Windows at acceptance") | Not yet | |
 | The guide's site, from the `guide-site` artifact of `guide.yml`'s run on the gate commit, or of a `workflow_dispatch` run of it on that commit (`gh run download <id> -n guide-site`, the downloaded folder served by `python -m http.server`), by the lead: every picture of the catalogue (42 shots, 84 files, 11.3.2, less any the lead dropped during §11, 13.4 item 21), the Light and the Navy theme each showing its own image of each picture (D440); the text drawn in them (the graph, the diffs) the demo's alone, which `LeakGuard` does not see (11.9); search finds "rebase"; the browser's network panel shows no request to another host (ruling 18, D441); every `SUMMARY.md` link opens its page; and the five addresses the first-run links open each reach its section of `troubleshooting/git.html` (`#git-missing`, `#git-chosen-missing`, `#git-too-old`, `#git-not-working`, `#helper-missing`; this report's addition, open point 108) | Part G (design 0.5, 11.5, 11.9; rulings 18, 61; D439 to D441, D451) | Not yet | The run's id, its head commit and the date it was downloaded go here. The artifact is kept 14 days (11.3.4), and a gate commit that changes only the real-window project starts no guide run (D451): then a `workflow_dispatch` run on it makes the artifact. Open points 108, 110 |
 | After the merge (ruling 64; D408, D451): at "Phase 8a accepted", before `master` is pushed, GitHub Pages' source set to "GitHub Actions" (the owner, or the lead through `gh api` at the owner's word); after the push, the guide's run on `master` read, and run again by `workflow_dispatch` if it ran before the setting; the live address `https://rahimpasha.github.io/VisualCommit/` answers; the `github-pages` environment's branch rule read, and if it admits more than `master`, the owner's leave asked to set it | Part G (design 0.5, 11.5, 11.9, 13.3) | Not yet | At "Phase 8a accepted", not at the gate; the guide's run is recorded beside CI's in `status.md` (11.3.4, D451). Until then the app's links answer "not found" (1.7, 11.9) |
@@ -4045,19 +4117,19 @@ has no part (design 0.1, 10.5). Where a row names a page of the guide, the page 
 |---|---|---|
 | The contrast fixes in one round (D410; plan.md's items from phase 6, 768 and 769) | L1 to L6; real window L1, L2, L4 a, L5 dark, L6 a to c | `ThemeTokensTests` (`Every_text_reaches_4_5_to_1_on_every_background_it_lies_on`, `The_contrast_rounds_values_are_the_designs`, `The_placeholder_has_its_own_token_at_full_opacity`, `Both_themes_hold_the_same_keys`); `PanelViewTests`' three tests; `Phase8aExpectationTests.L`; wave 1's masked comparison against phase 7b's references with the scan's boxes, and the scan's eight lists in `docs/test-reports/phase-8a-contrast/` (design 0.7, 2.6) |
 | Two instances; the macOS data folder (plan.md 778) | I1 (real window), I2 (and real window), I3; by hand: a second start behind another window | `SingleInstanceGuardTests`, `InstanceNoticeViewModelTests`, `MainWindowBringForwardTests`; `AppPathsTests.The_default_data_folder_is_the_platforms_documented_one`, read in CI's macOS job's log; `Phase8aExpectationTests.I` |
-| First-run experience (R4, D405; plan.md 757; D423, D449, D453): git missing, too old or not working, each state with its own text; "Check again" without a restart; "Choose git.exe"; winget on Windows after a confirm, in a visible terminal, where winget exists; the Command Line Tools or Homebrew on macOS, the distribution's package on Linux; the missing askpass helper; with plan.md 781's visual check (missing, too old, not working, found again by "Check again") | F1 to F13, G2 (the first-run links' five addresses); real window F1, F2, F4, F5, F6, F6b, F13 | `GitSetupShellTests` (each state: no clipped text at 1100×700 and 1000×560; the view's name and help text); Git.Tests' `GitLocatorTests`, `OsReleaseTests`, `GitStandInTests`, `GitConfigurationForgetTests`; App.Tests' `GitAccessTests`, `CheckGitAgainTests`, `GitSetupTextsTests`, `GitSetupViewModelTests`, `GitProgramViewModelTests`, `FileLauncherTests` (`ResolveStart`, `ToStartInfo` of the winget command, the one real `StartAsync`), `JsonSettingsStoreTests`, `MainWindowViewModelTests`, `SettingsDialogViewTests`; `Phase8aExpectationTests.F`; §9's sweep in the states (10) to (13) and the Narrator walk-through's steps 20 and 21 (part U, by hand); the guide's `first-run.md` and `troubleshooting/git.md` with its five anchors (`AppLinksTests`; 11.3.2); the lead's by-hand `cmd.exe /S /K ""<the path found>" --version"` before §5's merge (13.4 item 7; done on 2026-11-20: the console's window stays open where Windows Terminal is the default console) |
+| First-run experience (R4, D405; plan.md 757; D423, D449, D453): git missing, too old or not working, each state with its own text; "Check again" without a restart; "Choose git.exe"; winget on Windows after a confirm, in a visible terminal, where winget exists; the Command Line Tools or Homebrew on macOS, the distribution's package on Linux; the missing askpass helper; with plan.md 781's visual check (missing, too old, not working, found again by "Check again") | F1 to F13, G2 (the first-run links' five addresses); real window F1, F2, F4, F5, F6, F6b, F13 | `GitSetupShellTests` (each state: no clipped text at 1100×700 and 1000×560; the view's name and help text); Git.Tests' `GitLocatorTests`, `OsReleaseTests`, `GitStandInTests`, `GitConfigurationForgetTests`; App.Tests' `GitAccessTests`, `CheckGitAgainTests`, `GitSetupTextsTests`, `GitSetupViewModelTests`, `GitProgramViewModelTests`, `FileLauncherTests` (`ResolveStart`, `ToStartInfo` of the winget command, the one real `StartAsync`), `JsonSettingsStoreTests`, `MainWindowViewModelTests`, `SettingsDialogViewTests`; `Phase8aExpectationTests.F`; §9's sweep in the states (10) to (13) and the Narrator walk-through's steps 20, 21 and 21a (part U, by hand); the guide's `first-run.md` and `troubleshooting/git.md` with its five anchors (`AppLinksTests`; 11.3.2); the lead's by-hand `cmd.exe /S /K ""<the path found>" --version"` before §5's merge (13.4 item 7; done on 2026-11-20: the console's window stays open where Windows Terminal is the default console) |
 | A broken `~/.gitconfig` shows its own message (plan.md 767, from phase 6's design 8.5) | F6 (the fake), F6b (real git, also in CI's floor job on 2.34.1); real window F6 (the stand-in), F6b (real git) | `GitLocatorTests`: real git with `[user` in `GIT_CONFIG_GLOBAL` gives `ConfigFault(file, 1)`, on every CI job |
-| OpenSSH older than 8.4 ignores `SSH_ASKPASS_REQUIRE` (plan.md 766, risk 15; ruling 7, D424) | none: a log line, nothing on screen | `AskPassBrokerHelperTests` (the Info line `Git and ssh get SSH_ASKPASS_REQUIRE=force, so that ssh asks through VisualCommit; OpenSSH older than 8.4 ignores it and asks in the terminal VisualCommit was started from, if there is one.` once per session, at the first Ask or Deny scope); the guide's `troubleshooting/sign-in-and-ssh.md`, with ruling 7's sentence word for word (11.3.2) |
+| OpenSSH older than 8.4 ignores `SSH_ASKPASS_REQUIRE` (plan.md 766, risk 15; ruling 7 as ruling 100 amends it, D424) | none: a log line, nothing on screen | `AskPassBrokerHelperTests` (the Info line once per session, at the first Ask or Deny scope, `AskPassBroker.AskPassRequireLineFor` the running system's: on Windows `AskPassRequireLineWindows`, `Git and ssh get SSH_ASKPASS_REQUIRE=force, so that ssh asks through VisualCommit; OpenSSH older than 8.4 ignores it, and on Windows no terminal shows its question: cancel the operation if it waits.`, on macOS and Linux `AskPassRequireLineUnix`, ruling 7's words, `Git and ssh get SSH_ASKPASS_REQUIRE=force, so that ssh asks through VisualCommit; OpenSSH older than 8.4 ignores it and asks in the terminal VisualCommit was started from, if there is one.`; `Each_system_has_its_own_words_and_only_macOS_and_Linux_name_a_terminal`); the guide's `troubleshooting/sign-in-and-ssh.md`, with its section "An old OpenSSH does not ask through VisualCommit", a bullet for Linux and macOS (answer in the terminal VisualCommit was started from, if there is one, or cancel) and one for Windows (no terminal shows the question: cancel if it waits) (11.3.2). Until step 19's fix (2026-11-24, the review's security-privacy-1 and guide-2) the line and the page gave ruling 7's sentence on every system; ruling 100 amends ruling 7, because the app starts every git without a console window, so that on Windows ssh never reaches the terminal the app was started from |
 | The netrc note (plan.md 773, risk 35; ruling 8, D424) | F14 | `AccountsNetrcNoteTests`; the guide's `accounts.md` and `troubleshooting/sign-in-and-ssh.md` (ruling 8; 11.3.2) |
-| Keyboard gaps (R7; plan.md 759, 784 and "Done when" 786: every main action reached by keyboard): a hunk and chosen lines from the diff, a blame run and its menu, "Cancel {title}" in the palette, the stage rows' buttons on keyboard focus; Tab out of every read-only text view; a panel resized by the keys (design 0.1, 6.1, 6.3.9) | K1, K2, K3, K4, K8, G1 (F1 and the shortcuts list's `Help`, D417); real window K1, K2 | `KeyboardPassTests` (among them `Tab_and_Enter_on_Discard_hunk_confirmed_leave_the_focus_in_the_text`, `A_keyboard_Stage_held_while_the_user_moves_to_the_summary_leaves_the_focus_there`, `A_keyboard_Stage_held_while_the_user_goes_to_another_tab_leaves_that_tabs_lists_alone` `A_rows_Discard_by_the_keys_cancelled_in_its_question_gives_the_focus_to_the_rows_own_button_with_the_frame` and, for the activity log's splitter, `Up_on_the_activity_logs_splitter_reached_by_Tab_heightens_the_log_by_10_and_keeps_it`; four tests state where Ctrl+Tab leaves the focus, which from a stage row is on nothing until step 19's fix); `DiffTextViewTests`, `ConflictPanesTests`, `BlameViewTests` (`An_arrow_with_Cmd_or_Option_picks_the_carets_run` among them), `WorkingChangesTests` (`Tab_walks_every_row_of_a_list_longer_than_its_view_and_Shift_Tab_walks_back` among them), `StatusBarTests` (6.4's fail-first tests); `RegionKeysTests`, `CommandPaletteViewTests`, `PaletteEntriesTests`, `AppShortcutsTests` passing alone (6.8 item 1); phase 2's `Check_17` and phase 5's `Check_A4_real_keys` alone in the real window at §6's merge (6.8 item 5); the inventory of main actions (design 6.3.9) in the report, from §6's merge report, with its rows "Inline or side by side", proven by K1 (its scripted-only step 11: Tab and Shift+Tab to `SideBySideDiffButton`, Enter), and "Amend", proven by K7 (disabled while committing) and `KeyboardPassTests` (focused by Tab, the focus given back), as the lead settled open point 40; the guide's `keyboard-and-screen-readers.md` with each item of 6.3.10 (ruling 53; 1.17's "For the guide") |
+| Keyboard gaps (R7; plan.md 759, 784 and "Done when" 786: every main action reached by keyboard): a hunk and chosen lines from the diff, a blame run and its menu, "Cancel {title}" in the palette, the stage rows' buttons on keyboard focus; Tab out of every read-only text view; a panel resized by the keys (design 0.1, 6.1, 6.3.9) | K1, K2, K3, K4, K8, G1 (F1 and the shortcuts list's `Help`, D417); real window K1, K2 | `KeyboardPassTests` (among them `Tab_and_Enter_on_Discard_hunk_confirmed_leave_the_focus_in_the_text`, `A_keyboard_Stage_held_while_the_user_moves_to_the_summary_leaves_the_focus_there`, `A_keyboard_Stage_held_while_the_user_goes_to_another_tab_leaves_that_tabs_lists_alone` `A_rows_Discard_by_the_keys_cancelled_in_its_question_gives_the_focus_to_the_rows_own_button_with_the_frame` and, for the activity log's splitter, `Up_on_the_activity_logs_splitter_reached_by_Tab_heightens_the_log_by_10_and_keeps_it`; the tests of where a change of the active tab leaves the focus (since step 19's fix the window gives a focus that the switch took away to the same panel's target in the tab now shown, else to the graph area's target, and to nothing while that tab still opens, D462 (1); until then a stage row's focus was left on nothing): `Ctrl_Tab_from_a_focused_stage_row_gives_the_focus_to_the_other_tabs_first_row_with_the_frame` and `Ctrl_Tab_from_a_stage_rows_Stage_reached_by_Tab_gives_the_focus_to_the_other_tabs_first_row_with_the_frame`, renamed and rewritten by step 19 (they were `…_leaves_the_focus_on_nothing_and_F6_then_starts_at_the_left_panel`), the graph's and the summary's two as they were, and the ten facts of `KeyboardPassTests.TabSwitch.cs`; the focus kept or given back after a cancelled question, a row's menu and Amend in `KeyboardPassTests.FocusReturns.cs` (D462 (2)), and after a toggled section or folder and an eye or solo button that hides itself in `KeyboardPassTests.Toggles.cs` (D462 (3)); `DiffTextViewTests`, `ConflictPanesTests`, `BlameViewTests` (`An_arrow_with_Cmd_or_Option_picks_the_carets_run` among them), `WorkingChangesTests` (`Tab_walks_every_row_of_a_list_longer_than_its_view_and_Shift_Tab_walks_back` among them), `StatusBarTests` (6.4's fail-first tests); `RegionKeysTests`, `CommandPaletteViewTests`, `PaletteEntriesTests`, `AppShortcutsTests` passing alone (6.8 item 1); phase 2's `Check_17` and phase 5's `Check_A4_real_keys` alone in the real window at §6's merge (6.8 item 5); the inventory of main actions (design 6.3.9) in the report, from §6's merge report, with its rows "Inline or side by side", proven by K1 (its scripted-only step 11: Tab and Shift+Tab to `SideBySideDiffButton`, Enter), and "Amend", proven by K7 (disabled while committing) and `KeyboardPassTests` (focused by Tab, the focus given back), as the lead settled open point 40, and since step 19's fix the user's path, the palette's Commit, by `Amend_focused_when_a_commit_starts_from_the_palette_gets_the_focus_back` (the focus given back without the frame, D104; D462 (2)); the guide's `keyboard-and-screen-readers.md` with each item of 6.3.10 (ruling 53; 1.17's "For the guide") |
 | Focus after "Choose" (plan.md 771; phase 7a's design 17 item 5) | K5 | `KeyboardPassTests` (after Choose, reached by Home and Enter in the list, and after Esc in the browser; `Enter_in_the_repository_browsers_list_with_no_row_selected_chooses_nothing`; D454's Enter in the other dialogs' lists: `Enter_on_a_selected_row_of_a_pick_list_confirms_it_as_its_button_does`, `Enter_on_a_choice_dialogs_checked_option_confirms_it_as_its_button_does`, `Enter_on_the_push_dialogs_checked_remote_pushes_as_its_button_does`; the create form's Pick, ruling 51) |
 | The loading diff (plan.md 772; phase 7a's design 17 item 11) | K6 | `DiffTextViewTests` (`FocusBody(() => false)`), `KeyboardPassTests` (a held read, an `Empty` body turning to `Text`, a diff opened by Enter still taking the focus) |
-| The commit boxes (plan.md 774; D392) | K7 | `WorkingChangesTests` (a held `CommitAsync`, `CanToggleAmend`), `KeyboardPassTests` (Amend focused by Tab gets the focus back; `Amend_focused_by_Tab_leaves_the_focus_the_user_moved_while_the_commit_ran`) |
+| The commit boxes (plan.md 774; D392) | K7 | `WorkingChangesTests` (a held `CommitAsync`, `CanToggleAmend`), `KeyboardPassTests` (Amend focused by Tab gets the focus back; `Amend_focused_by_Tab_leaves_the_focus_the_user_moved_while_the_commit_ran`; since step 19's fix `Amend_focused_when_a_commit_starts_from_the_palette_gets_the_focus_back`, the user's path, the two before starting the commit from the code: D462 (2)) |
 | Icons and branding (R5, D407; plan.md 764): the icon's SVG, the tool that makes the `.ico`, the `.icns` and the PNG files, the window's and the executable's icon; with plan.md 782's visual check, the icon in the window and the taskbar | B1, B2; real window B1 (a) to (c) and B2 (the executable's icon, the window's two icons, the title bar dark and light, the taskbar button) | `IconFilesTests` (items 1 to 8: the masters' rules, the manifest's hashes, the `.ico`, the `.iconset`, `png/`, `Assets/Icon`, the `.icns` (item 7, D447) and `iconutil` both ways (item 8, in CI's macOS job, whose log shows it passed, not skipped)); `WindowIconTests` (the main window's and the notice window's `Icon`, `AppIcon`'s three URIs); `Phase8aExpectationTests.B`; the files: the masters in `assets/brand/`, the generated files, `tools/VisualCommit.IconBuilder` (built in CI's six jobs; a second run of it leaves `git status` clean, 7.8 item 2); the owner's choice recorded in `docs/brand/icon/round-1/` and `round-2/` (D447); the look-alike check by eye, with the checks by hand |
 | The README's "Name" note names the icon (D412; plan.md 764) | none | The README's "Name" note, design 7.3's text, written by the lead at §7's merge: proven by the file (design 0.1). No check of part B proves it; it stands here because it lands at §7's merge |
 | Third-party notices, complete for what the app ships and reachable from the app (plan.md 762; R6; D431, D433, D434; design 0.1, 8.1, 8.3.4) | A5 (the notices file and the vendors' files in the app's text dialog); A4 (the license) | `ThirdPartyNoticesTests` (`Every_shipped_package_is_named_with_its_version`, `Every_shipped_file_is_named`, `Every_named_package_ships`, `Every_grammar_and_theme_is_listed`, `Every_license_named_has_its_text`, `The_app_embeds_the_texts_word_for_word`, `The_identity_matches_LICENSE`, `The_notices_files_only_addresses_are_its_copyright_lines`), red on the base first and green in CI's six jobs (8.8; the macOS and Linux natives proven only in CI's macOS and Linux jobs, 8.9 item 5); `TextDocumentDialogViewModelTests`, `DocumentTextViewTests` (the text's keys, part A's "Shown by no check": `The_copy_key_copies_a_selection_and_nothing_without_one`, `The_select_all_key_selects_the_whole_text_and_leaves_the_view_where_it_is`, `Keys_that_would_move_extend_or_use_the_hidden_caret_or_type_do_nothing`, `Cut_paste_undo_and_redo_change_nothing_and_leave_the_view_where_it_is`, `Enter_with_or_without_modifiers_leaves_the_view_where_it_is_and_plain_Enter_goes_on_unhandled`, `Another_editor_still_takes_its_keys_line_breaks_typing_deleting_and_moving_its_caret`, `A_wheel_up_after_End_leaves_the_end_though_the_lines_it_brings_in_wrap` among them); `AboutSectionTests` (the notices' switch shows Avalonia's file; `Enter_in_the_licenses_text_closes_the_dialog_as_Close_does_and_gives_the_focus_back`); the files `THIRD-PARTY-NOTICES.md` and `notices/` (the vendors' files byte for byte as the vendors ship them, `notices/** -text` in `.gitattributes`: two with CRLF, two with LF; 8.2, 8.8); `ci.yml`'s `paths`, which take the notices and `LICENSE` as build inputs (D433; unverified until a push changes only the notices, 8.9 item 6) |
 | The About screen (plan.md 763 and 776; R6, D398, D409; with plan.md 782's visual check "The About screen") | A1 to A6, G3 (About's guide link); real window A1 (with a 1920×1080 capture where it fits) and A4 | `AboutSettingsViewModelTests` (the texts, the dialogs, the links' addresses, no launcher, a throwing launcher; `The_texts_are_read_off_the_callers_thread_and_a_second_press_meanwhile_opens_nothing_more`, `A_screen_closed_while_the_texts_are_read_shows_no_dialog`); `AboutSectionTests` (`Enter_in_the_licenses_text_closes_the_dialog_as_Close_does_and_gives_the_focus_back` among them); `LinkFocusFrameTests` (App.Tests, 12 cases: a link focused by the keyboard shows its whole text and its underline inside the frame, not under it, in About, dark and light, and in GitLab's sign-in dialog, `An_About_link_focused_by_Tab_shows_its_text_and_underline_inside_the_frame` and `A_sign_in_link_focused_by_Shift_Tab_shows_its_text_and_underline_inside_the_frame`; the frame moves nothing and a link draws outside its bounds only while focused, `The_frame_moves_nothing_and_a_link_draws_outside_its_bounds_only_while_focused`; the frame takes no pointer, `A_pointer_on_the_frame_reaches_what_lies_under_it_not_the_link`; a link focused by a click is underlined without the frame, `An_About_link_focused_by_a_click_is_underlined_without_the_frame` and `A_sign_in_link_focused_by_a_click_is_underlined_without_the_frame`); `AboutEntryTests` (the palette on a welcome, a repository and a dashboard tab; the macOS menu's one item `About VisualCommit`, no `Avalonia`, its `Command` with and without a dialog open); `SettingsDialogViewTests` (Down from Accounts reaches About, Down stays); `PaletteEntriesTests`, `CommandPaletteViewTests` and phase 6's K10 (the entry after `Follow the system's theme`); `AppVersionInfoTests` (WP0) and `The_identity_matches_LICENSE`; `Phase8aExpectationTests.A`; §9's sweep over About (part U); About in macOS's application menu, 8b's Mac checklist (8.9 item 2) |
-| An accessible name on every control and the graph's selected row exposed to UI Automation, with one Narrator walk-through by hand (R7, D411, D49 as D435 amends it, D450; plan.md 759's "an accessible name on every control; the graph's selected row exposed to UI Automation (D49); and one walk-through with Windows Narrator by hand", 770's icon buttons without a name, 784's visual check "the accessible names read through UI Automation in the real window", and "Done when" 786's "every control has an accessible name"; design 0.1) | U1, U2, U3; real window U1 and U3 (launch 13); by hand: the Narrator walk-through | `AccessibleNameSweepTests` (14 states; on the code before §9's names 12 of the first 13 failed, the notice's had nothing to find, and About's came at the merge: U2); `AutomationSweepTests`; `GraphRowSpeechTests`; `CommitGraphControlAutomationTests` (no peer without a client, one row peer for 100,000 rows, one Name change per move, bounds, the request's words, the same bytes after ten moves back); `CommitGraphControlTests.The_graph_is_a_ui_automation_list_with_its_name`; `StatusBarTests.The_operation_text_is_a_polite_live_region` (the status bar's live region, ruling 36); `Phase8aExpectationTests.U`; the spike's events in §9's merge notes (9.3.1); 9.6's grep (only `AutomationProperties.*` and `xmlns` lines in the `.axaml` hunks; no `Render`, `AffectsRender`, `InvalidateVisual`, measure or arrange in the graph's diff; no `IEmbeddedRootProvider`, `[PrivateApi]` or window peer in `src/` without a decision); the guide's `keyboard-and-screen-readers.md` (ruling 39, D411; 11.3.2); to the Backlog at the close, an item status on the left panel's rows (ruling 36) and the hunk bars' repeated names (13.4 item 15) |
+| An accessible name on every control and the graph's selected row exposed to UI Automation, with one Narrator walk-through by hand (R7, D411, D49 as D435 amends it, D450; plan.md 759's "an accessible name on every control; the graph's selected row exposed to UI Automation (D49); and one walk-through with Windows Narrator by hand", 770's icon buttons without a name, 784's visual check "the accessible names read through UI Automation in the real window", and "Done when" 786's "every control has an accessible name"; design 0.1) | U1, U2, U3; real window U1 and U3 (launch 13); by hand: the Narrator walk-through | `AccessibleNameSweepTests` (14 states; on the code before §9's names 12 of the first 13 failed, the notice's had nothing to find, and About's came at the merge: U2); `AutomationSweepTests`; `GraphRowSpeechTests`; `CommitGraphControlAutomationTests` (no peer without a client, one row peer for 100,000 rows, one Name change per move, bounds, the request's words, the same bytes after ten moves back); `CommitGraphControlTests.The_graph_is_a_ui_automation_list_with_its_name`; `StatusBarTests.The_operation_text_is_a_polite_live_region` (the status bar's live region, ruling 36) and, since step 19's fix, `StatusBarTests.The_operation_texts_live_region_speaks_the_start_and_the_result_not_the_progress` (two Name changes for twenty progress values, D463 (1)); `Phase8aExpectationTests.U`; the spike's events in §9's merge notes (9.3.1); 9.6's grep (only `AutomationProperties.*` and `xmlns` lines in the `.axaml` hunks; no `Render`, `AffectsRender`, `InvalidateVisual`, measure or arrange in the graph's diff; no `IEmbeddedRootProvider`, `[PrivateApi]` or window peer in `src/` without a decision); the guide's `keyboard-and-screen-readers.md` (ruling 39, D411; 11.3.2); to the Backlog at the close, an item status on the left panel's rows (ruling 36) and the hunk bars' repeated names (13.4 item 15) |
 | User guide (D408; plan.md's Delivers item "Markdown pages in the repository, a site on GitHub Pages built by a workflow, pictures in both themes from the walk-through's harness, and the app's links to it", and "Done when"'s "the user guide exist[s]"; D417, D434, D439 to D441, D451; design 0.1, 11.1) | G1, G2, G3 (the app's links: the palette's row and F1, the shortcuts list's `Help`, the first-run links, About's link); by hand: the guide's site from the `guide-site` artifact, and after the merge the live site and the environment's branch rule | The files: `docs/guide/book.toml`, `docs/guide/guide.css`, `docs/guide/src/SUMMARY.md` and its 33 pages in 11.3.2's order, each saying its row, those of rulings 7, 8, 19, 39, 46, 50, 53 and D411 among them (11.8 item 1, read by the lead at §11's merge), in American spelling (D434); `.github/workflows/guide.yml` (its run green after the merge's push, its step "App's links" included, no deploy job off `master`, `guide-site` looked at, 11.8 item 4) with mdBook 0.5.4 pinned by its Linux archive's SHA-256 `3f28de05dafca9d0f2eab99c662116b0e37b89b1d96a08f8f430b9eeae958cd7`, the digest GitHub shows for release `v0.5.4`, downloaded and checked on 2026-11-23 (13.4 item 20); `scripts/check-guide-links.py` with its `--self-test` (D441, D451); `tests/VisualCommit.GuideShots` (built by CI's Windows job; `GuideCatalogueTests`, `LeakGuardTests`; the lead's run on the laptop through `scripts/heavy-run.sh`, `LeakGuard` silent and every picture looked at, 11.8 item 3); App.Tests' `AppLinksTests` (each `GuidePage`'s page under `docs/guide/src`, linked from `SUMMARY.md`, its anchor once) and `GuideShortcutsPageTests` (the shortcuts page's tables made from `AppShortcuts.Groups`), also run by the guide's workflow (D451); `AppShortcutsTests` (F1 bound, routed on Ctrl and Cmd; `Help` with its note on a Mac), `SettingsDialogViewTests`, `PaletteEntriesTests`, `CommandPaletteViewTests`, phase 6's part S and K10 (the earlier tests 11.4 changes); `Phase8aExpectationTests.G`; `compare-pictures.py` at §11's merge showing only 11.6's changes (11.8 item 3) |
 | Performance pass (plan.md's Delivers list; D436 to D438, D457; design 0.1, 10.5) | none: §10 has no part (design 0.5, 10.5) | This report's section "The performance series" and its table (design 10.3.6's step 5); `PerformanceSeriesTests` (RealWindowTests, no window: the median of odd and even counts, the range, the bound's rounding, `ParseRuns`, the summary line); App.Tests' `StartupTimelineTests` (the start-up lines), `RepositoryViewModelTests` and `RepositoryViewModelFilterTests` (the reload's and the heap's log lines) and `RepositoryOperationsPullTests` (a Pull's git calls held to their budgets), design 10.4's classes; Q1 in phase 1's real-window pass (`Phase1RealWindowPass.Checks_8_and_9_the_100k_commit_repo_and_Q1`; D50, D436); ruling 76's restore order, merged at `aedb12f`: App.Tests' `RestoreOrderTests`, `RepositoryFirstPageTests`, `RestoreOrderShellTests` and `SettingsEntryTests`, and the proof by its alternated series and the lead's probe ("The restore order's proof"; D457, D458; the series taken again by D461); the guide's `troubleshooting/large-repositories.md`, with the report's numbers as indications (10.3.6 step 5; 1.17, "At wave 3's close") |
 
@@ -4381,7 +4453,12 @@ returns). `ActivityLogView.axaml` changes only if 6.3.8's test fails. K10's four
   and `SummaryFact` read names §9 keeps. The fact and its test came at wave 2's merge (`1355a20`, after
   §6's merge `e463392`; 1.17), after 9.4 was written; 9.4 gains it (open point 92). The pre-gate round
   (status.md's step 19) rewrites that test with the lead's ruling on Ctrl+Tab from a stage row (1.17);
-  whatever test then reads `ReadmesStageFact` reads §9's name. Otherwise as 9.4:
+  whatever test then reads `ReadmesStageFact` reads §9's name. (Done on 2026-11-24, D462 (1): the test
+  is now
+  `Ctrl_Tab_from_a_stage_rows_Stage_reached_by_Tab_gives_the_focus_to_the_other_tabs_first_row_with_the_frame`;
+  it still reads `ReadmesStageFact` as the focus placed before the switch, and after the switch it
+  expects `ReadmesRowFact`, the other tab's first row, where it expected the focus on nothing.)
+  Otherwise as 9.4:
   `ShellToolTipTests` reads tooltips, help texts and keys, which stay; `HideAndSoloTests` reads
   tooltips; `CommitKeyTests`, `RegionKeysTests`, `CommandPaletteViewTests` and
   `Phase6RealWindowPass.K.cs:224` read the focus on `GraphRows`, which stays (ruling 35).
@@ -4800,6 +4877,99 @@ so A1's capture at that size is not run there (run.txt says so).
   graph's subjects but not for that reload's end, and the steps after it press rows of panels that
   refresh with it; step 9 had the same gap before CI's failure of 2026-11-22 showed it. No expected
   result changes, and part U's six pictures are the same files as before.
+- **The Narrator walk-through, step 10** (2026-11-24; the review before the gate, screenreaders-4;
+  design 13.1's ruling 100, D462 (3)). The step no longer expects a row named
+  `Avalonia.Controls.DockPanel` for a moment as the folder opens: hearing that name is a finding.
+  Reason: a toggled folder now keeps its row (`IUpdatableRow`, `2466216`, merged at `c0bedc6`), so its
+  button's data never goes null under it and its peer keeps the row's name, "feature".
+  `KeyboardPassTests.Toggles.cs`'
+  `Enter_on_a_folder_of_the_left_panel_and_a_click_on_another_open_them_and_their_buttons_keep_the_focus_their_rows_and_their_names`
+  holds that cause, for Enter and for a click, and failed before the fix (`5f47436`); the name itself
+  is not reproduced headless, and what Narrator says is the gate's listen (D460; open point 93). No
+  check and no picture changes.
+- **The Narrator walk-through, step 14** (2026-11-24; the review before the gate, screenreaders-1;
+  design 13.1's ruling 100, D463 (1)). The step listens for the start, `Fetching from all remotes…`,
+  and the result, `Fetched from all remotes`, and notes whether the start is heard; it no longer asks
+  whether git's progress steps are read and how many. Reason: the status bar's polite live region was
+  told of every new text, git's stages and percentages up to ten times a second, which buries the
+  result; `Controls/StatusText` now raises its Name change only when `IStatusBarOperation.SpokenText`
+  changes (the start, ssh's notice, the result), while the text shown and its name keep the percentage.
+  `StatusBarTests.The_operation_texts_live_region_speaks_the_start_and_the_result_not_the_progress`
+  holds the count: two Name changes for twenty progress values. No check and no picture changes.
+- **The Narrator walk-through, step 21, and open point 86** (2026-11-24; the review before the gate,
+  screenreaders-3; design 13.1's ruling 100, D463 (3)). No "Checking…" is expected while the search
+  runs, where it was (the window, if Narrator names it as the focus leaves the button, is noted); once
+  the search ends, "Check again, button" with the focus given back, described by the title of the
+  state the search ended on, "VisualCommit needs Git" (step 19's second round). Reason: "Checking…" is
+  the text of a button that is disabled and without the focus while the search runs, and that text is
+  no live region (ruling 99's "nothing else"), so it was never spoken; and the title, the live region
+  that names the outcome, reaches only a reader that has already read the screen (in D455's cold case
+  it does not), and here its text does not change at all, so the outcome is said where the focus
+  lands, as a form's field is described by its error. No check and no picture changes.
+- **The Narrator walk-through, step 21a, new** (2026-11-24; the review before the gate, screenreaders-3
+  and its reader's speech-r1; design 13.1's ruling 100, D463 (3)). Choose refused (a program that is no
+  git, `whoami.exe`), the focus back on "Choose git.exe…" and the refusal as its description (step 19's
+  second round). Reason: since step 19's first round Choose gets the focus back after a refused file
+  (`a76b4ce`), and D463 (3) describes it by the error line there; what a reader then says is the gate's
+  listen (D460), and no step reached a refused Choose before. The notice's Try again, described by its
+  status in the same way, gets no step: an unanswered try needs a process that holds the data folder's
+  `instance.lock` and answers nothing, as part I's launch 5 does in its test process, and the
+  walk-through stages none (the note after the walk-through's steps). No check and no picture changes.
+- **The conventions' ink in a capture, and L6 a to c in the real window (launch 2)** (2026-11-24; the
+  review before the gate, realwindow-4; design 13.1's rulings 99 and 100; `c80689d` and `902288e` on
+  `wip/p8a-realwindow`). Every text read has its rectangle, and for L6 a to c a missing rectangle for
+  `main`'s name is a problem, noted and asserted after the picture's comparison, where the conventions
+  said that the comparison carries the colour and run.txt says so. Reason: the comparison matches
+  colours within 48 a channel (D58), and L6's two accents, `#7C8CFF` idle and `#8B9AFF` hovered or
+  selected, lie 15 apart at most, so a missing rectangle would have let a wrong accent pass.
+  `Phase8aOrderTests.L6_without_a_rectangle_for_main_is_a_problem` runs the rule (`HeadInk`) with no
+  window. No scripted check and no picture changes.
+- **B1 (a) in the real window (launch 3)** (2026-11-24; the review before the gate, realwindow-1;
+  design 13.1's rulings 99 and 100; `3e32b9b` on `wip/p8a-realwindow`). The executable's icon is asked
+  at 64 pixels, `Icon.ExtractIcon(ExecutablePath, 0, 64)`, a frame the `.ico` holds at any scaling, and
+  run.txt has the size asked and the size got, where `Icon.ExtractAssociatedIcon` was taken at its own
+  size. Reason: that call gives the icon at `SM_CXICON` for the test host's DPI, 56 at 175 %, a size
+  the `.ico` lacks, so the step would have failed there with a correct icon; reasoned, not measured,
+  the laptop running at 200 %, where it gave 64 (design 12.10). Open points 48 and 54 say so. No
+  scripted check and no picture changes.
+- **B2's taskbar step in the real window (launch 3), the row B2, the checks by hand and open point 51**
+  (2026-11-24; the review before the gate, realwindow-2 and its reader's realwindow-r1; design 13.1's
+  rulings 99 and 100; `e3c0884` and `82922f5` on `wip/p8a-realwindow`). The pass notes every taskbar
+  button named for VisualCommit that `TaskbarButtons` finds, with its taskbar and whether it lies on
+  the display that holds the app's window (`DisplayBounds`); only those there count. Exactly one is
+  captured; none found, and found but none there, are two "Not run" lines, each checked by hand; more
+  than one there captures nothing and fails the launch at its end, saying to close or unpin the other
+  VisualCommit; until then the first button found was captured, wherever it lay. Reason: a button
+  does not say whose process it is, so another running or pinned VisualCommit's button could have
+  been captured as this launch's; and Windows shows a window's button on every display's taskbar by
+  default, so a count over every taskbar would fail with no other VisualCommit running (reasoned, not
+  measured: the laptop has one display). No scripted check and no picture changes.
+- **Earlier tests whose assertions step 19's fixes changed, and one earlier picture** (2026-11-24; the
+  review before the gate; design 13.1's ruling 100, D462 to D465). Each keeps its point.
+  `GraphReviewFixTests.Opening_a_folder_inserts_its_rows_without_resetting_the_list` holds one Add of
+  the folder's 40 rows and the same folder object, open, where it held one Remove and 41 Adds: a
+  toggled folder keeps its row (D462 (3), focus-r4); the list is still never reset.
+  `FetchHoldTests.A_held_fetch_that_gives_up_leaves_a_marker_on_which_the_hold_fails` holds that
+  `Dispose` releases without throwing, where it held that `Dispose` threw; `Release` and
+  `WaitForHeldAsync` still throw (concurrency-lifetime-3, tests-ci-2; open point 94).
+  `AskPassBrokerHelperTests.The_line_about_ssh_comes_once_per_session_at_its_first_ask_or_deny_scope`
+  expects the line of the running system, `AskPassRequireLineWindows` on Windows, where it expected
+  ruling 7's line everywhere (security-privacy-1; ruling 100 amends ruling 7).
+  `GitProgramViewModelTests.Use_the_git_on_the_path_drops_the_choice_and_shows_the_git_in_use` expects
+  the note after the dropped choice that is in use, `Chosen here. VisualCommit uses the Git on the PATH
+  from its next start.` as built, where it expected `Chosen here. VisualCommit uses it from its next
+  start.` (firstrun-3); with step 19's second round it holds the lead's words, `Chosen here.
+  VisualCommit looks for Git again at its next start.` (`GitSetupTexts.NextStartLooksAgainSuffix`).
+  `SingleInstanceGuardTests.A_closing_holder_is_waited_for_and_the_waiter_takes_the_folder_and_serves`
+  (design 4.5's test 4) expects `WaitToTake` to give `HeldResolution.Taken`, where it gave true
+  (D464 (1)). 8a's own `KeyboardPassTests` facts of Ctrl+Tab from a stage row's own button and from its
+  Stage are rewritten and renamed, as ruling 99 ordered (part U's "Changes to expected results"; D462
+  (1)). Phase 1's picture `10b-second-tab` is from now on the form without the new tab's `New tab`
+  tooltip, the file of waves 1 and 2's references (`d3b041a4…`): check 10 moves the pointer to the
+  neutral point before `10b` and `10c` and asserts that no tooltip is open (`9998f68`, tests-ci-3), and
+  phase 1's report records it in check 10's notes. The comparison with wave 3's references will show
+  `10b-second-tab` changed once, as their file holds the tooltip (`9f967c94…`); its written expected
+  result does not change.
 
 ### Wave 1's comparison with phase 7b's references (2026-11-20)
 
@@ -5280,11 +5450,45 @@ wave 2's references.
   `New tab` over the toolbar's Fetch and Pull icons, and this run's picture, the file of wave 1's and wave 2's
   references, does not. It is none of the five kinds; its cause is check 10's timing (the picture is taken at
   once after the click on `+`, the pointer left on the new tab), which is on the list of the review before the
-  gate (status.md's step 19).
+  gate (status.md's step 19). On 2026-11-24 step 19 changed check 10 (`9998f68`, merged at
+  `876c197`): the pointer moves to the neutral point before `10b` and `10c` and the check asserts
+  that no tooltip is open, so the picture is now always the form without the tooltip.
 
 The eleven names new to this comparison are seven carets (`f11c`, `w6a`, `b01a`, `n06b`, `k6a`, `k7b`, `l3d`),
 one progress bar (`w8e`) and three of edge pixels (`g23h`, `a09b`, `n05b`). The references of the later merges
 stay wave 3's; this run's pictures are kept under `default-run-rows/visual/`.
+
+**Step 19's change to the row list (2026-11-24; D462 (3), ruling 100; the focus package's rows, merged
+at `c0bedc6`).** What this section says above held on 2026-11-22 and 23; the review before the gate
+(keyboard-3, screenreaders-4, performance-restore-rows-3) changed three things. A row's opening is now
+something the row updates in itself (`IUpdatableRow`): a folder's or a section's opening and a header's
+count, so a toggled folder or section keeps its row, its control and the keyboard focus a key gave it,
+where the lead's rule above still listed "level or opening" among what a ref row cannot change itself;
+and `RowCollection` counts a row that can update itself as kept at either end of a rebuild. The review's
+(D) above is answered with it: Enter or Space on a section header, a folder or a tree folder keeps the
+focus with its frame, and an eye or solo button that hides itself gives the focus to its branch's row
+(`KeyboardPassTests.Toggles.cs`). A rebuild that only inserts rows or only removes them tells the
+view of them in one Add or one Remove, however many, and never resets the list: a branch created or
+deleted keeps its section's header, which shows its new count itself, and the view is told of that
+branch's row alone. The reset above 64 rows told of stays for a rebuild that keeps the number of rows
+and for one that both removes and inserts, so "a rebuild that changes the number of rows removes and
+inserts its changed part whole" now holds only for one that does both. Measured, and accepted as a
+limit (ruling 100), in
+`LeftPanelScrollTests.Creating_a_branch_above_the_view_of_a_scrolled_left_panel_keeps_every_row_and_tells_the_list_of_the_new_row_alone`,
+which asserts the rows and the one Add and states the rest: 60 branches scrolled by 400 px, `a00`
+created outside the app, far above the view; every row stays the object it was, the list is told of
+`a00`'s row alone (one Add at index 1) and the offset stays 400; Avalonia's estimate after an insert
+above the first row it has made draws the rows in view 22 px lower, 4 px above their true places, each
+with a new control, the extent 1742 for 1720, and a press on one of them, `b19`, loses its click: the
+same numbers as on the rows before the change (`57ebeff`), and the row under the pointer has moved a row
+down in any case. Below the view
+(`Creating_a_branch_below_the_view_of_a_scrolled_left_panel_keeps_the_header_the_rows_in_view_and_the_click_under_a_press`)
+the rows in view keep their places and controls and the press its click, where before 61 rows removed
+and 62 inserted reset the list. With it `RowCollectionTests`
+(`Sixty_five_rows_inserted_together_or_removed_together_are_told_of_in_one_change_that_resets_nothing`
+among them) and `LeftPanelViewModelTests`' three facts of a branch created or deleted, a folder and a
+section toggled. One earlier test's assertions change, `GraphReviewFixTests`' ("Changed in this report
+after its first commit").
 
 ## The performance series (design 10.3.6; D457)
 
@@ -6015,6 +6219,12 @@ another; §12's builder follows the report's steps.
     for the focused id, Enter: `SideBySideDiffButton` selected, no git change); "Amend" by K7 (disabled
     while committing) and `KeyboardPassTests` (focused by Tab, the focus given back). The design's 6.3.9
     and part K's first Delivers row name them so.
+    **At step 19 (2026-11-24; D462 (2), ruling 100):** Amend's return is armed whenever Amend has the
+    focus as a commit starts, with the frame only if it had one, and
+    `KeyboardPassTests.Amend_focused_when_a_commit_starts_from_the_palette_gets_the_focus_back` proves
+    the path a user has: Amend focused by Tab, the palette's Commit run by the keys, whose close gives
+    Amend the focus without the frame (D104), and the focus given back without it once the commit has
+    ended. The two earlier facts start the commit from the code.
 41. **K2's Downs in the real window.** 12.3.4 launch 12's "real Down until the caret is in run 2" cannot
     be read in the real window: neither `BlameText`'s peer (its value alone, `BlameTextEditor.cs:204-217`)
     nor `BlameGutter`'s (a `Custom` element, there for its bounds) exposes the caret or the picked run.
@@ -6043,6 +6253,7 @@ another; §12's builder follows the report's steps.
     script. A shell that misses a short release still counts its rounds from its own start (`Arm()`'s
     comment says so); no test comes near that. No expected result changed. The exception that hid the
     first failure is open point 94.
+    **At step 19 (2026-11-24):** the final `Dispose` no longer fails on a marker (open point 94's note).
 43. **K5's start.** 8a's `StartEmptyAsync` takes a theme and a probe and no fake of GitHub (1.17; every
     provider stays off, `Phase8aChecks.Support.cs`). This part starts K5 as 7a's `StartEmptyAsync(data,
     served)` does, on a copy of 7a's "hosting" served on a free port; the lead may instead give 8a's
@@ -6127,6 +6338,11 @@ Still open, each with who settles it; a point the lead settled on 2026-11-20 say
     to assert the small pair is the lead's (the design only writes the numbers into run.txt).
     **Settled by the lead on 2026-11-20** for the small pair: `ICON_SMALL` and `SM_CXSMICON` are written
     to run.txt and inspected, not asserted. The rest of this point stands.
+    **Changed by step 19's fix (2026-11-24; `3e32b9b` on `wip/p8a-realwindow`; ruling 100)** for (a):
+    the executable's icon is asked at 64 pixels (`Icon.ExtractIcon`), a frame the `.ico` holds, so its
+    size no longer follows the scaling, and an extracted size that is none of the `.ico`'s can no longer
+    come of a scaling such as 175 %, where `ExtractAssociatedIcon` would give 56 (reasoned, not
+    measured; B1 (a)). (b) stands.
 49. **The crop.** "The title bar's left 64 × caption height" (7.5, 12.3.4) gives neither the scale of the
     64 nor the caption height's source. This report reads 64 pixels of the framed capture from its left
     edge (the invisible resize border that `GetWindowRect` includes among them) and the caption's height
@@ -6145,6 +6361,13 @@ Still open, each with who settles it; a point the lead settled on 2026-11-20 say
     bounds are asserted and it is captured; none found, the method does not fail on it, run.txt has the
     line, and the report's B2 says "Not run" for that step, which is then looked at by hand at the gate
     ("Checks by hand").
+    **Changed by step 19's fix (2026-11-24; `e3c0884` and `82922f5` on `wip/p8a-realwindow`; ruling
+    100):** every button named so is noted, and only those on the display that holds the app's window
+    count. Exactly one there is captured as before; none found, and found but none there, are two "Not
+    run" lines, each looked at by hand; more than one there captures nothing and fails the launch at its
+    end, saying to close or unpin the other VisualCommit. A button does not say whose process it is,
+    and Windows shows a window's button on every display's taskbar by default, so a count over every
+    taskbar would fail with no other VisualCommit running. B2's taskbar step above has the words.
 52. **The title in the three framed captures.** 7.6's "the title moved right", against phase 7b's
     references, where an icon already stands before the title. The expected regions stay 0.7's "the
     title bar" and §2's `FilterBox` box (open point 55); the lead reads it at the gate.
@@ -6177,6 +6400,10 @@ Still open, each with who settles it; a point the lead settled on 2026-11-20 say
     24's line two solid rows with a half-covered row above and below, and the `.iconset`'s
     `icon_16x16` soft. `WindowIconTests` and `ShellTests` pass, so `HeadlessIconLoaderStub` takes the
     `.ico`. The rest of this point, §12's, stands.
+    **Changed by step 19's fix (2026-11-24; ruling 100):** B1 (a) no longer takes
+    `ExtractAssociatedIcon`; the executable's icon is asked at 64 (`Icon.ExtractIcon`), a size the
+    `.ico` holds at any scaling (open point 48), so of this point's sizes only `WM_GETICON`'s stays
+    unverified under per-monitor DPI.
 55. **The framed captures' second region.** 0.7's row "The window's icon", its sentence "Every one but
     the framed captures is in the 1,333", 7.6 ("at the title bar's left only") and 12.6 name only the
     title bar for the three framed captures. §2's placeholder (1.5) also changes them, in the
@@ -6574,6 +6801,12 @@ Still open, each with the reading this report takes and who settles it; a point 
     row the keys really reach, as this part has them. Step 11: "F6 to the right panel: the first
     changed file's row, its name, 'button'". The owner hears the steps at the gate; a step whose words
     differ is written down as heard.
+    **Changed by step 19 (2026-11-24; ruling 100, D463):** step 21 expects no "Checking…": the button
+    is disabled and without the focus while the search runs and its text is no live region, so it was
+    never spoken; once the search ends, "Check again, button" with the focus given back, described by
+    the title of the state the search ended on (step 19's second round). Step 14 listens for the start
+    and the result only, and step 21a, Choose refused, is added ("Changed in this report after its
+    first commit").
 87. **Launch 13's details 12.3.4 leaves.** The click on the working-changes row before the double-click
     on `notes.txt` (the stage panel shows only then); `WindowLayout.RowHeight` ± 1 read in
     `GraphRowsBounds()`'s units (the window's, not the capture's pixels at 200 %); the run.txt line and
@@ -6627,11 +6860,26 @@ review before the gate (status.md's step 19).
     panel has settled, does not see it; it is older than 8a and outside 1.12's table. The review before
     the gate reproduces it in a test, and the Narrator walk-through listens for it when a folder opens
     (step 10).
+    **Settled by step 19's fix (`2466216`, merged at `c0bedc6`; screenreaders-4; rulings 99 and 100,
+    D462 (3)):** a toggled folder or section keeps its row, so its button's data never goes null under
+    it and its peer keeps the row's name. The Windows name itself is not reproduced headless (there the
+    name read at that instant still falls back to the row's text), so the test asserts the cause:
+    `KeyboardPassTests.Toggles.cs`'
+    `Enter_on_a_folder_of_the_left_panel_and_a_click_on_another_open_them_and_their_buttons_keep_the_focus_their_rows_and_their_names`
+    holds no change of the button's data and the name "feature", for Enter and for a click, and failed
+    before the fix (`5f47436`). Whether Narrator still says it is the gate's listen (step 10, D460).
 94. **A check whose `using var hold` throws in its `Dispose` hides the first exception.** In CI's run
     44969394972 part K's method 3 failed with the fetch hold's `Dispose` throwing "The hold gave up",
     which replaced the exception of the step that failed first (most likely `WaitForHeldAsync` at K8's
     step 7; open point 42). It is older than this wave, and the hold's fix (`f019688`) does not change
     it.
+    **Settled by step 19's fix (`84fb824`, merged at `876c197`; concurrency-lifetime-3, tests-ci-2;
+    ruling 99):** `FetchHold.Dispose` releases the hold and never throws, so the exception of the step
+    that failed first is the one reported, and each check that holds a fetch ends with its own look at
+    the hold (`Assert.Empty(hold.GaveUp())`), so a hold that gave up still fails its check.
+    `FetchHoldTests.A_step_that_fails_under_a_hold_that_gave_up_is_reported_with_its_own_exception`
+    holds it; `FetchHoldTests`' earlier test changes with it ("Changed in this report after its first
+    commit").
 
 Found at wave 3's close (the lead, 2026-11-22), numbered on: 95 to 97 by the link frame's fixer and
 verifiers, 98 by the performance pass.
@@ -6647,6 +6895,12 @@ verifiers, 98 by the performance pass.
     takes clicks just outside the radio button while it has the keyboard's focus, as `VcLinkButton`'s
     did in the link frame's first round. Not checked; for the review before the gate (status.md's step
     19).
+    **Settled by step 19's fix (`763a1c5`, merged at `ce144f4`; ruling 99):** it did take them. The
+    frame is now only drawn, never hit (`IsHitTestVisible` False on `FocusFrame`), as `VcLinkButton`'s:
+    a pointer on it reaches what lies under it, focused or not, and its drawn pixels are as before.
+    `RadioFocusFrameTests` (App.Tests) holds it: the Reset dialog's and the settings screen's options'
+    frames take no pointer and move nothing, the Reset dialog's cover no other control, and a click on
+    the frame of the focused hard option leaves Mixed checked.
 98. **Q1 and the launcher.** The real-window pass measures Q1 with git itself on the PATH (Git Bash's
     `ucrt64\bin\git.exe`), not through `cmd\git.exe`, the launcher an installed user's PATH finds
     (D457; "The performance series"): for the review before the gate (status.md's step 19).
