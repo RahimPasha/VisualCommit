@@ -1393,12 +1393,15 @@ community repository, which the Git for Windows project does not maintain, and r
 updates the one installed; Windows may ask for permission. When it has finished, close the window and
 press Check again.`, `Update`; `Cancel` (today's `ConfirmationRequest.CancelText`).
 
-Choose (5.3): the picker's titles `Choose git.exe` and `Choose the git program`; `Checking…`; the refusals
-`Git {v} at this path is too old: VisualCommit needs {min} or newer.`, `This Git did not report its
-version. Git said: {first line}`, `This file could not be started: {message}`, and today's
+Choose (5.3): the picker's titles `Choose git.exe` and `Choose the git program`; `Checking…`; the
+refusals `Git {v} at this path is too old: VisualCommit needs {min} or newer.`, `This Git did not report
+its version. Git said: {first line}`, `This file could not be started: {message}`, and today's
 `SettingsTexts.ProgramMissing` `There is no file at this path.` and `SettingsTexts.ProgramNotExe`
 `Choose the program itself (an .exe file): a .cmd or .bat file would run through cmd.exe.` (no check
-shows the last four).
+shows the last four); and, added on 2026-11-24, `This file did not report its version within 10 seconds,
+so VisualCommit stopped it.` (the review before the gate, concurrency-lifetime-2: the probe of a chosen
+file had no time limit, so a program that never answers held Choose for good; it now stops after 10
+seconds, with the window, and in the settings row with the screen's Save; no check shows it).
 
 The status bar (5.3, and today's `MainWindowViewModel`): `Looking for Git...`, `Git {v}`, `Git {v} is too old
 (needs {min} or newer)`, `Git not found`, `Git is not working`, and the new `Chosen Git not found`, `Git
@@ -1410,14 +1413,19 @@ The settings row (5.3): `Git program`; `None found`; `Found on the PATH.`, `Foun
 install folder.`, `Found in a usual install folder.`, `Chosen here.`, `Chosen here. There is no file at
 this path.`, `Chosen here. VisualCommit runs Git only from a full path to the program itself.`, `From
 VISUALCOMMIT_GIT_STAND_IN, a test switch.`, `No Git was found on the PATH or in the usual install
-folders.`, each followed, while the choice differs from the git in use, by ` VisualCommit uses it from its
-next start.` (git works) or ` VisualCommit looks for Git again when you save.`; after `Use the Git it found`
-while the chosen git is gone and another was found, `VisualCommit looks for Git again when you save.` alone
-(the lead's ruling on the review's FD5 and FT8; no check shows it); `Browse…`, `Use the Git on
-the PATH`, `Use the Git it found`. The netrc note (5.3): `Your home folder has a .netrc or _netrc file.
-With Git {v}, an entry in that file for a host can answer git's requests to it before your signed-in
-account. Git 2.46 or later stops this for git's own requests; git-lfs reads the file with every version of
-Git.`, `Dismiss`.
+folders.`, each followed, while the choice differs from the git in use, by ` VisualCommit uses it from
+its next start.` (git works) or ` VisualCommit looks for Git again when you save.`; after `Use the Git
+on the PATH` while the chosen git is the one in use and works, `Chosen here. VisualCommit looks for Git
+again at its next start.` (added on 2026-11-24, the review before the gate, firstrun-3: until then the
+note read `Chosen here. VisualCommit uses it from its next start.` there, which was false, the choice
+being dropped; the words are the lead's, ruling 100: the next start's search looks on the PATH and then
+in the usual install folders, so the note names neither; no check shows it); after `Use the Git it
+found` while the chosen git is gone and another was found, `VisualCommit looks for Git again when you
+save.` alone (the lead's ruling on the review's FD5 and FT8; no check shows it); `Browse…`, `Use the Git
+on the PATH`, `Use the Git it found`. The netrc note (5.3): `Your home folder has a .netrc or _netrc
+file. With Git {v}, an entry in that file for a host can answer git's requests to it before your
+signed-in account. Git 2.46 or later stops this for git's own requests; git-lfs reads the file with
+every version of Git.`, `Dismiss`.
 
 Today's texts the steps pass through: `New tab` (`RepoTabViewModel.EmptyTitle`), `No repository open`,
 the settings screen's `Git`, `Accounts`, `All repositories (global)`, `This repository`, `Save`, `Cancel`,
