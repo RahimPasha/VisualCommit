@@ -81,8 +81,11 @@ is. Update it, then press **Check again**:
   **Download Git for Windows** opens the download page; its installer updates Git in place.
 - On **macOS**, update the Command Line Tools in System Settings, General, Software Update, or
   install Git with Homebrew (`brew install git`).
-- On **Linux**, install a newer Git from your distribution, or choose another Git. The link
-  **Other ways to install Git** opens Git's page for Linux, which lists other sources.
+- On **Linux**, install a newer Git from your distribution. The link **Other ways to install Git**
+  opens Git's page for Linux, which lists other sources.
+
+Or choose a newer Git that is already on this computer (see below): VisualCommit checks it, saves it
+as your choice and looks for Git again at once, without **Check again**.
 
 When the Git that is too old is the one you chose in Settings, the screen offers
 **Use the Git on the PATH** in place of winget, which removes your choice.

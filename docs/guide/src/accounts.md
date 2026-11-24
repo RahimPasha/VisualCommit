@@ -48,7 +48,9 @@ VisualCommit never writes a token to a file.
 
 Where no keychain can be reached, as on some minimal Linux desktops, the token is kept for this
 session only: "No keychain was found on this computer. The token is not saved: VisualCommit keeps
-it until it closes and asks for it again at the next start."
+it until it closes and asks for it again at the next start." When saving it in the keychain fails,
+the token is also kept for this session only, and the section says why, beginning
+"The token could not be saved in this computer's keychain:".
 
 ## Use the account for git
 

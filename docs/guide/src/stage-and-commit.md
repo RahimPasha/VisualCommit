@@ -31,12 +31,13 @@ file, **Unstage hunk**.
 
 In a file's diff, select lines by clicking their numbers or by dragging over the text. The diff's
 toolbar then shows **Stage lines** and **Discard lines** (**Unstage lines** in a staged diff), and a
-right-click on the selection offers **Stage selected lines** and **Discard selected lines…**. Only
-the added and removed lines you selected are staged; the rest of the hunk stays as it is.
+right-click on the selection offers **Stage selected lines** and **Discard selected lines…**
+(**Unstage selected lines** in a staged diff). Only the added and removed lines you selected are
+staged; the rest of the hunk stays as it is.
 
 With the keyboard: press F6 until the diff has the focus, select lines with Shift and the arrows,
-then press Shift+F10 for the menu with **Stage selected lines**. See
-[Keyboard and screen readers](keyboard-and-screen-readers.md).
+then press Shift+F10 for the menu with **Stage selected lines** (**Unstage selected lines** in a
+staged diff). See [Keyboard and screen readers](keyboard-and-screen-readers.md).
 
 ## Write the message and commit
 
@@ -47,7 +48,9 @@ then press Shift+F10 for the menu with **Stage selected lines**. See
    Ctrl+Enter (Cmd+Enter on macOS) in either box.
 
 Ctrl+Shift+M (Cmd+Shift+M on macOS) selects the **Working changes** row and goes to the commit
-message from anywhere in the repository, while there are changes to commit.
+message from anywhere in the repository, while there are changes to commit and the conflict
+resolver is closed. It does nothing while the settings screen, the command palette, another dialog
+or a menu is open, or while you drag a branch.
 While nothing is staged, the button reads **Stage files to commit** and is disabled, whatever the
 summary holds; once files are staged, it stays disabled until the summary has text.
 

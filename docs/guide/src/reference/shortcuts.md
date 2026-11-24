@@ -5,8 +5,10 @@ VisualCommit's keys are fixed: no setting changes them. The settings screen's
 command palette show an action's key beside it.
 
 On macOS, Cmd mostly takes the place of Ctrl, and Option that of Alt; the tables give each key as
-each system has it. Ctrl+Tab, for example, is Ctrl on every system. How to reach what has no key of
-its own is in [Keyboard and screen readers](../keyboard-and-screen-readers.md).
+each system has it. Ctrl+Tab, for example, is Ctrl on every system. The text boxes' usual keys,
+such as Ctrl+C (Cmd+C on macOS) to copy, are left out. What keys do in each part of the window, and
+how to reach what has no key of its own, is in
+[Keyboard and screen readers](../keyboard-and-screen-readers.md).
 
 <!-- shortcuts:start -->
 

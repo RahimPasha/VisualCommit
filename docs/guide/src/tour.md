@@ -20,7 +20,8 @@ tab. The tabs you leave open come back when VisualCommit starts again. See
 - **Branch** creates a branch at HEAD; **Stash** stashes your changes and **Pop** applies the
   newest stash and drops it ([Branches](branches.md), [Stashes and tags](stash-and-tags.md)).
 - **Settings** opens the settings screen, **Search** the search bar above the graph, and **Theme**
-  switches between the dark and the light theme.
+  switches between the dark and the light theme and keeps your choice; while **System** is chosen,
+  a click on it stops following your system ([Settings](settings.md)).
 
 A toolbar button that cannot run now is dimmed; point at it to see why.
 

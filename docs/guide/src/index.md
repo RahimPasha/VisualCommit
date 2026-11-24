@@ -16,13 +16,15 @@ What it does:
   seconds.
 - Stages and commits whole files, single hunks or chosen lines.
 - Runs checkouts, merges, rebases (also interactive), cherry-picks, reverts, resets, stashes and
-  tags from menus, from drag and drop and from the toolbar.
+  tags from menus and from drag and drop, and stashes also from the toolbar.
 - Resolves conflicts in its own resolver or in your merge tool.
-- Shows a file's history and blame, the reflog, and an activity log of every git command it ran.
+- Shows a file's history and blame, the reflog, and an activity log of its recent operations and
+  their git commands.
 - Searches commits by message, author, SHA, file or the text of their changes, and compares two
   commits or branches.
-- Undoes and redoes its git actions, and refuses an action that would overwrite your uncommitted
-  work or ignored files.
+- Undoes and redoes the git actions it records, such as commits, merges and resets, and keeps a
+  checkout, merge, rebase, cherry-pick, revert or stash apply from overwriting your uncommitted
+  changes or, while **Keep ignored files** is on, your ignored files.
 - Groups repositories into workspaces with a dashboard that fetches or pulls them all at once.
 - With a GitHub, GitLab or Azure DevOps account, lists and creates pull requests (merge requests on
   GitLab) and clones your repositories.

@@ -43,8 +43,9 @@ Git it found, each operation's failure, and warnings such as a Git it has not be
 
 ## The activity log
 
-For what happened in one repository, the activity log in the window shows every git command
-VisualCommit ran and git's own output: see [The activity log](../activity-log.md).
+For what happened in one repository, the activity log in the window shows VisualCommit's recent
+operations there in this session, with the git commands and git's own output it still keeps: see
+[The activity log](../activity-log.md).
 
 ## Reporting a problem
 
