@@ -346,12 +346,15 @@ Wave 4 and the review:
   eight packages (run `wf_ccc5f713-fa5`), each read by an independent reader and corrected, and six
   of them are merged (2026-11-24, `c0bedc6` to `876c197`; design 13.1's ruling 100, D462 to D465);
   the real-window part's three wait on that part's merge. The lead's own five are recorded, among
-  them D461: the restore order's proof is taken again before the gate. **A second round** fixes six
-  things the first round's builders and readers raised (ruling 100's last paragraph; run
-  `wf_11b1bda1-1ef`), and the docs are brought up to the fixes as built (run `wf_ce28cc05-776`).
-  Still open: CI's run of the six merges, the second round's and the docs' merges, launches 2 and 3
-  of the real-window part again, the series taken again, the owner's answer on the dimmed texts,
-  §12's merge, the lagged list, the whole default run and CI.
+  them D461: the restore order's proof is taken again before the gate. **A second round** fixed six
+  things the first round's builders and readers raised (run `wf_11b1bda1-1ef`; merged at `950ca7d`,
+  `39c632f` and `db7fbce`; ruling 101, D466), and the docs are brought up to the first round as
+  built (`05e3b3e`). CI's run of the six merges failed off Windows on one test, the guard's modes
+  test at its first run anywhere; corrected (`e3002ac`, D464 (4)), and the run on it is green in all
+  six jobs. **A third round**, one package, and the docs for the second round are under way (run
+  `wf_fa279534-fed`). Still open: their merges and CI, launches 2 and 3 of the real-window part
+  again, the series taken again, the owner's answer on the dimmed texts, §12's merge, the lagged
+  list, the whole default run and CI.
 
 Gate:
 
@@ -888,39 +891,50 @@ packages asked and the lead's rulings; D462 to D465 the decisions.** The lead's 
 recorded (ruling 99): **D461, the restore order's proof is taken again**, because the first series
 cannot vouch for the run that carries its third condition; the series' corrected script; the macOS
 picture read (Progress, step 6); design 12.6's command; and the dimmed texts' contrast, which is the
-owner's ("Waiting on the owner"). **Two runs are under way, started at 08:00 and 08:02 on
-2026-11-24.** (a) The second round, run `wf_11b1bda1-1ef` (script
-`…/workflows/scripts/phase8a-review-fixes-second-round-wf_11b1bda1-1ef.js`; the items in
-`…/wave4/review/after-packages.json`): three packages in worktrees from `e778370`
-(`D:/Projects/Personal/vc-wt/p8a-after-speech`, `-order` and `-frames`, on `wip/p8a-after-<key>`),
-each built with its tests first, read and corrected: the outcome said where the focus lands (D463
-(3)), the blame's caret, the Git program row's note in the lead's words; Tab through a list's rows
-in the rows' order; the Theme options' frame and a link's frame at scalings above 1.25. (b) The
-docs, run `wf_ce28cc05-776`, in the worktree `p8a-docs-fixes` (`wip/p8a-docs-fixes`, from
-`e778370`): three writers in turn on the design, one on the report, one on the architecture page,
-then a checker per file; the writers commit nothing, the lead reads the checkers' findings,
-corrects, commits there and merges. **Next for the lead, in this order:** (1) read CI's run of this
-push and record it: the three tests that can fail only on macOS and Linux (the guard's modes, the
-copied data folder) and the floor's new rows of `PullConfigurationTests` have their first run there;
-(2) when the two runs end, read their results, rule, merge the second round's three branches, each
-with its test classes run, and the docs' branch after its corrections; bring the docs up to the
-second round as well; push; read CI; (3) with no agent at work, the machine quiet and the owner told
-just before: build `p8a-realwindow` in Release and run launches 2 and 3 of the real-window part
-alone again on their fixes (`Check_L_graph_danger_item_and_head_row` and
-`Check_A_and_B_about_and_icon`), then take the restore order's series again as D461 says: the
-worktrees `p8a-restore-base` at `3f67850` and `p8a-restore` on `wip/p8a-restore` stand ready, their
-Release builds made at 00:24 and 00:28 on 2026-11-24, `bash
+owner's ("Waiting on the owner"). **The second round is built and merged** (run `wf_11b1bda1-1ef`,
+08:00 to 10:21 on 2026-11-24, nine agents, 2.87M tokens; its result
+`…/wave4/review/after-result.json`, the items in `…/wave4/review/after-packages.json`): `950ca7d`
+(after-speech), `39c632f` (after-order) and `db7fbce` (after-frames), merged at 10:23 and their
+classes run on the merged tree; ruling 101 has what was built and the lead's rulings, D466 the rule
+for Tab through a list's rows. The three worktrees are removed; their `wip/p8a-after-<key>` branches
+stay local (D396). **The docs are brought up to the first round as built** (runs `wf_ce28cc05-776`
+and `wf_3212b0e2-8c2`, 3.92M tokens together: five writers, a checker per file that read 127 changed
+passages against the code, 26 faults and 13 passages still old applied by a fixer per file; merged
+at `05e3b3e`). **CI:** run 45421164866 on the six merges passed on Windows and failed in the five
+other jobs on one test, the guard's modes test at its first run anywhere; the lead corrected the
+test's claim about a missing folder above the data folder (`e3002ac`; D464 (4)), and run 45432651867
+on it is green in all six jobs (the CI section). **One run is under way, started at 10:26 on
+2026-11-24** (`wf_fa279534-fed`, script
+`…/workflows/scripts/phase8a-third-round-and-docs-wf_fa279534-fed.js`): (a) a third round, one
+package in the worktree `D:/Projects/Personal/vc-wt/p8a-after-browse` (`wip/p8a-after-browse`, from
+`59a955c`), built with its tests first, read and corrected: the Git program row's Browse described
+by the row at all times (ruling 101), and where the keyboard focus goes when "Use the Git on the
+PATH" hides itself; (b) the docs brought up to the second round as built, in the worktree
+`p8a-docs-after` (`wip/p8a-docs-after`, from `59a955c`), a writer, a checker and a fixer per file;
+they commit nothing, the lead reads the result, commits there and merges. **Next for the lead, in
+this order:** (1) read CI's run of the second round's push and record it: the 30 scaled cases of
+`LinkFocusFrameTests` have their first run on macOS and Linux there (ruling 101); (2) when the run
+ends, read its results, rule, merge the third round's branch with its test classes run, commit the
+docs in their worktree and merge them, and bring the docs up to the third round; push; read CI; (3)
+with no agent at work and the owner told just before: build `p8a-realwindow` in Release and run
+launches 2 and 3 of the real-window part alone again on their fixes
+(`Check_L_graph_danger_item_and_head_row` and `Check_A_and_B_about_and_icon`), then take the restore
+order's series again as D461 says: the worktrees `p8a-restore-base` at `3f67850` and `p8a-restore`
+on `wip/p8a-restore` stand ready, their Release builds made at 00:24 and 00:28 on 2026-11-24, `bash
 D:/Projects/Personal/phase8-work/wave4/restore/series2/run_series2.sh 1 10`, about an hour and a
-half, a void pair taken again under its number plus ten, and its outcome recorded by D457 (5)'s rule
-(on 2026-11-24 at 07:00 Adobe's Creative Cloud used a core and a half without pause, so the series
-waited: look at the machine's load first); (4) ask the owner about the dimmed texts before the whole
-default run, since a change of those colours changes earlier pictures; (5) merge §12 last, with
-CLAUDE.md's rows and notes for 8a's real-window checks as ruling 99 lists them (S19-34); then the
-lagged list, the whole default run (`bash scripts/heavy-run.sh`), the comparison of its pictures
-with wave 3's references, the push and CI's run; then step 19 is ticked. The package is reviewed
-with the rest in step 19 and merged last, in that step. The three finished worktrees (`p8a-restore`,
-`p8a-restore-base`, `p8a-guide`) are removed; their `wip/` branches stay local (D396). §11's
-builders got with their briefs: mdBook at
+half, a void pair taken again under its number plus ten, and its outcome recorded by D457 (5)'s
+rule. The machine's state for it: on 2026-11-24 Adobe's Desktop Service was found to have used a
+full core without pause since 2026-11-11 (11.7 days of processor time), so through every measure of
+this phase, the first series among them; the series is taken in that state, as the first was, and
+its record says so; (4) ask the owner about the dimmed texts before the whole default run, since a
+change of those colours changes earlier pictures; (5) merge §12 last, with CLAUDE.md's rows and
+notes for 8a's real-window checks as ruling 99 lists them (S19-34); then the lagged list, with the
+classes the fixes added that start the app (`OutcomeAtFocusTests`, `FirstRunFocusTests`,
+`FirstRunSearchTests`), the whole default run (`bash scripts/heavy-run.sh`), the comparison of its
+pictures with wave 3's references, the push and CI's run; then step 19 is ticked. The package is
+reviewed with the rest in step 19 and merged last, in that step. The three finished worktrees
+(`p8a-restore`, `p8a-restore-base`, `p8a-guide`) are removed; their `wip/` branches stay local
+(D396). §11's builders got with their briefs: mdBook at
 `D:/Projects/Personal/phase8-work/tools/mdbook-0.5.4/mdbook.exe` and the Linux archive's SHA-256 for
 `guide.yml` (Notes, "Wave 4"); the references `D:/Projects/Personal/phase8-work/references/wave3/`;
 rulings 80 (stop and report if the first-run link's frame touches its ink), 82 (the facts no check
