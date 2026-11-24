@@ -10,15 +10,19 @@ Usage, with the standard library alone (run it with ``python3 -I``):
 Over each ``.html`` file under the folder, the addresses of every element's ``href``,
 ``xlink:href``, ``src``, ``srcset``, ``imagesrcset``, ``poster``, ``data``, ``background``,
 ``ping``, ``action``, ``formaction``, ``cite`` and ``longdesc``, of a ``meta`` refresh's content,
-and of every ``url(...)``, ``@import`` and ``image-set(...)`` string in a ``style`` attribute or
-element (an ``iframe``'s ``srcdoc`` is read as a page of its own):
+of every ``url(...)``, ``@import`` and ``image-set(...)`` string in a ``style`` attribute or
+element, and of every ``url(...)`` in SVG's presentation attributes ``cursor``, ``mask``,
+``fill``, ``stroke``, ``filter``, ``clip-path``, ``marker-start``, ``marker-mid`` and
+``marker-end`` (an ``iframe``'s ``srcdoc`` is read as a page of its own, and a base of its own
+there fails as the page's would):
   * every relative one resolves to a file of the site, and every ``#fragment`` to an ``id`` (or an
     anchor's ``name``) in its target; a fragment alone names the page itself;
   * nothing that loads names another host or a protocol-relative address. Every address loads
     except the ones a user goes to: an ``a``'s or ``area``'s ``href`` (an SVG ``a``'s
     ``xlink:href`` too), a ``form``'s ``action`` and a button's ``formaction``, a quotation's
     ``cite``, an image's ``longdesc``, and a ``link``'s ``href`` whose every ``rel`` is
-    ``alternate``, ``author``, ``canonical``, ``help``, ``license``, ``next`` or ``prev``;
+    ``alternate``, ``author``, ``canonical``, ``help``, ``license`` or ``prev`` (Firefox
+    prefetches ``next``);
   * a ``data:`` URL passes, except where it would be a document, a script or a style sheet, which
     could load from another host itself: an ``iframe``'s, ``frame``'s, ``embed``'s or ``script``'s
     ``src``, an ``object``'s ``data``, a ``link`` to a style sheet, module or manifest, a refresh,
@@ -65,8 +69,13 @@ NAVIGATION = {
 
 # A link goes to its href, and loads nothing, only when it has a rel and every rel is one of
 # these; any other rel, a stylesheet among them, loads it (prefetch, preconnect, an icon, an
-# OpenSearch description, which a browser may fetch by itself).
-NAVIGATION_RELS = frozenset({"alternate", "author", "canonical", "help", "license", "next", "prev"})
+# OpenSearch description, which a browser may fetch by itself; next, which Firefox prefetches).
+NAVIGATION_RELS = frozenset({"alternate", "author", "canonical", "help", "license", "prev"})
+
+# SVG's presentation attributes whose value may hold url(), read as CSS: each maps to a property
+# that loads what it names (a cursor's image, a mask, a paint server, a filter, a clip path, a marker).
+PRESENTATION_ATTRIBUTES = ("cursor", "mask", "fill", "stroke", "filter", "clip-path",
+                           "marker-start", "marker-mid", "marker-end")
 
 # Where a data: URL holds a document, a script or a style sheet, which could load from another
 # host itself and whose content the check does not read. A data: image, font or medium passes.
@@ -310,6 +319,8 @@ class _Page(html.parser.HTMLParser):
         self.addresses = []
         # (what, class token) of each element mdBook's playground script fetches for.
         self.playgrounds = []
+        # (what, base) of each frame's srcdoc page that has a base of its own.
+        self.frame_bases = []
         self._style_depth = 0
         self._style_text = []
 
@@ -354,14 +365,22 @@ class _Page(html.parser.HTMLParser):
                 self.addresses.append((what, url, loads, document))
         if tag == "meta" and values.get("http-equiv", "").strip().lower() == "refresh":
             self.addresses.append(("<meta refresh>", refresh_url(values.get("content", "")), True, True))
+        for attribute in PRESENTATION_ATTRIBUTES:
+            if attribute in values:
+                for form, url in css_references(values[attribute]):
+                    self.addresses.append(("<{} {}> {}".format(tag, attribute, form), url, True, form.startswith("@import")))
         if "srcdoc" in values:
-            # A frame's srcdoc is a page of its own, whose relative addresses resolve as this one's.
+            # A frame's srcdoc is a page of its own, whose relative addresses resolve as this one's,
+            # unless it has a base of its own: one on another host fails as this page's would.
             inner = _Page()
             inner.feed(values["srcdoc"])
             inner.close()
             prefix = "<{} srcdoc> ".format(tag)
             self.addresses.extend((prefix + what, url, loads, document) for what, url, loads, document in inner.addresses)
             self.playgrounds.extend((prefix + what, token) for what, token in inner.playgrounds)
+            if inner.base is not None:
+                self.frame_bases.append((prefix + "<base href>", inner.base))
+            self.frame_bases.extend((prefix + what, base) for what, base in inner.frame_bases)
         for token in values.get("class", "").split():
             if token in PLAYGROUND_CLASSES:
                 self.playgrounds.append(("<{} class>".format(tag), token))
@@ -462,6 +481,10 @@ class Checker:
                 folder = self.root
             else:
                 folder = os.path.normpath(os.path.join(folder, urllib.parse.unquote(base)))
+        for _, base in parser.frame_bases:
+            base = base.strip()
+            if SCHEME.match(base) or base.startswith("//"):
+                self._find(page, base, BASE_ELSEWHERE)
         for what, token in parser.playgrounds:
             self._find(page, '{}="{}"'.format(what, token), PLAYGROUND)
         for what, url, loads, document in parser.addresses:

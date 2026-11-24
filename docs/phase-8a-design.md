@@ -4675,13 +4675,16 @@ and CSS form, in a temporary folder.
 
 As widened by step 19's review (guide-1): the check reads every element's `href`, `xlink:href`, `src`,
 `srcset`, `imagesrcset`, `poster`, `data`, `background`, `ping`, `action`, `formaction`, `cite` and
-`longdesc`, a `meta` refresh's address, an `iframe`'s `srcdoc` as a page of its own, and in CSS (a
-`style` attribute or element, a `.css` file) every `url(...)`, `@import` and `image-set(...)` or
-`-webkit-image-set(...)` string, with CSS escapes decoded (`\75 rl(` is `url(`). Every address
+`longdesc`, a `meta` refresh's address, an `iframe`'s `srcdoc` as a page of its own (a `<base href>`
+of its own on another host, or protocol-relative, fails as the page's would), every `url(...)` in
+SVG's presentation attributes `cursor`, `mask`, `fill`, `stroke`, `filter`, `clip-path`,
+`marker-start`, `marker-mid` and `marker-end`, and in CSS (a
+`style` attribute or element, a `.css` file) every `url(...)`, `@import` and every string directly in
+an `image-set(...)` or `-webkit-image-set(...)` (not `type()`'s), with CSS escapes decoded (`\75 rl(` is `url(`). Every address
 loads except the ones a user goes to: an `a`'s or `area`'s `href` (an SVG `a`'s `xlink:href`), a
 `form`'s `action` and a button's `formaction`, a quotation's `cite`, an image's `longdesc`, and a
-`link`'s `href` whose every `rel` is `alternate`, `author`, `canonical`, `help`, `license`, `next`
-or `prev` (so `prefetch`, `preconnect`, `dns-prefetch`, `prerender`, `apple-touch-icon`,
+`link`'s `href` whose every `rel` is `alternate`, `author`, `canonical`, `help`, `license` or `prev`
+(so `next`, which Firefox prefetches, `prefetch`, `preconnect`, `dns-prefetch`, `prerender`, `apple-touch-icon`,
 `mask-icon`, `search` and a `link` without `rel` load). A `data:` URL passes except where it would
 be a document, a script or a style sheet: an `iframe`'s, `frame`'s, `embed`'s or `script`'s `src`,
 an `object`'s `data`, a `link` to a style sheet, module or manifest, a refresh, an `@import`. An
@@ -4689,7 +4692,9 @@ element of class `playground` or `mdbook-runnable` fails, since mdBook's `book.j
 `play.rust-lang.org` for it. `xmlns` attributes are never read. The self-test has a case with a
 file of the site, one with a host and one protocol-relative for each loading form, a failing case
 for each `data:` document form, and passing cases for the navigation forms and inline SVG's
-namespaces (227 cases; the built site of 2026-11-23 stays clean).
+namespaces (227 cases; the built site of 2026-11-23 stays clean). The fixes' reader added the
+`next` link, the `srcdoc`'s own base, SVG's presentation attributes and an image set's `type()`
+(245 cases; the same site stays clean).
 
 ### 11.4 Tests
 
