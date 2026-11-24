@@ -1,3 +1,4 @@
+using System.Collections.Specialized;
 using System.Globalization;
 using System.Text;
 using Avalonia;
@@ -57,6 +58,17 @@ namespace VisualCommit.App.Tests;
 /// in the window, that every row the list is not told of keeps its object, that the rows outside
 /// the span from the first shifted row to the last keep their controls too, as do the rows between
 /// the runs where the fact says so, and that the press is a click.
+/// </para>
+/// <para>
+/// A branch created below the view changes the number of rows: the section's header, far above the
+/// view, shows its new count itself, and the list is told of the new row alone, so every row stays,
+/// the rows in view with their places and their controls, and the press is a click. Before, the
+/// header ended the rows the list kept at its start, and the rows from it down to the new one were
+/// removed and inserted, or reset the list above 64 rows. A branch created above the view keeps
+/// every row too, and the list is told of its row alone; there the panel estimates where the rows in
+/// view are, as it did when the header was removed and inserted with the new row, and draws them a
+/// row lower, 4 px short, with new controls, and the press loses its click, a known limit stated in
+/// that fact and not asserted.
 /// </para>
 /// <para>
 /// Not asserted here, because the estimate does worse there, as it did before phase 8a: a rename
@@ -294,6 +306,149 @@ public class LeftPanelScrollTests
             shift: Undo("b03", "c99"),
             topInView: "b04",
             bounds: new ShiftBounds(Offset: 5, Extent: 5));
+    }
+
+    [AvaloniaFact]
+    public async Task Creating_a_branch_below_the_view_of_a_scrolled_left_panel_keeps_the_header_the_rows_in_view_and_the_click_under_a_press()
+    {
+        // 60 branches scrolled by 400 px: b15 to b40 or so in view, the header far above them. b99,
+        // made outside the app, sorts after b60, below the view, and the header's count grows by one.
+        // The header shows its count itself, so the list is told of b99's row alone. Before, the
+        // header ended the rows kept at the list's start, and the rows from it down to b99, 61
+        // removed and 62 inserted, reset the list: every row in view got a new control, and the
+        // press lost its click.
+        using var repo = await ManyBranchesAsync(60);
+        using var data = new TempDirectory("data");
+        using var app = ShellDriver.StartWithTabs(data.Path, [repo.Path], width: 1100, height: 700);
+        var repository = await app.WaitForRepositoryAsync();
+        await app.WaitForWatchersQuietAsync();
+        await app.WaitForIdleAsync();
+        app.MoveToNeutral();
+        var list = app.Find<ItemsControl>("RefList");
+        var scroller = list.GetVisualDescendants().OfType<ScrollViewer>().First();
+        scroller.Offset = new Vector(0, 400);
+        app.Settle();
+        list.ItemsPanelRoot!.InvalidateMeasure();
+        app.Settle();
+        var offsetBefore = scroller.Offset.Y;
+        Assert.Equal(400, offsetBefore);
+        var header = repository.LeftPanel.Rows[0];
+        var rowsBefore = repository.LeftPanel.Rows.ToList();
+        var before = InView(app, list, scroller);
+        Assert.DoesNotContain(before, entry => entry.Row is RefSectionRow);
+        var target = before[4].Row;
+        var point = app.BoundsOf(before[4].Button).Center;
+        app.PressMouse(point);
+
+        await repo.GitAsync("branch", "b99");
+        await repository.RefreshAsync();
+        await app.WaitForIdleAsync();
+        await app.WaitForGraphReloadAsync();
+        await app.WaitForWatchersQuietAsync();
+        app.Settle();
+        Assert.True(HasBranch(repository, "b99"), "The left panel does not show b99.");
+
+        var after = InView(app, list, scroller).ToDictionary(entry => entry.Row.Key, StringComparer.Ordinal);
+        var problems = new List<string>();
+        if (!ReferenceEquals(repository.LeftPanel.Rows[0], header) || ((RefSectionRow)header).Count != 62)
+        {
+            problems.Add($"the header is {(ReferenceEquals(repository.LeftPanel.Rows[0], header) ? "the same row" : "another row")} with the count {((RefSectionRow)repository.LeftPanel.Rows[0]).Count}");
+        }
+
+        var others = rowsBefore.Where(row => !repository.LeftPanel.Rows.Contains(row)).Select(row => row.Text).ToList();
+        if (others.Count > 0)
+        {
+            problems.Add($"{others.Count} rows were made again: {string.Join(", ", others.Take(5))}");
+        }
+
+        if (scroller.Offset.Y != offsetBefore)
+        {
+            problems.Add(string.Create(CultureInfo.InvariantCulture, $"offset {scroller.Offset.Y} for {offsetBefore}"));
+        }
+
+        foreach (var (shown, y, button) in before)
+        {
+            if (!after.TryGetValue(shown.Key, out var now))
+            {
+                problems.Add($"{shown.Text} is no longer in view");
+            }
+            else if (now.Y != y || !ReferenceEquals(now.Row, shown) || !ReferenceEquals(now.Button, button))
+            {
+                problems.Add(string.Create(CultureInfo.InvariantCulture, $"{shown.Text} at y {now.Y} for {y}, {(ReferenceEquals(now.Row, shown) ? "the same row" : "another row")}, {(ReferenceEquals(now.Button, button) ? "the same button" : "another button")}"));
+            }
+        }
+
+        app.ReleaseMouse(point);
+        await app.WaitForIdleAsync();
+        var selected = repository.LeftPanel.Rows.OfType<RefItemRow>().Where(item => item.IsSelected).Select(item => item.Text).ToList();
+        if (selected is not [var only] || only != target.Text)
+        {
+            problems.Add($"the press on {target.Text} selected {(selected.Count == 0 ? "nothing" : string.Join(", ", selected))}");
+        }
+
+        Assert.True(problems.Count == 0, $"After b99 was created: {string.Join("; ", problems)}. In view before: {Describe(before)}.");
+    }
+
+    [AvaloniaFact]
+    public async Task Creating_a_branch_above_the_view_of_a_scrolled_left_panel_keeps_every_row_and_tells_the_list_of_the_new_row_alone()
+    {
+        // 60 branches scrolled by 400 px, as in the fact above; a00, made outside the app, sorts
+        // before b01, right under the header and far above the view. The header shows its new count
+        // itself and every row stays the object it was: the list is told of a00's row alone, one Add
+        // at index 1, and nothing sends the list to its top. Before, the header was removed and
+        // inserted with a00, a Remove and two Adds. What the panel does with an insert above the
+        // first row it has made is Avalonia's estimate, the same then and now, and is not asserted:
+        // the offset stays 400, the extent becomes 1742 for 1720 where the row is 26 px, and the
+        // rows in view are drawn 22 px lower, 4 px above their true places (the estimate takes the
+        // mean of the 26 px rows it has made and misses the 30 px header above them), each with a
+        // new control, b36 out of view; a press on one of them, b19, loses its click, as it did
+        // before (measured on 57ebeff's rows, the same numbers). The row under the pointer has
+        // moved away in any case: the true places are a row lower.
+        using var repo = await ManyBranchesAsync(60);
+        using var data = new TempDirectory("data");
+        using var app = ShellDriver.StartWithTabs(data.Path, [repo.Path], width: 1100, height: 700);
+        var repository = await app.WaitForRepositoryAsync();
+        await app.WaitForWatchersQuietAsync();
+        await app.WaitForIdleAsync();
+        app.MoveToNeutral();
+        var list = app.Find<ItemsControl>("RefList");
+        var scroller = list.GetVisualDescendants().OfType<ScrollViewer>().First();
+        scroller.Offset = new Vector(0, 400);
+        app.Settle();
+        list.ItemsPanelRoot!.InvalidateMeasure();
+        app.Settle();
+        Assert.Equal(400, scroller.Offset.Y);
+        var header = repository.LeftPanel.Rows[0];
+        var rowsBefore = repository.LeftPanel.Rows.ToList();
+        var before = InView(app, list, scroller);
+        Assert.DoesNotContain(before, entry => entry.Row is RefSectionRow);
+        Assert.DoesNotContain(before, entry => entry.Row.Text is "b01" or "b02");
+        var changes = new List<NotifyCollectionChangedEventArgs>();
+        repository.LeftPanel.Rows.CollectionChanged += (_, e) => changes.Add(e);
+        var point = app.BoundsOf(before[4].Button).Center;
+        app.PressMouse(point);
+
+        await repo.GitAsync("branch", "a00");
+        await repository.RefreshAsync();
+        await app.WaitForIdleAsync();
+        await app.WaitForGraphReloadAsync();
+        await app.WaitForWatchersQuietAsync();
+        app.Settle();
+        app.ReleaseMouse(point);
+        await app.WaitForIdleAsync();
+        Assert.True(HasBranch(repository, "a00"), "The left panel does not show a00.");
+
+        var rowsAfter = repository.LeftPanel.Rows.ToList();
+        Assert.Same(header, rowsAfter[0]);
+        Assert.Equal(62, ((RefSectionRow)header).Count);
+        Assert.Equal("a00", rowsAfter[1].Text);
+        Assert.Equal(rowsBefore.Skip(1), rowsAfter.Skip(2));
+        Assert.True(rowsBefore.Skip(1).Zip(rowsAfter.Skip(2)).All(pair => ReferenceEquals(pair.First, pair.Second)), "A row of the branches was made again.");
+        var change = Assert.Single(changes);
+        Assert.Equal(NotifyCollectionChangedAction.Add, change.Action);
+        Assert.Equal(1, change.NewStartingIndex);
+        Assert.Same(rowsAfter[1], Assert.Single(change.NewItems!.Cast<RefListRow>()));
+        Assert.Equal(400, scroller.Offset.Y);
     }
 
     /// <summary>

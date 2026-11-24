@@ -153,7 +153,7 @@ public sealed class ChangedFileList
 
         if (keepRows)
         {
-            // Only the stage lists keep their rows, and they show every row 24 px high (WorkingChangesView).
+            // Every file list shows every row 24 px high (WorkingChangesView, RightPanelView, CompareView).
             Rows.ReplaceAll(rows, (shown, rebuilt) => shown.ShowsSameAs(rebuilt));
         }
         else
@@ -189,7 +189,9 @@ public sealed class ChangedFileList
             _closedFolders.Add(row.Key);
         }
 
-        Rebuild();
+        // The folder's row stays and shows its opening itself; the view is told only of the rows
+        // below it that come or go, so the folder's button keeps a focus that Enter or Space gave it.
+        Rebuild(keepRows: true);
     }
 
     private sealed class FileFolder

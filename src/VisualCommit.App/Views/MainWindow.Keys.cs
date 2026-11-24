@@ -1,3 +1,5 @@
+using System.ComponentModel;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
@@ -5,6 +7,7 @@ using Avalonia.Threading;
 using Avalonia.VisualTree;
 using VisualCommit.App.ViewModels;
 using VisualCommit.App.ViewModels.Commands;
+using VisualCommit.App.Views.Shell;
 
 namespace VisualCommit.App.Views;
 
@@ -13,9 +16,16 @@ namespace VisualCommit.App.Views;
 // the focus (IWindowKeyActions): the commit message, the filter, F6's regions.
 public partial class MainWindow : IWindowKeyActions
 {
+    /// <summary>The pseudo-class of an element that shows the keyboard's frame (its focus came by Tab or the arrows).</summary>
+    private const string FocusVisibleClass = ":focus-visible";
+
     private readonly KeyRegionNavigator _regions = new();
     private KeyRouter? _router;
     private bool _focusFollowed;
+    private MainWindowViewModel? _shell;
+
+    /// <summary>Where the focus lay as the active tab began to change: its region, that region's root (the panel) and whether it showed the keyboard's frame; null outside every region.</summary>
+    private (KeyRegionRole Role, Control Root, bool Framed)? _focusAtSwitch;
 
     /// <summary>The window's key router (6.3).</summary>
     private KeyRouter Router => _router ??= new KeyRouter(this);
@@ -54,6 +64,98 @@ public partial class MainWindow : IWindowKeyActions
         if (DataContext is MainWindowViewModel shell)
         {
             shell.WindowActions = this;
+        }
+
+        FollowShell(DataContext as MainWindowViewModel);
+    }
+
+    private void FollowShell(MainWindowViewModel? shell)
+    {
+        if (ReferenceEquals(shell, _shell))
+        {
+            return;
+        }
+
+        if (_shell is not null)
+        {
+            _shell.PropertyChanging -= OnShellChanging;
+            _shell.PropertyChanged -= OnShellChanged;
+        }
+
+        _shell = shell;
+        _focusAtSwitch = null;
+        if (shell is not null)
+        {
+            shell.PropertyChanging += OnShellChanging;
+            shell.PropertyChanged += OnShellChanged;
+        }
+    }
+
+    /// <summary>
+    /// The active tab is about to change: where the focus lies now, outside a menu (as a dialog
+    /// keeps it, D104). The panels are the tabs' shared views, and the switch gives them the other
+    /// tab's data: a focused row of a list leaves the window with the list's rows, a panel the
+    /// other tab does not show hides with its focused element, and the focus is then on nothing.
+    /// </summary>
+    private void OnShellChanging(object? sender, PropertyChangingEventArgs e)
+    {
+        if (e.PropertyName != nameof(MainWindowViewModel.ActiveTab))
+        {
+            return;
+        }
+
+        var focused = MenuLayer.FocusOutsideMenus(FocusManager?.GetFocusedElement()) as Control;
+        _focusAtSwitch = focused is not null && KeyRegion.RootOf(focused) is { } root
+            ? (KeyRegion.GetRole(root), root, focused.Classes.Contains(FocusVisibleClass))
+            : null;
+    }
+
+    /// <summary>
+    /// The active tab has changed while the focus lay in a region: once the layout shows the new
+    /// tab, and after what its views ask for themselves at the same priority (a dashboard's list, an
+    /// open diff's text), a focus the switch took away goes to that region (<see cref="FocusAfterSwitch"/>).
+    /// </summary>
+    private void OnShellChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName != nameof(MainWindowViewModel.ActiveTab) || _focusAtSwitch is not { } before)
+        {
+            return;
+        }
+
+        _focusAtSwitch = null;
+        Dispatcher.UIThread.Post(
+            () => Dispatcher.UIThread.Post(() => FocusAfterSwitch(before), DispatcherPriority.Loaded),
+            DispatcherPriority.Loaded);
+    }
+
+    /// <summary>
+    /// After a switch of tabs that took the focus away from a region (nothing, the window or an
+    /// element no longer shown has it, and no dialog is open): the focus goes to that region's
+    /// target in the tab now shown, as F6 would give it without its memory of the other tab's
+    /// element (D213), when the tab shows the same panel with a repository of its own; else to the
+    /// graph area's target. A tab without a repository (a welcome page, the first-run screen, a tab
+    /// still opening) shows only the panels' empty stand-ins, so its graph area's target is taken
+    /// there. It comes with the keyboard's frame when the element that lost it had the frame. A tab
+    /// still opening has no graph area's target, and the focus stays where it is; a focus the user
+    /// or a view has placed meanwhile stays too.
+    /// </summary>
+    private void FocusAfterSwitch((KeyRegionRole Role, Control Root, bool Framed) before)
+    {
+        var focused = FocusManager?.GetFocusedElement();
+        if (_shell is not { Dialogs.IsOpen: false }
+            || !(focused is null || ReferenceEquals(focused, this) || focused is Visual { IsEffectivelyVisible: false } || focused is InputElement { IsEffectivelyEnabled: false }))
+        {
+            return;
+        }
+
+        var target = before.Role != KeyRegionRole.GraphArea && _shell.ActiveTab.HasRepository
+            && before.Root.IsEffectivelyVisible && before.Root.IsAttachedToVisualTree()
+            ? _regions.MarkedTargetIn(before.Role, before.Root)
+            : null;
+        target ??= this.GetVisualDescendants().OfType<CommitGraphView>().FirstOrDefault(view => view.IsEffectivelyVisible)?.GraphAreaFocusTarget();
+        if (target is { IsEffectivelyVisible: true, IsEffectivelyEnabled: true })
+        {
+            target.Focus(before.Framed ? NavigationMethod.Tab : NavigationMethod.Unspecified);
         }
     }
 

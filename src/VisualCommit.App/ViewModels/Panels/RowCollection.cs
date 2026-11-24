@@ -16,7 +16,9 @@ public sealed class RowCollection<T> : ObservableCollection<T>
     /// The most rows a partial update tells the view of one by one; more reset the list. A rebuild
     /// that changes the number of rows counts the rows it removes and those it inserts; one with as
     /// many rows counts the rows it tells of, each once, whether its run is replaced or removed and
-    /// inserted. A row that stays, or that changes itself, counts for nothing.
+    /// inserted. A row that stays, or that changes itself, counts for nothing. A rebuild that only
+    /// inserts rows, or only removes them, tells the view of them in one change, however many, and
+    /// resets nothing.
     /// </summary>
     private const int MaxPartialChange = 64;
 
@@ -32,9 +34,13 @@ public sealed class RowCollection<T> : ObservableCollection<T>
     /// <summary>
     /// Replaces the rows with <paramref name="rows"/>, telling the view only about the part that
     /// changed when that part is small: the rows before and after it that
-    /// <paramref name="showSame"/> calls equal stay as they are. A folder opened in a long list
-    /// then inserts its children without the list laying itself out again from estimated sizes,
-    /// which moved the rows under the pointer. When the part that changed has as many rows as
+    /// <paramref name="showSame"/> calls equal stay as they are, and so do those that can show their
+    /// rebuilt rows by changing themselves (<see cref="IUpdatableRow{T}"/>), which do. A folder
+    /// opened in a long list then keeps its row, which shows itself open, and inserts its children,
+    /// told of in one change however many, without the list laying itself out again from estimated
+    /// sizes, which moved the rows under the pointer; the folder's control keeps a focus a key gave
+    /// it. A branch created or deleted keeps its section's header, which shows its new count itself,
+    /// and the view is told of that branch's row alone. When the part that changed has as many rows as
     /// before, each of its rows is compared with the one rebuilt in its place, and only those that
     /// show something new are changed (<see cref="ReplaceChanged"/>): two rows marked far apart (a
     /// refresh's counts, the hidden branches' tooltips once the graph without them is shown) leave
@@ -56,14 +62,18 @@ public sealed class RowCollection<T> : ObservableCollection<T>
         ArgumentNullException.ThrowIfNull(rows);
         ArgumentNullException.ThrowIfNull(showSame);
 
+        // The rows that stay at the list's start and at its end: those that show the same as the row
+        // rebuilt in their place, and those that can show it by changing themselves, which checks
+        // that it stands for the same item (CanUpdateTo).
+        var updated = new List<(IUpdatableRow<T> Row, T Rebuilt)>();
         var prefix = 0;
-        while (prefix < Count && prefix < rows.Count && showSame(this[prefix], rows[prefix]))
+        while (prefix < Count && prefix < rows.Count && Stays(this[prefix], rows[prefix], showSame, updated))
         {
             prefix++;
         }
 
         var suffix = 0;
-        while (suffix < Count - prefix && suffix < rows.Count - prefix && showSame(this[Count - 1 - suffix], rows[rows.Count - 1 - suffix]))
+        while (suffix < Count - prefix && suffix < rows.Count - prefix && Stays(this[Count - 1 - suffix], rows[rows.Count - 1 - suffix], showSame, updated))
         {
             suffix++;
         }
@@ -72,17 +82,53 @@ public sealed class RowCollection<T> : ObservableCollection<T>
         var added = rows.Count - prefix - suffix;
         if (removed == added)
         {
-            ReplaceChanged(rows, prefix, removed, showSame, sameItem);
+            ReplaceChanged(rows, prefix, removed, showSame, sameItem, updated);
             return;
         }
 
-        if (removed + added > MaxPartialChange)
+        if (removed > 0 && added > 0 && removed + added > MaxPartialChange)
         {
             ReplaceAll(rows);
             return;
         }
 
-        RemoveAndInsert(rows, prefix, removed, added);
+        foreach (var (row, rebuilt) in updated)
+        {
+            row.UpdateTo(rebuilt);
+        }
+
+        if (added == 0)
+        {
+            RemoveRun(prefix, removed);
+        }
+        else if (removed == 0)
+        {
+            InsertRun(rows, prefix, added);
+        }
+        else
+        {
+            RemoveAndInsert(rows, prefix, removed, added);
+        }
+    }
+
+    /// <summary>
+    /// Whether <paramref name="shown"/> stays where <paramref name="rebuilt"/> was rebuilt: it shows
+    /// the same, or it can show it by changing itself, which it is then to do (added to <paramref name="updated"/>).
+    /// </summary>
+    private static bool Stays(T shown, T rebuilt, Func<T, T, bool> showSame, List<(IUpdatableRow<T> Row, T Rebuilt)> updated)
+    {
+        if (showSame(shown, rebuilt))
+        {
+            return true;
+        }
+
+        if (shown is IUpdatableRow<T> row && row.CanUpdateTo(rebuilt))
+        {
+            updated.Add((row, rebuilt));
+            return true;
+        }
+
+        return false;
     }
 
     /// <summary>
@@ -90,8 +136,10 @@ public sealed class RowCollection<T> : ObservableCollection<T>
     /// rebuilt. A row that shows the same as its rebuilt row stays. A row that does not, and is an
     /// <see cref="IUpdatableRow{T}"/> that can show it, changes itself, and the list tells the view
     /// nothing of it: in the left panel a branch, remote, folder, tag or stash row whose key, kind,
-    /// name, tooltip, level and opening stay takes its new marks, commit, HEAD, counts, selection and
-    /// pull request so, and a header its new count. Every other such row is told of, unless more than
+    /// name, tooltip and level stay takes its new opening, marks, commit, HEAD, counts, selection and
+    /// pull request so, and a header its new count and opening; in a file list a folder its opening.
+    /// Such rows at the list's start and end, before and after this part, stay too and change with
+    /// these (<see cref="Replace"/>). Every other such row is told of, unless more than
     /// <see cref="MaxPartialChange"/> rows are, which resets the list. For rows of one height
     /// (<paramref name="sameItem"/> null) each is removed and its rebuilt row inserted at its index.
     /// For rows of mixed heights they go by runs, each run the most consecutive rows told of: a run
@@ -102,10 +150,10 @@ public sealed class RowCollection<T> : ObservableCollection<T>
     /// changes itself, stays as it is, the object and, wherever Avalonia leaves it, its control. In
     /// the left panel the first kind are rows whose key stays but which cannot change themselves (a
     /// pull request row that shows something new, or whose request changed; a message row of the pull
-    /// requests' section whose text changes; a ref row whose name, tooltip, level or opening changes
-    /// under its key); the second are rows that only shift, which a branch renamed in the app or
-    /// outside it, its undo, or a fetch that drops one remote branch and brings another give every row
-    /// between the old place and the new one, and a message row that gives way to another kind.
+    /// requests' section whose text changes; a ref row whose name, tooltip or level changes under its
+    /// key); the second are rows that only shift, which a branch renamed in the app or outside it, its
+    /// undo, or a fetch that drops one remote branch and brings another give every row between the old
+    /// place and the new one, and a message row that gives way to another kind.
     /// <para>
     /// What the view does with each, in Avalonia's virtualising stack panel (12.1.3), which keeps the
     /// place of the first row it has made and finds the row at the top of the view by adding the
@@ -143,7 +191,13 @@ public sealed class RowCollection<T> : ObservableCollection<T>
     /// with 21 local and 21 remote branches, each side's main among them, scrolled down to origin/r03
     /// at the top of the view, a fetch that drops r03 and brings r99 moves the rows in view 87 px
     /// down. A rebuild that changes the number of rows removes and inserts its changed part in the
-    /// same way.
+    /// same way, or, when it only inserts rows or only removes them, inserts or removes them in one
+    /// change, which the panel takes as it takes them one by one. So 60 branches scrolled by 400 px,
+    /// a branch created that sorts first, far above the view: the list is told of its row alone, the
+    /// offset stays 400, the rows in view are drawn 22 px lower, 4 px above their true places, each
+    /// with a new control, and a press on one of them loses its click, as when the header was
+    /// removed and inserted with the new row; the row under the pointer has moved a row down in any
+    /// case.
     /// </para>
     /// <para>
     /// How far the estimate misses depends on which of the rows the panel has made are left for its
@@ -168,9 +222,8 @@ public sealed class RowCollection<T> : ObservableCollection<T>
     /// apart into a reset of the whole list.
     /// </para>
     /// </summary>
-    private void ReplaceChanged(IReadOnlyList<T> rows, int start, int count, Func<T, T, bool> showSame, Func<T, T, bool>? sameItem)
+    private void ReplaceChanged(IReadOnlyList<T> rows, int start, int count, Func<T, T, bool> showSame, Func<T, T, bool>? sameItem, List<(IUpdatableRow<T> Row, T Rebuilt)> updated)
     {
-        var updated = new List<(IUpdatableRow<T> Row, T Rebuilt)>();
         var changed = new List<int>();
         for (var i = start; i < start + count; i++)
         {
@@ -258,6 +311,60 @@ public sealed class RowCollection<T> : ObservableCollection<T>
     /// last first, and inserting their rebuilt rows, the first first.
     /// </summary>
     private readonly record struct Run(int Start, int Count, bool Replace);
+
+    /// <summary>Removes the <paramref name="count"/> rows from <paramref name="start"/> on and tells the view once, with one Remove of them all.</summary>
+    private void RemoveRun(int start, int count)
+    {
+        CheckReentrancy();
+        var gone = new List<T>(count);
+        for (var i = start; i < start + count; i++)
+        {
+            gone.Add(Items[i]);
+        }
+
+        if (Items is List<T> list)
+        {
+            list.RemoveRange(start, count);
+        }
+        else
+        {
+            for (var i = start + count - 1; i >= start; i--)
+            {
+                Items.RemoveAt(i);
+            }
+        }
+
+        OnPropertyChanged(new PropertyChangedEventArgs(nameof(Count)));
+        OnPropertyChanged(new PropertyChangedEventArgs("Item[]"));
+        OnCollectionChanged(new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Remove, gone, start));
+    }
+
+    /// <summary>Inserts the <paramref name="count"/> rows of <paramref name="rows"/> from <paramref name="start"/> on at that index and tells the view once, with one Add of them all.</summary>
+    private void InsertRun(IReadOnlyList<T> rows, int start, int count)
+    {
+        CheckReentrancy();
+        var coming = new List<T>(count);
+        for (var i = start; i < start + count; i++)
+        {
+            coming.Add(rows[i]);
+        }
+
+        if (Items is List<T> list)
+        {
+            list.InsertRange(start, coming);
+        }
+        else
+        {
+            for (var i = 0; i < count; i++)
+            {
+                Items.Insert(start + i, coming[i]);
+            }
+        }
+
+        OnPropertyChanged(new PropertyChangedEventArgs(nameof(Count)));
+        OnPropertyChanged(new PropertyChangedEventArgs("Item[]"));
+        OnCollectionChanged(new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Add, coming, start));
+    }
 
     /// <summary>
     /// Removes the <paramref name="removed"/> rows from <paramref name="start"/> on, the last first,

@@ -37,7 +37,7 @@ public enum RefItemKind
 /// virtualised list of these rows, rebuilt whenever what is open or what matches the filter
 /// changes, so that a repository with thousands of tags costs only the rows in view.
 /// </summary>
-public abstract class RefListRow : ObservableObject
+public abstract partial class RefListRow : ObservableObject
 {
     /// <summary>Where the chevron of a row at depth 0 (a section header) starts.</summary>
     public const double FirstIndent = 10;
@@ -69,8 +69,13 @@ public abstract class RefListRow : ObservableObject
     /// <summary>The space before the row's chevron, in logical pixels.</summary>
     public double Indent => FirstIndent + (IndentPerLevel * Depth);
 
-    /// <summary>For a section, remote or folder: its content is shown below it.</summary>
-    public bool IsOpen { get; }
+    /// <summary>
+    /// For a section, remote or folder: its content is shown below it. A rebuild that only opens or
+    /// closes the row keeps it, and it shows its new opening itself (<see cref="IUpdatableRow{T}"/>),
+    /// so its control keeps the focus that Enter or Space gave it.
+    /// </summary>
+    [ObservableProperty]
+    public partial bool IsOpen { get; private protected set; }
 
     /// <summary>What a click on the row does: open or close it, or select the commit a ref points to.</summary>
     public IRelayCommand ActivateCommand { get; }
@@ -80,12 +85,19 @@ public abstract class RefListRow : ObservableObject
     /// shows, so the list can keep this row instead of drawing it again.
     /// </summary>
     public abstract bool ShowsSameAs(RefListRow other);
+
+    /// <summary>Tells the bindings of what the row shows from <see cref="IsOpen"/>, once it has changed.</summary>
+    private protected virtual void OnOpenChanged()
+    {
+    }
+
+    partial void OnIsOpenChanged(bool value) => OnOpenChanged();
 }
 
 /// <summary>
 /// A section header: a chevron, the title and the number of items that match the filter. A rebuild
-/// that changes only the number keeps the header, which shows the new one itself
-/// (<see cref="IUpdatableRow{T}"/>).
+/// that changes only the number, or whether the section is open, keeps the header, which shows the
+/// new one itself (<see cref="IUpdatableRow{T}"/>).
 /// </summary>
 public sealed partial class RefSectionRow : RefListRow, IUpdatableRow<RefListRow>
 {
@@ -121,12 +133,17 @@ public sealed partial class RefSectionRow : RefListRow, IUpdatableRow<RefListRow
         && section.Key == Key && section.Text == Text && section.IsOpen == IsOpen
         && section.Count == Count && section.CanToggle == CanToggle;
 
-    /// <summary>The same section with the same title, open or closed as this one and as clickable: only its number may differ.</summary>
+    /// <summary>The same section with the same title, as clickable as this one: only its number and its opening may differ.</summary>
     public bool CanUpdateTo(RefListRow rebuilt) =>
         rebuilt is RefSectionRow section
-        && section.Key == Key && section.Text == Text && section.IsOpen == IsOpen && section.CanToggle == CanToggle;
+        && section.Key == Key && section.Text == Text && section.CanToggle == CanToggle;
 
-    public void UpdateTo(RefListRow rebuilt) => Count = ((RefSectionRow)rebuilt).Count;
+    public void UpdateTo(RefListRow rebuilt)
+    {
+        var section = (RefSectionRow)rebuilt;
+        Count = section.Count;
+        IsOpen = section.IsOpen;
+    }
 }
 
 /// <summary>
@@ -147,10 +164,11 @@ public sealed record RefRowMarks(bool IsHidden, bool IsSoloed, bool IsDimmed, st
 
 /// <summary>
 /// A remote, a folder, a branch, a tag or a stash under a section header. A rebuild that changes
-/// only what the graph's filter marks on it, the commit it points to, whether HEAD is on it, its
-/// counts or its pull request keeps the row, which shows the new values itself
-/// (<see cref="IUpdatableRow{T}"/>): a hide, a solo or its end, and a refresh after a commit or a
-/// fetch, then leave the scrolled list and its controls as they were.
+/// only whether a remote or folder is open, what the graph's filter marks on it, the commit it
+/// points to, whether HEAD is on it, its counts or its pull request keeps the row, which shows the
+/// new values itself (<see cref="IUpdatableRow{T}"/>): a folder opened or closed, a hide, a solo or
+/// its end, and a refresh after a commit or a fetch, then leave the scrolled list and its controls
+/// as they were.
 /// </summary>
 public sealed partial class RefItemRow : RefListRow, IUpdatableRow<RefListRow>
 {
@@ -207,6 +225,12 @@ public sealed partial class RefItemRow : RefListRow, IUpdatableRow<RefListRow>
 
     /// <summary>The chevron points right: a closed remote or folder.</summary>
     public bool ShowsClosedChevron => IsContainer && !IsOpen;
+
+    private protected override void OnOpenChanged()
+    {
+        OnPropertyChanged(nameof(ShowsOpenChevron));
+        OnPropertyChanged(nameof(ShowsClosedChevron));
+    }
 
     /// <summary>The commit a branch, tag or stash points to; null for a remote or a folder.</summary>
     [ObservableProperty]
@@ -288,18 +312,19 @@ public sealed partial class RefItemRow : RefListRow, IUpdatableRow<RefListRow>
         && item.PullRequestText == PullRequestText && item.PullRequestToolTip == PullRequestToolTip;
 
     /// <summary>
-    /// The same ref, remote or folder with the same name, tooltip, level and opening. The panel gives
-    /// every row of one kind the same commands for its eye and its solo button, so the kept row's
-    /// commands still fit.
+    /// The same ref, remote or folder with the same name, tooltip and level. The panel gives every
+    /// row of one kind the same commands for its eye and its solo button, so the kept row's commands
+    /// still fit.
     /// </summary>
     public bool CanUpdateTo(RefListRow rebuilt) =>
         rebuilt is RefItemRow item
         && item.Key == Key && item.Kind == Kind && item.Text == Text && item.ToolTip == ToolTip
-        && item.Depth == Depth && item.IsOpen == IsOpen;
+        && item.Depth == Depth;
 
     public void UpdateTo(RefListRow rebuilt)
     {
         var item = (RefItemRow)rebuilt;
+        IsOpen = item.IsOpen;
         TargetSha = item.TargetSha;
         IsHead = item.IsHead;
         Ahead = item.Ahead;

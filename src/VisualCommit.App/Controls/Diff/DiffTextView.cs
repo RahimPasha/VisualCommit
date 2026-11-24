@@ -240,6 +240,9 @@ public sealed class DiffTextView : UserControl, IDiffPaneHost
         TryFocus();
     }
 
+    /// <summary>The element that takes the text's keyboard focus (<see cref="FocusBody"/>): the left pane's text area.</summary>
+    internal InputElement BodyFocusTarget => _left.Editor.TextArea;
+
     /// <summary>Where row <paramref name="row"/> is, across the view's whole width, in this control's coordinates; null when it is not laid out in view.</summary>
     public Rect? RowBounds(int row)
     {

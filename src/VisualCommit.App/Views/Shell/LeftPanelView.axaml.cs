@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Threading;
 using Avalonia.VisualTree;
 using VisualCommit.App.ViewModels.Panels;
 
@@ -11,17 +12,23 @@ namespace VisualCommit.App.Views.Shell;
 /// The left panel of the active tab (see <see cref="LeftPanelViewModel"/>). The code-behind adds
 /// what bindings cannot: the menus of its rows (docs/phase-3-design.md 4b: a right-click, the Menu
 /// key or Shift+F10 opens the row's menu only, selecting and highlighting nothing, D114), the
-/// double-clicks of 4c, and the row lookup the branch drag uses for its drop targets (4g; the
-/// drag's sources are the rows' <see cref="RefDrag.SourceProperty"/>).
+/// double-clicks of 4c, the row lookup the branch drag uses for its drop targets (4g; the drag's
+/// sources are the rows' <see cref="RefDrag.SourceProperty"/>), and the focus a branch row's eye or
+/// solo button gives to its row when it hides itself.
 /// </summary>
 public partial class LeftPanelView : UserControl
 {
+    /// <summary>The eye or solo button of a branch row that has the focus, and whether it came with the keyboard's frame; null while the focus is elsewhere.</summary>
+    private (Button Toggle, bool Framed)? _focusedToggle;
+
     public LeftPanelView()
     {
         InitializeComponent();
         RefList.AddHandler(ContextRequestedEvent, OnContextRequested);
         RefList.AddHandler(DoubleTappedEvent, OnDoubleTapped, handledEventsToo: true);
         RefList.AddHandler(Button.ClickEvent, OnRowClicked);
+        RefList.AddHandler(GotFocusEvent, OnFocusInList);
+        RefList.AddHandler(LostFocusEvent, OnFocusLeavingList);
     }
 
     /// <summary>
@@ -82,6 +89,49 @@ public partial class LeftPanelView : UserControl
         {
             repository.ActivatePullRequestMessage(row);
         }
+    }
+
+    /// <summary>A row's eye or solo button takes the focus: remembered, with whether the focus came as Tab or the arrows give it, with the frame.</summary>
+    private void OnFocusInList(object? sender, FocusChangedEventArgs e) =>
+        _focusedToggle = e.Source is Button { Name: "RefHiddenToggle" or "RefSoloToggle" } toggle
+            ? (toggle, e.NavigationMethod is NavigationMethod.Tab or NavigationMethod.Directional)
+            : null;
+
+    /// <summary>
+    /// A row's eye or solo button that had the focus has hidden itself, its branch shown again or its
+    /// solo ended, and Avalonia gives the focus to nothing then: once the layout has followed, the
+    /// branch's own row takes it, with the keyboard's frame when the button had it. Only when the
+    /// focus is still lost, the panel shows the same tab and the row still stands for that branch.
+    /// </summary>
+    private void OnFocusLeavingList(object? sender, FocusChangedEventArgs e)
+    {
+        if (_focusedToggle is not ({ } toggle, var framed) || !ReferenceEquals(e.Source, toggle))
+        {
+            return;
+        }
+
+        _focusedToggle = null;
+        if (toggle.IsVisible
+            || toggle.GetVisualAncestors().OfType<Button>().FirstOrDefault() is not { DataContext: RefItemRow { Key: var key } } row)
+        {
+            return;
+        }
+
+        var topLevel = TopLevel.GetTopLevel(this);
+        var armed = DataContext;
+        var lost = FocusReturn.LostFrom(topLevel, toggle, static () => false);
+        Dispatcher.UIThread.Post(
+            () =>
+            {
+                if (ReferenceEquals(DataContext, armed)
+                    && row is { DataContext: RefItemRow { Key: var shown }, IsEffectivelyVisible: true, IsEffectivelyEnabled: true }
+                    && shown == key
+                    && lost(topLevel?.FocusManager?.GetFocusedElement()))
+                {
+                    row.Focus(framed ? NavigationMethod.Tab : NavigationMethod.Unspecified);
+                }
+            },
+            DispatcherPriority.Loaded);
     }
 
     /// <summary>

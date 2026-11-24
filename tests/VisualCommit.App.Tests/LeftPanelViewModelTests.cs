@@ -614,6 +614,95 @@ public class LeftPanelViewModelTests
     }
 
     [Fact]
+    public void A_branch_created_or_deleted_keeps_its_sections_header_with_the_new_count_and_tells_the_list_of_that_branchs_row_alone()
+    {
+        // next sorts after main, below the folders; the header above them shows the new count itself.
+        var panel = Updated(GraphRefs());
+        var before = panel.Rows.ToList();
+        var header = Section(panel, RefSection.LocalBranches);
+        var main = Item(panel, "main", RefItemKind.LocalBranch);
+        var at = before.IndexOf(main) + 1;
+        var changes = RecordRuns(panel.Rows);
+        var refs = GraphRefs();
+
+        panel.Update(refs with { Refs = [.. refs.Refs, Local("next", 'n')] });
+
+        Assert.Equal([(NotifyCollectionChangedAction.Add, at, 1)], changes);
+        Assert.Same(header, panel.Rows[0]);
+        Assert.Equal("5", header.CountText);
+        Assert.Equal("next", panel.Rows[at].Text);
+        Assert.All(Enumerable.Range(0, at), i => Assert.Same(before[i], panel.Rows[i]));
+        Assert.All(Enumerable.Range(at, before.Count - at), i => Assert.Same(before[i], panel.Rows[i + 1]));
+
+        // And deleted again: the header shows 4, and only next's row goes.
+        changes.Clear();
+        panel.Update(GraphRefs());
+
+        Assert.Equal([(NotifyCollectionChangedAction.Remove, at, 1)], changes);
+        Assert.Same(header, panel.Rows[0]);
+        Assert.Equal("4", header.CountText);
+        Assert.All(Enumerable.Range(0, before.Count), i => Assert.Same(before[i], panel.Rows[i]));
+    }
+
+    [Fact]
+    public void A_folder_opened_and_closed_keeps_its_row_which_shows_its_chevron_itself_and_the_list_is_told_of_its_branches_alone()
+    {
+        var panel = Updated(GraphRefs());
+        var before = panel.Rows.ToList();
+        var feature = Item(panel, "feature", RefItemKind.Folder, depth: 1);
+        var at = before.IndexOf(feature);
+        var told = new List<string?>();
+        feature.PropertyChanged += (_, e) => told.Add(e.PropertyName);
+        var changes = RecordRuns(panel.Rows);
+
+        panel.Activate(feature);
+
+        // login and search come in below it; the folder is the row it was, open.
+        Assert.Equal([(NotifyCollectionChangedAction.Add, at + 1, 2)], changes);
+        Assert.Same(feature, panel.Rows[at]);
+        Assert.True(feature is { IsOpen: true, ShowsOpenChevron: true, ShowsClosedChevron: false }, "The kept folder does not show itself open.");
+        Assert.Equal([nameof(RefListRow.IsOpen), nameof(RefItemRow.ShowsClosedChevron), nameof(RefItemRow.ShowsOpenChevron)], told.Order(StringComparer.Ordinal));
+        Assert.Equal(["login", "search"], panel.Rows.Skip(at + 1).Take(2).Select(row => row.Text));
+        Assert.All(Enumerable.Range(0, at + 1), i => Assert.Same(before[i], panel.Rows[i]));
+        Assert.All(Enumerable.Range(at + 1, before.Count - at - 1), i => Assert.Same(before[i], panel.Rows[i + 2]));
+
+        changes.Clear();
+        panel.Activate(feature);
+
+        Assert.Equal([(NotifyCollectionChangedAction.Remove, at + 1, 2)], changes);
+        Assert.True(feature is { IsOpen: false, ShowsClosedChevron: true }, "The kept folder does not show itself closed.");
+        Assert.All(Enumerable.Range(0, before.Count), i => Assert.Same(before[i], panel.Rows[i]));
+    }
+
+    [Fact]
+    public void A_section_closed_and_opened_keeps_its_header_and_the_list_is_told_of_its_rows_alone()
+    {
+        var panel = Updated(GraphRefs());
+        var before = panel.Rows.ToList();
+        var tags = Section(panel, RefSection.Tags);
+        var at = before.IndexOf(tags);
+        var told = new List<string?>();
+        tags.PropertyChanged += (_, e) => told.Add(e.PropertyName);
+        var changes = RecordRuns(panel.Rows);
+
+        panel.Activate(tags);
+
+        Assert.Equal([(NotifyCollectionChangedAction.Remove, at + 1, 2)], changes);
+        Assert.Same(tags, panel.Rows[at]);
+        Assert.False(tags.IsOpen);
+        Assert.Contains(nameof(RefListRow.IsOpen), told);
+
+        changes.Clear();
+        panel.Activate(tags);
+
+        Assert.Equal([(NotifyCollectionChangedAction.Add, at + 1, 2)], changes);
+        Assert.True(tags.IsOpen);
+        Assert.Equal(GraphScenarioTree, Describe(panel));
+        Assert.All(Enumerable.Range(0, before.Count).Where(i => i <= at), i => Assert.Same(before[i], panel.Rows[i]));
+        Assert.Same(before[^1], panel.Rows[^1]);
+    }
+
+    [Fact]
     public void In_solo_mode_the_branches_neither_soloed_nor_heads_are_dimmed_and_the_solo_button_ends_a_solo()
     {
         var panel = Updated(GraphRefs());
@@ -640,6 +729,19 @@ public class LeftPanelViewModelTests
     {
         var changes = new List<(NotifyCollectionChangedAction Action, int Index)>();
         rows.CollectionChanged += (_, e) => changes.Add((e.Action, e.Action == NotifyCollectionChangedAction.Remove ? e.OldStartingIndex : e.NewStartingIndex));
+        return changes;
+    }
+
+    /// <summary>What <paramref name="rows"/> tell the view from now on: each change's kind, its first index and its number of rows (-1 and 0 for a reset).</summary>
+    private static List<(NotifyCollectionChangedAction Action, int Index, int Count)> RecordRuns(INotifyCollectionChanged rows)
+    {
+        var changes = new List<(NotifyCollectionChangedAction Action, int Index, int Count)>();
+        rows.CollectionChanged += (_, e) => changes.Add(e.Action switch
+        {
+            NotifyCollectionChangedAction.Reset => (e.Action, -1, 0),
+            NotifyCollectionChangedAction.Remove => (e.Action, e.OldStartingIndex, e.OldItems!.Count),
+            _ => (e.Action, e.NewStartingIndex, e.NewItems!.Count),
+        });
         return changes;
     }
 

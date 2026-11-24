@@ -51,6 +51,13 @@ public partial class DiffView : UserControl
         // Menu key or Shift+F10. A right-press leaves the text's selection as it is (the panes
         // select with the left button only).
         AddHandler(ContextRequestedEvent, OnContextRequested);
+
+        // The discards ask first, their buttons disabled meanwhile: one pressed by the keys gets
+        // the focus back when its question is cancelled. A cancelled "Discard lines" leaves no line
+        // selected, and its button goes with them: the text, where they were chosen, takes the
+        // focus then, without a frame, as when a hunk's bar goes.
+        FocusReturn.AfterKeyboardPress(DiscardFileButton);
+        FocusReturn.AfterKeyboardPress(DiscardLinesButton, () => DiffText.BodyFocusTarget);
     }
 
     /// <summary>
