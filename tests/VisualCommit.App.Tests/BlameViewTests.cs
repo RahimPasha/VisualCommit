@@ -435,8 +435,53 @@ public class BlameViewTests
         Assert.Equal(0, page.SelectedRun?.Index);
     }
 
-    /// <summary>A blame of 85 lines in two runs: lines 1 to 45, each over 150 characters long, "Add the parser"; lines 46 to 85, short, "Add tracing".</summary>
-    private static BlameViewModel TwoLongRuns()
+    /// <summary>
+    /// The caret put on a picked run's first line in view keeps the text where it was also when that
+    /// line ends left of the view's edge (docs/phase-8a-design.md 13.1, ruling 100): with the text
+    /// scrolled 60 across and line 20, an empty line of run 0, drawn at the view's top, a click on
+    /// run 0's line 30 puts the caret on line 20, out of view at its end, and the next Down takes it
+    /// to line 21, a long one, with the text where it was. Before, Down took the x of the caret on
+    /// line 20, the view's far left, and scrolled the text back across to it.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task A_click_in_the_gutter_moves_no_text_across_when_the_runs_first_line_in_view_is_empty()
+    {
+        using var page = TwoLongRuns(everySecondLineEmpty: true);
+        var view = new BlameView { DataContext = page };
+        using var host = DiffHost.Show(view, 700, 400, ThemeVariant.Dark);
+        await page.LoadAsync();
+        DiffHost.Settle();
+        var text = Text(view);
+        var gutter = Gutter(view);
+        Assert.True(text.TextArea.Focus());
+        var scroller = text.GetVisualDescendants().OfType<Avalonia.Controls.ScrollViewer>().First();
+        scroller.Offset = new Vector(60, text.TextView.GetVisualTopByDocumentLine(20) + 2);
+        DiffHost.Settle();
+        var scrolled = (text.HorizontalOffset, text.VerticalOffset);
+        Assert.True(scrolled.HorizontalOffset > 0, $"The text did not scroll across: {scrolled}.");
+        Assert.Equal(20, text.LineAt(text.TextView.TranslatePoint(default, text)!.Value.Y));
+        Assert.Equal(string.Empty, text.Document.GetText(text.Document.GetLineByNumber(20)));
+
+        host.Click(gutter, GutterPoint(text, gutter, 30));
+        DiffHost.Settle();
+
+        Assert.Equal(0, page.SelectedRun?.Index);
+        Assert.Equal(20, text.TextArea.Caret.Line);
+        Assert.Equal(scrolled, (text.HorizontalOffset, text.VerticalOffset));
+
+        host.PressKey(Avalonia.Input.Key.Down);
+        DiffHost.Settle();
+
+        Assert.Equal(21, text.TextArea.Caret.Line);
+        Assert.Equal(0, page.SelectedRun?.Index);
+        Assert.Equal(scrolled, (text.HorizontalOffset, text.VerticalOffset));
+    }
+
+    /// <summary>
+    /// A blame of 85 lines in two runs: lines 1 to 45, each over 150 characters long, "Add the parser"
+    /// (with <paramref name="everySecondLineEmpty"/>, its even lines empty); lines 46 to 85, short, "Add tracing".
+    /// </summary>
+    private static BlameViewModel TwoLongRuns(bool everySecondLineEmpty = false)
     {
         var first = BlameCommitOf(AddParserSha, "Mira Kovac", 1, "src/Parser.cs");
         var second = BlameCommitOf(AddTracingSha, "Jonas Berg", 4, "src/Parser.cs");
@@ -444,7 +489,9 @@ public class BlameViewTests
         {
             Blame = (_, _) => new BlameResult(
             [
-                .. Enumerable.Range(1, 45).Select(line => new BlameLine($"// line {line} {new string('x', 150)}", first)),
+                .. Enumerable.Range(1, 45).Select(line => new BlameLine(
+                    everySecondLineEmpty && line % 2 == 0 ? string.Empty : $"// line {line} {new string('x', 150)}",
+                    first)),
                 .. Enumerable.Range(46, 40).Select(line => new BlameLine($"// line {line}", second)),
             ]),
         };
