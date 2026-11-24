@@ -14,10 +14,11 @@ namespace VisualCommit.VisualTests.Phase8a;
 /// (docs/phase-6-design.md 6.6) and the switch leaves it on nothing, which docs/phase-8a-design.md
 /// 1.17 recorded for a stage row: to that same region's target in the tab now shown, the region
 /// being the panel that held the focus (the left panel, the graph area, the commit's details, the
-/// stage panel); to the graph area's target when the tab now shown does not show that panel; with
-/// the keyboard's frame when the element that had the focus had it. A focus that the switch leaves
-/// where it was (the graph, the summary of a stage panel still shown) stays there, and a tab still
-/// opening gives nothing.
+/// stage panel); to the graph area's target when the tab now shown does not show that panel, or has
+/// no repository and so shows only that panel's empty stand-in (a new tab's welcome page, a tab
+/// still opening); with the keyboard's frame when the element that had the focus had it. A focus
+/// that the switch leaves where it was (the graph, the summary of a stage panel still shown) stays
+/// there, and a tab still opening, which has no graph area's target yet, gives nothing.
 /// </summary>
 public sealed partial class KeyboardPassTests
 {
@@ -184,6 +185,73 @@ public sealed partial class KeyboardPassTests
         await app.WaitForAsync(() => ReferenceEquals(app.Session.Shell.ActiveTab, mine), "the first tab");
         await ShowStagePanelAsync(app);
         await FocusReadmesRowAsync(app);
+        app.PressCtrlTab();
+        await app.WaitForAsync(() => ReferenceEquals(app.Session.Shell.ActiveTab, opening), "the tab still opening");
+        app.Settle();
+
+        Assert.True(opening is { IsOpening: true, Repository: null }, "The second tab is no longer opening.");
+        Assert.Equal(NothingFact, FocusFact(app));
+
+        held.Release();
+        await app.WaitForAsync(() => opening.Repository is { Graph.Count: > 0 }, "the second repository's history");
+        await app.WaitForIdleAsync();
+        app.Settle();
+        Assert.Equal(NothingFact, FocusFact(app));
+    }
+
+    /// <summary>
+    /// Ctrl+T from the left panel's first section, reached by Shift+F6 from the graph: the new tab has
+    /// no repository, and its left panel shows only its empty sections and the filter; the graph
+    /// area's target, the welcome page's "Open", takes the focus, with the frame, as from a stage row.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task Ctrl_T_from_the_left_panels_first_section_gives_the_focus_to_the_new_tabs_welcome_pages_Open_with_the_frame()
+    {
+        using var repo = await Scenarios.ChangesAsync();
+        using var data = new TempDirectory("data");
+        using var app = await OpenAsync(data, repo.Path);
+        var mine = app.Session.Shell.ActiveTab;
+        await ShowStagePanelAsync(app);
+        await FocusLeftSectionAsync(app);
+
+        app.PressKey(Key.T, RawInputModifiers.Control);
+        await app.WaitForAsync(() => app.Session.Shell.ActiveTab is { ShowsWelcome: true } shown && !ReferenceEquals(shown, mine), "the new tab's welcome page");
+        await app.WaitForIdleAsync(mine.Repository!);
+        app.Settle();
+
+        Assert.Equal(WelcomeOpenFact, FocusFact(app));
+    }
+
+    /// <summary>
+    /// Ctrl+Tab from the left panel's first section to a tab whose repository is still opening (its
+    /// first <c>rev-parse</c> held): that tab has no repository yet and no graph area's target, so the
+    /// focus stays on nothing, as from a stage row, and stays there once it has opened.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task Ctrl_Tab_from_the_left_panels_first_section_to_a_tab_still_opening_leaves_the_focus_on_nothing()
+    {
+        using var first = await Scenarios.ChangesAsync();
+        using var second = await Scenarios.ChangesAsync();
+        using var data = new TempDirectory("data");
+        var held = new HeldGitRunner();
+        using var app = await OpenAsync(data, first.Path, held.Probe);
+        var mine = app.Session.Shell.ActiveTab;
+
+        // A new tab opens the second repository by Ctrl+O, its first rev-parse held.
+        app.PressKey(Key.T, RawInputModifiers.Control);
+        await app.WaitForAsync(() => app.Session.Shell.ActiveTab.ShowsWelcome, "the new tab's welcome page");
+        var opening = app.Session.Shell.ActiveTab;
+        held.HoldNext("rev-parse");
+        app.Folders.Answer(second.Path);
+        app.PressKey(Key.O, RawInputModifiers.Control);
+        var call = await held.Started.WaitAsync(ShellDriver.DefaultWaitTimeout, Cancelled);
+        Assert.Equal(WorktreeKey.Of(second.Path), WorktreeKey.Of(call.WorkingDirectory!), WorktreeKey.Comparer);
+
+        // Back to the first tab, the left panel's first section focused, and Ctrl+Tab to the tab still opening.
+        app.PressCtrlTab();
+        await app.WaitForAsync(() => ReferenceEquals(app.Session.Shell.ActiveTab, mine), "the first tab");
+        await ShowStagePanelAsync(app);
+        await FocusLeftSectionAsync(app);
         app.PressCtrlTab();
         await app.WaitForAsync(() => ReferenceEquals(app.Session.Shell.ActiveTab, opening), "the tab still opening");
         app.Settle();
