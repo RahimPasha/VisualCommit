@@ -213,7 +213,7 @@ public static class GitSetupTexts
     public const string StandInNote = "From VISUALCOMMIT_GIT_STAND_IN, a test switch.";
     public const string NoGitFoundNote = "No Git was found on the PATH or in the usual install folders.";
     public const string NextStartSuffix = " VisualCommit uses it from its next start.";
-    public const string NextStartPathSuffix = " VisualCommit uses the Git on the PATH from its next start.";
+    public const string NextStartLooksAgainSuffix = " VisualCommit looks for Git again at its next start.";
     public const string WhenYouSaveSuffix = " VisualCommit looks for Git again when you save.";
     public const string Browse = "Browse…";
 

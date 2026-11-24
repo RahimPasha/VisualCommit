@@ -73,7 +73,7 @@ public sealed partial class GitProgramViewModel : ObservableObject
     /// <summary>
     /// <c>GitProgramNote</c>: where the shown git came from, then, while the choice differs from the
     /// git in use, when it applies; for a chosen git in use that works, its choice dropped, that the
-    /// next start uses the Git on the PATH.
+    /// next start looks for Git again.
     /// </summary>
     public string NoteText
     {
@@ -100,9 +100,10 @@ public sealed partial class GitProgramViewModel : ObservableObject
             }
             else if (ChoiceInUse is not null && GitWorks)
             {
-                // The chosen git in use dropped: the row still shows it, so the note says what
-                // the next start uses instead (D423).
-                return GitSetupTexts.SourceNote(_inUse, windows) + GitSetupTexts.NextStartPathSuffix;
+                // The chosen git in use dropped: the row still shows it, so the note says that the
+                // next start looks for Git again (D423), on the PATH and then in the usual install
+                // folders, which is why it names neither.
+                return GitSetupTexts.SourceNote(_inUse, windows) + GitSetupTexts.NextStartLooksAgainSuffix;
             }
             else
             {
