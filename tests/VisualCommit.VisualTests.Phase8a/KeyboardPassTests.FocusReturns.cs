@@ -72,11 +72,12 @@ public sealed partial class KeyboardPassTests
 
     /// <summary>
     /// Two lines of the remaining hunk chosen by the arrows (as G1 chooses them), "Discard lines"
-    /// reached by Shift+Tab from the text and pressed by Enter, its question cancelled by Esc:
-    /// "Discard lines" has the focus back with the frame, and nothing changed.
+    /// reached by Shift+Tab from the text and pressed by Enter, its question cancelled by Esc: the
+    /// cancel leaves no line selected (as before), so "Discard lines" is gone and the text, where the
+    /// lines were chosen, has the focus, without a frame; nothing changed.
     /// </summary>
     [AvaloniaFact]
-    public async Task Discard_lines_by_the_keys_cancelled_in_its_question_gives_the_focus_back_to_it_with_the_frame()
+    public async Task Discard_lines_by_the_keys_cancelled_in_its_question_gives_the_focus_to_the_text()
     {
         using var repo = await Scenarios.ChangesAsync();
         using var data = new TempDirectory("data");
@@ -101,8 +102,9 @@ public sealed partial class KeyboardPassTests
 
         await CancelQuestionByTheKeysAsync(app, "Esc");
 
-        Assert.True(app.FocusedAutomationId() == "DiscardLinesButton", $"After Esc in the question the focus is on {app.DescribeFocus()}.");
-        Assert.True(app.FocusVisible, "Discard lines shows no keyboard frame after Esc.");
+        Assert.Empty(diff.SelectedChanges);
+        Assert.True(app.FocusedAutomationId() == "DiffText", $"After Esc in the question the focus is on {app.DescribeFocus()}.");
+        Assert.False(app.FocusVisible, "The text shows the keyboard's frame after Esc.");
         Assert.Equal(exact, await repo.ExactStateAsync());
     }
 
