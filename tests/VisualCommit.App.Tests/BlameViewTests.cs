@@ -478,6 +478,54 @@ public class BlameViewTests
     }
 
     /// <summary>
+    /// A pick that clears a selection in view keeps the text where it was (docs/phase-8a-design.md
+    /// 13.1, ruling 100): AvaloniaEdit redraws the lines of a selection it clears, and the view's
+    /// lines stay out of date until the next layout, but the caret is still put at the view's left
+    /// edge. With the text scrolled 60 across, part of line 30 selected and a click on run 0's line
+    /// 40 in the gutter, the caret goes to the first of run 0's lines in view, the selection goes,
+    /// and the next Down scrolls nothing. Before, the caret went to column 1 there, and Down
+    /// scrolled the text back across to it.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task A_click_in_the_gutter_that_clears_a_selection_in_view_moves_no_text_across()
+    {
+        using var page = TwoLongRuns();
+        var view = new BlameView { DataContext = page };
+        using var host = DiffHost.Show(view, 700, 400, ThemeVariant.Dark);
+        await page.LoadAsync();
+        DiffHost.Settle();
+        var text = Text(view);
+        var gutter = Gutter(view);
+        Assert.True(text.TextArea.Focus());
+        var scroller = text.GetVisualDescendants().OfType<Avalonia.Controls.ScrollViewer>().First();
+        scroller.Offset = new Vector(60, text.TextView.GetVisualTopByDocumentLine(47) - text.TextView.Bounds.Height);
+        DiffHost.Settle();
+        var firstInView = text.LineAt(text.TextView.TranslatePoint(default, text)!.Value.Y) ?? throw new InvalidOperationException("No line is drawn at the view's top.");
+        Assert.InRange(firstInView, 2, 29);
+        var selected = text.Document.GetLineByNumber(30);
+        text.TextArea.Selection = AvaloniaEdit.Editing.Selection.Create(text.TextArea, selected.Offset + 12, selected.Offset + 40);
+        DiffHost.Settle();
+        var scrolled = (text.HorizontalOffset, text.VerticalOffset);
+        Assert.True(scrolled.HorizontalOffset > 0, $"The text did not scroll across: {scrolled}.");
+        Assert.False(text.TextArea.Selection.IsEmpty);
+        Assert.True(text.TextView.VisualLinesValid);
+
+        host.Click(gutter, GutterPoint(text, gutter, 40));
+        DiffHost.Settle();
+
+        Assert.Equal(0, page.SelectedRun?.Index);
+        Assert.Equal(firstInView, text.TextArea.Caret.Line);
+        Assert.True(text.TextArea.Selection.IsEmpty);
+        Assert.Equal(scrolled, (text.HorizontalOffset, text.VerticalOffset));
+
+        host.PressKey(Avalonia.Input.Key.Down);
+        DiffHost.Settle();
+
+        Assert.Equal(firstInView + 1, text.TextArea.Caret.Line);
+        Assert.Equal(scrolled, (text.HorizontalOffset, text.VerticalOffset));
+    }
+
+    /// <summary>
     /// A blame of 85 lines in two runs: lines 1 to 45, each over 150 characters long, "Add the parser"
     /// (with <paramref name="everySecondLineEmpty"/>, its even lines empty); lines 46 to 85, short, "Add tracing".
     /// </summary>
