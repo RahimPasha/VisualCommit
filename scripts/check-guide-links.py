@@ -231,7 +231,8 @@ _IMAGE_SETS = ("image-set", "-webkit-image-set")
 
 def css_references(text):
     """Every address a style sheet loads, as (form, address): 'url()', '@import' with a string,
-    '@import url()', and each string inside 'image-set()' or '-webkit-image-set()'. Names are read
+    '@import url()', and each string directly inside 'image-set()' or '-webkit-image-set()' (not one
+    in a function within it, such as type()). Names are read
     as CSS reads them, escapes decoded, so that '\\75 rl(' is url( too; comments and other strings
     are skipped."""
     references = []
@@ -246,7 +247,8 @@ def css_references(text):
         character = text[i]
         if character in "\"'":
             value, i = _read_string(text, i)
-            if any(function is not None for function in functions):
+            # Only a string directly in the image set is an image: type("image/avif") is not.
+            if functions and functions[-1] is not None:
                 references.append(("image-set()", value))
             continue
         if character == "@" and i + 1 < n and _is_name_character(text, i + 1):
