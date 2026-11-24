@@ -145,6 +145,120 @@ public class RepositoryViewModelTests
     }
 
     [Fact]
+    public async Task Commits_that_come_above_the_top_row_in_view_leave_that_row_at_the_top()
+    {
+        using var repo = await Scenarios.GraphAsync();
+        using var viewModel = await OpenAsync(repo);
+        Assert.False(viewModel.HasWorkingChanges);
+        viewModel.ScrollOffset = (5 * RowHeight) + 10;
+        var top = viewModel.Graph.CommitAt(5).Sha;
+
+        await repo.CommitFileAsync("one.txt", "one\n", "First from a terminal");
+        await repo.CommitFileAsync("two.txt", "two\n", "Second from a terminal");
+        await viewModel.RefreshAsync();
+
+        // Two rows more above it: the offset follows by two rows, its part of a row kept.
+        Assert.Equal(15, viewModel.Graph.Count);
+        Assert.Equal(7, viewModel.Graph.IndexOf(top));
+        Assert.Equal((7 * RowHeight) + 10, viewModel.ScrollOffset);
+        Assert.Equal(top, TopCommit(viewModel));
+    }
+
+    [Fact]
+    public async Task Commits_that_go_above_the_top_row_in_view_leave_that_row_at_the_top()
+    {
+        using var repo = await Scenarios.GraphAsync();
+        using var viewModel = await OpenAsync(repo);
+        await repo.CommitFileAsync("one.txt", "one\n", "First from a terminal");
+        await viewModel.RefreshAsync();
+        viewModel.ScrollOffset = (6 * RowHeight) + 3;
+        var top = TopCommit(viewModel);
+
+        await repo.GitAsync("reset", "--hard", "--quiet", "HEAD~1");
+        await viewModel.RefreshAsync();
+
+        Assert.Equal(13, viewModel.Graph.Count);
+        Assert.Equal((5 * RowHeight) + 3, viewModel.ScrollOffset);
+        Assert.Equal(top, TopCommit(viewModel));
+    }
+
+    [Fact]
+    public async Task When_the_top_row_in_view_leaves_the_graph_the_offset_stays()
+    {
+        using var repo = await Scenarios.GraphAsync();
+        using var viewModel = await OpenAsync(repo);
+        await repo.CommitFileAsync("one.txt", "one\n", "First from a terminal");
+        await repo.CommitFileAsync("two.txt", "two\n", "Second from a terminal");
+        await viewModel.RefreshAsync();
+        var gone = (await repo.GitAsync("rev-parse", "HEAD~1")).StandardOutput.Trim();
+        viewModel.ScrollOffset = (viewModel.Graph.IndexOf(gone) * RowHeight) + 5;
+
+        await repo.GitAsync("reset", "--hard", "--quiet", "HEAD~2");
+        await viewModel.RefreshAsync();
+
+        Assert.Equal(-1, viewModel.Graph.IndexOf(gone));
+        Assert.Equal((1 * RowHeight) + 5, viewModel.ScrollOffset);
+    }
+
+    [Fact]
+    public async Task At_the_top_of_the_graph_new_commits_show_at_the_top()
+    {
+        using var repo = await Scenarios.GraphAsync();
+        using var viewModel = await OpenAsync(repo);
+        Assert.Equal(0, viewModel.ScrollOffset);
+
+        await repo.CommitFileAsync("one.txt", "one\n", "First from a terminal");
+        await viewModel.RefreshAsync();
+
+        Assert.Equal(0, viewModel.ScrollOffset);
+        Assert.Equal("First from a terminal", viewModel.Graph.CommitAt(0).Subject);
+    }
+
+    [Fact]
+    public async Task A_commit_of_every_change_from_a_terminal_while_scrolled_leaves_the_top_row_in_view_at_the_top()
+    {
+        // The working-changes row goes as the commit comes: the swap follows the commit, the status
+        // read takes the row back (D60), and the same commit stays at the top.
+        using var repo = await Scenarios.GraphAsync();
+        using var viewModel = await OpenAsync(repo);
+        repo.WriteFile("notes.txt", "A note\n");
+        await viewModel.RefreshStatusAsync();
+        Assert.True(viewModel.HasWorkingChanges);
+        viewModel.ScrollOffset = (6 * RowHeight) + 10;
+        var top = TopCommit(viewModel);
+
+        await repo.GitAsync("add", "--all");
+        await repo.GitAsync("commit", "--quiet", "-m", "Everything from a terminal");
+        await viewModel.RefreshAsync();
+
+        Assert.False(viewModel.HasWorkingChanges);
+        Assert.Equal(14, viewModel.Graph.Count);
+        Assert.Equal(top, TopCommit(viewModel));
+    }
+
+    [Fact]
+    public async Task A_commit_made_in_the_app_while_scrolled_leaves_the_top_row_in_view_at_the_top()
+    {
+        // Part of the changes committed: the working-changes row stays, and so does the top row.
+        using var repo = await Scenarios.GraphAsync();
+        using var viewModel = await OpenAsync(repo);
+        repo.WriteFile("staged.txt", "staged\n");
+        repo.WriteFile("unstaged.txt", "unstaged\n");
+        await repo.GitAsync("add", "staged.txt");
+        await viewModel.RefreshStatusAsync();
+        viewModel.ScrollOffset = (6 * RowHeight) + 10;
+        var top = TopCommit(viewModel);
+
+        Assert.Null(await viewModel.CommitAsync("Staged in the app", amend: false));
+        await viewModel.RefreshAsync();
+
+        Assert.True(viewModel.HasWorkingChanges);
+        Assert.Equal("Staged in the app", viewModel.Graph.CommitAt(0).Subject);
+        Assert.Equal((7 * RowHeight) + 10, viewModel.ScrollOffset);
+        Assert.Equal(top, TopCommit(viewModel));
+    }
+
+    [Fact]
     public async Task A_detached_head_shows_in_the_branch_text()
     {
         using var repo = await Scenarios.GraphAsync();
@@ -175,6 +289,13 @@ public class RepositoryViewModelTests
         Assert.Single(log.Messages, message => message.StartsWith("graph: first graph rows drawn after ", StringComparison.Ordinal));
         Assert.Contains("graph: graph frames: 20 drawn, 95th percentile 19.0 ms, longest 20.0 ms", log.Messages);
     }
+
+    /// <summary>The graph's row height, which <see cref="RepositoryViewModel.ScrollOffset"/> counts in.</summary>
+    private const double RowHeight = VisualCommit.App.Controls.CommitGraphControl.RowHeight;
+
+    /// <summary>The commit at the top of the view, as the graph control finds it: the row at the offset, less the working-changes row when it is shown.</summary>
+    private static string TopCommit(RepositoryViewModel viewModel) =>
+        viewModel.Graph.CommitAt((int)Math.Floor(viewModel.ScrollOffset / RowHeight) - (viewModel.HasWorkingChanges ? 1 : 0)).Sha;
 
     /// <summary>The graph scenario's heap line after a load of <paramref name="commits"/> commits, as a pattern; its megabytes any whole number.</summary>
     private static string HeapLine(int commits) => $"graph: managed heap N MB after loading {commits} commits.";
