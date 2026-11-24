@@ -1424,21 +1424,22 @@ wave adds to it. What wave 2 tells §12's launches is in 12.3.5.
   report has it).
 
 - **Wave 4: the restore order, as built, proven and merged** (the lead, 2026-11-23; section 14 with
-  its 14.10; rulings 86 to 93; D458; merge `aedb12f`). What a later package or session must know. A
-  start whose active tab is a restored repository's beside other restored tabs opens them through
-  `RestoreOrder` (`ViewModels/RestoreOrder.cs`): the active tab first and alone, the others at its
-  graph's first page (`RepositoryViewModel.FirstPage`), at its opening's end without one, at its
-  close or after 5 s on `TabServices.RestoreClock`, then at most `OpensAtOnce` (4) before their own
-  first pages; a waiting tab that is shown opens at once, one that is closed never opens. Every
-  other start is unchanged, and `InitializeAsync` and the harness's `WaitUntilReadyAsync` keep their
-  contracts, so no wait changed. `AppSession.Start` and `ShellDriver`'s `Start` and `StartWithTabs`
-  take the optional `restoreClock`, last in each list: a test that starts the app with several
-  restored repository tabs and must not meet the 5 s gives a `ManualTimeProvider` that it never
-  moves, and then only the first tab's page, end or close releases the others. The order writes
-  `Restore order: …` lines, at Info at its start and its release. In the real window phase 1's check
-  15 opens its 100,000-commit tab after `linear`'s first page. M3's bound is 8,900 ms and M2's 9,500
-  ms (`Phase8aPerformance`, `23bea54`), and CLAUDE.md has the command that runs M2 and M3 alone for
-  two builds by turns. "Check again" still reopens the tabs whose restore failed all at once (ruling
+  its 14.10; rulings 86 to 93; D458; merge `aedb12f`). The proof is taken again before the gate
+  (D461, 2026-11-24; 14.10's amendment). What a later package or session must know. A start whose
+  active tab is a restored repository's beside other restored tabs opens them through `RestoreOrder`
+  (`ViewModels/RestoreOrder.cs`): the active tab first and alone, the others at its graph's first
+  page (`RepositoryViewModel.FirstPage`), at its opening's end without one, at its close or after 5
+  s on `TabServices.RestoreClock`, then at most `OpensAtOnce` (4) before their own first pages; a
+  waiting tab that is shown opens at once, one that is closed never opens. Every other start is
+  unchanged, and `InitializeAsync` and the harness's `WaitUntilReadyAsync` keep their contracts, so
+  no wait changed. `AppSession.Start` and `ShellDriver`'s `Start` and `StartWithTabs` take the
+  optional `restoreClock`, last in each list: a test that starts the app with several restored
+  repository tabs and must not meet the 5 s gives a `ManualTimeProvider` that it never moves, and
+  then only the first tab's page, end or close releases the others. The order writes `Restore order:
+  …` lines, at Info at its start and its release. In the real window phase 1's check 15 opens its
+  100,000-commit tab after `linear`'s first page. M3's bound is 8,900 ms and M2's 9,500 ms
+  (`Phase8aPerformance`, `23bea54`), and CLAUDE.md has the command that runs M2 and M3 alone for two
+  builds by turns. "Check again" still reopens the tabs whose restore failed all at once (ruling
   90).
 
 ## 2. colours: the contrast round (D410)
@@ -1903,19 +1904,22 @@ compared with nothing.
 **As read (the lead, 2026-11-24; the finding floor-2 of the review before the gate, ruling 99).**
 The picture cannot show it. In the macOS job's pictures of CI's run 45306019513
 (`visual-macos-latest`, `phase-5/scripted/a2d-show-reads.png`; the status bar reads Git 2.56.1) the
-activity log stands at its end, as it does on the laptop: under "Show reads" it shows the reads that
-follow the refused checkout (`git rev-parse HEAD --symbolic-full-name …`, `git for-each-ref`, `git
-status`, `git diff-tree`, `git for-each-ref`, `git config --null --get-regexp ^remote\.` with exit
-1, `git stash list`, `git symbolic-ref -q HEAD`, `git rev-parse -q --verify HEAD`, `git status`; the
-laptop's picture has the same rows without the first `git status`). The opening's reads lie far
-above what the panel shows, so this picture shows neither the opening's first call nor its second,
-on any platform, and no other picture of CI's shows the log's top. What holds the second call
-instead is a test:
+activity log stands at its end, as it does on the laptop: it shows the refused checkout's own last
+calls, at that operation's depth (`git rev-parse HEAD --symbolic-full-name …`, `git for-each-ref`),
+and then, under "Show reads", the reads that follow it (`git status`, `git diff-tree`, `git
+for-each-ref`, `git config --null --get-regexp ^remote\.` with exit 1, `git stash list`, `git
+symbolic-ref -q HEAD`, `git rev-parse -q --verify HEAD`, `git status`; the laptop's picture has the
+same rows without the first `git status`). The opening's reads lie far above what the panel shows,
+so this picture shows neither the opening's first call nor its second, on any platform, and no other
+scripted picture is taken with "Show reads" ticked (phase 5's `a2a` and `a2b` show the log's top,
+without the reads). What holds the second call instead is a test:
 `ActivityLogViewTests.A_repository_opened_through_a_link_shows_its_openings_reads_under_Show_reads`
 opens one repository through a link and one in a folder below its top and asserts the log's first
 two rows, the opening's call and then `git rev-parse --path-format=absolute --git-common-dir`; it
-runs on every platform and passed in that run's macOS job. The sentence above and 3.8's item on the
-picture are wrong about what the picture shows; they stay as written, with this note.
+runs on every platform and passed in that run's macOS job. The sentence above, 3.3.4's "phase 5's A2
+picture shows it first" and 3.8's item on the picture are wrong about what the picture shows: A2
+holds the opening's call by an assertion on the log's rows (`Phase5Checks.A.Log.cs`,
+`AssertShowReads`), not by its picture. They stay as written, with this note.
 
 ### 3.7 Lagged list, run time, real-window pass
 
@@ -5318,8 +5322,9 @@ files of 8a's walk-through that 12.3.5's first ruling changes (`Phase8aExpectati
 `Phase8aChecks.F.cs`, `Phase8aChecks.F.Helpers.cs`; ruling 96), whose two scripted pictures stay the
 same files, so no scripted picture can change, and `StartInfoFor` changes no launch. Proof: `git diff
 --stat phase/8a-release-readiness...wip/p8a-realwindow -- . ':(exclude)tests/VisualCommit.RealWindowTests'`, in its
-three-dot form, which reads from the two branches' merge base (`f0b4f8a`) whatever the phase's branch
-has gained since (the review before the gate, realwindow-3; ruling 99), prints those three files alone; at the gate the
+three-dot form, which compares the part's branch with the two branches' merge base (`f0b4f8a`) and so
+leaves out whatever the phase's branch has gained since (the review before the gate, realwindow-3;
+ruling 99), prints those three files alone; at the gate the
 earlier captures differ from phase 7b's only as 0.7 names (§2's, §7's three framed and §2's placeholder in the same three, §8's eight, the two
 palette captures). New files: the 31 captures above (32 where 1920×1080 fits) and their 25 (26) difference pictures in
 `artifacts/visual/phase-8a/real-window/`, with run.txt.
@@ -5634,27 +5639,28 @@ waits lengthen the series from about 30 minutes to about 55; the owner is told.
 
 **The restore order's proof (the lead, 2026-11-23, at its end; 14.8 steps 5 to 8; D458).** 93. Four
 at once stays: ruling 88's rule is met (230 ms against 335 ms), and no trial of two is made. The
-series is proven by D457 (5)'s rule on five undisturbed pairs (the report's "The restore order's
-proof"). Four of nine pairs met a task the scheduler had not shown as due and were taken again, as
-step 6 says; once four pairs were kept, their values fixed the rule's outcome for any fifth pair, so
-the lead would have ended the series there had the last retake met a task too, which it did not.
-M3's bound is 8,900 ms (7,077 ms; step 8). M2's bound goes from 6,100 to 9,500 ms, as D457 (3)
-provides: the slowest of the fourteen runs that themselves met no scheduled task, on the base and on
-the fix, whose one-tab start makes no order, is 7,563 ms, the fix's (from the base's runs alone,
-7,374 ms, it would be 9,300 ms); a run of a dropped pair counts for this when its own run met no
-task. The fix's M2 median lies 794 ms above the base's, with ranges that overlap wholly; the fix
-adds no wait and no process on the one-tab path, the window opened 416 ms later in its kept one-tab
-runs (medians), before anything of the fix runs, and counted from the window's opening its one-tab
-first rows came sooner than the base's in four of the nine pairs and later in five: read as the
-laptop's spread, and put on the list of the review before the gate, with the bound's reading that
-both builds count. 14.9's open point 4 (M3's bound without a merge) did not arise. Its open point 5
-(a release that delays the first frame) is answered by the probe and the alternation together. The
-release does come before the first frame: its line stands 180 to 256 ms before the tab's `first
-graph rows drawn` in the probe's six launches with ten tabs. No cost of it shows beyond the spread:
-by the tab's own clock its first rows came as soon beside nine tabs as alone (the fix's medians
-1,840 and 1,913 ms against 2,113 ms alone), and in the series, counted from the window's opening,
-the fix's M3 first rows came 255 ms after its M2's in the five kept pairs (medians 2,511 and 2,256
-ms) and 236 ms before them over all nine (1,957 and 2,193 ms). The order stays as built.
+series is proven by D457 (5)'s rule on five undisturbed pairs [amended by D461 on 2026-11-24: its
+third condition is not shown by that series, which is taken again; ruling 99] (the report's "The
+restore order's proof"). Four of nine pairs met a task the scheduler had not shown as due and were
+taken again, as step 6 says; once four pairs were kept, their values fixed the rule's outcome for
+any fifth pair, so the lead would have ended the series there had the last retake met a task too,
+which it did not. M3's bound is 8,900 ms (7,077 ms; step 8). M2's bound goes from 6,100 to 9,500 ms,
+as D457 (3) provides: the slowest of the fourteen runs that themselves met no scheduled task, on the
+base and on the fix, whose one-tab start makes no order, is 7,563 ms, the fix's (from the base's
+runs alone, 7,374 ms, it would be 9,300 ms); a run of a dropped pair counts for this when its own
+run met no task. The fix's M2 median lies 794 ms above the base's, with ranges that overlap wholly;
+the fix adds no wait and no process on the one-tab path, the window opened 416 ms later in its kept
+one-tab runs (medians), before anything of the fix runs, and counted from the window's opening its
+one-tab first rows came sooner than the base's in four of the nine pairs and later in five: read as
+the laptop's spread, and put on the list of the review before the gate, with the bound's reading
+that both builds count. 14.9's open point 4 (M3's bound without a merge) did not arise. Its open
+point 5 (a release that delays the first frame) is answered by the probe and the alternation
+together. The release does come before the first frame: its line stands 180 to 256 ms before the
+tab's `first graph rows drawn` in the probe's six launches with ten tabs. No cost of it shows beyond
+the spread: by the tab's own clock its first rows came as soon beside nine tabs as alone (the fix's
+medians 1,840 and 1,913 ms against 2,113 ms alone), and in the series, counted from the window's
+opening, the fix's M3 first rows came 255 ms after its M2's in the five kept pairs (medians 2,511
+and 2,256 ms) and 236 ms before them over all nine (1,957 and 2,193 ms). The order stays as built.
 
 **The guide's pages and pictures before §11's merge (the lead, 2026-11-23; ruling 79, 11.8).** 94.
 §11's reviewers read the pages by sampling and found nine false statements, so before the merge
@@ -5762,28 +5768,33 @@ picked (keyboard-5); and the status bar's polite live region told of every progr
 order 2.3 promises is measured on the enabled box, and holds); the first-run links' accent while
 disabled (colours-3: the state cannot be reached with the app's launcher); "Discard hunk" given its
 focus back without the frame (keyboard-8: D104's return, as 6.3.1 writes it); the live region
-speaking the new tab's status at a tab switch (screenreaders-2: 9.3.7's rule); and two tabs on one
+speaking the new tab's status at a tab switch (screenreaders-2: 9.3.7's rule, a tab switch being a
+move that is spoken, 9.3.4; the speech package changes when that region speaks, so what a tab switch
+speaks after it is ruled at that package's merge, and 9.3.7 is amended there); and two tabs on one
 worktree from Recent repositories (concurrency-lifetime-5: the state phases 5 and 6 accepted, D209).
 The result is `D:/Projects/Personal/phase8-work/wave4/review/review-result.json`.
 
-**The fixes** (run `wf_ccc5f713-fa5`, started on 2026-11-24 at about 00:10): 38 of the confirmed
-findings in eight packages, each built with its tests first where a test can hold it, read by an
-independent reader and corrected, in worktrees from `57ebeff`
-(`D:/Projects/Personal/vc-wt/p8a-fix-<key>` on `wip/p8a-fix-<key>`; the real-window part's three in
-that part's own worktree). The lead's rulings to their builders:
+**The fixes** (run `wf_ccc5f713-fa5`, started on 2026-11-24 at 00:04): 38 of the confirmed findings
+in eight packages, each built with its tests first where a test can hold it, read by an independent
+reader and corrected, in worktrees from `57ebeff` (`D:/Projects/Personal/vc-wt/p8a-fix-<key>` on
+`wip/p8a-fix-<key>`; the real-window part's three in that part's own worktree). The lead's rulings
+to their builders:
 
 - *focus*, two packages one after the other in one worktree. The loss at a tab change is one fix,
   made where the tab changes (the window) and not in the stage panel's view alone, as the lead first
   ruled on 2026-11-20: a focus that lies in a region of the window when the active tab changes, and
   is on nothing afterwards, goes to that region's target in the new tab (the stage panel's rows to
   the graph area's target when the new tab shows no such row), with the keyboard's frame if it had
-  it; 8a's four facts that state today's loss are rewritten. With it keyboard-7 and keyboard-9, and
-  keyboard-6 per site, armed only when the pressed button had the keyboard's frame, so that mouse
-  paths and earlier pictures stay. Then the rows: a row that only changes itself keeps its control
-  (`IsOpen` becomes something a row updates in place, and `RowCollection`'s scans count a row that
-  can update itself as kept: keyboard-3, screenreaders-4, performance-restore-rows-3), and where a
-  control truly goes (the eye of a branch that is shown again, keyboard-4) the focus goes to its
-  row. No scripted picture may change but for a focus that is now kept.
+  it. Of 8a's four Ctrl+Tab facts the two that state today's loss (from a stage row's own button and
+  from its Stage) are rewritten; the graph's and the summary's, which state a focus that stays, stay
+  (the builder's brief said "the four", wrongly; its result is read for that). With it keyboard-7
+  and keyboard-9; and keyboard-6, per site, armed only when the pressed button had the keyboard's
+  frame, so that mouse paths and earlier pictures stay. Then the rows: a row that only changes
+  itself keeps its control (`IsOpen` becomes something a row updates in place, and `RowCollection`'s
+  scans count a row that can update itself as kept: keyboard-3, screenreaders-4,
+  performance-restore-rows-3), and where a control truly goes (the eye of a branch that is shown
+  again, keyboard-4) the focus goes to its row. No scripted picture may change but for a focus that
+  is now kept.
 - *speech*. The live region speaks an operation's start and its result, not its progress, and
   nothing a sighted user sees changes (screenreaders-1); a polite live setting on the first-run
   screen's title and its error or checking line and on the notice's status, nothing else
@@ -5838,10 +5849,19 @@ S19-19: no fault. S19-22: the pass and the series keep the test host's PATH in 8
 since phase 0 measured, so Q1's limit and the bounds stay comparable; a Backlog row for git found
 behind Git for Windows' launcher (D457's last note; plan.md's risk 10). S19-26 and S19-28 (a row
 that shows something new loses its press; Avalonia's estimate after a change above the view):
-Backlog rows, the second older than the phase. S19-27 and S19-29: no fault found. S19-31: not
-reproduced by reading; the test stays on the lagged list with its message. S19-33: no fix touches
-the order's code, and the git package's builder is told so. S19-34: the part merges last, after its
-three fixes. S19-35: the route holds as built; the listen is the gate's (D460).
+Backlog rows, the second older than the phase. S19-27: no fault in the other phases' walk-throughs;
+in 8a's own, U2/U3's step 4 hides a branch and waits for its rows but not for the graph's reload, as
+step 9 did before its fix: the lead adds that wait at the fixes' merge, with the reason in the
+report. S19-29: no fault found by reading; a solo's cost with thousands of branches stays
+unmeasured. S19-31: not reproduced by reading; the test stays on the lagged list with its message.
+S19-33: no fix touches the order's code, and the git package's builder is told so. S19-32's other
+question: four projects at once stays (D343); one stop in a run that counted for nothing decides
+nothing, and `OperationsHarness`' new limits name the step the next time. S19-34: the part merges
+last, after its three fixes; CLAUDE.md's rows at that merge name 8a's own filter (`--filter-class
+"*Phase8aRealWindowPass"`) and say that winget must be on the PATH or launch 7 fails (D449), that
+F4's Open dialog leaves entries in the user's recent-files lists, that the part minimises the window
+and starts a second process, and that `Phase8aOrderTests` run only in the whole pass. S19-35: the
+route holds as built; the listen is the gate's (D460).
 
 ### 13.2 What the integration settled
 
@@ -5862,7 +5882,7 @@ activity log's splitter goes to a fixer (D427).
 | §9's spike and merge | Told before the spike (a minute of keys and clicks); at §9's merge, a short Narrator listen (9.3.9's steps 2 to 6 and 14, about 5 minutes; 13.4 item 13). |
 | §10's merge and the series | Told before the first run (about 5 minutes of the desktop) and the series (rested, the desktop for 12 to 18 minutes per run as estimated, about 8 as taken (10.7); M6 clicks Fetch). |
 | The restore order's proof (ruling 76, D457; wave 4) | Asked first for the week's share (D241; answered on 2026-11-23: all of wave 4). Told in the chat just before each takeover, with no agent at work (ruling 23; 14.7, 14.8): the lead's probe (two warm-up launches and 18 counted ones on data folders of its own, no input, about 9 minutes) and the alternated series of M2 and M3 (the two builds five times each, taken as D457 (2) says, about 30 minutes), each after a rest of at least ten minutes behind its builds: about 50 minutes of the rested desktop in all, about 70 with a trial of two at once, about 80 when four stays after that trial. **Taken on 2026-11-23**, the owner told at 13:26: 13:36 to 14:52, the probe 8 minutes and the series 67 with its waits for the scheduler (ruling 92) and four pairs taken again; no trial of two. |
-| The review's fixes and the proof taken again (status step 19; ruling 99, D461) | Told in the chat just before each takeover, with no agent at work: launches 2 and 3 of the real-window part run alone again on their fixes (about two minutes), and the restore order's alternated series taken again, ten pairs, the builds' order alternating (about an hour of the rested desktop). **Asked before step 19's whole default run:** what to do with the three texts the app dims on purpose, which lie under 4.5:1 (colours-1): fix them in 8a, which changes earlier pictures, or keep them as recorded exceptions (status.md's "Waiting on the owner"). |
+| The review's fixes and the proof taken again (status step 19; ruling 99, D461) | Told in the chat just before each takeover, with no agent at work: launches 2 and 3 of the real-window part run alone again on their fixes (about two minutes), and the restore order's alternated series taken again, ten pairs, the builds' order alternating (about an hour and a half of the rested desktop, more with pairs taken again). **Asked before step 19's whole default run:** what to do with the three texts the app dims on purpose, which lie under 4.5:1 (colours-1): fix the names and the dropped rows in 8a, which changes earlier pictures, or keep all three as recorded exceptions; the search's dimming cannot reach 4.5:1 by its opacity and needs a form of its own either way (status.md's "Waiting on the owner"). |
 | §12's build (status step 18) | Told before each of its 13 methods runs alone and before phase 0's `Check_8` runs alone (12.4, 12.8 item 3): about 15 minutes of the desktop in all, never beside a heavy run (ruling 23). |
 | Before the counted round | Nothing: the owner chose the mark before §7 was built (1.17, 7.8), and §7 built with it, so nothing waits there. |
 | Before the gate | The three live tokens made again (GitHub's expires on 2026-11-29, Azure DevOps' and GitLab's on 2026-12-04), through the masked script; told before each live run (D335). Present for D246's two runs of 8a's real-window checks; told before the pass. |
