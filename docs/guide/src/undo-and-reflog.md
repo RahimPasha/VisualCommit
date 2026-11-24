@@ -28,9 +28,9 @@ files, remotes and upstreams, and pushes. The list is not kept when VisualCommit
 ## Backups
 
 Before anything that could lose work (deleting a branch or a tag, a reset, a discard, dropping a
-stash, a rebase, a force push, an abort), VisualCommit saves a backup in the repository, under
-`refs/visualcommit/backup/`. A backup is deleted when it is older than 30 days, or when there are
-more than 50 (the oldest go first).
+stash, removing a remote, a rebase, a force push, an abort), VisualCommit saves a backup in the
+repository, under `refs/visualcommit/backup/`. A backup is deleted when it is older than 30 days,
+or when there are more than 50 (the oldest go first).
 
 To see them, choose **Show backups** in the menu of the **Working changes** row, of the graph's
 empty area or of the **Local branches** section, or in the command palette. Each backup's menu offers what brings it back, such as **Restore branch** and its name,

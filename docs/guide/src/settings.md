@@ -66,8 +66,8 @@ window. The keys are fixed.
 The command palette reaches every command by typing, with the active repository's branches, tags,
 stashes and remotes, your other tabs, your recent repositories, the repositories of your workspaces
 and the workspaces themselves. Open it with Ctrl+Shift+P (Cmd+Shift+P on macOS), type part of a
-name, move with the arrows and press Enter. A command's key, if it has one, stands at its right, and its
-detail, such as the branch it acts on, beside its name.
+name, move with the arrows and press Enter. A command's key, if it has one, stands at its right,
+and its detail, such as the branch it acts on, beside its name.
 
 <img src="pictures/palette-light.png" srcset="pictures/palette-light.png 2x" alt="The command palette with branch typed: Create branch… with Ctrl+B, Filter branches and tags with Ctrl+Shift+E, then Create branch here… and Copy branch name for main, feature/forecast, feature/units, fix/rounding and origin/feature/forecast.">
 <img src="pictures/palette-dark.png" srcset="pictures/palette-dark.png 2x" alt="The command palette with branch typed: Create branch… with Ctrl+B, Filter branches and tags with Ctrl+Shift+E, then Create branch here… and Copy branch name for main, feature/forecast, feature/units, fix/rounding and origin/feature/forecast.">

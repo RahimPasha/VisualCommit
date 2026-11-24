@@ -19,11 +19,11 @@ your virus scanner and your Git will give other numbers.
 | The graph reloaded after a commit made outside VisualCommit | about 3 s |
 | The graph reloaded after a fetch from a remote on the same computer, from the click on Fetch | about 6 s |
 
-With several tabs to restore, the tab in front, when it holds a repository, opens first, and the
-others after its first rows show, at most four at a time.
-
 A fetch over the network adds the time the download takes. While the graph reloads, the window
 keeps answering and the old graph stays in view.
+
+With several tabs to restore, the tab in front, when it holds a repository, opens first, and the
+others once its first rows show, or after 5 seconds at the latest, at most four at a time.
 
 ## Make git faster
 
