@@ -711,6 +711,9 @@ def _cases():
     case("css comment", {"index.html": _page(), "css/a.css": "/* url(https://example.com/x.css) */ a { color: red; }"}, None)
     case("css url() with an escaped colon", {"index.html": _page(), "css/a.css": 'a { background: url("https\\3a //cdn.example.com/x"); }'}, ANOTHER_HOST.format(what="url()"))
     case("css image-set() of a data: image", {"index.html": _page(), "css/a.css": 'a { background-image: image-set("data:image/png;base64,AAA=" 1x); }'}, None)
+    # An image set's type() names a media type, not an address.
+    case("css image-set() with a type()", {"index.html": _page(), "css/a.css": 'a { background-image: image-set("../ok.png" type("image/png") 1x); }'}, None)
+    case("style element image-set() with a type()", {"index.html": _page('<style>.a { background-image: image-set("ok.png" type("image/png") 1x); }</style>')}, None)
     # A data: document, script or style sheet fails; a data: image or icon passes.
     for name, what, template in _DATA_DOCUMENTS:
         case("data: {}".format(name), {"index.html": _page(template.format(url="data:text/html;base64,PHA+eDwvcD4="))}, DATA_DOCUMENT.format(what=what))
