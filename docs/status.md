@@ -392,6 +392,17 @@ Phase 8a's runs on `phase/8a-release-readiness`, the newest first. CI has six jo
 `e04762b`: the sixth, "ubuntu 22.04 container, git 2.34 (the floor)", did not fail the run until
 `bba59c7`, which made it required after its first green run.
 
+- [45462804153](https://github.com/RahimPasha/VisualCommit/actions/runs/45462804153), for `e455dd4`
+  (step 19's third round, `c9c3279`, with the docs of the second round): **success in all six
+  jobs.** `windows-latest`: 8,760 tests, 8,753 passed, 7 skipped, Test step 27 min 37 s of 70.
+  `macos-latest`: 8,757 tests, 8,754 passed, 3 skipped, Test step 42 min 18 s of 70.
+  `ubuntu-latest`: 8,757 tests, 8,753 passed, 4 skipped, Test step 7 min 43 s. The floor's job (git
+  2.34.1): 8,757 tests with 4 skipped, Test step 8 min 3 s; the two containers 8,757 tests with 4
+  skipped each, Test steps 5 min 52 s with Microsoft's installer and 5 min 45 s with Ubuntu's
+  packages, and the Secret Service's test passed in both. The Windows and macOS keychain steps
+  passed. 8 tests more than the run before, the third round's, at their first run on macOS and
+  Linux. **The guide's workflow** on the same push,
+  [45462804405](https://github.com/RahimPasha/VisualCommit/actions/runs/45462804405): **success**.
 - [45452648787](https://github.com/RahimPasha/VisualCommit/actions/runs/45452648787), for `4e01e1f`
   (step 19's second round, `950ca7d`, `39c632f` and `db7fbce`, with the docs of the first round):
   **success in all six jobs.** `windows-latest`: 8,752 tests, 8,745 passed, 7 skipped, Test step 44
