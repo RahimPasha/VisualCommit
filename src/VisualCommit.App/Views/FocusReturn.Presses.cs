@@ -9,6 +9,7 @@ using Avalonia.Threading;
 using Avalonia.VisualTree;
 using CommunityToolkit.Mvvm.Input;
 using VisualCommit.App.ViewModels;
+using VisualCommit.App.ViewModels.Dialogs;
 using VisualCommit.App.Views.Dialogs;
 using VisualCommit.App.Views.Shell;
 
@@ -18,8 +19,9 @@ namespace VisualCommit.App.Views;
 /// The window's rule for an action by the keys (D462): the app never takes the keyboard focus away
 /// without putting it somewhere. A button pressed by the keys (it is focused and shows the keyboard's
 /// frame at its Click: Enter or Space after Tab or the arrows; a click on a button that shows the
-/// frame from before counts so too), a dialog's confirm run by Enter in one of its boxes, and a menu
-/// opened by the keys on an element: when the action has left the focus on nothing, on the window or
+/// frame from before counts so too), a dialog's confirm run by Enter in one of its boxes, a menu
+/// opened by the keys on an element, and a key of the window's (a shortcut) pressed while the
+/// focused element shows the frame: when the action has left the focus on nothing, on the window or
 /// on an element no longer shown or enabled (Avalonia gives the focus to nothing when the focused
 /// element is hidden, removed or disabled), the focus goes, once the action's run has ended and the
 /// layout has followed, to the first of these that can take it:
@@ -27,7 +29,8 @@ namespace VisualCommit.App.Views;
 /// <item>the element itself, shown and enabled again with the data it was pressed for;</item>
 /// <item>what its view named to stand in its place (<see cref="Instead"/>);</item>
 /// <item>the item now at its place in the list it lay in (its first stop), when it was an item's;</item>
-/// <item>in a dialog, the dialog's first stop; elsewhere the target of the region it lay in, as F6
+/// <item>in a dialog, what the dialog gives the focus to as it opens (the settings screen's shown
+/// section's button), else its first stop; elsewhere the target of the region it lay in, as F6
 /// gives it (<see cref="KeyRegionNavigator.MarkedTargetIn"/>);</item>
 /// <item>the graph area's target, for an element in no region (the tab strip, the toolbar, the status bar).</item>
 /// </list>
@@ -36,8 +39,13 @@ namespace VisualCommit.App.Views;
 /// screen's Git program row, a dialog's own return, D104) do so first: this rule looks only after
 /// them and acts only when the focus is still lost. A click on a button without the frame arms
 /// nothing; a focus the user has moved meanwhile stays; a dialog the action closed leaves the return
-/// to D104 and to its opener's own action; and after a switch of tabs the window places the focus
-/// (<c>MainWindow.FocusAfterSwitch</c>).
+/// to D104 and to its opener's own action; a dialog that stands over the element's place (one opened
+/// over the window, or over the element's own dialog) is waited for, and the look comes once it has
+/// closed, so that no focus goes behind it; and after a switch of tabs the window places the focus
+/// first (<c>MainWindow.FocusAfterSwitch</c>), and a focus still on nothing then, as when the action
+/// had taken it before the switch, goes to the graph area's target of the tab now shown. While the
+/// action's run lasts, a pressed element its run disables hands the focus to what its view named to
+/// stand in its place, when that shows (the clone form's Cancel clone beside its disabled Clone).
 /// </summary>
 public static partial class FocusReturn
 {
@@ -94,10 +102,27 @@ public static partial class FocusReturn
     }
 
     /// <summary>
+    /// Follows a key of the window's (a shortcut its router runs: Stage all, Close tab, Undo, …)
+    /// pressed while <paramref name="focused"/> has the focus, when it shows the keyboard's frame:
+    /// a key that takes the focused element away (its row staged, its tab closed) leaves the focus
+    /// where a press by the keys on it would. Call it just before the key's command runs. A focus
+    /// without the frame (a click's) arms nothing, as a click does not.
+    /// </summary>
+    public static void AfterKeyboardShortcut(IInputElement? focused)
+    {
+        if (focused is InputElement element && element.Classes.Contains(FocusVisibleClass))
+        {
+            // Beside an action already followed on the element (a press whose run still lasts), not in its place.
+            Follow(element, null, NavigationMethod.Tab, replaces: false);
+        }
+    }
+
+    /// <summary>
     /// Names what takes the focus, by <paramref name="method"/>, when an action by the keys leaves
     /// <paramref name="pressed"/> hidden or disabled: the control that stands in its place (the
-    /// clone form's Clone for its Cancel clone) or that opened what it closed (the welcome page's
-    /// Clone for the form's Cancel). Call once, when the view is made.
+    /// clone form's Clone for its Cancel clone, and Cancel clone for Clone while the clone runs) or
+    /// that opened what it closed (the welcome page's Clone for the form's Cancel). Call once, when
+    /// the view is made.
     /// </summary>
     public static void Instead(InputElement pressed, Func<InputElement?> target, NavigationMethod method = NavigationMethod.Tab)
     {
@@ -106,20 +131,24 @@ public static partial class FocusReturn
         InPlaces.AddOrUpdate(pressed, new InPlace(target, method));
     }
 
-    private static void Follow(InputElement pressed, ICommand? command, NavigationMethod method)
+    private static void Follow(InputElement pressed, ICommand? command, NavigationMethod method, bool replaces = true)
     {
         if (TopLevel.GetTopLevel(pressed) is not { } topLevel || InMenu(pressed))
         {
             return;
         }
 
-        if (Followed.TryGetValue(pressed, out var earlier))
+        var action = new ActionByKeys(pressed, topLevel, method);
+        if (replaces)
         {
-            earlier.Stop();
+            if (Followed.TryGetValue(pressed, out var earlier))
+            {
+                earlier.Stop();
+            }
+
+            Followed.AddOrUpdate(pressed, action);
         }
 
-        var action = new ActionByKeys(pressed, topLevel, method);
-        Followed.AddOrUpdate(pressed, action);
         if (command is IAsyncRelayCommand run)
         {
             action.FollowNextRun(run);
@@ -157,6 +186,15 @@ public static partial class FocusReturn
         /// <summary>Whether the look follows the end of the action's run, after which a disabled element is disabled for good (Undo with nothing left to undo).</summary>
         private bool _afterRun;
 
+        /// <summary>Whether a look found the active tab changed and came again one round later, after the window's own placement.</summary>
+        private bool _afterSwitch;
+
+        /// <summary>The window's dialogs while a look waits for those that stand over the element's place to close.</summary>
+        private DialogHostViewModel? _waitingOn;
+
+        /// <summary>Whether a loss while the run lasts is handed to what stands in the element's place (<see cref="Instead"/>).</summary>
+        private bool _watchingRun;
+
         public ActionByKeys(InputElement pressed, TopLevel topLevel, NavigationMethod method)
         {
             _pressed = pressed;
@@ -175,11 +213,23 @@ public static partial class FocusReturn
             _pressed.LostFocus -= OnLostFocus;
             _pressed.PropertyChanged -= OnEnabledChanged;
             _pressed.DetachedFromVisualTree -= OnDetached;
+            StopWatchingRun();
+            StopWaitingForDialogs();
         }
 
-        /// <summary>The run the press starts (the command's next execution, which the click comes before): when it ends, a look.</summary>
+        /// <summary>
+        /// The run the press starts (the command's next execution, which the click comes before): when
+        /// it ends, a look. Meanwhile, for an element whose view named what stands in its place, a loss
+        /// of the focus (the run disabling the element as it starts) hands it there.
+        /// </summary>
         public void FollowNextRun(IAsyncRelayCommand command)
         {
+            if (InPlaces.TryGetValue(_pressed, out _))
+            {
+                _watchingRun = true;
+                _pressed.LostFocus += OnLostDuringRun;
+            }
+
             var started = false;
             void OnChanged(object? sender, PropertyChangedEventArgs e)
             {
@@ -200,9 +250,40 @@ public static partial class FocusReturn
                     if (!started)
                     {
                         command.PropertyChanged -= OnChanged;
+                        StopWatchingRun();
                     }
                 },
                 DispatcherPriority.Loaded);
+        }
+
+        private void StopWatchingRun()
+        {
+            _watchingRun = false;
+            _pressed.LostFocus -= OnLostDuringRun;
+        }
+
+        /// <summary>The element lost the focus while its run lasts: a look, once the layout shows what stands in its place.</summary>
+        private void OnLostDuringRun(object? sender, RoutedEventArgs e)
+        {
+            if (ReferenceEquals(e.Source, _pressed))
+            {
+                Dispatcher.UIThread.Post(() => Dispatcher.UIThread.Post(LookDuringRun, DispatcherPriority.Loaded), DispatcherPriority.Loaded);
+            }
+        }
+
+        /// <summary>While the run lasts, a focus still lost goes to what stands in the element's place, when it can take it; the look at the run's end does the rest.</summary>
+        private void LookDuringRun()
+        {
+            if (!_watchingRun || _stopped || _afterRun || DialogsAbove() is not null
+                || !LostFrom(_topLevel, _pressed, StillThere)(_topLevel.FocusManager?.GetFocusedElement()))
+            {
+                return;
+            }
+
+            if (InPlaces.TryGetValue(_pressed, out var inPlace) && inPlace.Target() is { } instead && CanTake(instead))
+            {
+                instead.Focus(inPlace.Method);
+            }
         }
 
         /// <summary>The next loss of the focus by the element: a look, once a run of its own that is going on has ended.</summary>
@@ -238,6 +319,7 @@ public static partial class FocusReturn
                 _ => Dispatcher.UIThread.Post(() =>
                 {
                     _afterRun = true;
+                    StopWatchingRun();
                     LookLater();
                 }),
                 CancellationToken.None,
@@ -282,21 +364,45 @@ public static partial class FocusReturn
 
         private void Look()
         {
-            // A dialog the action closed leaves the return to D104; a switch of tabs away from an
-            // element in a region leaves it to the window's own (the tab strip, the toolbar and the
-            // status bar are in no region, and the switch does not place their focus).
-            if (_stopped
-                || (_dialog is not null && !_dialog.IsAttachedToVisualTree())
-                || (_root is not null && _tab is not null && !ReferenceEquals(_tab, (_topLevel.DataContext as MainWindowViewModel)?.ActiveTab)))
+            // A dialog the action closed leaves the return to D104.
+            if (_stopped || (_dialog is not null && !_dialog.IsAttachedToVisualTree()))
             {
                 return;
             }
 
+            // A dialog over the element's place: the look comes once it has closed (and D104 has
+            // given back what it took), never behind it.
+            if (DialogsAbove() is { } dialogs)
+            {
+                WaitForDialogs(dialogs);
+                return;
+            }
+
             var focused = _topLevel.FocusManager?.GetFocusedElement();
+            if (_root is not null && _tab is not null && !ReferenceEquals(_tab, (_topLevel.DataContext as MainWindowViewModel)?.ActiveTab))
+            {
+                // A switch of tabs away from an element in a region: the window's own placement
+                // comes first, a round later than the switch; a focus it found on nothing already
+                // (the action had taken it before the switch) goes to the graph area's target of the
+                // tab now shown. The tab strip, the toolbar and the status bar are in no region:
+                // their elements are looked at as below.
+                if (!_afterSwitch)
+                {
+                    _afterSwitch = true;
+                    LookLater();
+                }
+                else if (LostFrom(_topLevel, _pressed, static () => true)(focused) && GraphAreaTarget() is { } graph && CanTake(graph))
+                {
+                    graph.Focus(_method);
+                }
+
+                return;
+            }
+
             if (!LostFrom(_topLevel, _pressed, StillThere)(focused))
             {
-                // Still on the element, or in a menu or a dialog that gives it back: its next loss is looked at too.
-                if (ReferenceEquals(focused, _pressed) || InMenu(focused) || InAnotherDialog(focused))
+                // Still on the element, or in a menu that gives it back: its next loss is looked at too.
+                if (ReferenceEquals(focused, _pressed) || InMenu(focused))
                 {
                     WatchLoss();
                 }
@@ -320,8 +426,43 @@ public static partial class FocusReturn
         /// <summary>Whether the element stands where it was pressed: in the window, shown, enabled, with its data.</summary>
         private bool StillThere() => CanTake(_pressed) && ReferenceEquals(_pressed.DataContext, _data);
 
-        private bool InAnotherDialog(IInputElement? focused) =>
-            focused is Visual visual && visual.GetSelfAndVisualAncestors().OfType<DialogView>().FirstOrDefault() is { } dialog && !ReferenceEquals(dialog, _dialog);
+        /// <summary>The window's dialogs when one stands over the element's place: any, for an element outside them; one above its own, for an element in a dialog. Null otherwise.</summary>
+        private DialogHostViewModel? DialogsAbove() =>
+            _topLevel.DataContext is MainWindowViewModel { Dialogs: { IsOpen: true } dialogs }
+                && !(_dialog is not null && ReferenceEquals(_dialog.DataContext, dialogs.Current))
+                ? dialogs
+                : null;
+
+        /// <summary>A look again when the dialogs change (one closes, or another opens over them), until none stands over the element's place.</summary>
+        private void WaitForDialogs(DialogHostViewModel dialogs)
+        {
+            StopWaitingForDialogs();
+            _waitingOn = dialogs;
+            dialogs.PropertyChanged += OnDialogsChanged;
+        }
+
+        private void StopWaitingForDialogs()
+        {
+            if (_waitingOn is { } dialogs)
+            {
+                dialogs.PropertyChanged -= OnDialogsChanged;
+            }
+
+            _waitingOn = null;
+        }
+
+        private void OnDialogsChanged(object? sender, PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName == nameof(DialogHostViewModel.Current))
+            {
+                StopWaitingForDialogs();
+                LookLater();
+            }
+        }
+
+        /// <summary>The graph area's target of the tab shown (the graph, the welcome page's Open, the dashboard's list).</summary>
+        private InputElement? GraphAreaTarget() =>
+            _topLevel.GetVisualDescendants().OfType<CommitGraphView>().FirstOrDefault(view => view.IsEffectivelyVisible)?.GraphAreaFocusTarget();
 
         /// <summary>Where the focus goes (the class comment's order), and how.</summary>
         private (InputElement Target, NavigationMethod Method)? Target()
@@ -342,7 +483,7 @@ public static partial class FocusReturn
             }
 
             var region = _dialog is not null
-                ? RowOrderStackPanel.StopsOf(_dialog).FirstOrDefault()
+                ? (_dialog.OpeningFocus() is InputElement opening && CanTake(opening) ? opening : RowOrderStackPanel.StopsOf(_dialog).FirstOrDefault())
                 : _root is { } root && root.IsAttachedToVisualTree() && root.IsEffectivelyVisible
                     ? KeyRegionNavigator.MarkedTargetIn(KeyRegion.GetRole(root), root)
                     : null;
@@ -351,9 +492,7 @@ public static partial class FocusReturn
                 return (region!, _method);
             }
 
-            var graphArea = _dialog is null
-                ? _topLevel.GetVisualDescendants().OfType<CommitGraphView>().FirstOrDefault(view => view.IsEffectivelyVisible)?.GraphAreaFocusTarget()
-                : null;
+            var graphArea = _dialog is null ? GraphAreaTarget() : null;
             return CanTake(graphArea) ? (graphArea!, _method) : null;
         }
 

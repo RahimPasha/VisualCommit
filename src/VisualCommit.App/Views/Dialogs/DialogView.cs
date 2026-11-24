@@ -64,12 +64,7 @@ public class DialogView : UserControl
     /// <summary>Moves the focus as the dialog does when it opens; also after its card changed (the Remotes dialog's form).</summary>
     protected void FocusOnOpening()
     {
-        var box = !FocusesTextBoxOnOpening ? null
-            : InitialTextBox is { IsEffectivelyVisible: true, IsEffectivelyEnabled: true } chosen
-            ? chosen
-            : this.GetVisualDescendants().OfType<TextBox>()
-                .FirstOrDefault(candidate => candidate is { IsEffectivelyVisible: true, IsEffectivelyEnabled: true, IsReadOnly: false });
-        if (box is not null)
+        if (OpeningTextBox() is { } box)
         {
             box.Focus(NavigationMethod.Unspecified);
             if (SelectsAllOnOpening)
@@ -87,6 +82,22 @@ public class DialogView : UserControl
 
         InitialFocus?.Focus(NavigationMethod.Tab);
     }
+
+    /// <summary>
+    /// What the dialog gives the focus to as it opens, as it shows now: its first text box that can
+    /// be typed into (or the one it names), else <see cref="InitialFocus"/> (the settings screen's
+    /// shown section's button). An action by the keys that hides its own element takes it as the
+    /// dialog's target (D462).
+    /// </summary>
+    internal Control? OpeningFocus() => OpeningTextBox() ?? InitialFocus;
+
+    /// <summary>The text box the dialog gives the focus to as it opens, or null for none.</summary>
+    private TextBox? OpeningTextBox() =>
+        !FocusesTextBoxOnOpening ? null
+            : InitialTextBox is { IsEffectivelyVisible: true, IsEffectivelyEnabled: true } chosen
+            ? chosen
+            : this.GetVisualDescendants().OfType<TextBox>()
+                .FirstOrDefault(candidate => candidate is { IsEffectivelyVisible: true, IsEffectivelyEnabled: true, IsReadOnly: false });
 
     /// <summary>
     /// Enter with no modifier in <paramref name="list"/>, while a row is selected, runs the confirm

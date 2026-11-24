@@ -353,7 +353,9 @@ public sealed partial class KeyboardPassTests
     /// <summary>
     /// A workspace's dashboard, a tab on "graph" after it: the header's "…", pressed by the keys,
     /// opens its menu; "Delete workspace…" chosen by the keys and confirmed by a click closes the
-    /// dashboard's tab with the button; "graph"'s tab shows, and its graph has the focus (a guard).
+    /// dashboard's tab with the button; "graph"'s tab shows, and its graph has the focus (a guard). It
+    /// comes without the frame: the question's close gives "…" the focus back without it (D104), and
+    /// the switch of tabs then frames as "…" was; the fact asserts the place alone.
     /// </summary>
     [AvaloniaFact]
     public async Task Guard_Delete_workspace_from_the_dashboards_menu_opened_by_the_keys_gives_the_focus_to_the_next_tabs_graph()
