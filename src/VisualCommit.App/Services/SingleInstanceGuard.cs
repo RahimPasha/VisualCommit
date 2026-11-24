@@ -108,6 +108,12 @@ public sealed partial class SingleInstanceGuard : IDisposable
 
     private const string EndpointPrefix = "VisualCommit-";
 
+    /// <summary>On macOS and Linux, a lock file the guard makes: read and write for the user alone.</summary>
+    private const UnixFileMode UserOnlyFile = UnixFileMode.UserRead | UnixFileMode.UserWrite;
+
+    /// <summary>On macOS and Linux, a folder the guard makes: the user's alone.</summary>
+    private const UnixFileMode UserOnlyFolder = UserOnlyFile | UnixFileMode.UserExecute;
+
     /// <summary>The variable through which .NET is told to take no file locks on macOS and Linux.</summary>
     private const string LockingOffVariable = "DOTNET_SYSTEM_IO_DISABLEFILELOCKING";
 
@@ -459,7 +465,7 @@ public sealed partial class SingleInstanceGuard : IDisposable
         {
             try
             {
-                Directory.CreateDirectory(Folder);
+                CreateFolder();
                 var stream = OpenLock();
                 lock (_gate)
                 {
@@ -505,7 +511,36 @@ public sealed partial class SingleInstanceGuard : IDisposable
         }
     }
 
-    private FileStream OpenLock() => new(_paths.InstanceLockFile, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
+    /// <summary>
+    /// The data folder, made with each missing folder above it. On macOS and Linux a folder made here
+    /// is the user's alone; one that exists keeps its mode.
+    /// </summary>
+    private void CreateFolder()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            Directory.CreateDirectory(Folder);
+        }
+        else
+        {
+            Directory.CreateDirectory(Folder, UserOnlyFolder);
+        }
+    }
+
+    /// <summary>
+    /// The lock file, opened alone. On macOS and Linux a file made here is the user's alone, since
+    /// another user who could open it could hold its lock, and every start of this user's would then
+    /// find the folder held; one that exists keeps its mode.
+    /// </summary>
+    private FileStream OpenLock() => OperatingSystem.IsWindows()
+        ? new(_paths.InstanceLockFile, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None)
+        : new(_paths.InstanceLockFile, new FileStreamOptions
+        {
+            Mode = FileMode.OpenOrCreate,
+            Access = FileAccess.ReadWrite,
+            Share = FileShare.None,
+            UnixCreateMode = UserOnlyFile,
+        });
 
     /// <summary>
     /// The holder's steps, under <see cref="_gate"/> with the lock just opened: the old instance
