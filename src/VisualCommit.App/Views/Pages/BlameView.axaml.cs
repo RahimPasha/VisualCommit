@@ -6,6 +6,8 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
 using AvaloniaEdit;
+using AvaloniaEdit.Document;
+using AvaloniaEdit.Rendering;
 using VisualCommit.App.Controls.Blame;
 using VisualCommit.App.ViewModels.Menus;
 using VisualCommit.App.ViewModels.Pages;
@@ -212,11 +214,13 @@ public partial class BlameView : UserControl
     }
 
     /// <summary>
-    /// A run picked by the pointer, in the gutter or by a right-click, takes the caret to its first
-    /// line, as a click on the text takes it to the line clicked: the caret is not drawn, and the
-    /// arrows pick the run of the line they take it to, so they go on from the run the user picked,
-    /// not from where the caret was left. The text does not scroll to the caret (a run's first line
-    /// may lie above the view) until an arrow moves it.
+    /// A run picked by the pointer, in the gutter or by a right-click, takes the caret to the first of
+    /// its lines that is in view (its first line when that one is), at the view's left edge, as a
+    /// click on the text takes it to the line clicked: the caret is not drawn, and the arrows pick
+    /// the run of the line they take it to, so they go on from the run the user picked, not from
+    /// where the caret was left. Nothing scrolls: the text does not scroll to the caret, and the next
+    /// arrow moves it one line from a line the user sees, so that AvaloniaEdit, which brings the
+    /// moved caret into view, scrolls only when that line is out of view.
     /// </summary>
     private void PutCaretOn(BlameRun run)
     {
@@ -226,9 +230,53 @@ public partial class BlameView : UserControl
         }
 
         var area = BlameText.TextArea;
+        var view = area.TextView;
+        var line = Math.Clamp(FirstLineInView(view), run.FirstLine, Math.Min(run.LastLine, document.LineCount));
         area.ClearSelection();
-        area.Caret.Position = new TextViewPosition(run.FirstLine, 1);
+        area.Caret.Position = AtLeftEdge(view, document, line);
         area.Caret.DesiredXPos = double.NaN;
+    }
+
+    /// <summary>
+    /// The first line wholly in view: the top line, or the one below it when the top line's top lies
+    /// above the view by more than half a pixel; 1 before the text is laid out.
+    /// </summary>
+    private static int FirstLineInView(TextView view)
+    {
+        if (!view.VisualLinesValid || view.GetDocumentLineByVisualTop(view.ScrollOffset.Y) is not { } top)
+        {
+            return 1;
+        }
+
+        return view.GetVisualTopByDocumentLine(top.LineNumber) < view.ScrollOffset.Y - 0.5 && top.NextLine is { } next
+            ? next.LineNumber
+            : top.LineNumber;
+    }
+
+    /// <summary>
+    /// Where the caret stands on <paramref name="line"/> at the view's left edge: column 1 while the
+    /// text is not scrolled across, else the first caret position at or right of that edge (the line's
+    /// end on a line that ends before it), so that an arrow, which keeps the caret's x, moves no text
+    /// across.
+    /// </summary>
+    private static TextViewPosition AtLeftEdge(TextView view, TextDocument document, int line)
+    {
+        var x = view.ScrollOffset.X;
+        if (x <= 0 || !view.VisualLinesValid)
+        {
+            return new TextViewPosition(line, 1);
+        }
+
+        var visualLine = view.GetOrConstructVisualLine(document.GetLineByNumber(line));
+        var textLine = visualLine.TextLines[0];
+        var column = visualLine.GetVisualColumn(textLine, x, allowVirtualSpace: false);
+        if (visualLine.GetTextLineVisualXPosition(textLine, column) < x
+            && visualLine.GetNextCaretPosition(column, LogicalDirection.Forward, CaretPositioningMode.Normal, allowVirtualSpace: false) is var next and >= 0)
+        {
+            column = next;
+        }
+
+        return visualLine.GetTextViewPosition(column);
     }
 
     /// <summary>
