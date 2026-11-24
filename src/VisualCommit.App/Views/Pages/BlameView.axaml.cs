@@ -241,9 +241,12 @@ public partial class BlameView : UserControl
     /// <summary>
     /// The first line in view: the one drawn at the view's top, also when part of it lies above, so
     /// that one Up from a run whose first line shows picks the run above; 1 before the text is laid out.
+    /// It is read from the lines' heights, which a redraw leaves as they were, not from the view's
+    /// lines, which a redraw (of a selection cleared, of colours come) leaves out of date until the
+    /// next layout.
     /// </summary>
     private static int FirstLineInView(TextView view) =>
-        view.VisualLinesValid && view.GetDocumentLineByVisualTop(view.ScrollOffset.Y) is { } top ? top.LineNumber : 1;
+        view.Document is not null && view.GetDocumentLineByVisualTop(view.ScrollOffset.Y) is { } top ? top.LineNumber : 1;
 
     /// <summary>
     /// Where the caret stands on <paramref name="line"/> at the view's left edge, and the x that Up
@@ -253,12 +256,14 @@ public partial class BlameView : UserControl
     /// out of view, and the x kept is half a space right of the edge, which AvaloniaEdit rounds on the
     /// next line to the nearest caret position, one at or right of the edge: the caret's own x would
     /// scroll the text back across. An arrow onto a line that itself ends left of the edge still
-    /// scrolls across to show the caret, as on any line.
+    /// scrolls across to show the caret, as on any line. The line is built also while the view's
+    /// lines are out of date, as AvaloniaEdit's own caret moves build it: clearing a selection, just
+    /// before, redraws the selection's lines.
     /// </summary>
     private static (TextViewPosition Position, double DesiredX) AtLeftEdge(TextView view, TextDocument document, int line)
     {
         var edge = view.ScrollOffset.X;
-        if (edge <= 0 || !view.VisualLinesValid)
+        if (edge <= 0)
         {
             return (new TextViewPosition(line, 1), double.NaN);
         }
