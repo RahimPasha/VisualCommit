@@ -104,7 +104,9 @@ public sealed record SettingsScreenServices(
 /// <para>
 /// The screen's work ends with it: Cancel, Esc and the session's end
 /// (<see cref="DialogHostViewModel.CancelAll"/>) cancel its token, which stops the reads, the
-/// editor search, the global writes before their next key and a repository write that waits. While
+/// editor search, the global writes before their next key and a repository write that waits; a
+/// Save that closes the screen cancels it too, once its own writes and read back have ended, which
+/// stops the Git program row's probe and About's reads that still run. While
 /// the global writes run (no queue holds them), <see cref="GlobalWrites"/> lets the window's close
 /// wait for them (3.7).
 /// </para>
@@ -413,7 +415,10 @@ public sealed partial class SettingsDialogViewModel : DialogViewModel<bool>
             return;
         }
 
+        // The screen's work ends with it: a probe of the Git program row that still runs, About's
+        // texts still being read.
         Accounts.Dispose();
+        _lifetime.Cancel();
         Complete(true);
     }
 

@@ -173,6 +173,7 @@ public static class GitSetupTexts
     public const string ChooseTooOldFormat = "Git {0} at this path is too old: VisualCommit needs {1} or newer.";
     public const string ChooseNoVersionFormat = "This Git did not report its version. Git said: {0}";
     public const string ChooseNotStartedFormat = "This file could not be started: {0}";
+    public const string ChooseNoAnswer = "This file did not report its version within 10 seconds, so VisualCommit stopped it.";
 
     /// <summary>A start of winget or <c>xcode-select</c> that failed: {0} the program, {1} why.</summary>
     public const string StartFailedFormat = "{0} could not be started: {1}";

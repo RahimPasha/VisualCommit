@@ -23,6 +23,7 @@ public sealed partial class GitProgramViewModel : ObservableObject
     private readonly Func<string, CancellationToken, Task<GitDetection>>? _probe;
     private readonly IFolderPicker _folders;
     private readonly CancellationToken _lifetime;
+    private readonly TimeSpan? _probeLimit;
 
     /// <param name="saved">The git chosen in Settings when the screen opened; null for none.</param>
     /// <param name="inUse">What the session's last search found; null while none has ended.</param>
@@ -38,6 +39,7 @@ public sealed partial class GitProgramViewModel : ObservableObject
         _probe = probe;
         _folders = folders;
         _lifetime = lifetime;
+        _probeLimit = probeLimit;
         Choice = saved;
     }
 
@@ -155,7 +157,8 @@ public sealed partial class GitProgramViewModel : ObservableObject
                 file,
                 _probe ?? ((_, _) => Task.FromResult(new GitDetection(GitAvailability.NotFound, null, null, null))),
                 text => StatusText = text,
-                _lifetime);
+                _lifetime,
+                _probeLimit);
         }
         catch (OperationCanceledException) when (_lifetime.IsCancellationRequested)
         {

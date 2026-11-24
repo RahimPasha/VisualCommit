@@ -34,7 +34,7 @@ public sealed class AboutSettingsViewModel
     /// <param name="log">Where a text that cannot be read and a link that cannot be opened are logged.</param>
     /// <param name="readText">Reads an embedded text by its resource's name; null reads the app's (<see cref="EmbeddedTexts.Read"/>).</param>
     /// <param name="vendorNotices">The vendors' notice files' resource names, in order; null takes the app's (<see cref="EmbeddedTexts.VendorNotices"/>).</param>
-    /// <param name="lifetime">The settings screen's token, cancelled when Cancel, Esc or the session's end closes it: texts read after that show no dialog.</param>
+    /// <param name="lifetime">The settings screen's token, cancelled when Cancel, Esc, Save or the session's end closes it: texts read after that show no dialog.</param>
     public AboutSettingsViewModel(
         AppIdentity identity,
         DialogHostViewModel dialogs,

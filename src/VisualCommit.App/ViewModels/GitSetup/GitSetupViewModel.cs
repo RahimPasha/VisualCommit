@@ -271,9 +271,10 @@ public sealed partial class GitSetupViewModel : ObservableObject
 
     /// <summary>
     /// "Choose git.exe…": the file dialog, then the file's checks: on Windows an <c>.exe</c> only,
-    /// unrun; then the probe, with <c>Checking…</c> meanwhile. A git that is found and new enough is
-    /// written as <c>gitExecutable</c> and searched for again; otherwise the settings stay as they
-    /// were and <c>GitSetupError</c> says why.
+    /// unrun; then the probe, with <c>Checking…</c> meanwhile, at most <see cref="ChosenProbeLimit"/>
+    /// and no longer than the window. A git that is found and new enough is written as
+    /// <c>gitExecutable</c> and searched for again; otherwise the settings stay as they were and
+    /// <c>GitSetupError</c> says why.
     /// </summary>
     [RelayCommand]
     private async Task ChooseAsync()
@@ -285,7 +286,18 @@ public sealed partial class GitSetupViewModel : ObservableObject
             return;
         }
 
-        var refusal = await CheckChosenAsync(file, _services.ProbeGit, text => ErrorText = text, CancellationToken.None);
+        var lifetime = _services.Lifetime?.Invoke() ?? CancellationToken.None;
+        string? refusal;
+        try
+        {
+            refusal = await CheckChosenAsync(file, _services.ProbeGit, text => ErrorText = text, lifetime, _services.ProbeLimit);
+        }
+        catch (OperationCanceledException) when (lifetime.IsCancellationRequested)
+        {
+            // The window is closing.
+            return;
+        }
+
         if (refusal is not null)
         {
             ErrorText = refusal;
@@ -333,12 +345,16 @@ public sealed partial class GitSetupViewModel : ObservableObject
     /// The checks of a chosen git program, Choose's and the settings row's Browse's: on Windows an
     /// <c>.exe</c> only, unrun; then <paramref name="probe"/>, <paramref name="checking"/> told
     /// <c>Checking…</c> meanwhile. Null when the file is a git that is found and new enough; else why not.
+    /// The probe is stopped after <paramref name="limit"/> (<see cref="ChosenProbeLimit"/> when null),
+    /// which stops the program it runs (a program that does not exit on <c>--version</c>), and is
+    /// refused then; <paramref name="cancellationToken"/>'s cancel is thrown.
     /// </summary>
     public static async Task<string?> CheckChosenAsync(
         string file,
         Func<string, CancellationToken, Task<GitDetection>> probe,
         Action<string> checking,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        TimeSpan? limit = null)
     {
         ArgumentNullException.ThrowIfNull(file);
         ArgumentNullException.ThrowIfNull(probe);
@@ -349,10 +365,16 @@ public sealed partial class GitSetupViewModel : ObservableObject
         }
 
         checking(GitSetupTexts.Checking);
+        using var limited = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        limited.CancelAfter(limit ?? ChosenProbeLimit);
         GitDetection found;
         try
         {
-            found = await probe(file, cancellationToken);
+            found = await probe(file, limited.Token);
+        }
+        catch (OperationCanceledException) when (limited.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
+        {
+            return GitSetupTexts.ChooseNoAnswer;
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
