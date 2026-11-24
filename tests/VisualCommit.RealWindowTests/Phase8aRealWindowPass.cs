@@ -859,6 +859,41 @@ public class Phase8aOrderTests
     }
 
     /// <summary>
+    /// B2's taskbar step with more than one display (design 12.3.4 launch 3): Windows shows one app's button
+    /// on every display's taskbar by default ("When using multiple displays, show my taskbar apps on: All
+    /// taskbars"), so only the buttons on the display that holds the app's window count. This launch's
+    /// button on <c>Shell_TrayWnd</c> and its copy on <c>Shell_SecondaryTrayWnd</c>, with the window on the
+    /// first display, give that button and no failure, in either order; a button on another display alone
+    /// gives neither (the step not run); two on the window's display fail, naming those two alone.
+    /// </summary>
+    [Fact]
+    public void B2_counts_only_the_taskbar_buttons_on_the_display_that_holds_the_window()
+    {
+        var display = new Rectangle(0, 0, 3000, 2000);
+        var launch = new RealApp.TaskbarEntry("VisualCommit - 1 running window", new Rectangle(2154, 1904, 88, 96), "Shell_TrayWnd");
+        var copy = launch with { ScreenBounds = new Rectangle(5154, 1904, 88, 96), Taskbar = "Shell_SecondaryTrayWnd" };
+        var other = launch with { ScreenBounds = new Rectangle(2066, 1904, 88, 96) };
+
+        foreach (var found in new[] { new[] { launch, copy }, [copy, launch] })
+        {
+            var (button, failure) = Phase8aRealWindowPass.SelectTaskbarButton(found, display);
+            Assert.Null(failure);
+            Assert.Equal(launch, button);
+        }
+
+        var (none, noFailure) = Phase8aRealWindowPass.SelectTaskbarButton([copy], display);
+        Assert.Null(none);
+        Assert.Null(noFailure);
+
+        var (taken, two) = Phase8aRealWindowPass.SelectTaskbarButton([other, copy, launch], display);
+        Assert.Null(taken);
+        Assert.NotNull(two);
+        Assert.StartsWith("B2's taskbar button: 2 taskbar buttons named " + B.TaskbarButtonNameStart, two, StringComparison.Ordinal);
+        Assert.Contains($"\"{other.Name}\" at {other.ScreenBounds} on Shell_TrayWnd; \"{launch.Name}\" at {launch.ScreenBounds} on Shell_TrayWnd.", two, StringComparison.Ordinal);
+        Assert.DoesNotContain("Shell_SecondaryTrayWnd", two, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// L6 a to c (design 12.3.3, 12.3.4 launch 2): with no rectangle for <c>main</c>'s name, the read is a
     /// problem that names the read and the two accents the 3 % comparison cannot tell apart.
     /// </summary>

@@ -562,6 +562,19 @@ public partial class Phase8aRealWindowPass
                 string.Join("; ", found.Select(each => string.Create(CultureInfo.InvariantCulture, $"\"{each.Name}\" at {each.ScreenBounds} on {each.Taskbar}"))));
     }
 
+    /// <summary>
+    /// B2's choice among the buttons <see cref="RealApp.TaskbarButtons"/> found, for the display at
+    /// <paramref name="display"/> that holds the app's window: the one button to capture, or the failure
+    /// (<see cref="MoreThanOneTaskbarButton"/>), or neither when none was found. As
+    /// <see cref="TaskbarButtonPictures"/> takes them today, the display aside.
+    /// </summary>
+    internal static (RealApp.TaskbarEntry? Button, string? Failure) SelectTaskbarButton(IReadOnlyList<RealApp.TaskbarEntry> found, Rectangle display)
+    {
+        ArgumentNullException.ThrowIfNull(found);
+        _ = display;
+        return found.Count == 1 ? (found[0], null) : (null, MoreThanOneTaskbarButton(found));
+    }
+
     /// <summary><paramref name="crop"/> of <paramref name="source"/>, <paramref name="factor"/> times as wide and high, each pixel a block of the same colour (nearest-neighbour).</summary>
     private static Bitmap Enlarged(Bitmap source, Rectangle crop, int factor)
     {
