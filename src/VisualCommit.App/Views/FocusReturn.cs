@@ -128,13 +128,13 @@ public static class FocusReturn
     }
 
     /// <summary>
-    /// For a button whose command hides it as it runs (the choice it stands for dropped): when it is
-    /// pressed while it shows the keyboard's frame (Enter or Space after Tab) and the press leaves it
-    /// hidden with the focus lost, <paramref name="instead"/> takes the focus, with the frame, once
-    /// the layout has followed, as a branch's eye that hides itself gives the focus to its row
-    /// (D462): Avalonia gives the focus to nothing then. Only while the button still has the data it
-    /// was pressed for and <paramref name="instead"/> shows, enabled; a click arms nothing, so the
-    /// mouse's path stays as it was. Call once, when the view is made.
+    /// For a button whose command hides it as it runs (the choice it stands for dropped, the note it
+    /// dismisses gone): when it is pressed while it shows the keyboard's frame (Enter or Space after
+    /// Tab) and the press leaves it hidden with the focus lost, <paramref name="instead"/> takes the
+    /// focus, with the frame, once the layout has followed, as a branch's eye that hides itself gives
+    /// the focus to its row (D462): Avalonia gives the focus to nothing then. Only while the button
+    /// still has the data it was pressed for and <paramref name="instead"/> shows, enabled; a click
+    /// arms nothing, so the mouse's path stays as it was. Call once, when the view is made.
     /// </summary>
     public static void AfterKeyboardPressThatHides(Button button, Func<InputElement?> instead)
     {
