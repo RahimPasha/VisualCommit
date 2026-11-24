@@ -9,6 +9,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using FlaUI.Core.AutomationElements;
 using FlaUI.Core.Definitions;
 using FlaUI.Core.WindowsAPI;
@@ -32,6 +33,10 @@ public partial class Phase8aRealWindowPass
 
     /// <summary>The text before the path in the log's Info line of a git in use (design 1.2), which Choose's probe and the search after it both write (design 12.3.5).</summary>
     private const string UsingGitStart = "Using Git ";
+
+    /// <summary>The log's Info line of a git in use, <c>Using Git {version} at {path}.</c> (design 1.2): its version and its path, as the app was handed it.</summary>
+    [GeneratedRegex(@"Using Git (?<version>\S+) at (?<path>.+)\.\s*$", RegexOptions.CultureInvariant)]
+    private static partial Regex UsingGitLine();
 
     /// <summary>The log line a winget start writes (design 5.3): none may come in launch 7 (design 12.3.2).</summary>
     private const string StartedInTerminal = "Started in a terminal:";
@@ -73,9 +78,13 @@ public partial class Phase8aRealWindowPass
     /// through the buttons, each waited on by the focused element; a real Enter on <c>Check again</c>: one more
     /// search logged, still Missing, and <c>Check again</c> focused again once the search has ended.</item>
     /// <item>F4: a real click on <c>Choose git.exe…</c>; the machine's git through Windows' Open dialog
-    /// <c>Choose git.exe</c>; within 60 s the screen gone and the restored repository opened again;
-    /// <c>GitStatus</c> <c>Git {v}</c>, its help text <c>{git}, chosen in Settings</c>; settings.json's
-    /// <c>gitExecutable</c> that git; <c>f4a-found-again</c>.</item>
+    /// <c>Choose git.exe</c>, its path set through the file name box's Value pattern and its Enter sent only
+    /// while the dialog is the foreground window with that box focused (design 12.3.3); within 60 s the
+    /// screen gone and the restored repository opened again; the path the dialog handed the app, read from
+    /// the probe's <c>Using Git {v} at {path}.</c>, that git (<c>GitFileNames.SamePath</c>: the dialog may
+    /// spell it otherwise, run.txt says whether it did); <c>GitStatus</c> <c>Git {v}</c>, its help text
+    /// <c>{path}, chosen in Settings</c> and settings.json's <c>gitExecutable</c> that path exactly;
+    /// <c>f4a-found-again</c>. run.txt notes the per-user recent lists the confirmed dialog writes.</item>
     /// </list>
     /// The app closed by its window, exit code 0; the repository as it was.
     /// </summary>
@@ -120,18 +129,20 @@ public partial class Phase8aRealWindowPass
         foreach (var id in F.FocusOrderWithWinget.Skip(1))
         {
             Keys(app, VirtualKeyShort.TAB);
-            app.WaitForFocusedElement(id, StepTimeout);
+            app.WaitForFocusOn(id, StepTimeout);
             Note($"F13: Tab, the focus on {id}");
         }
 
         CheckAgainByEnter(app, searches);
 
-        // F4: Choose git.exe…, the machine's git in Windows' Open dialog; the screen gone, the restored tab
-        // opened again; the status bar names the chosen git; settings.json holds it.
+        // F4: Choose git.exe…, the machine's git in Windows' Open dialog, its Enter sent only while the
+        // dialog is the foreground window; the screen gone, the restored tab opened again; the status bar
+        // names the chosen git; settings.json holds it.
         var mark = app.LogMark();
         Press(app, ShownOne(app, F.ChooseId));
-        app.ChooseFileInDialog(F.NativePickerTitle, git, F.NativePickerWithin);
-        Note($"F4: Windows' Open dialog \"{F.NativePickerTitle}\" was given {git} and confirmed");
+        var guard = app.ChooseFileInDialogGuarded(F.NativePickerTitle, git, F.NativePickerWithin);
+        Note($"F4: Windows' Open dialog \"{F.NativePickerTitle}\" was given {git} and confirmed: {guard}");
+        Note($"F4: confirming Windows' Open dialog records {Path.GetFileName(git)} and its folder in the current user's recent lists of the common file dialog (ComDlg32's OpenSavePidlMRU and LastVisitedPidlMRU), as every confirmed Open dialog does: a per-user record outside the launch's data folder, left after the run");
         var clock = Stopwatch.StartNew();
         var loaded = AppLogFile.Containing($"] {name}: loaded ");
         var workingTree = AppLogFile.WorkingTreeRead(name);
@@ -143,8 +154,20 @@ public partial class Phase8aRealWindowPass
             $"the first-run screen gone and {name}'s \"loaded\" and working-tree lines logged",
             F.FoundAgainWithin);
         Note(string.Create(CultureInfo.InvariantCulture, $"F4: the screen gone and {name} opened again {clock.Elapsed.TotalSeconds:0.0} s after the dialog closed"));
-        var usingLines = app.LogLinesSince(mark).Count(line => line.Contains(UsingGitStart + version + " at ", StringComparison.Ordinal));
-        Note($"F4: \"{UsingGitStart}{version} at …\" logged {usingLines} times since the click on Choose (Choose's probe and the search after it, design 12.3.5)");
+
+        // The path the Open dialog handed the app, as its probe of the chosen file logs it (design 12.3.5):
+        // the help text and settings.json must hold that path exactly; the dialog alone may spell the
+        // machine's git otherwise (case, separators), which is noted and allowed by GitFileNames.SamePath.
+        var used = app.LogLinesSince(mark).Select(line => UsingGitLine().Match(line)).Where(match => match.Success).ToList();
+        var chosen = used.Count > 0 ? used[0].Groups["path"].Value : null;
+        Note($"F4: \"{UsingGitStart}… at …\" logged {used.Count} times since the click on Choose (Choose's probe and the search after it, design 12.3.5), naming {string.Join(" | ", used.Select(match => $"{match.Groups["version"].Value} at {match.Groups["path"].Value}").Distinct(StringComparer.Ordinal))}");
+        Note($"F4: the path the Open dialog handed the app: {Quoted(chosen)}; the machine's git {git}; spelled the same: {(chosen == git ? "yes" : "no")}");
+        if (chosen is null)
+        {
+            throw new XunitException($"The log has no \"{UsingGitStart}… at …\" line since the click on Choose: the app did not take the chosen file.");
+        }
+
+        Assert.True(GitFileNames.SamePath(chosen, git), $"The Open dialog handed the app {chosen}, not {git}.");
 
         app.WaitForStripTabs(StepTimeout, name);
         var status = string.Format(CultureInfo.InvariantCulture, F.GitFormat, version);
@@ -152,11 +175,8 @@ public partial class Phase8aRealWindowPass
         var help = RealApp.HelpTextOf(ShownOne(app, F.StatusId));
         var saved = SavedGitExecutable(data);
         Note($"F4: GitStatus \"{status}\", its help text \"{help}\"; settings.json's gitExecutable \"{saved}\"; GitSetupButton shown: {app.ShownElements(F.SetUpButtonId).Count > 0}");
-        var chosenSuffix = string.Format(CultureInfo.InvariantCulture, F.ChosenInSettingsTipFormat, string.Empty);
-        Assert.True(
-            help.EndsWith(chosenSuffix, StringComparison.Ordinal) && GitFileNames.SamePath(help[..^chosenSuffix.Length], git),
-            $"GitStatus's help text is \"{help}\", not \"{string.Format(CultureInfo.InvariantCulture, F.ChosenInSettingsTipFormat, git)}\".");
-        Assert.True(GitFileNames.SamePath(saved, git), $"settings.json's gitExecutable is \"{saved}\", not {git}.");
+        Assert.Equal(string.Format(CultureInfo.InvariantCulture, F.ChosenInSettingsTipFormat, chosen), help);
+        Assert.Equal(chosen, saved);
         Assert.Empty(app.ShownElements(F.SetUpButtonId));
         Picture(app, F.F4aFoundAgain, keepPointer: false, _ => []);
 
@@ -357,8 +377,9 @@ public partial class Phase8aRealWindowPass
     }
 
     /// <summary>
-    /// Waits, at most <see cref="StepTimeout"/>, until the first-run screen shows with its guidance (the
-    /// report's "Waiting for the screen"; design 5.3: it shows only once its guidance is read):
+    /// Waits, at most <see cref="LoadTimeout"/>, the first wait after a start as the other launches' first
+    /// waits are, until the first-run screen shows with its guidance (the report's "Waiting for the screen";
+    /// design 5.3: it shows only once its guidance is read, after the start's search for git):
     /// <c>GitSetupGuidance</c> reads <paramref name="guidance"/> or starts with <paramref name="guidancePrefix"/>,
     /// <c>GitSetupChooseButton</c> reads <c>Choose git.exe…</c>, and with <paramref name="winget"/> the winget
     /// button is shown. A timeout names what did not come.
@@ -369,7 +390,7 @@ public partial class Phase8aRealWindowPass
         var clock = Stopwatch.StartNew();
         try
         {
-            app.WaitFor(() => (missing = FirstRunScreenMissing(app, guidance, guidancePrefix, winget)) is null, "the first-run screen with its guidance", StepTimeout);
+            app.WaitFor(() => (missing = FirstRunScreenMissing(app, guidance, guidancePrefix, winget)) is null, "the first-run screen with its guidance", LoadTimeout);
         }
         catch (TimeoutException ex)
         {
@@ -488,7 +509,7 @@ public partial class Phase8aRealWindowPass
     {
         app.WaitFor(() => app.ShownElements("ConfirmationDialog").Count == 1, "the winget confirm", StepTimeout);
         app.WaitForText("ConfirmTitle", title, StepTimeout);
-        app.WaitForFocusedElement("CancelButton", StepTimeout);
+        app.WaitForFocusOn("CancelButton", StepTimeout);
         var dialog = app.ShownElements("ConfirmationDialog")[0];
         var question = OneShownName(app, "ConfirmQuestion");
         var said = OneShownName(app, "ConfirmDetail");
@@ -548,14 +569,14 @@ public partial class Phase8aRealWindowPass
             Keys(app, VirtualKeyShort.F6);
             presses++;
             app.WaitFor(
-                () => app.FocusedAutomationId() == F.WingetId || FocusNow(app) != before,
+                () => app.FocusedId() == F.WingetId || FocusNow(app) != before,
                 string.Create(CultureInfo.InvariantCulture, $"F6 number {presses} to move the focus from {before}"),
                 StepTimeout);
             Note(string.Create(CultureInfo.InvariantCulture, $"F13: F6 number {presses}: the focus from {before} to {FocusNow(app)}"));
         }
-        while (app.FocusedAutomationId() != F.WingetId && presses < F.MostF6Presses);
+        while (app.FocusedId() != F.WingetId && presses < F.MostF6Presses);
 
-        if (app.FocusedAutomationId() != F.WingetId)
+        if (app.FocusedId() != F.WingetId)
         {
             var message = string.Create(CultureInfo.InvariantCulture, $"{F.WingetId} does not have the keyboard focus after {presses} F6 presses; it is on {FocusNow(app)}. No further key is sent.");
             Note(message);
@@ -574,15 +595,15 @@ public partial class Phase8aRealWindowPass
     /// </summary>
     private void CheckAgainByEnter(RealApp app, int searchesBefore)
     {
-        Assert.True(app.FocusedAutomationId() == F.CheckAgainId, $"The focus is on {FocusNow(app)}, not {F.CheckAgainId}: no Enter is sent (D444).");
-        Keys(app, VirtualKeyShort.RETURN);
+        Assert.True(app.FocusedId() == F.CheckAgainId, $"The focus is on {FocusNow(app)}, not {F.CheckAgainId}: no Enter is sent (D444).");
+        KeysOn(app, new FocusTarget(F.CheckAgainId, F.CheckAgain), VirtualKeyShort.RETURN);
         var clock = Stopwatch.StartNew();
         app.WaitFor(() => CountLogLines(app, NotLookedForLine) > searchesBefore, "one more search for git logged", StepTimeout);
         app.WaitFor(
             () => app.ShownElements(F.CheckAgainId) is [var button] && button.Name == F.CheckAgain && button.IsEnabled,
             $"{F.CheckAgainId} to read \"{F.CheckAgain}\", enabled, once the search has ended",
             StepTimeout);
-        app.WaitForFocusedElement(F.CheckAgainId, StepTimeout);
+        app.WaitForFocusOn(F.CheckAgainId, StepTimeout);
         var searches = CountLogLines(app, NotLookedForLine);
         Note(string.Create(CultureInfo.InvariantCulture, $"F13: Enter on {F.CheckAgainId}; searches logged {searchesBefore}, then {searches}; the focus back on {F.CheckAgainId} {clock.Elapsed.TotalSeconds:0.0} s after the Enter"));
         Assert.Equal(searchesBefore + 1, searches);
@@ -593,14 +614,17 @@ public partial class Phase8aRealWindowPass
     /// Rests the real pointer at part F's resting point (<see cref="Phase8aExpectations.F.RestingPoint"/>, design
     /// 12.3.5), the status bar's empty middle, instead of the neutral point, which a too-old git's long
     /// <c>GitStatus</c> text covers and where a real pointer would open its tooltip; then waits, at most
-    /// <see cref="StepTimeout"/>, until no tooltip shows. The capture that follows keeps the pointer there.
+    /// <see cref="StepTimeout"/>, until no tooltip shows, which clears one an earlier hover left open. That
+    /// wait cannot show that the resting point opens none, since a tooltip opens only after the hover
+    /// delay: the picture's read after its capture (<c>NoToolTip</c>) is the check. The capture that
+    /// follows keeps the pointer there.
     /// </summary>
     private void RestAtFirstRunPoint(RealApp app, string picture)
     {
         var (x, y) = ((float)F.RestingPoint.X, (float)F.RestingPoint.Y);
         app.SetPointer(x, y);
-        app.WaitFor(() => ToolTipsShown(app).Count == 0, $"no tooltip in the window before {picture}, the pointer at part F's resting point", StepTimeout);
-        Note(string.Create(CultureInfo.InvariantCulture, $"{picture}: the pointer at part F's resting point ({x:0.#}, {y:0.#}), not the neutral point, which GitStatus's text covers"));
+        app.WaitFor(() => ToolTipsShown(app).Count == 0, $"no tooltip left open in the window before {picture}, the pointer at part F's resting point", StepTimeout);
+        Note(string.Create(CultureInfo.InvariantCulture, $"{picture}: the pointer at part F's resting point ({x:0.#}, {y:0.#}), not the neutral point, which GitStatus's text covers; no tooltip left open when it came to rest (the read after the capture is the check that none opens there)"));
     }
 
     /// <summary>The one element <paramref name="automationId"/> on screen; fails when there is not exactly one.</summary>

@@ -16,7 +16,7 @@
 //
 // Conventions for the part files (design 12.3.1 to 12.3.3):
 // - Every method: NoteLaunch first (run.txt's start and end), then AssertDesktopReady (high contrast
-//   read, never changed, D224); the scenario's copy declared before the app, so that the app is stopped
+//   read and noted, never changed, D224); the scenario's copy declared before the app, so that the app is stopped
 //   first when a step fails; a new data folder whose session holds exactly the twin's tabs and starting
 //   theme (D442), written before the start; 1100×700 (Sized) unless the launch shows the notice.
 // - After an input, wait for a named condition with a limit (StepTimeout, LoadTimeout or the
@@ -28,8 +28,11 @@
 //   `dotnet test --project tests/VisualCommit.VisualTests.Phase8a` first.
 // - Input: Press for a real click on an element, Keys and TypeKeys for the real keyboard. Press refuses
 //   what AssertNeverPressed names (D444), Keys refuses F1 and an Enter or Space on such an element, and
-//   Keys and TypeKeys send nothing while the window is not the foreground window. A launch whose first
-//   input is a key asserts the foreground first, with its own fallback (design 12.3.3, 12.3.4).
+//   Keys and TypeKeys send nothing while the window is not the foreground window. Every Enter meant for
+//   one element goes by KeysOn, which reads the focused element right before the key and sends nothing
+//   unless it is that element. A launch whose first input is a key asserts the foreground first, with
+//   its own fallback (design 12.3.3, 12.3.4). The one key sent outside the app's window, F4's Enter in
+//   Windows' Open dialog, goes only while that dialog is the foreground window (ChooseFileInDialogGuarded).
 // - Each launch ends with the app closed by its window, exit code 0, unless the method asserts another.
 using System.Diagnostics;
 using System.Drawing;
@@ -143,8 +146,12 @@ public partial class Phase8aRealWindowPass(Phase8aRun fixture) : IClassFixture<P
         "GitSetupCltButton", "AboutRepositoryLink", "AboutGuideLink", "TextDocumentCopyButton",
     ];
 
-    /// <summary>The names no step presses: the winget confirm's <c>Install</c> and the palette's <c>Open the user guide</c> (design 12.3.2).</summary>
-    private static readonly string[] NeverPressedNames = ["Install", "Open the user guide"];
+    /// <summary>
+    /// The names no step presses: the winget confirm's <c>Install</c> and the palette's <c>Open the user
+    /// guide</c> (design 12.3.2), and the update confirm's <c>Update</c>, which starts the same winget
+    /// terminal as Install (no launch opens that confirm; refused all the same).
+    /// </summary>
+    private static readonly string[] NeverPressedNames = [F.Install, F.Update, "Open the user guide"];
 
     /// <summary>How the names of what no step presses start: any "Copy …", "Open in browser", "Show in folder", "Open in editor" (design 12.3.2).</summary>
     private static readonly string[] NeverPressedNameStarts = ["Copy", "Open in browser", "Show in folder", "Open in editor"];
@@ -172,12 +179,14 @@ public partial class Phase8aRealWindowPass(Phase8aRun fixture) : IClassFixture<P
     private void Note(string line) => Run.Note($"{_method}: {line}");
 
     /// <summary>
-    /// Reads Windows' high contrast first and only (D224): on, run.txt and the failure say
-    /// <see cref="HighContrastOn"/>; the pass never changes it.
+    /// Reads Windows' high contrast first and only (D224), and notes the read in run.txt whatever it
+    /// gives: on, run.txt and the failure say <see cref="HighContrastOn"/>; the pass never changes it.
     /// </summary>
     private void AssertDesktopReady()
     {
-        if (RealApp.HighContrastIsOn())
+        var on = RealApp.HighContrastIsOn();
+        Note($"Windows' high contrast is {(on ? "on" : "off")} (read only, D224)");
+        if (on)
         {
             Note(HighContrastOn);
             throw new XunitException(HighContrastOn);
@@ -252,7 +261,9 @@ public partial class Phase8aRealWindowPass(Phase8aRun fixture) : IClassFixture<P
     /// <summary>
     /// Rests the pointer at the neutral point unless <paramref name="keepPointer"/> is true (a menu open, a
     /// hover asked for) and then waits until no tooltip shows in the window; captures the client area and
-    /// saves it as <c>&lt;name&gt;.png</c>. The caller disposes it.
+    /// saves it as <c>&lt;name&gt;.png</c>. The caller disposes it. The wait clears a tooltip an earlier
+    /// hover left open; it cannot show that the resting point opens none, since a tooltip opens only after
+    /// the hover delay: where that matters, a read after the capture is the check (<c>NoToolTip</c>).
     /// </summary>
     private Bitmap Capture(RealApp app, string name, bool keepPointer = false)
     {
@@ -317,7 +328,7 @@ public partial class Phase8aRealWindowPass(Phase8aRun fixture) : IClassFixture<P
 
         using var maskedCapture = Painted(capture, folder, app.Scaling);
         var (difference, inPlace) = maskedCapture.DifferenceFrom(maskedTwin, Path.Combine(Run.Folder, name + "-difference.png"));
-        Run.Note(string.Create(CultureInfo.InvariantCulture, $"{name} against scripted {name}, its folder line masked: {difference:P2} of pixels differ ({inPlace:P2} compared in place only)"));
+        Note(string.Create(CultureInfo.InvariantCulture, $"{name} against scripted {name}, its folder line masked: {difference:P2} of pixels differ ({inPlace:P2} compared in place only)"));
         Assert.True(
             difference <= RealWindowRun.MaxDifference,
             string.Create(CultureInfo.InvariantCulture, $"{name} differs from the scripted screenshot {name}, its folder line masked, in {difference:P2} of its pixels; at most {RealWindowRun.MaxDifference:P0} is allowed. See {name}-difference.png."));
@@ -623,7 +634,22 @@ public partial class Phase8aRealWindowPass(Phase8aRun fixture) : IClassFixture<P
     /// a Space only while the focused element is none of what no step presses; and nothing while the
     /// window is not the foreground window, where the keys would reach another window.
     /// </summary>
-    private static void Keys(RealApp app, params VirtualKeyShort[] keys)
+    private static void Keys(RealApp app, params VirtualKeyShort[] keys) => SendKeys(app, target: null, keys);
+
+    /// <summary>
+    /// As <see cref="Keys"/>, for a key meant for one element, such as an Enter on a row, a button or a
+    /// menu item: UI Automation's focused element, read right before the key and after every other read,
+    /// must be <paramref name="target"/>, else nothing is sent. The wait that found the element may lie
+    /// a capture or a read of git behind, and the focus may have moved since.
+    /// </summary>
+    private static void KeysOn(RealApp app, FocusTarget target, params VirtualKeyShort[] keys)
+    {
+        ArgumentNullException.ThrowIfNull(target);
+        SendKeys(app, target, keys);
+    }
+
+    /// <summary><see cref="Keys"/> and <see cref="KeysOn"/>: the guards, then the keys, with nothing between the last read of the focus and the press.</summary>
+    private static void SendKeys(RealApp app, FocusTarget? target, VirtualKeyShort[] keys)
     {
         ArgumentNullException.ThrowIfNull(keys);
         foreach (var key in keys)
@@ -631,13 +657,45 @@ public partial class Phase8aRealWindowPass(Phase8aRun fixture) : IClassFixture<P
             AssertNeverPressed(key);
         }
 
-        if (keys[^1] is VirtualKeyShort.RETURN or VirtualKeyShort.SPACE)
+        var presses = keys[^1] is VirtualKeyShort.RETURN or VirtualKeyShort.SPACE;
+        if (presses || target is not null)
         {
-            AssertNeverPressed(app.FocusedElement() ?? throw new XunitException($"No element has the keyboard focus, so {keys[^1]} is not sent (D444)."));
+            var focused = app.FocusedElement() ?? throw new XunitException($"No element has the keyboard focus, so {string.Join("+", keys)} is not sent (D444).");
+            if (presses)
+            {
+                AssertNeverPressed(focused);
+            }
+
+            if (target is not null)
+            {
+                AssertFocusIs(focused, target, keys);
+            }
         }
 
         Assert.True(app.ForegroundIsThis, $"The app's window is not the foreground window: {string.Join("+", keys)} would reach another window.");
         app.PressKeys(keys);
+    }
+
+    /// <summary>Fails, before any key, when <paramref name="focused"/> is not <paramref name="target"/>: its id, its name where given, and the very element where given (UI Automation's comparison).</summary>
+    private static void AssertFocusIs(AutomationElement focused, FocusTarget target, VirtualKeyShort[] keys)
+    {
+        string? id;
+        string? name;
+        bool same;
+        try
+        {
+            id = focused.Properties.AutomationId.ValueOrDefault;
+            name = focused.Properties.Name.ValueOrDefault;
+            same = target.Element is null || focused.Equals(target.Element);
+        }
+        catch (Exception ex) when (ex is System.Runtime.InteropServices.COMException or FlaUI.Core.Exceptions.FlaUIException)
+        {
+            throw new XunitException($"The focused element could not be read ({ex.GetType().Name}), so {string.Join("+", keys)} is not sent (D444).");
+        }
+
+        Assert.True(
+            id == target.Id && (target.Name is null || name == target.Name) && same,
+            $"The keyboard focus is on {id ?? "(no id)"} \"{name}\"{(same ? string.Empty : ", another element than the one waited for")}, not {target.Id}{(target.Name is null ? string.Empty : $" \"{target.Name}\"")}: {string.Join("+", keys)} is not sent.");
     }
 
     /// <summary>Text typed on the real keyboard (<see cref="RealApp.TypeText"/>), only while the window is the foreground window.</summary>
@@ -646,6 +704,12 @@ public partial class Phase8aRealWindowPass(Phase8aRun fixture) : IClassFixture<P
         Assert.True(app.ForegroundIsThis, $"The app's window is not the foreground window: typing \"{text}\" would reach another window.");
         app.TypeText(text);
     }
+
+    /// <summary>
+    /// The element a key is meant for (<see cref="KeysOn"/>): its automation id, its name where given, and
+    /// the element a wait found where given, compared with the focused one by UI Automation.
+    /// </summary>
+    private sealed record FocusTarget(string Id, string? Name = null, AutomationElement? Element = null);
 
     /// <summary>run.txt's start and end of one method (<see cref="NoteLaunch"/>): the end is noted when it is disposed.</summary>
     private sealed class LaunchNotes(Phase8aRealWindowPass pass) : IDisposable
