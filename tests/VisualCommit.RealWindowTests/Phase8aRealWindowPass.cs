@@ -63,8 +63,7 @@ public sealed class Phase8aRun : IDisposable
 /// <summary>
 /// Runs the 8a pass's thirteen methods in design 12.3.4's order: part L's two, A and B's one, part I's
 /// three, part F's four, part K's two and part U's one (D442). A method the list does not name runs
-/// after them, by name. A name of a method not written yet is a literal; it becomes a nameof once the
-/// method exists.
+/// after them, by name; <see cref="Phase8aOrderTests"/> holds that there is none.
 /// </summary>
 public sealed class Phase8aOrder : ITestCaseOrderer
 {
@@ -81,9 +80,9 @@ public sealed class Phase8aOrder : ITestCaseOrderer
         nameof(Phase8aRealWindowPass.Check_F5_too_old_stand_in),
         nameof(Phase8aRealWindowPass.Check_F6_config_fault_stand_in),
         nameof(Phase8aRealWindowPass.Check_F6b_real_git_broken_config),
-        "Check_K1_hunk_by_keys",
-        "Check_K2_blame_by_arrows",
-        "Check_U_graph_row_and_names",
+        nameof(Phase8aRealWindowPass.Check_K1_hunk_by_keys),
+        nameof(Phase8aRealWindowPass.Check_K2_blame_by_arrows),
+        nameof(Phase8aRealWindowPass.Check_U_graph_row_and_names),
     ];
 
     public IReadOnlyCollection<TTestCase> OrderTestCases<TTestCase>(IReadOnlyCollection<TTestCase> testCases)
@@ -667,9 +666,8 @@ public class Phase8aOrderTests
 {
     /// <summary>
     /// <see cref="Phase8aOrder"/> names thirteen methods, each once, the expectations' launches at their
-    /// places; every <c>[Fact]</c> of <see cref="Phase8aRealWindowPass"/> is one of them. While the part
-    /// files are written one by one, the order names methods that do not exist yet; the last part's
-    /// commit makes the facts equal the order's thirteen.
+    /// places, and they are exactly the <c>[Fact]</c>s of <see cref="Phase8aRealWindowPass"/>: no fact runs
+    /// outside the order, and the order names no method that is not a fact (design 12.4).
     /// </summary>
     [Fact]
     public void The_order_names_every_fact_of_the_pass_once()
@@ -677,12 +675,12 @@ public class Phase8aOrderTests
         var facts = typeof(Phase8aRealWindowPass).GetMethods()
             .Where(method => method.GetCustomAttributes(inherit: true).OfType<IFactAttribute>().Any())
             .Select(method => method.Name)
-            .ToHashSet(StringComparer.Ordinal);
+            .ToList();
         var order = Phase8aOrder.Methods;
 
         Assert.Equal(13, order.Count);
         Assert.Equal(order.Count, order.Distinct(StringComparer.Ordinal).Count());
-        Assert.Subset(order.ToHashSet(StringComparer.Ordinal), facts);
+        Assert.Equal(order.Order(StringComparer.Ordinal), facts.Order(StringComparer.Ordinal));
         Assert.Equal(
             [L.ChangesLaunch.Method, L.GraphLaunch.Method, K.ChangesLaunch.Method, K.HistoryLaunch.Method, U.GraphRowLaunch.Method],
             [order[0], order[1], order[10], order[11], order[12]]);
