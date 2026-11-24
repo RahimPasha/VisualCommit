@@ -149,7 +149,8 @@ public sealed partial class SettingsDialogViewModel : DialogViewModel<bool>
             services.Clipboard,
             services.Log,
             readText: services.ReadText,
-            lifetime: _lifetime.Token);
+            lifetime: _lifetime.Token,
+            canShow: () => !IsClosed && !ConfirmCommand.IsRunning);
         General.PropertyChanged += OnSectionChanged;
         Git.Global.PropertyChanged += OnSectionChanged;
         Git.Repository.PropertyChanged += OnSectionChanged;

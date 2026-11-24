@@ -23,6 +23,7 @@ public sealed class AboutSettingsViewModel
     private readonly Func<string, string> _readText;
     private readonly Func<IReadOnlyList<string>> _vendorNotices;
     private readonly CancellationToken _lifetime;
+    private readonly Func<bool> _canShow;
 
     /// <summary>A Show button's texts are being read: a second press meanwhile opens nothing more.</summary>
     private bool _reading;
@@ -35,6 +36,11 @@ public sealed class AboutSettingsViewModel
     /// <param name="readText">Reads an embedded text by its resource's name; null reads the app's (<see cref="EmbeddedTexts.Read"/>).</param>
     /// <param name="vendorNotices">The vendors' notice files' resource names, in order; null takes the app's (<see cref="EmbeddedTexts.VendorNotices"/>).</param>
     /// <param name="lifetime">The settings screen's token, cancelled when Cancel, Esc, Save or the session's end closes it: texts read after that show no dialog.</param>
+    /// <param name="canShow">
+    /// Whether the screen may take the text dialog over it now, asked once the texts are read; null:
+    /// always. The settings screen says no while its Save runs, whose close would leave the dialog
+    /// alone over the window.
+    /// </param>
     public AboutSettingsViewModel(
         AppIdentity identity,
         DialogHostViewModel dialogs,
@@ -43,7 +49,8 @@ public sealed class AboutSettingsViewModel
         IAppLog log,
         Func<string, string>? readText = null,
         Func<IReadOnlyList<string>>? vendorNotices = null,
-        CancellationToken lifetime = default)
+        CancellationToken lifetime = default,
+        Func<bool>? canShow = null)
     {
         ArgumentNullException.ThrowIfNull(identity);
         ArgumentNullException.ThrowIfNull(dialogs);
@@ -56,6 +63,7 @@ public sealed class AboutSettingsViewModel
         _readText = readText ?? EmbeddedTexts.Read;
         _vendorNotices = vendorNotices ?? EmbeddedTexts.VendorNotices;
         _lifetime = lifetime;
+        _canShow = canShow ?? (static () => true);
 
         // A command that runs keeps its button enabled: a disabled button would lose the keyboard
         // focus, which the dialog gives back to it when it closes (and a link keeps after Enter).
@@ -111,7 +119,7 @@ public sealed class AboutSettingsViewModel
     /// <summary>
     /// Reads the texts off the UI thread and shows them in the text dialog, without waiting for it to
     /// close. A text that cannot be read is logged as an Error, and then no dialog shows; nor does one
-    /// when the settings screen closed while the texts were read.
+    /// when the settings screen closed while the texts were read, or may not take it now (its Save runs).
     /// </summary>
     private async Task ShowAsync(string title, IReadOnlyList<(string Resource, string Label, string AutomationId)> texts)
     {
@@ -131,7 +139,7 @@ public sealed class AboutSettingsViewModel
             _reading = false;
         }
 
-        if (_lifetime.IsCancellationRequested || read.Any(text => text.Text is null))
+        if (_lifetime.IsCancellationRequested || !_canShow() || read.Any(text => text.Text is null))
         {
             return;
         }
