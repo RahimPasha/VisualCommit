@@ -8,6 +8,7 @@ using VisualCommit.App.Services;
 using VisualCommit.App.ViewModels;
 using VisualCommit.App.Views.Shell;
 using VisualCommit.Core.Git;
+using VisualCommit.Hosting;
 using VisualCommit.Testing;
 using VisualCommit.Testing.Headless;
 using Xunit;
@@ -23,9 +24,10 @@ namespace VisualCommit.VisualTests.Phase8a;
 /// the chosen file is probed, get the focus back when the pick is cancelled or the file refused;
 /// the row's "Use the Git on the PATH", which hides itself with the choice it drops, gives the
 /// focus to Browse when it was pressed by the keys (13.1, ruling 101), and the first-run screen's
-/// twin, pressed by the keys, gives it with the frame where its search puts it. The launcher, the
-/// clipboard, the file dialog and the search are the harness's fakes, held until the test lets
-/// them answer.
+/// twin, pressed by the keys, gives it with the frame where its search puts it; the Accounts
+/// section's netrc note's Dismiss, which hides itself with the note, gives it to the section's
+/// button. The launcher, the clipboard, the file dialog and the search are the harness's fakes,
+/// held until the test lets them answer.
 /// </summary>
 public sealed class FirstRunFocusTests : Phase8aChecks
 {
@@ -210,6 +212,43 @@ public sealed class FirstRunFocusTests : Phase8aChecks
 
         Assert.False(usePath.IsEffectivelyVisible, $"{F.ProgramUsePathId} still shows after the click.");
         Assert.True(app.FocusedElement is null, $"After the click the focus is on {app.DescribeFocus()}, not where the hidden button left it (nothing).");
+    }
+
+    /// <summary>
+    /// The Accounts section's netrc note (F14's set-up: signed in with "Use for git over HTTPS" on, git
+    /// at 2.43.0, an empty <c>_netrc</c> in the session's home): its Dismiss, pressed by Enter with the
+    /// keyboard's frame, hides the note's row with itself; the section's button then has the focus,
+    /// with the frame, where the screen puts its first focus (D462). Before this the focus was on
+    /// nothing.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task The_netrc_notes_Dismiss_pressed_by_Enter_gives_the_focus_to_the_Accounts_button_with_the_frame()
+    {
+        var copy = await Scenarios.HostingAsync();
+        await using var served = await Scenarios.ServeHostingAsync(copy, inProcess: true, ct: TestContext.Current.CancellationToken, ownsCopy: true);
+        using var data = new TempDirectory("phase8a focus");
+        var probe = new FakeGitSetupProbe(FakeGitSetupProbe.Windows(), FakeGitAnswer.RealAt(F.WindowsGit, GitSource.Path, F.NetrcVersion));
+        using var app = ShellDriver.Start(data.Path, hosting: new HostingOptions(served.GitHub.Endpoints, served.GitHub.CreateHandler), gitProbe: probe);
+        await app.WaitUntilReadyAsync();
+        app.MoveToNeutral();
+        await app.SignInAsync(served.OctoToken, TestContext.Current.CancellationToken);
+        File.WriteAllText(Path.Combine(GitIsolation.SessionHomeFolder(data.Path), "_netrc"), string.Empty);
+        var dialog = await app.OpenSettingsAsync(SettingsOpening.Key);
+        app.ChooseSection(SettingsSection.Accounts);
+        await app.WaitForSettingsReadsAsync(dialog);
+        await app.WaitForAsync(() => app.FindByAutomationId(app.TopDialogView!, F.NetrcNoteId).IsEffectivelyVisible, "the netrc note");
+        var dismiss = (Button)app.FindByAutomationId(app.TopDialogView!, F.NetrcDismissId);
+        var accounts = (Button)app.FindByAutomationId(app.TopDialogView!, A.NavAccountsId);
+        dismiss.BringIntoView();
+        app.Settle();
+        FocusByTab(app, dismiss, F.NetrcDismissId);
+
+        app.PressKey(Key.Enter);
+        app.Settle();
+
+        Assert.False(dismiss.IsEffectivelyVisible, $"{F.NetrcDismissId} still shows after Enter.");
+        Assert.False(app.FindByAutomationId(app.TopDialogView!, F.NetrcNoteId).IsEffectivelyVisible, "The netrc note still shows after Enter on Dismiss.");
+        AssertFocusedWithFrame(app, accounts, A.NavAccountsId, $"after Enter on {F.NetrcDismissId}");
     }
 
     /// <summary>
