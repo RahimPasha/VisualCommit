@@ -8,6 +8,7 @@ using FlaUI.Core.Capturing;
 using FlaUI.Core.Definitions;
 using FlaUI.Core.EventHandlers;
 using FlaUI.Core.Input;
+using FlaUI.Core.WindowsAPI;
 using FlaUI.UIA3;
 using VisualCommit.App.Services;
 using VisualCommit.Git;
@@ -22,13 +23,20 @@ namespace VisualCommit.RealWindowTests;
 /// app; the window's state on the desktop (minimised, visible, the foreground window) read and set
 /// through Win32; the window's icons and a capture of any part of the screen, the taskbar's button
 /// among them; another top-level window of the app's process; and the graph row's events recorded
-/// for a screen reader's route. Every wait is on a condition with a limit, never on a fixed time.
-/// Nothing here changes a setting of the desktop (D224).
+/// for a screen reader's route; Windows' Open dialog confirmed only while it is the foreground window.
+/// Every wait is on a condition with a limit, never on a fixed time, and no call into the app's process
+/// waits without one. Nothing here changes a setting of the desktop (D224).
 /// </summary>
 public sealed partial class RealApp
 {
     /// <summary>The automation id of the notice a start shows when the app on its data folder does not answer.</summary>
     public const string InstanceNoticeId = "InstanceNotice";
+
+    /// <summary>How long a message sent to the app's window (<c>WM_GETICON</c>) may take to be answered before it counts as unanswered.</summary>
+    private const uint MessageAnswerMilliseconds = 5000;
+
+    /// <summary>How long Windows' Open dialog may take to be the foreground window with its file name box focused before its Enter.</summary>
+    private static readonly TimeSpan DialogForegroundWithin = TimeSpan.FromSeconds(5);
 
     /// <summary>The built app's executable, the file every launch starts (its <c>AppExecutable</c> metadata).</summary>
     public static string ExecutablePath => Executable;
@@ -92,10 +100,14 @@ public sealed partial class RealApp
         return new BesideStart(process);
     }
 
-    /// <summary>Minimises the window (<c>ShowWindow</c> with <c>SW_MINIMIZE</c>) and waits until it is iconic.</summary>
+    /// <summary>
+    /// Minimises the window and waits, at most <see cref="DefaultWaitTimeout"/>, until it is iconic:
+    /// <c>ShowWindowAsync</c> with <c>SW_MINIMIZE</c>, which posts the change to the window's thread, so
+    /// that an app that does not answer cannot hold the test.
+    /// </summary>
     public void Minimise()
     {
-        Win32.ShowWindow(Handle, Win32.SwMinimize);
+        Win32.ShowWindowAsync(Handle, Win32.SwMinimize);
         WaitFor(() => IsIconic, "the window to be minimised", DefaultWaitTimeout);
     }
 
@@ -129,22 +141,144 @@ public sealed partial class RealApp
     }
 
     /// <summary>
+    /// The automation id of UI Automation's focused element, or null when there is none or it cannot be
+    /// read: as <see cref="FocusedAutomationId"/>, but an element that goes between the look and the read
+    /// (FlaUI's <c>ElementNotAvailableException</c>, a focus that moves as a dialog closes or a button
+    /// turns disabled) counts as none, so that a wait on it looks again instead of ending.
+    /// </summary>
+    public string? FocusedId()
+    {
+        if (FocusedElement() is not { } focused)
+        {
+            return null;
+        }
+
+        try
+        {
+            return focused.Properties.AutomationId.ValueOrDefault;
+        }
+        catch (Exception ex) when (ex is COMException or FlaUI.Core.Exceptions.FlaUIException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>Waits until UI Automation's focused element has the automation id <paramref name="automationId"/>, read by <see cref="FocusedId"/>.</summary>
+    public void WaitForFocusOn(string automationId, TimeSpan timeout)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(automationId);
+        WaitForTelling(
+            () => FocusedId() == automationId,
+            $"UI Automation's focused element to be {automationId}",
+            timeout,
+            () => $"It is {FocusedId() ?? "none"}.");
+    }
+
+    /// <summary>
     /// The window's two icons as Windows holds them (<c>WM_GETICON</c> with <c>ICON_SMALL</c> and
     /// <c>ICON_BIG</c>, each null when the window gives none), with the window's DPI and the sizes
     /// Windows draws them at for it (<c>GetSystemMetricsForDpi</c> of <c>SM_CXSMICON</c> and
-    /// <c>SM_CXICON</c>). The caller disposes the result.
+    /// <c>SM_CXICON</c>). Each message is sent with <c>SendMessageTimeoutW</c> (<c>SMTO_BLOCK</c>,
+    /// <c>SMTO_ABORTIFHUNG</c>, <see cref="MessageAnswerMilliseconds"/>): one the app does not answer in
+    /// time counts as no icon, and the result says so. The caller disposes the result.
     /// </summary>
     public WindowIconSet WindowIcons()
     {
-        var small = Win32.SendMessageW(Handle, Win32.WmGetIcon, Win32.IconSmall, IntPtr.Zero);
-        var big = Win32.SendMessageW(Handle, Win32.WmGetIcon, Win32.IconBig, IntPtr.Zero);
+        var smallAnswered = AskIcon(Win32.IconSmall, out var small);
+        var bigAnswered = AskIcon(Win32.IconBig, out var big);
         var dpi = NativeMethods.GetDpiForWindow(Handle);
         return new WindowIconSet(
             BitmapOfIcon(small),
             BitmapOfIcon(big),
             dpi,
             Win32.GetSystemMetricsForDpi(Win32.SmCxSmIcon, dpi),
-            Win32.GetSystemMetricsForDpi(Win32.SmCxIcon, dpi));
+            Win32.GetSystemMetricsForDpi(Win32.SmCxIcon, dpi),
+            !smallAnswered,
+            !bigAnswered);
+    }
+
+    /// <summary>
+    /// The offset of the window's visible frame inside <see cref="CaptureWindow"/>'s capture, in screen
+    /// pixels: DWM's extended frame bounds (<c>DWMWA_EXTENDED_FRAME_BOUNDS</c>) less <c>GetWindowRect</c>'s
+    /// corner, which on Windows 10 and 11 lies outside the invisible border the window is resized by. Null
+    /// when DWM does not answer or the offset is not one such a border gives (negative, or a quarter of the
+    /// window or more); <paramref name="described"/> gives both rectangles for run.txt either way.
+    /// </summary>
+    public Point? VisibleFrameOffset(out string described)
+    {
+        NativeMethods.GetWindowRect(Handle, out var window);
+        var result = Win32.DwmGetWindowAttribute(Handle, Win32.DwmwaExtendedFrameBounds, out var frame, Marshal.SizeOf<NativeMethods.Rect>());
+        if (result != 0)
+        {
+            described = string.Create(System.Globalization.CultureInfo.InvariantCulture, $"GetWindowRect ({window.Left}, {window.Top}, {window.Right}, {window.Bottom}); DwmGetWindowAttribute(DWMWA_EXTENDED_FRAME_BOUNDS) failed with 0x{result:X8}");
+            return null;
+        }
+
+        described = string.Create(System.Globalization.CultureInfo.InvariantCulture, $"GetWindowRect ({window.Left}, {window.Top}, {window.Right}, {window.Bottom}), the visible frame ({frame.Left}, {frame.Top}, {frame.Right}, {frame.Bottom})");
+        var offset = new Point(frame.Left - window.Left, frame.Top - window.Top);
+        return offset.X < 0 || offset.Y < 0 || offset.X >= window.Width / 4 || offset.Y >= window.Height / 4 ? null : offset;
+    }
+
+    /// <summary>
+    /// Waits for Windows' Open dialog the app opened with <paramref name="title"/>, puts
+    /// <paramref name="file"/> into its file name box (automation id 1148) and confirms it with a real
+    /// Enter, as <see cref="ChooseFileInDialog"/> does, but with the guard that no key reaches another
+    /// window: the path goes in through the box's Value pattern alone (never typed: a box that gives no
+    /// Value pattern fails the step with nothing typed), and the Enter is sent only once the dialog is the
+    /// desktop's foreground window and its file name box UI Automation's focused element, waited for at
+    /// most <see cref="DialogForegroundWithin"/>; otherwise the step fails with no Enter sent. The dialog
+    /// is never clicked to bring it forward: a click could land on whatever covers it. Returns run.txt's
+    /// words for the guard.
+    /// </summary>
+    public string ChooseFileInDialogGuarded(string title, string file, TimeSpan timeout)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(file);
+        Window? dialog = null;
+        WaitFor(
+            () =>
+            {
+                dialog = Window.ModalWindows.FirstOrDefault(window => TitleOf(window) == title)
+                    ?? _automation.GetDesktop()
+                        .FindAllChildren(condition => condition.ByProcessId(_process.Id))
+                        .Select(element => element.AsWindow())
+                        .FirstOrDefault(window => TitleOf(window) == title);
+                return dialog is not null;
+            },
+            $"the file dialog \"{title}\"",
+            timeout);
+
+        var handle = dialog!.Properties.NativeWindowHandle.ValueOrDefault;
+        if (handle == IntPtr.Zero)
+        {
+            throw new InvalidOperationException($"The file dialog \"{title}\" gives no window handle: no key was sent.");
+        }
+
+        // The box is an edit inside the file name combo box (1148), or the combo box itself.
+        var name = DialogControl(dialog, "1148", "the file dialog's file name box", timeout);
+        var box = name.FindFirstDescendant(condition => condition.ByControlType(ControlType.Edit)) ?? name;
+        if (!box.Patterns.Value.IsSupported)
+        {
+            throw new InvalidOperationException("The file dialog's file name box gives no Value pattern: the path is not typed and no Enter is sent.");
+        }
+
+        box.Patterns.Value.Pattern.SetValue(file);
+        WaitFor(() => box.Patterns.Value.Pattern.Value.ValueOrDefault == file, "the file dialog's file name box to hold the path", timeout);
+
+        // Enter in the box confirms the whole path, as a user does (ChooseFileInDialog says why not the
+        // Open button). Sent only while the dialog is in front with the box focused.
+        box.Focus();
+        var clock = Stopwatch.StartNew();
+        WaitFor(
+            () => Win32.GetForegroundWindow() == handle && FocusedElement() is { } focused && (focused.Equals(box) || focused.Equals(name)),
+            $"the file dialog \"{title}\" to be the foreground window with its file name box focused; no Enter was sent, as it would reach another window",
+            DialogForegroundWithin);
+        var guard = string.Create(
+            System.Globalization.CultureInfo.InvariantCulture,
+            $"the path set through the file name box's Value pattern; the Enter sent once the dialog was the foreground window with that box focused, {clock.Elapsed.TotalSeconds:0.0} s after the box was given the focus");
+        PressKey(VirtualKeyShort.RETURN);
+        WaitFor(() => !Window.ModalWindows.Any(window => TitleOf(window) == title), "the file dialog to close", timeout);
+        WaitUntilIdle();
+        return guard;
     }
 
     /// <summary>
@@ -211,11 +345,22 @@ public sealed partial class RealApp
     /// Clicks the window's title bar once with the real mouse, to make it the foreground window: in its
     /// middle, away from its left end, where the icon opens the system menu (a double click there closes
     /// the window), and from the caption buttons at its right end. Its non-client area gives no control
-    /// the focus.
+    /// the focus. The click is made only when the window under that point (<c>WindowFromPoint</c>, its
+    /// root by <c>GetAncestor</c>) is this one; when another window lies over it, such as one kept on top
+    /// of every other, nothing is clicked and <see cref="InvalidOperationException"/> names that window.
     /// </summary>
     public void ClickTitleBar()
     {
-        Mouse.Click(TitleBarMiddle());
+        var point = TitleBarMiddle();
+        var under = Win32.GetAncestor(Win32.WindowFromPoint(new NativeMethods.Point { X = point.X, Y = point.Y }), Win32.GaRoot);
+        if (under != Handle)
+        {
+            throw new InvalidOperationException(string.Create(
+                System.Globalization.CultureInfo.InvariantCulture,
+                $"The title bar's middle at ({point.X}, {point.Y}) lies under another window ({WindowWords(under)}), not this one: nothing was clicked."));
+        }
+
+        Mouse.Click(point);
         WaitUntilIdle();
     }
 
@@ -299,6 +444,38 @@ public sealed partial class RealApp
     /// <summary><c>VisualCommit.dll</c> beside the executable: the app's own assembly, whose version resource holds the product version.</summary>
     private static string BuiltAssemblyPath => Path.Combine(Path.GetDirectoryName(Executable)!, "VisualCommit.dll");
 
+    /// <summary>
+    /// <c>WM_GETICON</c> with <paramref name="which"/>, sent with a limit: false when the app did not
+    /// answer within <see cref="MessageAnswerMilliseconds"/> (or is hung), and <paramref name="icon"/> is
+    /// then none; true with the icon's handle, or none when the window gives that icon none.
+    /// </summary>
+    private bool AskIcon(IntPtr which, out IntPtr icon)
+    {
+        var sent = Win32.SendMessageTimeoutW(Handle, Win32.WmGetIcon, which, IntPtr.Zero, Win32.SmtoBlock | Win32.SmtoAbortIfHung, MessageAnswerMilliseconds, out icon);
+        if (sent == IntPtr.Zero)
+        {
+            icon = IntPtr.Zero;
+            return false;
+        }
+
+        return true;
+    }
+
+    /// <summary>A top-level window in words for a message: its handle, its class and its title, as Windows gives them.</summary>
+    private static string WindowWords(IntPtr window)
+    {
+        if (window == IntPtr.Zero)
+        {
+            return "none";
+        }
+
+        var type = new System.Text.StringBuilder(256);
+        var title = new System.Text.StringBuilder(256);
+        _ = Win32.GetClassNameW(window, type, type.Capacity);
+        _ = Win32.GetWindowTextW(window, title, title.Capacity);
+        return string.Create(System.Globalization.CultureInfo.InvariantCulture, $"handle 0x{window.ToInt64():X}, class \"{type}\", title \"{title}\"");
+    }
+
     /// <summary>A copy of an icon's image with its alpha, or null for no icon. The handle stays the window's: it is not destroyed.</summary>
     private static Bitmap? BitmapOfIcon(IntPtr icon)
     {
@@ -343,10 +520,11 @@ public sealed partial class RealApp
 
     /// <summary>
     /// The window's icons (<see cref="WindowIcons"/>): <c>ICON_SMALL</c>'s and <c>ICON_BIG</c>'s images
-    /// (null where the window gives none), the window's DPI, and <c>SM_CXSMICON</c> and <c>SM_CXICON</c>
-    /// at that DPI, the sizes Windows draws the small icon (the title bar's) and the big one at.
+    /// (null where the window gives none, or did not answer in time), the window's DPI, <c>SM_CXSMICON</c>
+    /// and <c>SM_CXICON</c> at that DPI, the sizes Windows draws the small icon (the title bar's) and the
+    /// big one at, and whether each <c>WM_GETICON</c> went unanswered within its limit.
     /// </summary>
-    public sealed record WindowIconSet(Bitmap? Small, Bitmap? Big, uint Dpi, int SmallIconMetric, int IconMetric) : IDisposable
+    public sealed record WindowIconSet(Bitmap? Small, Bitmap? Big, uint Dpi, int SmallIconMetric, int IconMetric, bool SmallUnanswered, bool BigUnanswered) : IDisposable
     {
         public void Dispose()
         {
@@ -480,8 +658,10 @@ public sealed partial class RealApp
 
     /// <summary>
     /// The Win32 calls of these launches beside the shared <see cref="NativeMethods"/>: the window's
-    /// state on the desktop and its icons. Each only reads, but for <c>ShowWindow</c>, which minimises
-    /// the app's own window.
+    /// state on the desktop, its icons, its visible frame and the window under a point. Each only reads,
+    /// but for <c>ShowWindowAsync</c>, which minimises the app's own window. No call waits on the app's
+    /// thread without a limit: <c>WM_GETICON</c> goes by <c>SendMessageTimeoutW</c>, the minimise is
+    /// posted, and <c>GetWindowTextW</c> reads another process's window's title without a message.
     /// </summary>
     private static class Win32
     {
@@ -489,13 +669,17 @@ public sealed partial class RealApp
         public const uint WmGetIcon = 0x007F;
         public const int SmCxIcon = 11;
         public const int SmCxSmIcon = 49;
+        public const uint SmtoBlock = 0x0001;
+        public const uint SmtoAbortIfHung = 0x0002;
+        public const uint GaRoot = 2;
+        public const int DwmwaExtendedFrameBounds = 9;
 
         public static readonly IntPtr IconSmall = new(0);
         public static readonly IntPtr IconBig = new(1);
 
         [DllImport("user32.dll")]
         [return: MarshalAs(UnmanagedType.Bool)]
-        public static extern bool ShowWindow(IntPtr window, int command);
+        public static extern bool ShowWindowAsync(IntPtr window, int command);
 
         [DllImport("user32.dll")]
         [return: MarshalAs(UnmanagedType.Bool)]
@@ -509,9 +693,24 @@ public sealed partial class RealApp
         public static extern IntPtr GetForegroundWindow();
 
         [DllImport("user32.dll")]
-        public static extern IntPtr SendMessageW(IntPtr window, uint message, IntPtr wParam, IntPtr lParam);
+        public static extern IntPtr SendMessageTimeoutW(IntPtr window, uint message, IntPtr wParam, IntPtr lParam, uint flags, uint timeoutMilliseconds, out IntPtr result);
 
         [DllImport("user32.dll")]
         public static extern int GetSystemMetricsForDpi(int index, uint dpi);
+
+        [DllImport("user32.dll")]
+        public static extern IntPtr WindowFromPoint(NativeMethods.Point point);
+
+        [DllImport("user32.dll")]
+        public static extern IntPtr GetAncestor(IntPtr window, uint flags);
+
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+        public static extern int GetClassNameW(IntPtr window, System.Text.StringBuilder name, int capacity);
+
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+        public static extern int GetWindowTextW(IntPtr window, System.Text.StringBuilder text, int capacity);
+
+        [DllImport("dwmapi.dll")]
+        public static extern int DwmGetWindowAttribute(IntPtr window, int attribute, out NativeMethods.Rect value, int size);
     }
 }
