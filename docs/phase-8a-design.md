@@ -5887,6 +5887,145 @@ F4's Open dialog leaves entries in the user's recent-files lists, that the part 
 and starts a second process, and that `Phase8aOrderTests` run only in the whole pass. S19-35: the
 route holds as built; the listen is the gate's (D460).
 
+**The review's fixes as built, and what the lead ruled on them (the lead, 2026-11-24; D462 to
+D465).** 100. The fix run (`wf_ccc5f713-fa5`, 00:04 to 06:58 on 2026-11-24, 22 agents, 7.16M tokens)
+built ruling 99's packages, each with its tests first, committed failing where a test could fail
+first; an independent reader then read each package against its findings, and a fixer applied what
+the reader found. All 38 findings are answered. The seven readers found 33 points more, one of them
+major (the harness package's own new tests gave their one second to real git work, which the default
+run's load would have failed); the fixers applied what was theirs and left the rulings and the docs
+to the lead. Six packages were merged on 2026-11-24, each with its test classes run on the merged
+tree: focus `c0bedc6`, speech `a60056e`, instance `67ff55d`, git `9e225d1`, firstrun `ce144f4` and
+harness `876c197`; the real-window part's three fixes are on its branch and merge with the part
+(12). The results are outside the repository
+(`D:/Projects/Personal/phase8-work/wave4/review/fix-result.json`, the picture comparisons under
+`…/review/compare/`). What the packages asked of the lead, and the rulings:
+
+- *focus*. "That region's target in the new tab" (ruling 99) is the same panel's: when the tab now
+  shown has a repository of its own and shows the panel the focus lay in, the focus goes to that
+  panel's target as F6 would give it, without F6's memory of the other tab's element; otherwise to
+  the graph area's target (a welcome page's Open, the first-run screen's), and it stays on nothing
+  while a tab still opens. A dialog that is open, or a focus the user or a view placed meanwhile,
+  stays. The window does this at every change of the active tab (`MainWindow.Keys.cs`,
+  `FocusAfterSwitch`; D462). The reader found that a focus in the left panel went to the empty
+  panel's Filter box on a tab without a repository: fixed, the graph area's target is taken there.
+  Amend's return is armed whenever Amend has the focus as a commit starts, with the frame only when
+  it had one: ruling 99's "armed only when the pressed button had the keyboard's frame" was
+  keyboard-6's, and the palette's Commit, the one path a user has, reaches Amend without the frame
+  (D104). A cancelled Discard lines clears the selection, as before the fix, so its button goes and
+  the diff's text takes the focus. A toggled folder or section keeps its row and its control, and a
+  rebuild that only inserts or only removes rows is one change that never resets the list; the reset
+  above 64 rows stays for a rebuild that keeps the count and for one that both removes and inserts.
+  `GraphReviewFixTests.Opening_a_folder_inserts_its_rows_without_resetting_the_list`, an earlier
+  test, now holds one Add of the folder's 40 rows and the same folder object where it held one
+  Remove and 41 Adds: accepted, its point (no reset) stands. Accepted as a limit, measured in
+  `LeftPanelScrollTests`: a branch created above the rows in view of a scrolled left panel keeps
+  every row and tells the list of one Add, but Avalonia's estimate still draws the rows in view 22
+  px lower, 4 px above their true places, with new controls, and a press held across it loses its
+  click; the numbers are the same without the fix (S19-28's Backlog row). The builder also saw that
+  Tab walks the left panel's rows in the order their controls were made, not the rows' order, once
+  rows were inserted: older than the package, and fixed in the second round (below).
+- *speech*. The status bar's live region speaks an operation's start, ssh's notice and its result,
+  and on a dashboard a run's start, Cancel all's text as it was at the click and the result; the
+  text shown and its name keep the percentage (`Controls/StatusText`,
+  `IStatusBarOperation.SpokenText`; D463, 9.3.7). What a switch of tabs speaks, the question ruling
+  99 left: the status of the tab now shown when its spoken text differs from the one before, nothing
+  when the two are equal, as before the fix. The reader read Avalonia 12.1.3's bridge: a hidden
+  control is no child of its parent's peer, and a peer's events reach Windows only once a client was
+  handed its node (D455's cold case). The first-run screen's error line and the notice's status show
+  with their text in one step, so the polite live setting ruling 99 gave them is most likely never
+  heard there, and the title only by a client that has read the screen; the tests now take each peer
+  as a client reaches it (`ClientWalk`) and say so. Check again's own text, which the builder had
+  made a live region, is none again: ruling 99's "nothing else" stands. The lead's ruling on what is
+  left: each button that gets the keyboard focus back after such an outcome is described by the
+  outcome (its help text), as a form's field is by its error; built in the second round (D463). The
+  Narrator walk-through's steps 14 and 21 change with it, the reason in the report. Ruling 99's
+  caret, "the picked run's first line", scrolls the text at the next arrow when that line lies above
+  the view: amended to the first line of the picked run that is in view (second round). A
+  right-click on the blame's text inside a selection keeps the selection.
+- *instance*. As built: `SingleInstanceGuard.ResolveHeld` is the one answer to a held start that
+  `Program.Main` and Try again share; a start that waits for a closing VisualCommit looks at
+  `instance.json` at each try of the lock and asks whoever took the folder meanwhile, once per look,
+  on the same 30 s; an ask that goes unanswered tries the lock for 250 ms more before the notice; on
+  macOS and Linux the lock file the guard makes is the user's alone (0600) and so are the folders it
+  makes (0700, a missing parent included, as the XDG specification asks), while whatever exists
+  keeps its mode; a stale socket is deleted only when no server answers on it (D464; 1.11, 4.3).
+  Accepted: a new holder that keeps the lock while its endpoint refuses holds a waiting start until
+  the closing wait ends, where the first form of the fix gave up after five seconds, and the log
+  names the case. Accepted as known: a start whose ask is in flight at the moment a closing holder's
+  server is cancelled gets no answer, and if another start takes the lock within its 250 ms it shows
+  the notice instead of asking that start; Try again then hands over. The three tests that can fail
+  only on macOS and Linux (the two of the modes, the copied folder's) were shown failing by
+  reasoning alone, no builder having such a machine: CI's macOS, Linux and container jobs are their
+  first run, read at the push.
+- *git*. As built: when `git config --type=bool --get <key>` fails and the value in effect can be a
+  boolean, `git config --type=bool --fixed-value --get <key> <value>` converts the entries of that
+  value alone, one command for every case where floor-1's verified fix had three (D465;
+  `--fixed-value` is in git since 2.30, under D420's floor). The graph's anchor is the commit the
+  control draws at the top, at the offset rounded to a pixel, and it acts on every swap of the
+  graph, a hide's or solo's included: accepted (D465). The ssh line, ruling 7 amended: on Windows
+  the log reads `Git and ssh get SSH_ASKPASS_REQUIRE=force, so that ssh asks through VisualCommit;
+  OpenSSH older than 8.4 ignores it, and on Windows no terminal shows its question: cancel the
+  operation if it waits.` (`AskPassBroker.AskPassRequireLineWindows`), because the app starts every
+  git without a console window, so ssh never reaches the terminal the app was started from; macOS
+  and Linux keep ruling 7's words (`AskPassRequireLineUnix`), and the guide's page has a section per
+  case, "An old OpenSSH does not ask through VisualCommit". D424 stands. Nothing was measured with
+  an old OpenSSH on Windows: the words hold whether ssh waits or fails. The floor's job is the first
+  run of the new rows on git 2.34.1. Found at the merge: the fixer's fact
+  `An_offset_drawn_as_the_top_of_the_graph_shows_new_commits_at_the_top` failed twice on the merged
+  tree, at 26.4 for 0.4. It commits a file from outside at an offset of 0.4, and whenever the
+  watcher's status read landed between the file's write and the commit, the working-changes row's
+  one-row move (D60) pushed the view a row down, being guarded by the raw offset where the control
+  draws at the rounded one; the fixer had named that guard as a fault left. The lead fixed it with a
+  test first (`bc467e3` failing, `53b9c77`): the guard uses the offset as it is drawn, as the anchor
+  does.
+- *firstrun*. The Git program row's note after "Use the Git on the PATH" drops a chosen git that is
+  in use reads `Chosen here. VisualCommit looks for Git again at its next start.`: the builder's
+  "uses the Git on the PATH from its next start" can be false, the next start's search looking in
+  the usual install folders too (the words change in the second round; the report has them).
+  Choose's new refusal, `This file did not report its version within 10 seconds, so VisualCommit
+  stopped it.`, and its ten seconds stay as built: Choose can be pressed again. A press of Show
+  license… or Show third-party notices… whose texts are read while Save runs waits for that Save:
+  one that closes the screen shows nothing, one that keeps it open shows the text afterwards (the
+  reader's form; the builder's dropped the press). concurrency-lifetime-1's path cannot be reached
+  through the app today, Save's read back waiting for the start's search; the fix removes that
+  reliance and its shell test stays as a guard. S19-18, measured by the builder: a link's frame is
+  right at scalings 1 and 1.25; at 1.5 its inner line lies on the text's first and last rows, the
+  descenders' lowest among them, and at 1.75 it touches them (the 3 px above and below round to 4
+  device pixels at 1.5, the two lines to 3 and 2). By `LinkFrame`'s own rule that is a fault at two
+  common scalings: fixed in the second round. The builder also found the Theme options' frame cut by
+  4 px at its top by the section's scroller, older than the phase: second round.
+- *harness*. `OperationsHarness`' step limit keeps its 15 s before the hang watchdog's: a harness
+  step still running then fails alone, by name and with a stack, where the watchdog would stop the
+  whole process; a test whose harness step ended between 165 and 180 s counted passed before and
+  fails now, which the class's remarks say (S19-32, accepted). A harness still open at that moment
+  also writes a note that names the operation its queue runs, so a stall in an await of the test's
+  own is named too. The links' check now takes every address as loading unless a user goes to it
+  (11.3.6; 245 self-test cases). `10b-second-tab` is from now on the form without the new tab's
+  tooltip, the file of waves 1 and 2's references (phase 1's report, check 10). The real window's
+  own wait for a dashboard's read has the form the harness's had and is not changed: the pass runs
+  alone.
+- *realwindow*. As built on the part's branch: B1 (a) asks the executable's icon at 64 pixels
+  (`Icon.ExtractIcon`), a frame the `.ico` holds at any scaling; B2 notes every taskbar button named
+  for VisualCommit and counts those on the display that holds the app's window: one is captured,
+  none there or none at all is a "Not run" line, more than one fails the launch at its end with the
+  advice to close or unpin the other (the reader's point: Windows shows a window's button on every
+  display's taskbar by default, so counting all taskbars would fail with no other VisualCommit
+  running); L6 a to c fail on a missing rectangle for main's name. The expected results of the three
+  change with the reasons in the report. Whether the laptop's taskbar gives one button per program
+  is what launch 3's next run shows.
+
+**The second round.** Three packages in worktrees of their own, `wip/p8a-after-<key>`, built, read
+and corrected as the first; the briefs are in
+`D:/Projects/Personal/phase8-work/wave4/review/after-packages.json`. *after-speech*: the outcome
+said where the focus lands (the notice's Try again, the first-run screen's Choose and Check again,
+the row's Browse), the blame's caret on the picked run's first line in view, the row's note in the
+lead's words with both new texts in the expectations. *after-order*: Tab goes through a list's rows
+in the rows' order, also after rows were inserted, for every list of the app whose rows hold stops,
+with one helper shared with the stage lists' walk. *after-frames*: the Theme options' frame drawn
+whole with nothing else moved, and a link's frame clear of its text at every scaling from 1 to 2.
+The lead adds to U2/U3's step 4 the wait for the graph's reload (ruling 99, S19-27).
+
 ### 13.2 What the integration settled
 
 Beyond moving the packages' contracts into section 1: the broker's `gitVersion` goes at §3's merge,
