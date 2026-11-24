@@ -35,8 +35,9 @@ public partial class Phase8aRealWindowPass
     /// Launch 3 (design 12.3.4; the twin of part A's method 1, <c>Check_A1_A4_about_dark_and_license</c>,
     /// and, at 1920×1080, of method 3's picture), one empty tab, dark, 1100×700:
     /// <list type="number">
-    /// <item>B1 (a): the built executable's associated icon against the <c>.ico</c>'s frame of its size,
-    /// every pixel at alpha 255 within 2 per channel. (b): <c>WM_GETICON</c>'s small and big icons, each
+    /// <item>B1 (a): the built executable's icon asked at 64 pixels, a frame the <c>.ico</c> holds whatever
+    /// the scaling, against the <c>.ico</c>'s frame of the size it came at, every pixel at alpha 255 within 2
+    /// per channel; the size asked and got in run.txt. (b): <c>WM_GETICON</c>'s small and big icons, each
     /// given (a message the app does not answer within 5 s counts as none), each of a size the
     /// <c>.ico</c> holds compared as (a); their sizes, the window's DPI, <c>SM_CXSMICON</c> and
     /// <c>SM_CXICON</c> in run.txt. (a) and (b) are asserted at the launch's end, so that a miss there
@@ -267,22 +268,43 @@ public partial class Phase8aRealWindowPass
     // ---- Part B's steps ----
 
     /// <summary>
-    /// B1 (a): <c>Icon.ExtractAssociatedIcon</c> of the built <c>VisualCommit.exe</c> (its
-    /// <c>ApplicationIcon</c>) against the <c>.ico</c>'s frame of its size (<see cref="IconAgainstFrame"/>).
+    /// The size B1 (a) asks the executable's icon at: one of the <c>.ico</c>'s frames, so that Windows hands
+    /// back that frame whatever the display's scaling. Asked at none, Windows gives <c>SM_CXICON</c> for the
+    /// test host's DPI, 32 scaled by it, which at 175 % is 56, a size the <c>.ico</c> lacks and a frame
+    /// Windows scaled (design 12.3.5). 64 is <c>SM_CXICON</c> at the laptop's 200 %: the frame the first
+    /// runs compared.
+    /// </summary>
+    internal const int ExecutableIconSize = 64;
+
+    /// <summary>
+    /// B1 (a): the built <c>VisualCommit.exe</c>'s icon (its <c>ApplicationIcon</c>) asked at
+    /// <see cref="ExecutableIconSize"/> (<see cref="ExecutableIconAt"/>) against the <c>.ico</c>'s frame of
+    /// the size it came at (<see cref="IconAgainstFrame"/>); the size asked and the size got in run.txt.
     /// Returns what is wrong.
     /// </summary>
     private List<string> ExecutableIcon(IReadOnlyList<IconFrame> frames)
     {
         Note($"B1 (a): the executable {RealApp.ExecutablePath}");
-        using var icon = Icon.ExtractAssociatedIcon(RealApp.ExecutablePath);
-        if (icon is null)
+        using var image = ExecutableIconAt(ExecutableIconSize);
+        Note(string.Create(CultureInfo.InvariantCulture, $"B1 (a): the executable's icon asked at {ExecutableIconSize}x{ExecutableIconSize}, a frame the .ico holds, whatever the scaling; got {SizeOf(image)}"));
+        if (image is null)
         {
-            Note("B1 (a): the executable gives no associated icon");
-            return ["B1 (a): Icon.ExtractAssociatedIcon gave no icon for the built VisualCommit.exe."];
+            return [string.Create(CultureInfo.InvariantCulture, $"B1 (a): Icon.ExtractIcon gave no icon at {ExecutableIconSize} px for the built VisualCommit.exe: the file holds no icon of its own.")];
         }
 
-        using var image = icon.ToBitmap();
         return [.. IconAgainstFrame(image, frames, "B1 (a): the executable's icon")];
+    }
+
+    /// <summary>
+    /// The built <c>VisualCommit.exe</c>'s first icon, <paramref name="size"/> pixels square, as a bitmap with
+    /// its alpha: <c>Icon.ExtractIcon</c>, Windows' <c>SHDefExtractIcon</c> at that size, which takes the
+    /// icon's frame of that size where it holds one, whatever the display's scaling. Null when the file holds
+    /// no icon. The caller disposes it. It reads the file alone: no app is started.
+    /// </summary>
+    internal static Bitmap? ExecutableIconAt(int size)
+    {
+        using var icon = Icon.ExtractIcon(RealApp.ExecutablePath, 0, size);
+        return icon?.ToBitmap();
     }
 
     /// <summary>
@@ -345,6 +367,29 @@ public partial class Phase8aRealWindowPass
             return [string.Create(CultureInfo.InvariantCulture, $"{what} is {SizeOf(image)}; the .ico holds no frame of that size ({string.Join(", ", B.IcoSizes)}).")];
         }
 
+        var (compared, differing, examples) = PixelsAgainstFrame(image, frame);
+        Note(string.Create(CultureInfo.InvariantCulture, $"{what}: {size}x{size}, {compared} opaque pixels against the .ico's {size} px frame, {differing} differ by more than {B.IconTolerance}{(examples.Count > 0 ? ": " + string.Join("; ", examples) : string.Empty)}"));
+        if (compared == 0)
+        {
+            return [$"{what} has no pixel at alpha 255, so nothing of it was compared with the .ico's frame."];
+        }
+
+        return differing == 0
+            ? []
+            : [string.Create(CultureInfo.InvariantCulture, $"{what}: {differing} of its {compared} opaque pixels differ from the .ico's {size} px frame by more than {B.IconTolerance} in a channel, for example {string.Join("; ", examples)}.")];
+    }
+
+    /// <summary>
+    /// <see cref="IconAgainstFrame"/>'s rule for an image of <paramref name="frame"/>'s size: each pixel of
+    /// <paramref name="image"/> at alpha 255 against the frame's pixel, which differs when it lies further
+    /// than <see cref="Phase8aExpectations.B.IconTolerance"/> from it in a channel, alpha included. Returns
+    /// how many were compared, how many differ and the first five that do, in words.
+    /// </summary>
+    internal static (int Compared, int Differing, List<string> Examples) PixelsAgainstFrame(Bitmap image, IconFrame frame)
+    {
+        ArgumentNullException.ThrowIfNull(image);
+        ArgumentNullException.ThrowIfNull(frame);
+        var size = frame.Size;
         var pixels = frame.Bgra();
         var compared = 0;
         var differing = 0;
@@ -373,15 +418,7 @@ public partial class Phase8aRealWindowPass
             }
         }
 
-        Note(string.Create(CultureInfo.InvariantCulture, $"{what}: {size}x{size}, {compared} opaque pixels against the .ico's {size} px frame, {differing} differ by more than {B.IconTolerance}{(examples.Count > 0 ? ": " + string.Join("; ", examples) : string.Empty)}"));
-        if (compared == 0)
-        {
-            return [$"{what} has no pixel at alpha 255, so nothing of it was compared with the .ico's frame."];
-        }
-
-        return differing == 0
-            ? []
-            : [string.Create(CultureInfo.InvariantCulture, $"{what}: {differing} of its {compared} opaque pixels differ from the .ico's {size} px frame by more than {B.IconTolerance} in a channel, for example {string.Join("; ", examples)}.")];
+        return (compared, differing, examples);
     }
 
     /// <summary>

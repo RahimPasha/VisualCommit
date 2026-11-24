@@ -810,12 +810,37 @@ public partial class Phase8aRealWindowPass(Phase8aRun fixture) : IClassFixture<P
 }
 
 /// <summary>
-/// The 8a pass's order and picture names (docs/phase-8a-design.md 12.4), with no app and no window: the
-/// class constructs no fixture of the pass and touches nothing of the desktop. It runs in the whole
-/// pass, outside D246's filter, and alone with <c>--filter-class "*Phase8aOrderTests"</c>.
+/// The 8a pass's order and picture names (docs/phase-8a-design.md 12.4), and the rules of its steps that
+/// need no window (B1 (a)'s extraction from the built executable), with no app and no window: the class
+/// constructs no fixture of the pass and touches nothing of the desktop. It runs in the whole pass,
+/// outside D246's filter, and alone with <c>--filter-class "*Phase8aOrderTests"</c>.
 /// </summary>
 public class Phase8aOrderTests
 {
+    /// <summary>
+    /// B1 (a)'s extraction (design 12.3.4 launch 3, 12.3.5): the built executable's icon asked at a size the
+    /// <c>.ico</c> holds comes at that size, and its opaque pixels equal the <c>.ico</c>'s frame of it within
+    /// <c>B.IconTolerance</c>, by launch 3's rule. Asked at <c>ExecutableIconSize</c>, launch 3's size, and at
+    /// 48 and 96, <c>SM_CXICON</c> at 150 % and 300 %: at most one of the three is this machine's, so the size
+    /// asked governs, not the display's scaling. It reads the file alone; no app is started.
+    /// </summary>
+    [Theory]
+    [InlineData(Phase8aRealWindowPass.ExecutableIconSize)]
+    [InlineData(48)]
+    [InlineData(96)]
+    public void The_executables_icon_comes_at_the_size_asked_and_equals_that_frame(int size)
+    {
+        Assert.Contains(size, B.IcoSizes);
+        using var image = Phase8aRealWindowPass.ExecutableIconAt(size);
+        Assert.NotNull(image);
+        Assert.Equal((size, size), (image.Width, image.Height));
+
+        var frame = IconFile.Read(IconFile.RepositoryPath(IconFile.IcoFile)).Single(candidate => candidate.Size == size);
+        var (compared, differing, examples) = Phase8aRealWindowPass.PixelsAgainstFrame(image, frame);
+        Assert.True(compared > 0, "No pixel of the executable's icon is at alpha 255.");
+        Assert.True(differing == 0, $"{differing} of {compared} opaque pixels differ from the .ico's {size} px frame: {string.Join("; ", examples)}");
+    }
+
     /// <summary>
     /// <see cref="Phase8aOrder"/> names thirteen methods, each once, the expectations' launches at their
     /// places, and they are exactly the <c>[Fact]</c>s of <see cref="Phase8aRealWindowPass"/>: no fact runs
