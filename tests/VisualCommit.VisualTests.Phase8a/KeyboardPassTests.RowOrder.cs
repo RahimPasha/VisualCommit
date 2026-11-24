@@ -6,6 +6,7 @@ using Avalonia.Headless.XUnit;
 using Avalonia.Input;
 using Avalonia.VisualTree;
 using VisualCommit.App.ViewModels.Panels;
+using VisualCommit.App.Views.Rebase;
 using VisualCommit.App.Views.Shell;
 using VisualCommit.Core;
 using VisualCommit.Core.Git;
@@ -18,15 +19,16 @@ using U = VisualCommit.VisualTests.Phase8a.Phase8aExpectations.U;
 namespace VisualCommit.VisualTests.Phase8a;
 
 /// <summary>
-/// Tab and Shift+Tab go through a list's rows in the rows' order (the list of step 19's second round,
-/// after-4; design 6.3.4): every list whose rows hold elements Tab stops at, after rows were inserted
-/// while it showed (a folder opened, a branch made or a file changed outside the app, a list
-/// scrolled so that controls are made again). The lists make their rows' controls as they are needed
-/// and add the control of an inserted row last, and Avalonia's Tab follows the controls. Each fact
-/// walks one list from the stop before it, with Tab through every stop its rows hold to the stop
-/// after it, and back with Shift+Tab; a stop is written by its automation id and its row's key. Two
-/// facts are guards, which held before: the stage panel's two lists walked as one when no stop lies
-/// between them, and the activity log's list, which is one stop (its Tab navigation is <c>Once</c>).
+/// Tab and Shift+Tab go through a list's rows in the rows' order (design 6.3.4): every list whose
+/// rows hold elements Tab stops at, after rows were inserted while it showed (a folder opened, a
+/// branch made or a file changed outside the app, a list scrolled so that controls are made again).
+/// The lists make their rows' controls as they are needed and add the control of an inserted row
+/// last, and Avalonia's Tab follows the controls. Each fact walks one list from the stop before it,
+/// with Tab through every stop its rows hold to the stop after it, and back with Shift+Tab; a stop is
+/// written by its automation id and its row's key. Two facts are guards, which held before: the
+/// activity log's list and the interactive rebase's list, each one stop (their Tab navigation is
+/// <c>Once</c>), after a row was inserted or moved while it showed. The fact of the stage panel's two
+/// lists also holds the step from one list straight into the other when no stop lies between them.
 /// </summary>
 public sealed partial class KeyboardPassTests
 {
@@ -303,6 +305,51 @@ public sealed partial class KeyboardPassTests
         app.PressKey(Key.Tab, RawInputModifiers.Shift);
         app.Settle();
         Assert.False(app.FocusIsWithin(rows), $"Shift+Tab from the clicked row stayed in the log, on {app.DescribeFocus()}.");
+    }
+
+    /// <summary>
+    /// "interactive", the interactive rebase of main from Base (the graph's seventh row), as the
+    /// rebase list's checks open it: its second row clicked and moved one row down by Alt+Down, so
+    /// that its item moved while the list showed (the list makes the moved row's control again). The
+    /// list's rows are one stop (their Tab navigation is <c>Once</c>), so Tab from the moved row
+    /// leaves the list, Shift+Tab comes back to that row, and Shift+Tab again leaves the list. A
+    /// guard: this holds without a walk of its own.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task The_interactive_rebases_rows_are_one_stop_after_a_row_was_moved()
+    {
+        using var repo = await Scenarios.InteractiveAsync();
+        using var data = new TempDirectory("data");
+        using var app = await OpenAsync(data, repo.Path);
+        app.RightClick(app.GraphRowPoint(6));
+        app.ClickMenuItem("Interactive rebase of main from here…");
+        await app.WaitForRebaseListAsync();
+        var before = app.RebaseListSnapshot();
+        Assert.True(before.Rows.Count >= 3, $"The list holds {before.Rows.Count} rows, too few to move the second one down.");
+        var moved = before.Rows[1];
+        app.ClickRebaseRow(moved.Subject);
+        app.Settle();
+        Assert.True(app.RebaseListSnapshot().Row(moved.Subject).HasKeyboardFocus, $"The click on {moved.Name} left the focus on {app.DescribeFocus()}.");
+
+        app.PressKey(Key.Down, RawInputModifiers.Alt);
+        await app.WaitForIdleAsync();
+        app.Settle();
+        var after = app.RebaseListSnapshot();
+        Assert.True(
+            after.Rows[2].Name == moved.Name && after.Rows[2].IsSelected && after.Rows[2].HasKeyboardFocus,
+            $"Alt+Down did not move {moved.Name} to the third row with the focus: the rows are {string.Join(", ", after.Rows.Select(row => row.Name))}, the focus on {app.DescribeFocus()}.");
+        var rows = (ItemsControl)app.FindByAutomationId("RebaseRows");
+        bool OnMovedRow() => app.FocusedElement is RebaseListRow row && AutomationProperties.GetName(row) == moved.Name;
+
+        app.PressKey(Key.Tab);
+        app.Settle();
+        Assert.False(app.FocusIsWithin(rows), $"Tab from the moved row stayed in the list, on {app.DescribeFocus()}.");
+        app.PressKey(Key.Tab, RawInputModifiers.Shift);
+        app.Settle();
+        Assert.True(OnMovedRow(), $"Shift+Tab back into the list reached {app.DescribeFocus()}, not the moved row {moved.Name}.");
+        app.PressKey(Key.Tab, RawInputModifiers.Shift);
+        app.Settle();
+        Assert.False(app.FocusIsWithin(rows), $"Shift+Tab from the moved row stayed in the list, on {app.DescribeFocus()}.");
     }
 
     // ---- The walk ------------------------------------------------------------------------------
