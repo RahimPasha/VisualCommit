@@ -1,3 +1,4 @@
+using System.Globalization;
 using VisualCommit.App.Services;
 using VisualCommit.App.ViewModels;
 using VisualCommit.App.ViewModels.Dialogs;
@@ -33,17 +34,36 @@ namespace VisualCommit.App.Tests;
 /// </code>
 /// Every public operation completes when its operation and its refresh have ended, so a test
 /// asserts right after awaiting it.
+/// <para>
+/// The harness's own steps (the open, the first read, <see cref="WaitForIdleAsync"/>) are held to
+/// a limit: what the hang watchdog leaves the test, less <see cref="WatchdogMargin"/>, or the
+/// limit the test gave the open (<c>stepLimit</c>). A step past it fails with a
+/// <see cref="TimeoutException"/> that names it and says what
+/// ran meanwhile (the git calls that ended, the queue's operation), so that a step that stalls is
+/// told from one that crawls before the watchdog stops the whole test process, and a step that
+/// only crawls fails only when the watchdog was about to stop the test anyway.
+/// </para>
 /// </summary>
 internal sealed class OperationsHarness : IDisposable
 {
+    /// <summary>How long before the hang watchdog's limit a step of the harness gives up: time for the test to fail and end on its own.</summary>
+    public static readonly TimeSpan WatchdogMargin = TimeSpan.FromSeconds(15);
+
+    /// <summary>The least a step is given when the watchdog leaves the test less than that.</summary>
+    private static readonly TimeSpan LeastStepLimit = TimeSpan.FromSeconds(5);
+
     private static readonly string GitPath = GitLocator.FindExecutable(GitSearchContext.FromSystem())
         ?? throw new InvalidOperationException("The tests need git, and no git executable was found.");
+
+    /// <summary>The limit the test gave the harness's steps, or null for the watchdog's.</summary>
+    private readonly TimeSpan? _stepLimit;
 
     /// <summary>The prompt broker <see cref="OpenAsync(TempRepo, Func{DialogHostViewModel, IGitPromptHandler})"/> made, disposed with the harness.</summary>
     private IDisposable? _broker;
 
-    private OperationsHarness(TempRepo repo, RepositoryViewModel repository, DialogHostViewModel host, TabServices services, RecordingLog log, FakeClipboard clipboard, FakeFileLauncher launcher, GitCallLog calls)
+    private OperationsHarness(TempRepo repo, RepositoryViewModel repository, DialogHostViewModel host, TabServices services, RecordingLog log, FakeClipboard clipboard, FakeFileLauncher launcher, GitCallLog calls, TimeSpan? stepLimit)
     {
+        _stepLimit = stepLimit;
         Calls = calls;
         Repo = repo;
         Repository = repository;
@@ -131,12 +151,19 @@ internal sealed class OperationsHarness : IDisposable
     /// the broker's credential source; null: none, as before. <paramref name="gitEnvironment"/> is
     /// the session's git environment (D220), which the runner applies to every call and the broker
     /// reads as what git already gets (4.6), as an app session hands them both; null: none.
+    /// <paramref name="stepLimit"/> holds the harness's steps to that limit instead of the
+    /// watchdog's (the harness's own tests).
     /// </summary>
-    public static async Task<OperationsHarness> OpenAsync(TempRepo repo, Func<DialogHostViewModel, IGitPromptHandler>? prompts, Func<IGitRepository, IGitRepository>? wrap = null, ISessionStore? session = null, UndoHistories? undoHistories = null, IHostingSession? hosting = null, IReadOnlyDictionary<string, string?>? gitEnvironment = null)
+    public static async Task<OperationsHarness> OpenAsync(TempRepo repo, Func<DialogHostViewModel, IGitPromptHandler>? prompts, Func<IGitRepository, IGitRepository>? wrap = null, ISessionStore? session = null, UndoHistories? undoHistories = null, IHostingSession? hosting = null, IReadOnlyDictionary<string, string?>? gitEnvironment = null, TimeSpan? stepLimit = null)
     {
         ArgumentNullException.ThrowIfNull(repo);
         var calls = new GitCallLog();
-        IGitRepository git = await GitRepository.OpenAsync(new GitRunner(GitPath, calls, environment: gitEnvironment), repo.Path, TestContext.Current.CancellationToken);
+        IGitRepository git = await WithinLimitAsync(
+            GitRepository.OpenAsync(new GitRunner(GitPath, calls, environment: gitEnvironment), repo.Path, TestContext.Current.CancellationToken),
+            $"opening {repo.Path}",
+            stepLimit,
+            calls,
+            queue: null);
         git = wrap?.Invoke(git) ?? git;
         var log = new RecordingLog();
         var host = new DialogHostViewModel();
@@ -147,8 +174,17 @@ internal sealed class OperationsHarness : IDisposable
         var broker = prompts is null ? null : PromptDialogs.CreateBroker(prompts(host), log, credentials: hosting, sessionEnvironment: gitEnvironment);
         var services = new TabServices(new NoRepositories(), new NoFolders(), settings, session ?? new MemorySession(), dates, log, dialogs: host, prompts: broker, launcher: launcher, clipboard: clipboard, gitCalls: calls, undoHistories: undoHistories, hosting: hosting);
         var repository = new RepositoryViewModel(git, settings, dates, log, dialogs: host, services: services);
-        var harness = new OperationsHarness(repo, repository, host, services, log, clipboard, launcher, calls) { _broker = broker as IDisposable };
-        await repository.StartAsync();
+        var harness = new OperationsHarness(repo, repository, host, services, log, clipboard, launcher, calls, stepLimit) { _broker = broker as IDisposable };
+        try
+        {
+            await WithinLimitAsync(repository.StartAsync(), $"the first read of {repo.Path}", stepLimit, calls, repository.Queue);
+        }
+        catch
+        {
+            harness.Dispose();
+            throw;
+        }
+
         return harness;
     }
 
@@ -158,8 +194,10 @@ internal sealed class OperationsHarness : IDisposable
     /// <summary>Selects these commits in the graph, as clicks and Ctrl+clicks would (4h).</summary>
     public void Select(params string[] shas) => Repository.Selection = new GraphSelection(shas);
 
-    /// <summary>Waits until the repository's queue has nothing running or waiting.</summary>
-    public Task WaitForIdleAsync() => Repository.Queue.WhenIdleAsync();
+    /// <summary>Waits until the repository's queue has nothing running or waiting, within the harness's step limit.</summary>
+    /// <exception cref="TimeoutException">The queue was still busy when the limit was up; the message says with what.</exception>
+    public Task WaitForIdleAsync() =>
+        WithinLimitAsync(Repository.Queue.WhenIdleAsync(), $"the queue of {Repo.Path} to be idle", _stepLimit, Calls, Repository.Queue);
 
     /// <summary>
     /// Waits until the repository's watcher is quiet (<see cref="RepositoryViewModel.IsWatcherQuiet"/>):
@@ -230,11 +268,64 @@ internal sealed class OperationsHarness : IDisposable
         Assert.Equal(0, Dialogs.Unused);
     }
 
+    /// <summary>
+    /// A step's limit when the test gives none: what the hang watchdog leaves the current test, less
+    /// <see cref="WatchdogMargin"/>, and at least <see cref="LeastStepLimit"/>; outside a test the
+    /// watchdog's whole limit less the margin.
+    /// </summary>
+    public static TimeSpan StepLimit()
+    {
+        var limit = (HangWatchdogAttribute.TimeLeftForCurrentTest() ?? HangWatchdogAttribute.TestLimit) - WatchdogMargin;
+        return limit > LeastStepLimit ? limit : LeastStepLimit;
+    }
+
     public void Dispose()
     {
         Dialogs.Dispose();
         Repository.Dispose();
         _broker?.Dispose();
+    }
+
+    /// <summary>
+    /// Awaits <paramref name="step"/> within <paramref name="limit"/> (<see cref="StepLimit"/> when
+    /// null). Past it, a <see cref="TimeoutException"/> names the step (<paramref name="what"/>) and
+    /// says what ran meanwhile: the git calls that ended, and what <paramref name="queue"/> runs. The
+    /// step itself goes on.
+    /// </summary>
+    private static async Task WithinLimitAsync(Task step, string what, TimeSpan? limit, GitCallLog calls, IOperationQueue? queue)
+    {
+        var given = limit ?? StepLimit();
+        var before = calls.Snapshot().Count;
+        try
+        {
+            await step.WaitAsync(given);
+        }
+        catch (TimeoutException ex) when (!step.IsCompleted)
+        {
+            throw new TimeoutException(StepPastItsLimit(what, given, calls.Snapshot().Skip(before).ToList(), queue), ex);
+        }
+    }
+
+    /// <inheritdoc cref="WithinLimitAsync(Task, string, TimeSpan?, GitCallLog, IOperationQueue?)"/>
+    private static async Task<T> WithinLimitAsync<T>(Task<T> step, string what, TimeSpan? limit, GitCallLog calls, IOperationQueue? queue)
+    {
+        await WithinLimitAsync((Task)step, what, limit, calls, queue);
+        return await step;
+    }
+
+    /// <summary>What a step past its limit says: which step, the git calls that ended during it (none: a stall; many, the last just now: a crawl) and the queue's operation.</summary>
+    private static string StepPastItsLimit(string what, TimeSpan limit, IReadOnlyList<GitCallRecord> ended, IOperationQueue? queue)
+    {
+        var git = ended.Count == 0
+            ? "no git call ended meanwhile"
+            : string.Create(CultureInfo.InvariantCulture, $"{ended.Count} git call(s) ended meanwhile, the last \"{ended[^1].CommandText}\" after {ended[^1].Duration.TotalSeconds:0.0} s");
+        var running = queue switch
+        {
+            null => string.Empty,
+            { Current: { } current } => string.Create(CultureInfo.InvariantCulture, $"; the queue runs \"{current.Title}\", {queue.Waiting} waiting"),
+            _ => string.Create(CultureInfo.InvariantCulture, $"; the queue runs nothing, {queue.Waiting} waiting"),
+        };
+        return string.Create(CultureInfo.InvariantCulture, $"OperationsHarness: {what} did not end within {limit.TotalSeconds:0.#} s: {git}{running}.");
     }
 
     private sealed class MemorySession : ISessionStore

@@ -140,6 +140,16 @@ public sealed class HangWatchdogAttribute : BeforeAfterTestAttribute
     public static TimeSpan? CountedTimeOfCurrentTest() =>
         TestContext.Current.Test?.UniqueID is { } test ? Clock.CountedTime(test) : null;
 
+    /// <summary>The longest a single test may run before the watchdog stops the run: 3 minutes, or what <see cref="LimitVariable"/> says.</summary>
+    public static TimeSpan TestLimit => Limit;
+
+    /// <summary>
+    /// What the watchdog leaves the current test: <see cref="TestLimit"/> less its counted time
+    /// (<see cref="CountedTimeOfCurrentTest"/>). Null outside a test, or in an assembly without the
+    /// watchdog. A harness's step held to it fails by name before the watchdog stops the process.
+    /// </summary>
+    public static TimeSpan? TimeLeftForCurrentTest() => CountedTimeOfCurrentTest() is { } counted ? Limit - counted : null;
+
     public override void Before(MethodInfo methodUnderTest, IXunitTest test) => Clock.Started(test.UniqueID, test.TestDisplayName);
 
     public override void After(MethodInfo methodUnderTest, IXunitTest test) => Clock.Finished(test.UniqueID);
