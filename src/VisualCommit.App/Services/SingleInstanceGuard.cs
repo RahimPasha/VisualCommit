@@ -140,6 +140,10 @@ public sealed partial class SingleInstanceGuard : IDisposable
     private CancellationTokenSource? _serving;
     private Task? _server;
     private string? _endpoint;
+
+    /// <summary>The endpoint <see cref="AskToComeForward"/> last reached, which <see cref="WaitToTake"/> tells a new holder's from.</summary>
+    private string? _askedEndpoint;
+
     private bool _disposed;
 
     private SingleInstanceGuard(AppPaths paths, IAppLog log, SingleInstanceOptions options)
@@ -235,6 +239,7 @@ public sealed partial class SingleInstanceGuard : IDisposable
 
                 if (TryConnect(holder.Endpoint) is { } connection)
                 {
+                    _askedEndpoint = holder.Endpoint;
                     using (connection)
                     {
                         return Exchange(connection, pid);
@@ -312,7 +317,10 @@ public sealed partial class SingleInstanceGuard : IDisposable
     /// <summary>
     /// After a <see cref="ForwardAnswer.Closing"/>: <see cref="TryTakeNow"/> every 250 ms until it
     /// succeeds (<see cref="HeldResolution.Taken"/>) or <see cref="SingleInstanceOptions.WaitWhileClosing"/>
-    /// has passed (<see cref="HeldResolution.NotAnswered"/>). Logs which.
+    /// has passed (<see cref="HeldResolution.NotAnswered"/>). Another start may take the lock the
+    /// closing instance lets go: once <see cref="AppPaths.InstanceFile"/> names an endpoint other than
+    /// the one asked last, that instance is asked instead, and its answer counts as the first one's
+    /// would (a <see cref="ForwardAnswer.Closing"/> is waited for within the same time). Logs which.
     /// </summary>
     public HeldResolution WaitToTake()
     {
@@ -329,6 +337,21 @@ public sealed partial class SingleInstanceGuard : IDisposable
             {
                 _log.Warning($"The other VisualCommit did not close within {Seconds(_options.WaitWhileClosing)} s.");
                 return HeldResolution.NotAnswered;
+            }
+
+            // A missing file is the closing instance's, deleted before it lets the lock go: tried again.
+            if (ReadInstanceFile() is { } holder && holder.Endpoint != _askedEndpoint)
+            {
+                _log.Info("Another VisualCommit took the data folder while this start waited; it is asked instead.");
+                switch (AskToComeForward())
+                {
+                    case ForwardAnswer.Activated or ForwardAnswer.Starting:
+                        return HeldResolution.HandedOver;
+                    case ForwardAnswer.NotAnswered:
+                        return TakeAfterNoAnswer();
+                }
+
+                continue;
             }
 
             Thread.Sleep(TakePause);
