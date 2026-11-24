@@ -33,7 +33,7 @@ public sealed class GitAccess
     /// <summary>The latest search's result, pending until it ends; a fixed search's task for the first constructor.</summary>
     private Task<GitDetection> _detection;
 
-    /// <summary>The session's search that runs now, which a call joins; null while none runs and for a fixed search.</summary>
+    /// <summary>The session's search that runs now, which a call told the same lookup joins; null while none runs and for a fixed search.</summary>
     private Task<GitDetection>? _running;
 
     /// <summary>What <see cref="_running"/> was told; null when reading the lookup failed.</summary>

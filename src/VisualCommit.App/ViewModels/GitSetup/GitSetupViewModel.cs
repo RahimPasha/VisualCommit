@@ -318,8 +318,9 @@ public sealed partial class GitSetupViewModel : ObservableObject
     }
 
     /// <summary>
-    /// "Check again" for a setting just changed, once a search that runs now has ended: that search
-    /// went by the setting it read when it started, and a call while it runs would join it.
+    /// "Check again" for a setting just changed, once a run of the command that searches now has
+    /// ended: the command runs one search at a time, and the search it starts then reads the
+    /// setting just changed.
     /// </summary>
     public static async Task CheckAgainAfterRunningAsync(IAsyncRelayCommand checkAgain)
     {
