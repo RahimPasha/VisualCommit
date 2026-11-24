@@ -5636,6 +5636,37 @@ fonts and Font Awesome but not highlight.js, which the site also ships. From the
 change to the app's words, keys or behaviour needs its page's change, which no test finds but for
 the pages, anchors and key tables that the two App.Tests classes hold.
 
+**§12 as built, before its first runs (the lead, 2026-11-23; 12.8).** 96. The package was written
+and compiled, never run, by run `wf_b0d89b0f-cab` (four builders, three reviewers, a fixer;
+`wip/p8a-realwindow`, 15 commits from `f0b4f8a`, the last `b6fdd8a`). It stands with these readings.
+12.6's proof leaves out, besides `tests/VisualCommit.RealWindowTests`, the three files of 8a's
+walk-through that 12.3.5's first ruling changes (`Phase8aExpectations.F.cs`, `Phase8aChecks.F.cs`,
+`Phase8aChecks.F.Helpers.cs`: part F's resting point, (400, 687)); the scripted `f5a-too-old` and
+`f10c-ubuntu-too-old` are the same files after it, by their SHA-256. Every key is sent only while
+the app's window is the foreground window, not only a launch's first, and each Enter is pinned to
+the element it is meant for. F4 confirms Windows' Open dialog through a guarded form of S14's
+helper: the path set through the file box's value alone, the Enter sent only while the dialog is the
+foreground window with that box focused; the help text and `gitExecutable` are held exactly to the
+path the dialog handed the app, and that path to the machine's git, case and separators aside. The
+update confirm's `Update` joins what no step presses. K1's caret keys (Ctrl+Home, the Downs, the
+second Shift+Down) are exempt from 12.3.1's named condition, the diff's caret not being in UI
+Automation: they wait on the focus and the toolbar's buttons, and git's lines prove the rows. B1's
+crop starts at the visible frame's corner, read from the window manager, and the title bar's height
+is the window's top to the client area's top; B2 waits for the client area drawn light and, without
+failing, for the title bar's redraw; B1's icon results are asserted at the launch's end. F4's
+confirmed Open dialog leaves entries in the user's recent-files lists of Windows' common dialogs, as
+phase 6's S14 does; run.txt says so.
+
+**§12's first runs (the lead, 2026-11-23, 21:15 to 21:24, the owner told; 12.8 item 3).** 97. Each
+of the 13 methods ran alone, on `b6fdd8a`, after 8a's walk-through and phase 0's checks had made the
+twins in the worktree: 11 passed at once, their 28 compared captures between 0.14 and 1.76 % from
+their twins. Two failed in the harness. Launch 13 threw on a read of an event sender's id from UI
+Automation's cache, which the sender does not carry; the read falls back to a current one. Launch 5
+failed D448's precondition, the notice 216 high against its twin's 218; D459 settles it (the height
+within 3 px, 5 % for the notice alone, its words held by name, the guard before the first picture).
+The fixes and the inspection of the 28 captures are run `wf_1d035720-312`'s; the lead then runs
+launches 5 and 13 again, the owner told.
+
 ### 13.2 What the integration settled
 
 Beyond moving the packages' contracts into section 1: the broker's `gitVersion` goes at §3's merge,
