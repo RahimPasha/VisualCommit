@@ -12,12 +12,12 @@ namespace VisualCommit.App.Views.Shell;
 /// <summary>
 /// The first-run screen's view. "Check again" is disabled while it searches, which drops the
 /// keyboard focus: when the search ends with the focus on nothing or on the window, the button
-/// takes it again, or, the screen gone, the graph area's focus target does, either as by Tab when
-/// the button that started the search, "Check again" or "Use the Git on the PATH" ("Use the Git it
-/// found"), had the keyboard outline as it was pressed (D462). "Choose git.exe…" is disabled while
-/// its file dialog is open and its file is probed: a cancelled pick or a refused file starts no
-/// search, so the button takes the focus back itself once its run has ended, in the same way. The
-/// screen hidden while it holds the focus gives it to the graph area's target too.
+/// takes it again, as by Tab when the button that started the search, "Check again" or "Use the Git
+/// on the PATH" ("Use the Git it found"), had the keyboard outline as it was pressed (D462); or, the
+/// screen gone, the graph area's focus target takes it. "Choose git.exe…" is disabled while its
+/// file dialog is open and its file is probed: a cancelled pick or a refused file starts no search,
+/// so the button takes the focus back itself once its run has ended, in the same way. The screen
+/// hidden while it holds the focus gives it to the graph area's target too.
 /// </summary>
 public partial class GitSetupView : UserControl
 {
@@ -116,13 +116,13 @@ public partial class GitSetupView : UserControl
     {
         if (e.PropertyName == nameof(GitSetupViewModel.IsShown) && _viewModel is { IsShown: false } && IsKeyboardFocusWithin)
         {
-            Dispatcher.UIThread.Post(() => FocusGraphArea(withKeys: false), DispatcherPriority.Loaded);
+            Dispatcher.UIThread.Post(FocusGraphArea, DispatcherPriority.Loaded);
         }
     }
 
     /// <summary>
-    /// The search ended: with the focus on nothing or the window, "Check again" takes it again, or,
-    /// the screen gone, the graph area's target, as by Tab when <paramref name="withKeys"/>.
+    /// The search ended: with the focus on nothing or the window, "Check again" takes it again, as
+    /// by Tab when <paramref name="withKeys"/>, or, the screen gone, the graph area's target.
     /// </summary>
     private void GiveFocusBack(bool withKeys)
     {
@@ -138,9 +138,9 @@ public partial class GitSetupView : UserControl
             return;
         }
 
-        FocusGraphArea(withKeys);
+        FocusGraphArea();
     }
 
-    private void FocusGraphArea(bool withKeys) =>
-        this.FindAncestorOfType<CommitGraphView>()?.GraphAreaFocusTarget()?.Focus(withKeys ? NavigationMethod.Tab : NavigationMethod.Unspecified);
+    private void FocusGraphArea() =>
+        this.FindAncestorOfType<CommitGraphView>()?.GraphAreaFocusTarget()?.Focus(NavigationMethod.Unspecified);
 }
