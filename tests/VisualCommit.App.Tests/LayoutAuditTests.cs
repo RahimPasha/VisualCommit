@@ -56,6 +56,45 @@ public class LayoutAuditTests
         Assert.NotEmpty(LayoutAudit.FindClippedText(host.Window, allowShortenedWithToolTip: false, allowScrolledOutOfView: true));
     }
 
+    /// <summary>
+    /// A parent that clips by a geometry (<c>Clip</c>) instead of its bounds cuts a text as one that
+    /// clips to its bounds does: the settings screen's section scroller draws 4 px above its top
+    /// while its content is at its top and clips so, its bottom where its bounds end.
+    /// </summary>
+    [AvaloniaFact]
+    public void A_text_cut_by_a_parents_clip_geometry_is_reported()
+    {
+        var text = new TextBlock { Text = "Discard the changes" };
+        var parent = new Border
+        {
+            Width = 300,
+            Height = 40,
+            Child = new StackPanel { Children = { text } },
+            HorizontalAlignment = HorizontalAlignment.Left,
+            VerticalAlignment = VerticalAlignment.Top,
+        };
+        using var host = DiffHost.Show(parent, 400, 200, ThemeVariant.Dark);
+        Assert.Empty(LayoutAudit.FindClippedText(host.Window));
+
+        // Reaching above the parent's top and ending inside the text's line.
+        parent.Clip = new RectangleGeometry(new Avalonia.Rect(0, -4, 300, 4 + (text.Bounds.Height / 2)));
+        DiffHost.Settle();
+        var problem = Assert.Single(LayoutAudit.FindClippedText(host.Window));
+        Assert.Contains("\"Discard the changes\" at", problem, StringComparison.Ordinal);
+        Assert.Contains("is cut off to", problem, StringComparison.Ordinal);
+
+        // Reaching above the parent's top and below the text: nothing is cut.
+        parent.Clip = new RectangleGeometry(new Avalonia.Rect(0, -4, 300, 44));
+        DiffHost.Settle();
+        Assert.Empty(LayoutAudit.FindClippedText(host.Window));
+
+        // A clip geometry that a parent clipping to its bounds narrows still cuts there.
+        parent.ClipToBounds = true;
+        parent.Height = text.Bounds.Height / 2;
+        DiffHost.Settle();
+        Assert.Single(LayoutAudit.FindClippedText(host.Window));
+    }
+
     [AvaloniaFact]
     public void A_line_that_does_not_fit_is_still_reported()
     {
