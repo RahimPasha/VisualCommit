@@ -74,7 +74,7 @@ public partial class Phase8aRealWindowPass
         // first child read once before the recording starts (D455); then the moves.
         var ours = app.GraphRowPoint(U.OursEdits.DisplayRow, ConflictsLanes);
         app.ClickAt(ours.X, ours.Y);
-        app.WaitForFocusedElement(U.GraphRowsId, StepTimeout);
+        app.WaitForFocusOn(U.GraphRowsId, StepTimeout);
         app.WaitFor(() => app.NamesOnScreen("DetailsSubject").Contains(U.OursEdits.Subject), $"the details of \"{U.OursEdits.Subject}\"", StepTimeout);
         var first = ShownOne(app, U.GraphRowsId).FindFirstChild()
             ?? throw new XunitException($"{U.GraphRowsId} has no child after a click on \"{U.OursEdits.Subject}\".");
@@ -217,7 +217,7 @@ public partial class Phase8aRealWindowPass
         var selected = selection.Select(element => element.Properties.AutomationId.ValueOrDefault ?? "(no id)").ToList();
         var bounds = app.BoundsOf(row);
         var graph = app.GraphRowsBounds();
-        var focus = app.FocusedAutomationId();
+        var focus = app.FocusedId();
         Note(string.Create(
             CultureInfo.InvariantCulture,
             $"{move.Key}: the exposed row {Describe(row)}, help text \"{help}\"; {U.GraphRowsId}' selection [{string.Join(", ", selected)}]; its bounds {bounds} in the graph's {graph}, display row {move.Row.DisplayRow}'s centre at y {app.GraphRowCentreY(move.Row.DisplayRow):0.#}; the focus on {focus ?? "nothing"}"));

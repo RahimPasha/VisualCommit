@@ -105,7 +105,8 @@ public partial class Phase8aRealWindowPass
     /// and no settings; the app started on D, not sized.
     /// <list type="number">
     /// <item>The process's main window is the notice within 15 s; <c>InstanceNoticeFolder</c>'s name D's path;
-    /// <c>i2a-notice-dark</c>, the folder line masked.</item>
+    /// a wait of at most 5 s, read only, for the notice in front with Try again focused, as the twin waits
+    /// for the focus before its picture, its result noted; <c>i2a-notice-dark</c>, the folder line masked.</item>
     /// <item>The notice the foreground window with <c>Try again</c> focused, else one real click on its title
     /// bar and a wait of 5 s, else the method fails before any key.</item>
     /// <item>A real Enter: while <c>Try again</c> reads <c>Trying…</c>, disabled, <c>i2b-notice-trying</c>;
@@ -123,13 +124,18 @@ public partial class Phase8aRealWindowPass
         var paths = new AppPaths(data);
         using var held = HoldInstanceLock(paths);
         using var app = LaunchNotice(data);
+
+        // i2a as its twin takes it, once Try again has the keyboard focus (the notice posts it as it
+        // loads): read only, at most the guard's 5 s, so that when the notice is not in front the guard
+        // below still makes its one click. Its result is noted, and i2a is taken either way.
+        NoteNoticeSettled(app);
         NoticePicture(app, I.I2aNoticeDark);
 
         // Before any key: the notice in front with Try again focused.
         EnsureForegroundBeforeFirstKey(app, () => NoticeReady(app), NoticeReadyWhat, I.NotForegroundMessage);
 
         // A real Enter, as the twin presses it: Trying…, disabled; i2b while it lasts.
-        Keys(app, VirtualKeyShort.RETURN);
+        KeysOn(app, new FocusTarget(I.TryAgainId, I.TryAgain), VirtualKeyShort.RETURN);
         var sinceEnter = Stopwatch.StartNew();
         app.WaitFor(
             () => app.Find(I.TryAgainId) is var button && button.Name == I.Trying && !button.IsEnabled,
@@ -152,7 +158,7 @@ public partial class Phase8aRealWindowPass
         app.WaitForText(I.StatusId, I.StillNoAnswer, left > TimeSpan.Zero ? left : TimeSpan.Zero);
         Note(string.Create(CultureInfo.InvariantCulture, $"\"{I.StillNoAnswer}\" after {sinceEnter.Elapsed.TotalSeconds:0.0} s"));
         app.WaitFor(
-            () => app.Find(I.TryAgainId) is var button && button.Name == I.TryAgain && button.IsEnabled && app.FocusedAutomationId() == I.TryAgainId,
+            () => app.Find(I.TryAgainId) is var button && button.Name == I.TryAgain && button.IsEnabled && app.FocusedId() == I.TryAgainId,
             $"{I.TryAgainId} to read \"{I.TryAgain}\" again, enabled and UI Automation's focused element",
             StepTimeout);
         NoticePicture(app, I.I2cNoticeNoAnswer);
@@ -193,7 +199,7 @@ public partial class Phase8aRealWindowPass
         held.Dispose();
         Note($"the test released {Path.GetFileName(paths.InstanceLockFile)}");
         EnsureForegroundBeforeFirstKey(app, () => NoticeReady(app), NoticeReadyWhat, I.NotForegroundMessage);
-        Keys(app, VirtualKeyShort.RETURN);
+        KeysOn(app, new FocusTarget(I.TryAgainId, I.TryAgain), VirtualKeyShort.RETURN);
         var clock = Stopwatch.StartNew();
 
         // The main window in the same process, GitStatus in it; the notice closed. The RealApp's own window
@@ -227,7 +233,27 @@ public partial class Phase8aRealWindowPass
     private const string NoticeReadyWhat = "the notice the foreground window with Try again UI Automation's focused element";
 
     /// <summary>The notice is the foreground window and <c>InstanceNoticeTryAgain</c> is UI Automation's focused element: a real Enter then reaches Try again alone.</summary>
-    private static bool NoticeReady(RealApp app) => app.ForegroundIsThis && app.FocusedAutomationId() == I.TryAgainId;
+    private static bool NoticeReady(RealApp app) => app.ForegroundIsThis && app.FocusedId() == I.TryAgainId;
+
+    /// <summary>
+    /// Before i2a, read only: waits at most <see cref="Phase8aExpectations.I.ForegroundAgainWithin"/> for
+    /// <see cref="NoticeReady"/>, as the twin waits for Try again's focus before its picture, and notes
+    /// whether it came. Nothing is clicked or sent here: when it does not come, the picture is taken
+    /// without it and the guard before the first key makes its one click.
+    /// </summary>
+    private void NoteNoticeSettled(RealApp app)
+    {
+        var clock = Stopwatch.StartNew();
+        try
+        {
+            app.WaitFor(() => NoticeReady(app), NoticeReadyWhat, I.ForegroundAgainWithin);
+            Note(string.Create(CultureInfo.InvariantCulture, $"before {I.I2aNoticeDark}: {NoticeReadyWhat} after {clock.Elapsed.TotalSeconds:0.0} s"));
+        }
+        catch (TimeoutException)
+        {
+            Note(string.Create(CultureInfo.InvariantCulture, $"before {I.I2aNoticeDark}: not {NoticeReadyWhat} within {I.ForegroundAgainWithin.TotalSeconds:0} s (the foreground window {app.ForegroundIsThis}, the focus on {app.FocusedId() ?? "nothing"}); {I.I2aNoticeDark} taken as it is, the guard to follow"));
+        }
+    }
 
     /// <summary>
     /// Opens <paramref name="paths"/>' <c>instance.lock</c> as a running instance holds it, with

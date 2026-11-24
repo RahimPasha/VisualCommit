@@ -37,6 +37,9 @@ public partial class Phase8aRealWindowPass
     /// <summary>The blame page's own automation id (a pane named by its title).</summary>
     private const string BlamePageId = "Blame";
 
+    /// <summary>The automation id of an item of the app's menus, which its label names.</summary>
+    private const string MenuItemId = "ContextMenuItem";
+
     /// <summary>How often a wait on git's state reads it again.</summary>
     private static readonly TimeSpan GitPollInterval = TimeSpan.FromMilliseconds(100);
 
@@ -100,22 +103,24 @@ public partial class Phase8aRealWindowPass
 
         Assert.Equal(exact, await repo.ExactStateAsync());
 
-        // Step 5: a real Enter opens the diff; the text's wait comes straight after it, as nothing may move
-        // the focus in between; then the diff's header and its two hunk bars are read.
-        Keys(app, VirtualKeyShort.RETURN);
+        // Step 5: a real Enter opens the diff, sent only while the walk's last stop, src/Calculator.cs's
+        // own button, still has the focus after the read of git; the text's wait comes straight after it,
+        // as nothing may move the focus in between; then the diff's header and its two hunk bars are read.
+        KeysOn(app, new FocusTarget(K.Ids.StageFileRow, K.Calculator), VirtualKeyShort.RETURN);
         WaitForFocusInText(app, K.Ids.DiffText, StepTimeout);
         WaitForCalculatorDiff(app, hunks: 2);
 
         // Step 6 (k1a): a real Tab, the first hunk's Stage hunk.
         Keys(app, VirtualKeyShort.TAB);
-        WaitForFirstStageHunk(app);
+        var firstHunk = WaitForFirstStageHunk(app);
         Picture(app, K.K1aHunkButton, keepPointer: false, _ => []);
         Assert.Equal(exact, await repo.ExactStateAsync());
 
-        // Step 7 (k1b): a real Enter stages that hunk alone. The focus stays on the button until the
+        // Step 7 (k1b): a real Enter stages that hunk alone, sent only while that very button still has
+        // the focus after the picture and the read of git. The focus stays on the button until the
         // diff's re-read makes the bars again, so the text's wait comes after the staged list and git
         // show the hunk staged and one Stage hunk is left (design 12.3.5).
-        Keys(app, VirtualKeyShort.RETURN);
+        KeysOn(app, new FocusTarget(K.Ids.StageHunkButton, K.StageHunk, firstHunk), VirtualKeyShort.RETURN);
         app.WaitFor(
             () => app.NamesOnScreen(StagedTitleId).Contains(K.Staged4) && app.ShownElements(K.Ids.StageHunkButton).Count == 1,
             $"\"{K.Staged4}\" and one {K.Ids.StageHunkButton} left after the diff's re-read",
@@ -126,7 +131,7 @@ public partial class Phase8aRealWindowPass
 
         // Step 8 (k1c): a real Shift+Tab, Discard file, the toolbar's last shown button.
         Keys(app, VirtualKeyShort.SHIFT, VirtualKeyShort.TAB);
-        app.WaitForFocusedElement(K.Ids.DiscardFileButton, StepTimeout);
+        app.WaitForFocusOn(K.Ids.DiscardFileButton, StepTimeout);
         Note($"Shift+Tab: the focus on {FocusNow(app)}");
         Picture(app, K.K1cToolbar, keepPointer: false, _ => []);
 
@@ -141,8 +146,9 @@ public partial class Phase8aRealWindowPass
         Assert.Equal([K.StageSelectedLines, K.DiscardSelectedLines], menu.Take(2));
         Picture(app, K.K1dLinesMenu, keepPointer: true, _ => []);
 
-        // Step 10: a real Enter on Stage selected lines: the two lines staged.
-        Keys(app, VirtualKeyShort.RETURN);
+        // Step 10: a real Enter on Stage selected lines, sent only while that item still has the focus
+        // after the picture: the two lines staged.
+        KeysOn(app, new FocusTarget(MenuItemId, K.StageSelectedLines), VirtualKeyShort.RETURN);
         app.WaitFor(() => app.FindAll("ContextMenu").Count == 0, "the menu to close", StepTimeout);
         await WaitForNumstatAsync(app, repo, cached: true, K.StagedAfterLines, "after the two lines");
         await AssertNumstatAsync(repo, "after the two lines", K.StagedAfterLines, K.UnstagedAfterLines);
@@ -197,7 +203,7 @@ public partial class Phase8aRealWindowPass
         app.MoveToNeutral();
         Keys(app, VirtualKeyShort.F6);
         WaitForWalkStop(app, K.Ids.UnstagedFileList, K.Reader, K.Ids.StageFileRow, "F6");
-        Keys(app, VirtualKeyShort.RETURN);
+        KeysOn(app, new FocusTarget(K.Ids.StageFileRow, K.Reader), VirtualKeyShort.RETURN);
         WaitForFocusInText(app, K.Ids.DiffText, StepTimeout);
 
         // Step 4: a real Ctrl+Shift+B, the blame with the focus in its text; then its title and caption,
@@ -344,46 +350,74 @@ public partial class Phase8aRealWindowPass
     /// <summary>
     /// K1's step 6: waits, at most <see cref="StepTimeout"/>, until UI Automation's focused element is a
     /// <c>StageHunkButton</c>, then asserts it is the first hunk's, the uppermost of those shown. Noted.
+    /// Returns that button, which step 7's Enter is sent to only while it still has the focus.
     /// </summary>
-    private void WaitForFirstStageHunk(RealApp app)
+    private AutomationElement WaitForFirstStageHunk(RealApp app)
     {
-        app.WaitForFocusedElement(K.Ids.StageHunkButton, StepTimeout);
+        app.WaitForFocusOn(K.Ids.StageHunkButton, StepTimeout);
         var focused = app.FocusedElement() ?? throw new XunitException("No element has the keyboard focus after Tab.");
         var first = app.ShownElements(K.Ids.StageHunkButton)[0];
         Note($"Tab: the focus on {FocusNow(app)}; the first hunk's {K.Ids.StageHunkButton} at {first.BoundingRectangle} named \"{first.Name}\"");
         Assert.True(focused.BoundingRectangle == first.BoundingRectangle, $"Tab reached a {K.Ids.StageHunkButton} at {focused.BoundingRectangle}, not the first hunk's at {first.BoundingRectangle}.");
         Assert.Equal(K.StageHunk, first.Name);
+        return first;
     }
 
     /// <summary>
     /// K1's step 9 on the hunk that remains: a real Ctrl+Home, <c>K.DownsToLines</c> real Downs and
     /// <c>K.ShiftDownsForLines</c> real Shift+Downs. The caret is not drawn and the selection is not in UI
-    /// Automation (the text's peer is a plain Document), so the keys before the first Shift+Down are waited
-    /// on only by UI Automation's input queue; from the first Shift+Down on, <c>Stage lines</c> and
-    /// <c>Discard lines</c> show in place of <c>Stage file</c> and <c>Discard file</c>, which is waited for
-    /// (a selection, not its two rows, which git's lines after the Enter prove; design 12.3.5). The focus
-    /// is still in the text after the keys.
+    /// Automation (the text's peer is a plain Document), so no condition shows where a key left the caret
+    /// (design 12.3.5): after each key, besides UI Automation's input queue, a wait at most
+    /// <see cref="StepTimeout"/> for what can be read, the focus still in the text and the toolbar's
+    /// buttons as they must be then: the file's before the first Shift+Down, <c>Stage lines</c> and
+    /// <c>Discard lines</c> in their place from it on. The second Shift+Down changes nothing that can be
+    /// read. The two rows are proven by git's lines after the Enter; run.txt says so.
     /// </summary>
     private void SelectTheTwoLines(RealApp app)
     {
         Keys(app, VirtualKeyShort.CONTROL, VirtualKeyShort.HOME);
-        for (var down = 0; down < K.DownsToLines; down++)
+        WaitForCaretKeyRead(app, "Ctrl+Home", lines: false);
+        for (var down = 1; down <= K.DownsToLines; down++)
         {
             Keys(app, VirtualKeyShort.DOWN);
+            WaitForCaretKeyRead(app, string.Create(CultureInfo.InvariantCulture, $"Down {down}"), lines: false);
         }
 
-        Assert.True(LinesButtonsShown(app) is false, $"The toolbar does not show the file's buttons alone before any Shift+Down: it shows {string.Join(", ", ToolbarShown(app))}.");
         for (var down = 1; down <= K.ShiftDownsForLines; down++)
         {
             Keys(app, VirtualKeyShort.SHIFT, VirtualKeyShort.DOWN);
-            app.WaitFor(
-                () => LinesButtonsShown(app) is true,
-                string.Create(CultureInfo.InvariantCulture, $"{K.StageLines} and {K.DiscardLines} in place of the file's buttons after Shift+Down {down}"),
-                StepTimeout);
+            WaitForCaretKeyRead(app, string.Create(CultureInfo.InvariantCulture, $"Shift+Down {down}"), lines: true);
         }
 
-        Note(string.Create(CultureInfo.InvariantCulture, $"Ctrl+Home, {K.DownsToLines} Downs, {K.ShiftDownsForLines} Shift+Downs: the toolbar shows {string.Join(", ", ToolbarShown(app))}"));
+        Note(string.Create(CultureInfo.InvariantCulture, $"Ctrl+Home, {K.DownsToLines} Downs, {K.ShiftDownsForLines} Shift+Downs: the toolbar shows {string.Join(", ", ToolbarShown(app))}; where each key left the caret is not in UI Automation, so each was waited on by the focus in {K.Ids.DiffText} and the toolbar alone, and git's lines after the Enter prove the two rows"));
         WaitForFocusInText(app, K.Ids.DiffText, StepTimeout);
+    }
+
+    /// <summary>
+    /// After a caret key of <see cref="SelectTheTwoLines"/>: waits, at most <see cref="StepTimeout"/>, until
+    /// the focus is still in <c>DiffText</c> and the toolbar shows the line buttons (<paramref name="lines"/>)
+    /// or the file's. A timeout names both, before any further key.
+    /// </summary>
+    private static void WaitForCaretKeyRead(RealApp app, string key, bool lines)
+    {
+        var shown = "nothing read yet";
+        var focus = "nothing read yet";
+        try
+        {
+            app.WaitFor(
+                () =>
+                {
+                    shown = string.Join(", ", ToolbarShown(app));
+                    var inText = FocusInText(app, K.Ids.DiffText, out focus) is not null;
+                    return inText && LinesButtonsShown(app) == lines;
+                },
+                $"after {key}: the focus still in {K.Ids.DiffText} and the toolbar showing {(lines ? $"{K.StageLines} and {K.DiscardLines} in place of the file's buttons" : "the file's buttons alone")}",
+                StepTimeout);
+        }
+        catch (TimeoutException ex)
+        {
+            throw new XunitException($"{ex.Message} The toolbar shows {shown}; UI Automation's focused element is {focus}. No further key is sent.");
+        }
     }
 
     /// <summary>

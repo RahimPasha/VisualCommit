@@ -37,13 +37,16 @@ public partial class Phase8aRealWindowPass
     /// <list type="number">
     /// <item>B1 (a): the built executable's associated icon against the <c>.ico</c>'s frame of its size,
     /// every pixel at alpha 255 within 2 per channel. (b): <c>WM_GETICON</c>'s small and big icons, each
-    /// given, each of a size the <c>.ico</c> holds compared as (a); their sizes, the window's DPI,
-    /// <c>SM_CXSMICON</c> and <c>SM_CXICON</c> in run.txt. (c): the window with its frame,
-    /// <c>b1-title-bar-dark-with-frame</c>, and its title bar's left 64 pixels by the title bar's height,
-    /// four times, <c>b1-title-bar-icon-dark</c>. (a) and (b) are asserted at the launch's end, so that a
-    /// miss there still lets A1 and A4 run; run.txt has every value at once.</item>
-    /// <item>The window the foreground window before the first key, else one real click on its title bar
-    /// and a wait of 5 s, else the method fails before any key.</item>
+    /// given (a message the app does not answer within 5 s counts as none), each of a size the
+    /// <c>.ico</c> holds compared as (a); their sizes, the window's DPI, <c>SM_CXSMICON</c> and
+    /// <c>SM_CXICON</c> in run.txt. (a) and (b) are asserted at the launch's end, so that a miss there
+    /// still lets A1 and A4 run; run.txt has every value at once.</item>
+    /// <item>The window the foreground window before B1 (c) and the first key, else one real click on its
+    /// title bar (only where the window under that point is the app's) and a wait of 5 s, else the method
+    /// fails before any key.</item>
+    /// <item>B1 (c): the window with its frame, <c>b1-title-bar-dark-with-frame</c>, and its title bar's
+    /// left 64 pixels from the visible frame's corner by the title bar's height, four times,
+    /// <c>b1-title-bar-icon-dark</c>; whether the window was the foreground window in run.txt.</item>
     /// <item>A1: a real Ctrl+Shift+P, <c>about</c> typed, the one row <c>About VisualCommit…</c> highlighted,
     /// a real Enter: About with <c>SettingsNavAbout</c> focused; <c>AboutVersion</c>'s name the built app's
     /// version with its short commit; <c>a1a-about-dark</c>. At 1920×1080 where it fits,
@@ -72,11 +75,12 @@ public partial class Phase8aRealWindowPass
         List<string> b1 = [.. ExecutableIcon(frames)];
         b1.AddRange(WindowIcons(app, frames));
 
+        // Before B1 (c)'s capture and the first key (B1 presses nothing): the window the foreground window,
+        // so that B1 (c)'s title bar is the active caption, as B2's is after its click.
+        EnsureForegroundBeforeFirstKey(app, () => app.ForegroundIsThis, "the app's window the foreground window", MainNotForegroundMessage);
+
         // B1 (c): the title bar, dark, the pointer at the neutral point.
         var darkTitleBar = TitleBarPictures(app, B.B1TitleBarDarkWithFrame, B.B1TitleBarIconDark);
-
-        // Before the first key (B1 presses nothing): the window the foreground window.
-        EnsureForegroundBeforeFirstKey(app, () => app.ForegroundIsThis, "the app's window the foreground window", MainNotForegroundMessage);
 
         // A1: About from the palette by real keys; the built version; a1a.
         OpenAboutFromThePalette(app);
@@ -91,8 +95,8 @@ public partial class Phase8aRealWindowPass
 
         // A4: the license by a real Tab and Enter; a4a; Esc.
         Keys(app, VirtualKeyShort.TAB);
-        app.WaitForFocusedElement(A.ShowLicenseId, StepTimeout);
-        Keys(app, VirtualKeyShort.RETURN);
+        app.WaitForFocusOn(A.ShowLicenseId, StepTimeout);
+        KeysOn(app, new FocusTarget(A.ShowLicenseId), VirtualKeyShort.RETURN);
         app.WaitForText(A.DialogTitleId, A.LicenseTitle, StepTimeout);
         WaitForFocusInText(app, A.TextId, StepTimeout);
         using (var license = Capture(app, A.A4aLicense))
@@ -102,7 +106,7 @@ public partial class Phase8aRealWindowPass
 
         Keys(app, VirtualKeyShort.ESCAPE);
         app.WaitFor(
-            () => app.ShownElements(A.TextId).Count == 0 && app.FocusedAutomationId() == A.ShowLicenseId && app.ShownElements(A.VersionId).Count == 1,
+            () => app.ShownElements(A.TextId).Count == 0 && app.FocusedId() == A.ShowLicenseId && app.ShownElements(A.VersionId).Count == 1,
             $"the text dialog closed alone, {A.ShowLicenseId} UI Automation's focused element and {A.VersionId} still shown",
             StepTimeout);
 
@@ -139,8 +143,10 @@ public partial class Phase8aRealWindowPass
     /// The guard before a launch's first key (design 12.3.3, 12.3.4 launches 3, 5 and 6, 12.3.5): when
     /// <paramref name="ready"/> does not hold, one real click on the window's title bar, away from its left
     /// end and its caption buttons (<see cref="RealApp.ClickTitleBar"/>), then a wait of at most 5 s until
-    /// it holds, else the method fails with <paramref name="failure"/> before any key. run.txt says whether
-    /// the click was needed. Returns it.
+    /// it holds, else the method fails with <paramref name="failure"/> before any key. When another window
+    /// lies over the point the click would land on, nothing is clicked and the method fails with
+    /// <paramref name="failure"/> and that window's words. run.txt says whether the click was needed.
+    /// Returns it.
     /// </summary>
     private bool EnsureForegroundBeforeFirstKey(RealApp app, Func<bool> ready, string what, string failure)
     {
@@ -151,7 +157,16 @@ public partial class Phase8aRealWindowPass
         }
 
         Note($"before the first key: not {what}; one real click on the title bar");
-        app.ClickTitleBar();
+        try
+        {
+            app.ClickTitleBar();
+        }
+        catch (InvalidOperationException ex)
+        {
+            var refused = $"{failure} {ex.Message}";
+            Note(refused);
+            throw new XunitException(refused);
+        }
         try
         {
             app.WaitFor(ready, what, I.ForegroundAgainWithin);
@@ -267,15 +282,18 @@ public partial class Phase8aRealWindowPass
     private List<string> WindowIcons(RealApp app, IReadOnlyList<IconFrame> frames)
     {
         using var icons = app.WindowIcons();
+        static string Unanswered(bool unanswered) => unanswered ? " (WM_GETICON unanswered within 5 s)" : string.Empty;
         Note(string.Create(
             CultureInfo.InvariantCulture,
-            $"B1 (b): ICON_SMALL {SizeOf(icons.Small)}, ICON_BIG {SizeOf(icons.Big)}; the window's DPI {icons.Dpi}; SM_CXSMICON {icons.SmallIconMetric}, SM_CXICON {icons.IconMetric} at that DPI"));
+            $"B1 (b): ICON_SMALL {SizeOf(icons.Small)}{Unanswered(icons.SmallUnanswered)}, ICON_BIG {SizeOf(icons.Big)}{Unanswered(icons.BigUnanswered)}; the window's DPI {icons.Dpi}; SM_CXSMICON {icons.SmallIconMetric}, SM_CXICON {icons.IconMetric} at that DPI"));
         List<string> problems = [];
-        foreach (var (image, which) in new[] { (icons.Small, "ICON_SMALL"), (icons.Big, "ICON_BIG") })
+        foreach (var (image, which, unanswered) in new[] { (icons.Small, "ICON_SMALL", icons.SmallUnanswered), (icons.Big, "ICON_BIG", icons.BigUnanswered) })
         {
             if (image is null)
             {
-                problems.Add($"B1 (b): WM_GETICON gave no {which} icon for the app's window.");
+                problems.Add(unanswered
+                    ? $"B1 (b): the app's window did not answer WM_GETICON for {which} within 5 s, so no {which} icon was read."
+                    : $"B1 (b): WM_GETICON gave no {which} icon for the app's window.");
             }
             else if (image.Width == image.Height && B.IcoSizes.Contains(image.Width))
             {
@@ -355,13 +373,16 @@ public partial class Phase8aRealWindowPass
 
     /// <summary>
     /// B1 (c) and B2's title bar: the pointer at the neutral point and no tooltip in the window; the window
-    /// with its frame (<see cref="RealApp.CaptureWindow"/>) saved as <paramref name="framed"/>; its left
-    /// <see cref="Phase8aExpectations.B.TitleBarCropWidth"/> pixels by the title bar's height
-    /// (<see cref="RealApp.TitleBarHeight"/>: from the window's top to the client area's, the source the
-    /// report's open point 49 leaves to the first run, named in run.txt), enlarged
+    /// with its frame (<see cref="RealApp.CaptureWindow"/>) saved as <paramref name="framed"/>; the title
+    /// bar's left <see cref="Phase8aExpectations.B.TitleBarCropWidth"/> pixels from the visible frame's
+    /// corner (<see cref="RealApp.VisibleFrameOffset"/>: the capture's own corner lies on the invisible
+    /// resize border, which shows the desktop behind the window; the capture's corner when DWM does not
+    /// say, which run.txt then names) down to the client area's top (<see cref="RealApp.TitleBarHeight"/>,
+    /// the source the report's open point 49 leaves to the first run, named in run.txt), enlarged
     /// <see cref="Phase8aExpectations.B.Enlargement"/> times nearest-neighbour, saved as
-    /// <paramref name="enlarged"/>. Neither has a twin; both are inspected. Returns the colour of the title
-    /// bar's middle, where <see cref="RealApp.ClickTitleBar"/> clicks.
+    /// <paramref name="enlarged"/>. Neither has a twin; both are inspected. run.txt says whether the window
+    /// was the foreground window, whose title bar is drawn active. Returns the colour of the title bar's
+    /// middle, where <see cref="RealApp.ClickTitleBar"/> clicks.
     /// </summary>
     private Color TitleBarPictures(RealApp app, string framed, string enlarged)
     {
@@ -370,10 +391,13 @@ public partial class Phase8aRealWindowPass
         app.MoveToNeutral();
         app.WaitFor(() => ToolTipsShown(app).Count == 0, $"no tooltip in the window before {framed}", StepTimeout);
         Assert.Equal(B.WindowTitle, app.Window.Title);
+        var visible = app.VisibleFrameOffset(out var frames);
+        var foreground = app.ForegroundIsThis;
         using var frame = app.CaptureWindow();
         Run.Save(frame, framed);
         var height = Math.Min(app.TitleBarHeight, frame.Height);
-        var crop = new Rectangle(0, 0, Math.Min(B.TitleBarCropWidth, frame.Width), height);
+        var (left, top) = visible is { } corner ? (corner.X, corner.Y) : (0, 0);
+        var crop = new Rectangle(left, top, Math.Min(B.TitleBarCropWidth, frame.Width - left), Math.Max(1, height - top));
         using (var big = Enlarged(frame, crop, B.Enlargement))
         {
             Run.Save(big, enlarged);
@@ -382,7 +406,7 @@ public partial class Phase8aRealWindowPass
         var middle = frame.GetPixel(frame.Width / 2, height / 2);
         Note(string.Create(
             CultureInfo.InvariantCulture,
-            $"{framed}: {frame.Width}x{frame.Height} screen pixels, the title bar {height} high (GetWindowRect's top to the client area's top); {enlarged}: its left {crop.Width} by {crop.Height}, {B.Enlargement} times; the title bar's middle {Hex(middle)}"));
+            $"{framed}: {frame.Width}x{frame.Height} screen pixels, the window the foreground window: {foreground}; the title bar {height} high (GetWindowRect's top to the client area's top); {frames}; {enlarged}: the title bar's left {crop.Width} by {crop.Height} from ({left}, {top}) of the capture, {(visible is null ? "the capture's own corner, as no visible frame was read" : "the visible frame's corner")}, {B.Enlargement} times; the title bar's middle {Hex(middle)}"));
         return middle;
     }
 
@@ -481,7 +505,7 @@ public partial class Phase8aRealWindowPass
         app.MoveToNeutral();
         Keys(app, VirtualKeyShort.CONTROL, VirtualKeyShort.SHIFT, VirtualKeyShort.KEY_P);
         app.WaitForPalette(StepTimeout);
-        app.WaitForFocusedElement("CommandPaletteBox", StepTimeout);
+        app.WaitForFocusOn("CommandPaletteBox", StepTimeout);
         TypeKeys(app, A.PaletteQuery);
         app.WaitFor(() => app.PaletteQuery() == A.PaletteQuery, $"the palette's box to hold \"{A.PaletteQuery}\"", StepTimeout);
         try
@@ -496,10 +520,10 @@ public partial class Phase8aRealWindowPass
         var row = app.PaletteRows()[0];
         Note($"A1: the palette's one row \"{row.Label}\", highlighted, key \"{row.Key}\", detail \"{row.Detail}\"");
         Assert.True(row.Label == A.PaletteCommand, $"The palette's highlighted row reads \"{row.Label}\", not \"{A.PaletteCommand}\": no Enter is sent (D444).");
-        Keys(app, VirtualKeyShort.RETURN);
+        KeysOn(app, new FocusTarget("CommandPaletteBox"), VirtualKeyShort.RETURN);
         app.WaitForPaletteClosed(StepTimeout);
         app.WaitFor(() => app.ShownElements(A.VersionId).Count == 1, $"About shown ({A.VersionId})", StepTimeout);
-        app.WaitForFocusedElement(A.NavAboutId, StepTimeout);
+        app.WaitForFocusOn(A.NavAboutId, StepTimeout);
     }
 
     /// <summary>

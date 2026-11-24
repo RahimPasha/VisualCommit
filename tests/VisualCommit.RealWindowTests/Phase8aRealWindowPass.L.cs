@@ -231,13 +231,27 @@ public partial class Phase8aRealWindowPass
 
     /// <summary>
     /// The typed <c>sea</c>'s reads: <c>FilterBox</c> holds it and has the focus, its background at a point
-    /// of its left padding, and the text's ink in the box's text area less the caret's column.
+    /// of its left padding, and the text's ink in the box's text area less the caret's column. Each read is
+    /// noted and returned as a problem, never asserted here, so that the comparison with the twin runs first.
     /// </summary>
     private IEnumerable<string> TypedText(RealApp app, Bitmap capture, L.Colours colours)
     {
         var box = app.Find("FilterBox");
-        Assert.Equal(L.Typed, app.BoxText("FilterBox"));
-        List<string> problems = [.. ReadSpot(capture, app.Scaling, "FilterBox's background (TextControlBackground)", LeftPaddingOf(app, box), colours.Box)];
+        var text = app.BoxText("FilterBox");
+        var focused = RealApp.HasKeyboardFocus(box);
+        Note($"FilterBox holds \"{text}\", focused {focused}");
+        List<string> problems = [];
+        if (text != L.Typed)
+        {
+            problems.Add($"FilterBox holds \"{text}\", not \"{L.Typed}\".");
+        }
+
+        if (!focused)
+        {
+            problems.Add("FilterBox does not have the keyboard focus.");
+        }
+
+        problems.AddRange(ReadSpot(capture, app.Scaling, "FilterBox's background (TextControlBackground)", LeftPaddingOf(app, box), colours.Box));
         var what = $"the text \"{L.Typed}\" typed into FilterBox (TextControlForeground)";
         problems.AddRange(ReadInk(capture, app.Scaling, what, TypedArea(app, capture, box, colours.Box, what), colours.Typed, colours.Box, replaced: null));
         return problems;
@@ -250,7 +264,7 @@ public partial class Phase8aRealWindowPass
     private static void TypeIntoFilter(RealApp app)
     {
         Keys(app, VirtualKeyShort.CONTROL, VirtualKeyShort.SHIFT, VirtualKeyShort.KEY_E);
-        app.WaitForFocusedElement("FilterBox", StepTimeout);
+        app.WaitForFocusOn("FilterBox", StepTimeout);
         TypeKeys(app, L.Typed);
         app.WaitFor(
             () => app.BoxText("FilterBox") == L.Typed && !app.HasRefRow(L.LocalBranches, L.Main),
@@ -288,23 +302,38 @@ public partial class Phase8aRealWindowPass
     }
 
     /// <summary>
-    /// L5 dark's reads: the confirmation's title, its buttons' names; the danger button's background at a
-    /// point of its left padding, <c>#EA7D86</c>; its label's ink <c>#10121A</c> on it, more than 8 from
-    /// the <c>#FFFFFF</c> it replaced. The button is read, never pressed.
+    /// L5 dark's reads: the confirmation's title, its buttons' names, Cancel's focus; the danger button's
+    /// background at a point of its left padding, <c>#EA7D86</c>; its label's ink <c>#10121A</c> on it,
+    /// more than 8 from the <c>#FFFFFF</c> it replaced. Each read is noted and returned as a problem, never
+    /// asserted here, so that the comparison with the twin runs first. The button is read, never pressed.
     /// </summary>
     private IEnumerable<string> DangerButton(RealApp app, Bitmap capture, AutomationElement dialog)
     {
         var dark = L.Dark;
-        Assert.Equal([L.DiscardTitle], app.NamesOnScreen("ConfirmTitle"));
+        var titles = app.NamesOnScreen("ConfirmTitle");
         var cancel = app.FindIn(dialog, "CancelButton");
         var confirm = app.FindIn(dialog, "ConfirmButton");
-        Assert.Equal((L.Cancel, true), (cancel.Name, RealApp.HasKeyboardFocus(cancel)));
-        Assert.Equal(L.Discard, confirm.Name);
-        return
-        [
-            .. ReadSpot(capture, app.Scaling, "Discard's background (VcDangerBrush)", LeftPaddingOf(app, confirm), dark.Danger),
-            .. ReadInk(capture, app.Scaling, "Discard's label (VcDangerTextBrush)", LabelArea(app, confirm, L.Discard, "Discard's label"), dark.DangerText, dark.Danger, dark.DangerTextReplaced),
-        ];
+        var (cancelName, cancelFocused, confirmName) = (cancel.Name, RealApp.HasKeyboardFocus(cancel), confirm.Name);
+        Note($"the discard's confirmation: title {string.Join(" | ", titles.Select(title => $"\"{title}\""))}; \"{cancelName}\" focused {cancelFocused}; \"{confirmName}\"");
+        List<string> problems = [];
+        if (!titles.SequenceEqual([L.DiscardTitle]))
+        {
+            problems.Add($"The confirmation's title reads {string.Join(" | ", titles.Select(title => $"\"{title}\""))}, not \"{L.DiscardTitle}\".");
+        }
+
+        if (cancelName != L.Cancel || !cancelFocused)
+        {
+            problems.Add($"The confirmation's Cancel is named \"{cancelName}\" and focused {cancelFocused}, not \"{L.Cancel}\" and focused.");
+        }
+
+        if (confirmName != L.Discard)
+        {
+            problems.Add($"The confirmation's danger button is named \"{confirmName}\", not \"{L.Discard}\".");
+        }
+
+        problems.AddRange(ReadSpot(capture, app.Scaling, "Discard's background (VcDangerBrush)", LeftPaddingOf(app, confirm), dark.Danger));
+        problems.AddRange(ReadInk(capture, app.Scaling, "Discard's label (VcDangerTextBrush)", LabelArea(app, confirm, L.Discard, "Discard's label"), dark.DangerText, dark.Danger, dark.DangerTextReplaced));
+        return problems;
     }
 
     /// <summary>
