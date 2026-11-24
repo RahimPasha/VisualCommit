@@ -5,6 +5,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
+using AvaloniaEdit;
 using VisualCommit.App.Controls.Blame;
 using VisualCommit.App.ViewModels.Menus;
 using VisualCommit.App.ViewModels.Pages;
@@ -17,8 +18,9 @@ namespace VisualCommit.App.Views.Pages;
 /// fills the text and the gutter from the view model, keeps the gutter's width by the page's
 /// (130, or 200 from a page 700 wide), turns a click on a run, in the gutter or on its text, into
 /// picking it and a double-click into "Show in graph", picks the caret's run after an arrow key as
-/// a click would, opens a run's menu (a right-click picks the run first, BD9), gives the text the
-/// keyboard focus when the page opens (BD10), and closes the page on Esc
+/// a click would (a run picked in the gutter or by a right-click takes the caret to its first line,
+/// so that the arrows go on from it), opens a run's menu (a right-click picks the run first, BD9),
+/// gives the text the keyboard focus when the page opens (BD10), and closes the page on Esc
 /// (<see cref="EscapeOrder.Page"/>) unless a diff covers it or a text box has the focus.
 /// </summary>
 public partial class BlameView : UserControl
@@ -33,7 +35,7 @@ public partial class BlameView : UserControl
     {
         InitializeComponent();
         BlameGutter.Editor = BlameText;
-        BlameGutter.RunPressed += (_, e) => OnRunPressed(e.Run, e.ClickCount);
+        BlameGutter.RunPressed += (_, e) => OnRunPressed(e.Run, e.ClickCount, inGutter: true);
         SizeChanged += (_, e) => FitGutter(e.NewSize.Width);
 
         // A press on the text picks its line's run; AvaloniaEdit's own handlers place the
@@ -151,7 +153,7 @@ public partial class BlameView : UserControl
         var point = e.GetCurrentPoint(BlameText);
         if (point.Properties.IsLeftButtonPressed && BlameText.LineAt(point.Position.Y) is { } line && BlameGutter.RunOfLine(line) is { } run)
         {
-            OnRunPressed(run, e.ClickCount);
+            OnRunPressed(run, e.ClickCount, inGutter: false);
         }
     }
 
@@ -181,8 +183,12 @@ public partial class BlameView : UserControl
             ? viewModel.Runs[index]
             : null;
 
-    /// <summary>A click picks the run (its commit in the right panel, 11.3); a double-click shows it in the graph (4.2).</summary>
-    private void OnRunPressed(int index, int clickCount)
+    /// <summary>
+    /// A click picks the run (its commit in the right panel, 11.3); a double-click shows it in the
+    /// graph (4.2). A click in the gutter also puts the caret on the run (<see cref="PutCaretOn"/>);
+    /// one on the text leaves the caret to AvaloniaEdit, which puts it where the click is.
+    /// </summary>
+    private void OnRunPressed(int index, int clickCount, bool inGutter)
     {
         if (_viewModel is not { IsClosed: false } viewModel || index >= viewModel.Runs.Count)
         {
@@ -196,14 +202,39 @@ public partial class BlameView : UserControl
         }
         else
         {
+            if (inGutter)
+            {
+                PutCaretOn(run);
+            }
+
             viewModel.Pick(run);
         }
     }
 
     /// <summary>
-    /// A run's menu (BD8, BD9): a right-click on the gutter or the text picks the run, then opens it
-    /// at the pointer; the Menu key or Shift+F10 at the top of the text, for the picked run, or the
-    /// caret's while none is picked (a page just opened has run 0's).
+    /// A run picked by the pointer, in the gutter or by a right-click, takes the caret to its first
+    /// line, as a click on the text takes it to the line clicked: the caret is not drawn, and the
+    /// arrows pick the run of the line they take it to, so they go on from the run the user picked,
+    /// not from where the caret was left. The text does not scroll to the caret (a run's first line
+    /// may lie above the view) until an arrow moves it.
+    /// </summary>
+    private void PutCaretOn(BlameRun run)
+    {
+        if (BlameText.Document is not { } document || run.FirstLine > document.LineCount)
+        {
+            return;
+        }
+
+        var area = BlameText.TextArea;
+        area.ClearSelection();
+        area.Caret.Position = new TextViewPosition(run.FirstLine, 1);
+        area.Caret.DesiredXPos = double.NaN;
+    }
+
+    /// <summary>
+    /// A run's menu (BD8, BD9): a right-click on the gutter or the text picks the run, with the caret
+    /// on its first line, then opens it at the pointer; the Menu key or Shift+F10 at the top of the
+    /// text, for the picked run, or the caret's while none is picked (a page just opened has run 0's).
     /// </summary>
     private void OnContextRequested(object? sender, ContextRequestedEventArgs e)
     {
@@ -232,6 +263,11 @@ public partial class BlameView : UserControl
         if (run is null)
         {
             return;
+        }
+
+        if (openedBy == MenuOpenedBy.Pointer)
+        {
+            PutCaretOn(run);
         }
 
         viewModel.Pick(run);
