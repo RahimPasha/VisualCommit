@@ -19,11 +19,15 @@ namespace VisualCommit.VisualTests.Phase8a;
 /// review before the gate): Enter or Space on a section header or a folder of the left panel, or on
 /// a tree folder of the stage lists, the commit's details or a comparison, opens or closes it and
 /// leaves the focus on it, with the keyboard's frame; the row is kept, so its button never loses its
-/// data, and a screen reader never reads it by its content's type (9.3).
+/// data, and a screen reader never reads it by its content's type (9.3). Space on the eye of a hidden
+/// branch, or on the solo button of a soloed one, which then hides, gives the focus to that branch's
+/// own row, with the frame; a click on the eye gives it without the frame.
 /// </summary>
 public sealed partial class KeyboardPassTests
 {
     private const string FeatureFolderKey = "local:feature";
+    private const string AlphaKey = "ref:refs/heads/feature/alpha";
+    private const string FfKey = "ref:refs/heads/feature/ff";
 
     /// <summary>
     /// "Local branches", reached by Shift+F6 from the graph: Enter closes it and Space opens it
@@ -213,6 +217,88 @@ public sealed partial class KeyboardPassTests
 
         await TabToFolderAsync(app, "FileTreeFolder", "src");
         await AssertEnterKeepsTheFolderAsync(app, files, "FileTreeFolder", "src", count: 1);
+    }
+
+    /// <summary>
+    /// feature/alpha hidden: Tab from its own row, clicked, to its eye, then Space shows it again,
+    /// and once the graph has reloaded and the eye has gone, alpha's own row has the focus, with the
+    /// frame.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task Space_on_the_eye_of_a_hidden_branch_shows_it_and_gives_the_focus_to_its_row_with_the_frame()
+    {
+        var facts = await PressRowToggleAsync(AlphaKey, "RefHiddenToggle", repository => repository.Operations.HideBranchAsync("refs/heads/feature/alpha"), byKeys: true);
+
+        Assert.False(facts.ShowsToggle, "alpha's eye still shows.");
+        Assert.Equal("Button RefItem \"alpha\" [Left], framed", facts.Focus);
+    }
+
+    /// <summary>feature/ff soloed: Tab from its own row, clicked, to its solo button, then Space ends the solo, and ff's own row has the focus, with the frame.</summary>
+    [AvaloniaFact]
+    public async Task Space_on_the_solo_button_of_a_soloed_branch_ends_the_solo_and_gives_the_focus_to_its_row_with_the_frame()
+    {
+        var facts = await PressRowToggleAsync(FfKey, "RefSoloToggle", repository => repository.Operations.SoloBranchAsync("refs/heads/feature/ff"), byKeys: true);
+
+        Assert.False(facts.ShowsToggle, "ff's solo button still shows.");
+        Assert.Equal("Button RefItem \"ff\" [Left], framed", facts.Focus);
+    }
+
+    /// <summary>feature/alpha hidden: a click on its eye shows it again, and alpha's own row has the focus, without the frame.</summary>
+    [AvaloniaFact]
+    public async Task A_click_on_the_eye_of_a_hidden_branch_shows_it_and_gives_the_focus_to_its_row_without_the_frame()
+    {
+        var facts = await PressRowToggleAsync(AlphaKey, "RefHiddenToggle", repository => repository.Operations.HideBranchAsync("refs/heads/feature/alpha"), byKeys: false);
+
+        Assert.False(facts.ShowsToggle, "alpha's eye still shows.");
+        Assert.Equal("Button RefItem \"alpha\" [Left]", facts.Focus);
+    }
+
+    /// <summary>Whether the toggle still shows, and the focus as <see cref="FocusFact"/> names it, after a row's toggle was pressed.</summary>
+    private sealed record ToggleFacts(bool ShowsToggle, string Focus);
+
+    /// <summary>
+    /// "ops" with Local branches › feature opened through the panel, then <paramref name="mark"/>
+    /// (a hide or a solo) and the graph's reload; the toggle <paramref name="toggleId"/> of the row
+    /// <paramref name="key"/> pressed: with <paramref name="byKeys"/> by Tab from that row's own
+    /// button, clicked, and Space; else by a click. Then the graph's reload and the toggle gone.
+    /// </summary>
+    private static async Task<ToggleFacts> PressRowToggleAsync(string key, string toggleId, Func<RepositoryViewModel, Task> mark, bool byKeys)
+    {
+        using var repo = await Scenarios.OperationsAsync();
+        using var data = new TempDirectory("data");
+        using var app = await OpenAsync(data, repo.Path);
+        var repository = Repository(app);
+        repository.LeftPanel.Activate(repository.LeftPanel.Rows.Single(row => row.Key == FeatureFolderKey));
+        await mark(repository);
+        await app.WaitForGraphReloadAsync();
+        app.Settle();
+        var row = (RefItemRow)repository.LeftPanel.Rows.Single(each => each.Key == key);
+        bool Shows() => toggleId == "RefHiddenToggle" ? row.ShowsHiddenToggle : row.ShowsSoloToggle;
+        Assert.True(Shows(), $"{row.Text}'s {toggleId} does not show.");
+
+        var refRow = await app.RefRowAsync(U.LocalBranches, U.Feature, row.Text);
+        if (byKeys)
+        {
+            // The row by a click (its rows came after the panel's other rows were made, so Tab would
+            // reach them last), then Tab to its toggle.
+            app.Click(refRow);
+            await app.WaitForIdleAsync();
+            app.MoveToNeutral();
+            Assert.True(ReferenceEquals(app.FocusedElement, refRow), $"The click on {row.Text}'s row left the focus on {app.DescribeFocus()}.");
+            await app.TabToAsync(focused => focused is Button { DataContext: RefItemRow { Key: var focusedKey } } button && focusedKey == key && AutomationProperties.GetAutomationId(button) == toggleId, $"{row.Text}'s {toggleId}");
+            Assert.True(app.FocusVisible, $"{row.Text}'s {toggleId} shows no keyboard frame.");
+            app.PressKey(Key.Space);
+        }
+        else
+        {
+            var toggle = refRow.GetVisualDescendants().OfType<Button>().Single(button => AutomationProperties.GetAutomationId(button) == toggleId);
+            app.Click(toggle);
+        }
+
+        await app.WaitForAsync(() => !Shows(), $"{row.Text}'s {toggleId} to go");
+        await app.WaitForGraphReloadAsync();
+        app.Settle();
+        return new ToggleFacts(Shows(), FocusFact(app));
     }
 
     /// <summary>
