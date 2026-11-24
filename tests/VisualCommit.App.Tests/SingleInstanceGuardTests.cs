@@ -185,6 +185,52 @@ public sealed class SingleInstanceGuardTests
     [Theory]
     [InlineData(SecondStart)]
     [InlineData(TryAgain)]
+    public async Task Two_starts_that_wait_for_a_closing_holder_end_one_taken_and_the_other_handed_over_to_it(string caller)
+    {
+        using var root = new TempDirectory("guard");
+        var paths = DataFolder(root);
+        var holder = SingleInstanceGuard.TryTake(paths, new RecordingLog(), Patient);
+        try
+        {
+            holder.ComeForward = () => ForwardAnswer.Closing;
+            RecordingLog[] logs = [new(), new()];
+            using var first = SingleInstanceGuard.TryTake(paths, logs[0], Patient);
+            using var second = SingleInstanceGuard.TryTake(paths, logs[1], Patient);
+            SingleInstanceGuard[] guards = [first, second];
+            Assert.All(guards, guard => Assert.Equal(GuardOutcome.Held, guard.Outcome));
+
+            // Each on a thread of its own, which a busy pool cannot hold up. The holder lets the
+            // folder go only once both have its answer, so that neither ask meets its end.
+            var waits = guards.Select(guard => Task.Factory.StartNew(() => Resolve(guard, caller), CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default)).ToArray();
+            var closing = Info($"VisualCommit on the data folder {paths.DataDirectory} (process {Pid}) is closing; this start waits up to 30 s for it.");
+            await WaitForLineAsync(logs[0], closing);
+            await WaitForLineAsync(logs[1], closing);
+            holder.Dispose();
+            var results = await Task.WhenAll(waits);
+
+            // One takes the folder; the other asks it, as it would have asked the closing one.
+            Assert.Equal([HeldResolution.Taken, HeldResolution.HandedOver], results.Order().ToArray());
+            var winner = Array.IndexOf(results, HeldResolution.Taken);
+            var loser = 1 - winner;
+            Assert.Equal(GuardOutcome.Taken, guards[winner].Outcome);
+            Assert.Equal(GuardOutcome.Held, guards[loser].Outcome);
+            Assert.Contains(Info("The other VisualCommit closed; this start goes on."), logs[winner].Entries.Select(Line));
+            var lost = logs[loser].Entries.Select(Line).ToList();
+            Assert.Contains(Info("Another VisualCommit took the data folder while this start waited; it is asked instead."), lost);
+            Assert.Contains(Info($"VisualCommit is starting on the data folder {paths.DataDirectory} (process {Pid}); this start ends."), lost);
+            Assert.DoesNotContain(lost, line => line.Contains("did not close within", StringComparison.Ordinal));
+            using var file = JsonDocument.Parse(File.ReadAllBytes(paths.InstanceFile));
+            Assert.Equal(guards[winner].Endpoint, file.RootElement.GetProperty("endpoint").GetString());
+        }
+        finally
+        {
+            holder.Dispose();
+        }
+    }
+
+    [Theory]
+    [InlineData(SecondStart)]
+    [InlineData(TryAgain)]
     public async Task A_holder_that_ends_while_it_is_asked_leaves_the_folder_to_the_asker(string caller)
     {
         using var root = new TempDirectory("guard");
