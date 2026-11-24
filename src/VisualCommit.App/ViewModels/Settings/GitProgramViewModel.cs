@@ -59,8 +59,11 @@ public sealed partial class GitProgramViewModel : ObservableObject
     /// null for none. Also Browse's help text (D463).
     /// </summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ShowsStatus), nameof(IsStatusRefusal))]
+    [NotifyPropertyChangedFor(nameof(ShowsStatus), nameof(IsStatusRefusal), nameof(BrowseHelpText))]
     public partial string? StatusText { get; private set; }
+
+    /// <summary>Browse's help text (D463): its status.</summary>
+    public string? BrowseHelpText => StatusText;
 
     public bool ShowsStatus => !string.IsNullOrEmpty(StatusText);
 
