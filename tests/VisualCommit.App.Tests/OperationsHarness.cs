@@ -44,14 +44,25 @@ namespace VisualCommit.App.Tests;
 /// told from one that crawls before the watchdog stops the whole test process, and a step that
 /// only crawls fails only when the watchdog was about to stop the test anyway.
 /// </para>
+/// <para>
+/// The awaits the harness does not hold to a limit, above all the operations a test runs through
+/// <see cref="Operations"/>, get a stall note instead: a harness still open when the watchdog leaves
+/// its test no more than <see cref="WatchdogMargin"/> writes one line to the standard error and
+/// output, as the watchdog does, with the test and its counted time, the repository, the queue's
+/// operation and the git calls that ended since the open. The watchdog's stop that follows then has
+/// the stalled operation named; a test that ends in time is not changed by it.
+/// </para>
 /// </summary>
 internal sealed class OperationsHarness : IDisposable
 {
-    /// <summary>How long before the hang watchdog's limit a step of the harness gives up: time for the test to fail and end on its own.</summary>
+    /// <summary>How long before the hang watchdog's limit a step of the harness gives up, and its stall note is written: time for the test to fail and end on its own.</summary>
     public static readonly TimeSpan WatchdogMargin = TimeSpan.FromSeconds(15);
 
     /// <summary>The least a step is given when the watchdog leaves the test less than that.</summary>
     private static readonly TimeSpan LeastStepLimit = TimeSpan.FromSeconds(5);
+
+    /// <summary>The longest the stall note's watch waits at once before it reads the test's counted time again (a wait's limit in milliseconds is an int).</summary>
+    private static readonly TimeSpan LongestNoteWait = TimeSpan.FromHours(1);
 
     private static readonly string GitPath = GitLocator.FindExecutable(GitSearchContext.FromSystem())
         ?? throw new InvalidOperationException("The tests need git, and no git executable was found.");
@@ -59,12 +70,25 @@ internal sealed class OperationsHarness : IDisposable
     /// <summary>The limit the test gave the harness's steps, or null for the watchdog's.</summary>
     private readonly TimeSpan? _stepLimit;
 
+    /// <summary>Set by <see cref="Dispose"/>: ends every stall note's watch.</summary>
+    private readonly ManualResetEventSlim _closed = new();
+
+    /// <summary>The unique id of the test that opened the harness, null outside a test; and its name.</summary>
+    private readonly string? _testId;
+
+    private readonly string _testName;
+
+    /// <summary>How many git calls had ended when the open was done.</summary>
+    private int _callsAtOpen;
+
     /// <summary>The prompt broker <see cref="OpenAsync(TempRepo, Func{DialogHostViewModel, IGitPromptHandler})"/> made, disposed with the harness.</summary>
     private IDisposable? _broker;
 
     private OperationsHarness(TempRepo repo, RepositoryViewModel repository, DialogHostViewModel host, TabServices services, RecordingLog log, FakeClipboard clipboard, FakeFileLauncher launcher, GitCallLog calls, TimeSpan? stepLimit)
     {
         _stepLimit = stepLimit;
+        _testId = TestContext.Current.Test?.UniqueID;
+        _testName = TestContext.Current.Test?.TestDisplayName ?? "no test";
         Calls = calls;
         Repo = repo;
         Repository = repository;
@@ -187,6 +211,8 @@ internal sealed class OperationsHarness : IDisposable
             throw;
         }
 
+        harness._callsAtOpen = calls.Snapshot().Count;
+        _ = harness.StartStallNote(after: null, to: null);
         return harness;
     }
 
@@ -288,13 +314,19 @@ internal sealed class OperationsHarness : IDisposable
     }
 
     /// <summary>
-    /// Writes the stall note to <paramref name="to"/> once <paramref name="after"/> has passed with
-    /// the harness still open (the harness's own tests). Completes when the note's watch has ended.
+    /// Writes the stall note to <paramref name="to"/> alone once <paramref name="after"/> has passed
+    /// with the harness still open and its test running (the harness's own tests). Completes when
+    /// the note's watch has ended.
     /// </summary>
-    internal Task StartStallNote(TimeSpan after, TextWriter to) => Task.CompletedTask;
+    internal Task StartStallNote(TimeSpan after, TextWriter to)
+    {
+        ArgumentNullException.ThrowIfNull(to);
+        return StartStallNote((TimeSpan?)after, to);
+    }
 
     public void Dispose()
     {
+        _closed.Set();
         Dialogs.Dispose();
         Repository.Dispose();
         _broker?.Dispose();
@@ -331,16 +363,105 @@ internal sealed class OperationsHarness : IDisposable
     /// <summary>What a step past its limit says: which step, the git calls that ended during it (none: a stall; many, the last just now: a crawl) and the queue's operation.</summary>
     private static string StepPastItsLimit(string what, TimeSpan limit, IReadOnlyList<GitCallRecord> ended, IOperationQueue? queue)
     {
-        var git = ended.Count == 0
-            ? "no git call ended meanwhile"
-            : string.Create(CultureInfo.InvariantCulture, $"{ended.Count} git call(s) ended meanwhile, the last \"{ended[^1].CommandText}\" after {ended[^1].Duration.TotalSeconds:0.0} s");
-        var running = queue switch
+        var running = queue is null ? string.Empty : "; " + QueueRuns(queue);
+        return string.Create(CultureInfo.InvariantCulture, $"OperationsHarness: {what} did not end within {limit.TotalSeconds:0.#} s: {CallsEnded(ended, "meanwhile")}{running}.");
+    }
+
+    /// <summary>The git calls that ended <paramref name="when"/>: how many, and the last with its time.</summary>
+    private static string CallsEnded(IReadOnlyList<GitCallRecord> ended, string when) =>
+        ended.Count == 0
+            ? $"no git call ended {when}"
+            : string.Create(CultureInfo.InvariantCulture, $"{ended.Count} git call(s) ended {when}, the last \"{ended[^1].CommandText}\" after {ended[^1].Duration.TotalSeconds:0.0} s");
+
+    /// <summary>What <paramref name="queue"/> runs and how many operations wait behind it.</summary>
+    private static string QueueRuns(IOperationQueue queue) => queue.Current is { } current
+        ? string.Create(CultureInfo.InvariantCulture, $"the queue runs \"{current.Title}\", {queue.Waiting} waiting")
+        : string.Create(CultureInfo.InvariantCulture, $"the queue runs nothing, {queue.Waiting} waiting");
+
+    /// <summary>
+    /// Starts the stall note's watch on a thread of its own, not a timer: the hang watchdog's reason,
+    /// a stall can be a thread pool with no thread to spare. With <paramref name="after"/> null the
+    /// note is due when the watchdog leaves the test no more than <see cref="WatchdogMargin"/>, and
+    /// goes to the standard error and output; else after that time, to <paramref name="to"/>. The
+    /// returned task completes when the watch has ended.
+    /// </summary>
+    private Task StartStallNote(TimeSpan? after, TextWriter? to)
+    {
+        var ended = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var watch = new Thread(() =>
         {
-            null => string.Empty,
-            { Current: { } current } => string.Create(CultureInfo.InvariantCulture, $"; the queue runs \"{current.Title}\", {queue.Waiting} waiting"),
-            _ => string.Create(CultureInfo.InvariantCulture, $"; the queue runs nothing, {queue.Waiting} waiting"),
+            try
+            {
+                WatchForStall(after, to);
+            }
+            catch
+            {
+                // A note that cannot be read or written is lost: it never fails the test process.
+            }
+            finally
+            {
+                ended.TrySetResult();
+            }
+        })
+        {
+            IsBackground = true,
+            Name = "OperationsHarness stall note",
         };
-        return string.Create(CultureInfo.InvariantCulture, $"OperationsHarness: {what} did not end within {limit.TotalSeconds:0.#} s: {git}{running}.");
+        watch.Start();
+        return ended.Task;
+    }
+
+    /// <summary>Waits until the note is due or the harness is disposed, then writes the note if the harness's test still runs.</summary>
+    private void WatchForStall(TimeSpan? after, TextWriter? to)
+    {
+        if (_testId is null)
+        {
+            return;
+        }
+
+        if (after is { } given)
+        {
+            if (_closed.Wait(given))
+            {
+                return;
+            }
+        }
+        else
+        {
+            while (HangWatchdogAttribute.CountedTimeOf(_testId) is { } counted)
+            {
+                var due = HangWatchdogAttribute.TestLimit - WatchdogMargin - counted;
+                if (due <= TimeSpan.Zero)
+                {
+                    break;
+                }
+
+                if (_closed.Wait(due < LongestNoteWait ? due : LongestNoteWait))
+                {
+                    return;
+                }
+            }
+        }
+
+        if (_closed.IsSet || HangWatchdogAttribute.CountedTimeOf(_testId) is not { } now)
+        {
+            return;
+        }
+
+        var note = string.Create(
+            CultureInfo.InvariantCulture,
+            $"OperationsHarness: {_testName} has run {now.TotalSeconds:0} s counted with its harness on {Repo.Path} still open: {QueueRuns(Repository.Queue)}; {CallsEnded([.. Calls.Snapshot().Skip(_callsAtOpen)], "since the open")}.");
+        if (to is not null)
+        {
+            to.WriteLine(note);
+            return;
+        }
+
+        // Both streams, as the hang watchdog writes its own message.
+        Console.Error.WriteLine(note);
+        Console.Error.Flush();
+        Console.Out.WriteLine(note);
+        Console.Out.Flush();
     }
 
     private sealed class MemorySession : ISessionStore

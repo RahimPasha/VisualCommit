@@ -138,7 +138,18 @@ public sealed class HangWatchdogAttribute : BeforeAfterTestAttribute
     /// the watchdog holds to the limit. Null outside a test, or in an assembly without the watchdog.
     /// </summary>
     public static TimeSpan? CountedTimeOfCurrentTest() =>
-        TestContext.Current.Test?.UniqueID is { } test ? Clock.CountedTime(test) : null;
+        TestContext.Current.Test?.UniqueID is { } test ? CountedTimeOf(test) : null;
+
+    /// <summary>
+    /// The counted time of the test whose unique id is <paramref name="test"/>, as
+    /// <see cref="CountedTimeOfCurrentTest"/> gives it, read from any thread: null once that test
+    /// has finished, or in an assembly without the watchdog.
+    /// </summary>
+    public static TimeSpan? CountedTimeOf(string test)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(test);
+        return Clock.CountedTime(test);
+    }
 
     /// <summary>The longest a single test may run before the watchdog stops the run: 3 minutes, or what <see cref="LimitVariable"/> says.</summary>
     public static TimeSpan TestLimit => Limit;

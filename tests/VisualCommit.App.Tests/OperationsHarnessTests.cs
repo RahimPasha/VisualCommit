@@ -121,6 +121,26 @@ public class OperationsHarnessTests
     }
 
     [Fact]
+    public async Task A_harness_disposed_before_its_note_is_due_writes_none()
+    {
+        using var repo = await Scenarios.OperationsAsync();
+        var app = await OperationsHarness.OpenAsync(repo);
+        var notes = new FirstLine();
+        Task watch;
+        try
+        {
+            watch = app.StartStallNote(NoteWait, notes);
+        }
+        finally
+        {
+            app.Dispose();
+        }
+
+        await watch.WaitAsync(NoteWait, TestContext.Current.CancellationToken);
+        Assert.False(notes.Written.Task.IsCompleted);
+    }
+
+    [Fact]
     public void A_step_is_given_what_the_hang_watchdog_leaves_the_test_less_the_margin()
     {
         var left = HangWatchdogAttribute.TimeLeftForCurrentTest();
