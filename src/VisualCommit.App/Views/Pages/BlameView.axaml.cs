@@ -233,8 +233,9 @@ public partial class BlameView : UserControl
         var view = area.TextView;
         var line = Math.Clamp(FirstLineInView(view), run.FirstLine, Math.Min(run.LastLine, document.LineCount));
         area.ClearSelection();
-        area.Caret.Position = AtLeftEdge(view, document, line);
-        area.Caret.DesiredXPos = double.NaN;
+        var (position, desiredX) = AtLeftEdge(view, document, line);
+        area.Caret.Position = position;
+        area.Caret.DesiredXPos = desiredX;
     }
 
     /// <summary>
@@ -245,29 +246,35 @@ public partial class BlameView : UserControl
         view.VisualLinesValid && view.GetDocumentLineByVisualTop(view.ScrollOffset.Y) is { } top ? top.LineNumber : 1;
 
     /// <summary>
-    /// Where the caret stands on <paramref name="line"/> at the view's left edge: column 1 while the
-    /// text is not scrolled across, else the first caret position at or right of that edge (the line's
-    /// end on a line that ends before it), so that an arrow, which keeps the caret's x, moves no text
-    /// across.
+    /// Where the caret stands on <paramref name="line"/> at the view's left edge, and the x that Up
+    /// and Down keep for it: column 1 and no x of its own while the text is not scrolled across; else
+    /// the first caret position at or right of that edge and its x, so that Up and Down move no text
+    /// across. On a line that ends left of the edge (an empty one, or "}") the caret stands at its end,
+    /// out of view, and the x kept is half a space right of the edge, which AvaloniaEdit rounds on the
+    /// next line to the nearest caret position, one at or right of the edge: the caret's own x would
+    /// scroll the text back across. An arrow onto a line that itself ends left of the edge still
+    /// scrolls across to show the caret, as on any line.
     /// </summary>
-    private static TextViewPosition AtLeftEdge(TextView view, TextDocument document, int line)
+    private static (TextViewPosition Position, double DesiredX) AtLeftEdge(TextView view, TextDocument document, int line)
     {
-        var x = view.ScrollOffset.X;
-        if (x <= 0 || !view.VisualLinesValid)
+        var edge = view.ScrollOffset.X;
+        if (edge <= 0 || !view.VisualLinesValid)
         {
-            return new TextViewPosition(line, 1);
+            return (new TextViewPosition(line, 1), double.NaN);
         }
 
         var visualLine = view.GetOrConstructVisualLine(document.GetLineByNumber(line));
         var textLine = visualLine.TextLines[0];
-        var column = visualLine.GetVisualColumn(textLine, x, allowVirtualSpace: false);
-        if (visualLine.GetTextLineVisualXPosition(textLine, column) < x
+        var column = visualLine.GetVisualColumn(textLine, edge, allowVirtualSpace: false);
+        var x = visualLine.GetTextLineVisualXPosition(textLine, column);
+        if (x < edge
             && visualLine.GetNextCaretPosition(column, LogicalDirection.Forward, CaretPositioningMode.Normal, allowVirtualSpace: false) is var next and >= 0)
         {
             column = next;
+            x = visualLine.GetTextLineVisualXPosition(textLine, column);
         }
 
-        return visualLine.GetTextViewPosition(column);
+        return (visualLine.GetTextViewPosition(column), x >= edge ? x : edge + view.WideSpaceWidth / 2);
     }
 
     /// <summary>
