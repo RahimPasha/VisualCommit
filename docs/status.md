@@ -355,8 +355,9 @@ Wave 4 and the review:
   (`ba4570e`) are merged too, and CI's run on the second round is green in all six jobs. **A fourth
   round** sweeps the whole app for controls that hide or disable themselves under the keyboard's
   focus (run `wf_17596548-fdb`). Still open: its merge, the docs for the third and fourth rounds and
-  CI, launches 2 and 3 of the real-window part again, the series taken again, the owner's answer on
-  the dimmed texts, §12's merge, the lagged list, the whole default run and CI.
+  CI, the series taken again (launches 2 and 3 of the real-window part ran again on their fixes on
+  2026-11-24 and passed), the owner's answer on the dimmed texts, §12's merge, the lagged list, the
+  whole default run and CI.
 
 Gate:
 
@@ -950,25 +951,24 @@ left to the lead (`third-result.json`, each file's `written.forTheLead` and `app
 "a file's diff (T, Enter)", the palette named twice in 6.3.4, the report's bullet on step 21 that
 cites `OutcomeAtFocusTests` beside a title the test does not hold, the architecture page's sentence
 on Choose's and Browse's focus after a run); push; read CI; (3) with no agent at work and the owner
-told just before: build `p8a-realwindow` in Release and run launches 2 and 3 of the real-window part
-alone again on their fixes (`Check_L_graph_danger_item_and_head_row` and
-`Check_A_and_B_about_and_icon`), then take the restore order's series again as D461 says: the
-worktrees `p8a-restore-base` at `3f67850` and `p8a-restore` on `wip/p8a-restore` stand ready, their
-Release builds made at 00:24 and 00:28 on 2026-11-24, `bash
-D:/Projects/Personal/phase8-work/wave4/restore/series2/run_series2.sh 1 10`, about an hour and a
-half, a void pair taken again under its number plus ten, and its outcome recorded by D457 (5)'s
-rule. The machine's state for it: on 2026-11-24 Adobe's Desktop Service was found to have used a
-full core without pause since 2026-11-11 (11.7 days of processor time), so through every measure of
-this phase, the first series among them; the series is taken in that state, as the first was, and
-its record says so; (4) ask the owner about the dimmed texts before the whole default run, since a
-change of those colours changes earlier pictures; (5) merge §12 last, with CLAUDE.md's rows and
-notes for 8a's real-window checks as ruling 99 lists them (S19-34); then the lagged list, with the
-classes the fixes added that start the app (`OutcomeAtFocusTests`, `FirstRunFocusTests`,
-`FirstRunSearchTests`), the whole default run (`bash scripts/heavy-run.sh`), the comparison of its
-pictures with wave 3's references, the push and CI's run; then step 19 is ticked. The package is
-reviewed with the rest in step 19 and merged last, in that step. The three finished worktrees
-(`p8a-restore`, `p8a-restore-base`, `p8a-guide`) are removed; their `wip/` branches stay local
-(D396). §11's builders got with their briefs: mdBook at
+told just before (launches 2 and 3 of the real-window part ran again on their three fixes on
+2026-11-24 at 15:21 and 15:24, the owner told, and passed, their run.txt as the fixes predicted:
+design 12.10): take the restore order's series again as D461 says: the worktrees `p8a-restore-base`
+at `3f67850` and `p8a-restore` on `wip/p8a-restore` stand ready, their Release builds made at 00:24
+and 00:28 on 2026-11-24, `bash D:/Projects/Personal/phase8-work/wave4/restore/series2/run_series2.sh
+1 10`, about an hour and a half, a void pair taken again under its number plus ten, and its outcome
+recorded by D457 (5)'s rule. The machine's state for it: on 2026-11-24 Adobe's Desktop Service was
+found to have used a full core without pause since 2026-11-11 (11.7 days of processor time), so
+through every measure of this phase, the first series among them; the series is taken in that state,
+as the first was, and its record says so; (4) ask the owner about the dimmed texts before the whole
+default run, since a change of those colours changes earlier pictures; (5) merge §12 last, with
+CLAUDE.md's rows and notes for 8a's real-window checks as ruling 99 lists them (S19-34); then the
+lagged list, with the classes the fixes added that start the app (`OutcomeAtFocusTests`,
+`FirstRunFocusTests`, `FirstRunSearchTests`), the whole default run (`bash scripts/heavy-run.sh`),
+the comparison of its pictures with wave 3's references, the push and CI's run; then step 19 is
+ticked. The package is reviewed with the rest in step 19 and merged last, in that step. The three
+finished worktrees (`p8a-restore`, `p8a-restore-base`, `p8a-guide`) are removed; their `wip/`
+branches stay local (D396). §11's builders got with their briefs: mdBook at
 `D:/Projects/Personal/phase8-work/tools/mdbook-0.5.4/mdbook.exe` and the Linux archive's SHA-256 for
 `guide.yml` (Notes, "Wave 4"); the references `D:/Projects/Personal/phase8-work/references/wave3/`;
 rulings 80 (stop and report if the first-run link's frame touches its ink), 82 (the facts no check

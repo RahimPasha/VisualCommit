@@ -6056,8 +6056,18 @@ rectangle that cannot be missing, and L6 a to c read through `ReadHeadInk`, whic
 `L6_without_a_rectangle_for_main_is_a_problem`; with 12.4's two, six tests and eight cases, and its
 summary now names the rules of the steps it holds with no window. The fixer ran the class alone: the
 display fact failed on `3ffec5c` as meant, and 8 of 8 passed on `82922f5` and on `902288e`. No
-earlier test changed, and no scripted picture can change. Left for the lead before the part's merge:
-launches 2 and 3 run again on these fixes, the owner told (ruling 99).
+earlier test changed, and no scripted picture can change. **The lead ran launches 2 and 3 again on
+these fixes on 2026-11-24, the owner told, at 15:21 and 15:24 on `902288e`: both passed** (1 min 12
+s and 23 s; the captures and run.txt in
+`D:/Projects/Personal/phase8-work/wave4/realwindow/fixes-launch2/` and `fixes-launch3/`). Launch 2's
+run.txt reads the ink of `main`'s name at its rectangle in all three states (`#7C8CFF` idle,
+`#8B9AFF` hovered and selected, each "held") and has no line that leaves a colour to the comparison.
+Launch 3's reads `B1 (a): the executable's icon asked at 64x64, a frame the .ico holds, whatever the
+scaling; got 64x64`, 2,942 opaque pixels of which none differs by more than 2, then the display that
+holds the window, `{X=0,Y=0,Width=3000,Height=2000}`, and one button, `"VisualCommit - 1 running
+window"` on `Shell_TrayWnd`, on the window's display, found after 0.5 s: the laptop's taskbar gives
+one button per program, which ruling 100 had left open. The enlarged capture of the button shows the
+app's icon.
 
 ## 13. The lead's rulings, what waits on the owner, and the open points
 
