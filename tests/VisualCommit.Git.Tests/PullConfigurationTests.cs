@@ -243,10 +243,12 @@ public class PullConfigurationTests
         Assert.Equal((fastForward, (string?)null), (fastForwardOnly.FastForward, fastForwardOnly.Problem));
 
         // git pull with the same settings, here without a remote: it accepts them and ends at "There
-        // is no tracking information" (exit 1), never at "invalid value" (128), on every git.
+        // is no tracking information" (exit 1), never at its refusal (128), on every git. The
+        // refusal's words differ by version ("Invalid value for pull.ff: …" on 2.34, "invalid value
+        // for 'pull.ff'" since 2.36), so they are looked for in either case.
         var pull = await lab.Runner.RunAsync(new GitCommand("pull") { WorkingDirectory = repo.Path }, TestCancelled);
         Assert.True(pull.ExitCode == 1, $"git pull exited {pull.ExitCode}: {pull.StandardError}");
-        Assert.DoesNotContain("invalid value", pull.StandardError, StringComparison.Ordinal);
+        Assert.DoesNotContain("invalid value", pull.StandardError, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
