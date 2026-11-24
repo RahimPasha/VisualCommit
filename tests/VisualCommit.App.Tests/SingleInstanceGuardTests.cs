@@ -6,6 +6,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using VisualCommit.App.Services;
+using VisualCommit.App.ViewModels;
 using VisualCommit.Core;
 using VisualCommit.Core.Logging;
 using VisualCommit.Testing;
@@ -38,6 +39,23 @@ public sealed class SingleInstanceGuardTests
     /// test's process, a line that names it shows whose id it took.
     /// </summary>
     private const int NoProcess = int.MaxValue;
+
+    /// <summary>The caller that asks as <c>Program.Main</c> does (<see cref="SingleInstanceGuard.ResolveHeld"/>).</summary>
+    private const string SecondStart = "a second start";
+
+    /// <summary>The caller that asks as the notice's "Try again" does (<see cref="InstanceNoticeViewModel.RetryOn"/>).</summary>
+    private const string TryAgain = "Try again";
+
+    /// <summary>A holder that ends as a crash ends it: its <c>instance.json</c> stays.</summary>
+    private const string Crashed = "crashed";
+
+    /// <summary>A holder that ends as its <c>Dispose</c> ends it: <c>instance.json</c> deleted, then the lock let go.</summary>
+    private const string Closed = "closed";
+
+    /// <summary>Every bit that lets a user other than the owner read, write or enter.</summary>
+    private const UnixFileMode GroupOrOther =
+        UnixFileMode.GroupRead | UnixFileMode.GroupWrite | UnixFileMode.GroupExecute
+        | UnixFileMode.OtherRead | UnixFileMode.OtherWrite | UnixFileMode.OtherExecute;
 
     [Fact]
     public void A_second_guard_on_a_taken_folder_is_held_and_one_on_another_folder_takes_it()
@@ -153,7 +171,7 @@ public sealed class SingleInstanceGuardTests
                     holder.Dispose();
                 },
                 TestContext.Current.CancellationToken);
-            Assert.True(second.WaitToTake());
+            Assert.Equal(HeldResolution.Taken, second.WaitToTake());
             await disposal;
 
             Assert.Equal(GuardOutcome.Taken, second.Outcome);
@@ -172,6 +190,275 @@ public sealed class SingleInstanceGuardTests
         finally
         {
             holder.Dispose();
+        }
+    }
+
+    [Theory]
+    [InlineData(SecondStart)]
+    [InlineData(TryAgain)]
+    public async Task Two_starts_that_wait_for_a_closing_holder_end_one_taken_and_the_other_handed_over_to_it(string caller)
+    {
+        using var root = new TempDirectory("guard");
+        var paths = DataFolder(root);
+        var holder = SingleInstanceGuard.TryTake(paths, new RecordingLog(), Patient);
+        try
+        {
+            holder.ComeForward = () => ForwardAnswer.Closing;
+            RecordingLog[] logs = [new(), new()];
+            using var first = SingleInstanceGuard.TryTake(paths, logs[0], Patient);
+            using var second = SingleInstanceGuard.TryTake(paths, logs[1], Patient);
+            SingleInstanceGuard[] guards = [first, second];
+            Assert.All(guards, guard => Assert.Equal(GuardOutcome.Held, guard.Outcome));
+
+            // Each on a thread of its own, which a busy pool cannot hold up. The holder lets the
+            // folder go only once both have its answer, so that neither ask meets its end.
+            var waits = guards.Select(guard => Task.Factory.StartNew(() => Resolve(guard, caller), CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default)).ToArray();
+            var closing = Info($"VisualCommit on the data folder {paths.DataDirectory} (process {Pid}) is closing; this start waits up to 30 s for it.");
+            await WaitForLineAsync(logs[0], closing);
+            await WaitForLineAsync(logs[1], closing);
+            holder.Dispose();
+            var results = await Task.WhenAll(waits);
+
+            // One takes the folder; the other asks it, as it would have asked the closing one.
+            Assert.Equal([HeldResolution.Taken, HeldResolution.HandedOver], results.Order().ToArray());
+            var winner = Array.IndexOf(results, HeldResolution.Taken);
+            var loser = 1 - winner;
+            Assert.Equal(GuardOutcome.Taken, guards[winner].Outcome);
+            Assert.Equal(GuardOutcome.Held, guards[loser].Outcome);
+            Assert.Contains(Info("The other VisualCommit closed; this start goes on."), logs[winner].Entries.Select(Line));
+            var lost = logs[loser].Entries.Select(Line).ToList();
+            Assert.Contains(Info("Another VisualCommit took the data folder while this start waited; it is asked instead."), lost);
+            Assert.Contains(Info($"VisualCommit is starting on the data folder {paths.DataDirectory} (process {Pid}); this start ends."), lost);
+            Assert.DoesNotContain(lost, line => line.Contains("did not close within", StringComparison.Ordinal));
+            using var file = JsonDocument.Parse(File.ReadAllBytes(paths.InstanceFile));
+            Assert.Equal(guards[winner].Endpoint, file.RootElement.GetProperty("endpoint").GetString());
+        }
+        finally
+        {
+            holder.Dispose();
+        }
+    }
+
+    [Theory]
+    [InlineData(SecondStart)]
+    [InlineData(TryAgain)]
+    public async Task A_holder_that_ends_while_it_is_asked_leaves_the_folder_to_the_asker(string caller)
+    {
+        using var root = new TempDirectory("guard");
+        var paths = DataFolder(root);
+        Directory.CreateDirectory(paths.DataDirectory);
+        var endpoint = FreeEndpoint();
+        using var limit = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        limit.CancelAfter(WaitLimit);
+
+        // The test is the holder: it holds the lock and serves the endpoint that instance.json names.
+        var held = new FileStream(paths.InstanceLockFile, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
+        var server = new NamedPipeServerStream(endpoint, PipeDirection.InOut, 1, PipeTransmissionMode.Byte, SingleInstanceGuard.ServerPipeOptions);
+        try
+        {
+            WriteInstanceFile(paths, InstanceJson(NoProcess, endpoint));
+            var log = new RecordingLog();
+            using var asker = SingleInstanceGuard.TryTake(paths, log, Patient);
+            Assert.Equal(GuardOutcome.Held, asker.Outcome);
+
+            // On a thread of its own, which a busy pool cannot hold up. The holder reads the request,
+            // then ends as a closed, crashed or ended VisualCommit does: the lock goes, then the pipe.
+            var resolution = Task.Factory.StartNew(() => Resolve(asker, caller), CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+            await server.WaitForConnectionAsync(limit.Token);
+            Assert.Contains("\"request\":\"come-forward\"", await ReadRequestAsync(server, limit.Token), StringComparison.Ordinal);
+            held.Dispose();
+            server.Dispose();
+
+            Assert.Equal(HeldResolution.Taken, await resolution);
+            Assert.Equal(GuardOutcome.Taken, asker.Outcome);
+            Assert.NotNull(asker.Endpoint);
+            Assert.Contains(Warning($"VisualCommit holds the data folder {paths.DataDirectory} but did not answer (no reply within 5 s)."), log.Entries.Select(Line));
+            Assert.Contains(Info($"The data folder {paths.DataDirectory} is free now; this start goes on."), log.Entries.Select(Line));
+            using var file = JsonDocument.Parse(File.ReadAllBytes(paths.InstanceFile));
+            Assert.Equal(asker.Endpoint, file.RootElement.GetProperty("endpoint").GetString());
+        }
+        finally
+        {
+            server.Dispose();
+            held.Dispose();
+            if (!OperatingSystem.IsWindows())
+            {
+                File.Delete(endpoint);
+            }
+        }
+    }
+
+    [Theory]
+    [InlineData(Crashed)]
+    [InlineData(Closed)]
+    public async Task A_new_holder_that_ends_before_it_answers_a_waiting_start_leaves_the_folder_to_it_at_once(string ending)
+    {
+        using var root = new TempDirectory("guard");
+        var paths = DataFolder(root);
+        Directory.CreateDirectory(paths.DataDirectory);
+        var closing = FreeEndpoint();
+        var next = FreeEndpoint();
+        using var limit = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        limit.CancelAfter(WaitLimit);
+
+        // The waiter's Connect is as long as the test's limit: an ask of the new holder that ran it
+        // out would show as a wait of about that long after the folder came free.
+        var options = new SingleInstanceOptions(WaitLimit, Patient.Reply, Patient.WaitWhileClosing);
+
+        // The test is both holders and holds the lock throughout: first the closing one, whose
+        // endpoint it serves, then the one that took the folder and ends before it answers.
+        var held = new FileStream(paths.InstanceLockFile, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
+        var server = new NamedPipeServerStream(closing, PipeDirection.InOut, 1, PipeTransmissionMode.Byte, SingleInstanceGuard.ServerPipeOptions);
+        try
+        {
+            WriteInstanceFile(paths, InstanceJson(NoProcess, closing));
+            var log = new RecordingLog();
+            using var waiter = SingleInstanceGuard.TryTake(paths, log, options);
+            Assert.Equal(GuardOutcome.Held, waiter.Outcome);
+
+            // On a thread of its own, which a busy pool cannot hold up. The new holder's file is in
+            // place before the closing one answers, so the waiter's first look finds it.
+            var resolution = Task.Factory.StartNew(() => waiter.ResolveHeld(), CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+            await AwaitRequestAsync(server, limit.Token);
+            WriteInstanceFile(paths, InstanceJson(NoProcess, next));
+            await AnswerClosingAsync(server, limit.Token);
+            await WaitForLineAsync(log, Info("Another VisualCommit took the data folder while this start waited; it is asked instead."));
+
+            // Crashed, the new holder leaves its file; closed, it deletes it first. The lock goes either way.
+            if (ending == Closed)
+            {
+                File.Delete(paths.InstanceFile);
+            }
+
+            held.Dispose();
+            var released = Stopwatch.StartNew();
+            var result = await resolution;
+            var elapsed = released.Elapsed;
+
+            Assert.Equal(HeldResolution.Taken, result);
+            Assert.True(elapsed < options.Connect / 3, $"The waiter took the folder {elapsed.TotalSeconds:F1} s after it came free: it went on asking a holder that had ended until its Connect of {options.Connect.TotalSeconds:F0} s ran out.");
+            Assert.Equal(GuardOutcome.Taken, waiter.Outcome);
+            Assert.DoesNotContain(log.Entries, entry => entry.Level == LogLevel.Warning);
+            using var file = JsonDocument.Parse(File.ReadAllBytes(paths.InstanceFile));
+            Assert.Equal(waiter.Endpoint, file.RootElement.GetProperty("endpoint").GetString());
+        }
+        finally
+        {
+            server.Dispose();
+            held.Dispose();
+            if (!OperatingSystem.IsWindows())
+            {
+                File.Delete(closing);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task A_new_holder_that_does_not_answer_a_waiting_start_is_named_so_when_the_wait_runs_out()
+    {
+        using var root = new TempDirectory("guard");
+        var paths = DataFolder(root);
+        Directory.CreateDirectory(paths.DataDirectory);
+        var closing = FreeEndpoint();
+        var next = FreeEndpoint();
+        using var limit = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        limit.CancelAfter(WaitLimit);
+
+        // The waiter's expected result is that its wait runs out, so the wait is short. It asks the
+        // new holder at its first look, since that holder's file is in place before the closing one
+        // answers.
+        var options = new SingleInstanceOptions(Patient.Connect, Patient.Reply, TimeSpan.FromSeconds(5));
+
+        // The test is both holders and holds the lock throughout; nothing serves the new holder's endpoint.
+        var held = new FileStream(paths.InstanceLockFile, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
+        var server = new NamedPipeServerStream(closing, PipeDirection.InOut, 1, PipeTransmissionMode.Byte, SingleInstanceGuard.ServerPipeOptions);
+        try
+        {
+            WriteInstanceFile(paths, InstanceJson(NoProcess, closing));
+            var log = new RecordingLog();
+            using var waiter = SingleInstanceGuard.TryTake(paths, log, options);
+            Assert.Equal(GuardOutcome.Held, waiter.Outcome);
+
+            var resolution = Task.Factory.StartNew(() => waiter.ResolveHeld(), CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+            await AwaitRequestAsync(server, limit.Token);
+            WriteInstanceFile(paths, InstanceJson(NoProcess, next));
+            await AnswerClosingAsync(server, limit.Token);
+
+            // The closing one did let the folder go: the log names the one that holds it now.
+            Assert.Equal(HeldResolution.NotAnswered, await resolution);
+            Assert.Equal(GuardOutcome.Held, waiter.Outcome);
+            var lines = log.Entries.Select(Line).ToList();
+            Assert.Contains(Warning($"VisualCommit holds the data folder {paths.DataDirectory} but did not answer (its endpoint refused the connection)."), lines);
+            Assert.DoesNotContain(lines, line => line.Contains("did not close within", StringComparison.Ordinal));
+        }
+        finally
+        {
+            server.Dispose();
+            held.Dispose();
+            if (!OperatingSystem.IsWindows())
+            {
+                File.Delete(closing);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task A_new_holder_that_is_closing_too_is_waited_for_within_what_is_left_and_the_log_says_how_long()
+    {
+        using var root = new TempDirectory("guard");
+        var paths = DataFolder(root);
+        Directory.CreateDirectory(paths.DataDirectory);
+        var closing = FreeEndpoint();
+        var next = FreeEndpoint();
+        const int NextProcess = NoProcess - 2;
+        using var limit = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        limit.CancelAfter(WaitLimit);
+
+        // The waiter's expected result is that its wait runs out, so the wait is short. It asks the
+        // new holder at its first look, since that holder's file is in place before the closing one
+        // answers.
+        var options = new SingleInstanceOptions(Patient.Connect, Patient.Reply, TimeSpan.FromSeconds(5));
+
+        // The test is both holders, both closing, and holds the lock throughout.
+        var held = new FileStream(paths.InstanceLockFile, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
+        var first = new NamedPipeServerStream(closing, PipeDirection.InOut, 1, PipeTransmissionMode.Byte, SingleInstanceGuard.ServerPipeOptions);
+        var second = new NamedPipeServerStream(next, PipeDirection.InOut, 1, PipeTransmissionMode.Byte, SingleInstanceGuard.ServerPipeOptions);
+        try
+        {
+            WriteInstanceFile(paths, InstanceJson(NoProcess, closing));
+            var log = new RecordingLog();
+            using var waiter = SingleInstanceGuard.TryTake(paths, log, options);
+            Assert.Equal(GuardOutcome.Held, waiter.Outcome);
+
+            var resolution = Task.Factory.StartNew(() => waiter.ResolveHeld(), CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+            await AwaitRequestAsync(first, limit.Token);
+            WriteInstanceFile(paths, InstanceJson(NextProcess, next));
+            await AnswerClosingAsync(first, limit.Token);
+            await AwaitRequestAsync(second, limit.Token);
+            await AnswerClosingAsync(second, limit.Token);
+
+            Assert.Equal(HeldResolution.NotAnswered, await resolution);
+            var lines = log.Entries.Select(Line).ToList();
+            Assert.Contains(Info($"VisualCommit on the data folder {paths.DataDirectory} (process {NoProcess}) is closing; this start waits up to 5 s for it."), lines);
+
+            // The second is told what is left of the one wait, and the line that ends it names the same.
+            var closingToo = Assert.Single(lines, line => line.Contains($"(process {NextProcess}) is closing", StringComparison.Ordinal));
+            var told = Regex.Match(closingToo, "^" + Regex.Escape(Info($"VisualCommit on the data folder {paths.DataDirectory} (process {NextProcess}) is closing; this start waits up to ")) + @"(?<seconds>[0-9]+(\.[0-9]+)?) s for it\.$");
+            Assert.True(told.Success, $"\"{closingToo}\" is not the line of an instance that is closing.");
+            var seconds = told.Groups["seconds"].Value;
+            Assert.True(double.Parse(seconds, CultureInfo.InvariantCulture) < options.WaitWhileClosing.TotalSeconds, $"The second closing instance was told that this start waits up to {seconds} s for it, the whole wait, though part of it had passed.");
+            Assert.Equal(Warning($"The other VisualCommit did not close within {seconds} s."), lines[^1]);
+        }
+        finally
+        {
+            first.Dispose();
+            second.Dispose();
+            held.Dispose();
+            if (!OperatingSystem.IsWindows())
+            {
+                File.Delete(closing);
+                File.Delete(next);
+            }
         }
     }
 
@@ -204,6 +491,36 @@ public sealed class SingleInstanceGuardTests
                 File.Delete(stale);
             }
         }
+    }
+
+    [Fact]
+    public void A_folder_copied_while_its_instance_runs_leaves_that_instances_endpoint_to_it()
+    {
+        using var root = new TempDirectory("guard");
+        var original = DataFolder(root);
+        var copy = new AppPaths(root.Combine("copied data folder"));
+        var runningLog = new RecordingLog();
+        using var running = SingleInstanceGuard.TryTake(original, runningLog, Patient);
+        Assert.Equal(GuardOutcome.Taken, running.Outcome);
+
+        // The copy's lock is free, and its instance.json names the running instance's live endpoint.
+        Directory.CreateDirectory(copy.DataDirectory);
+        File.Copy(original.InstanceFile, copy.InstanceFile);
+        using (var onCopy = SingleInstanceGuard.TryTake(copy, new RecordingLog(), Patient))
+        {
+            Assert.Equal(GuardOutcome.Taken, onCopy.Outcome);
+            Assert.NotEqual(running.Endpoint, onCopy.Endpoint);
+        }
+
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.True(File.Exists(running.Endpoint), $"The running instance's socket {running.Endpoint} was deleted by a start on a copy of its data folder.");
+        }
+
+        using var asker = SingleInstanceGuard.TryTake(original, new RecordingLog(), Patient);
+        Assert.Equal(GuardOutcome.Held, asker.Outcome);
+        Assert.Equal(ForwardAnswer.Starting, asker.AskToComeForward());
+        Assert.DoesNotContain(runningLog.Entries, entry => entry.Level == LogLevel.Warning);
     }
 
     [Fact]
@@ -371,6 +688,47 @@ public sealed class SingleInstanceGuardTests
     }
 
     [Fact]
+    public void On_macOS_and_Linux_the_lock_file_and_the_folders_the_guard_makes_are_the_users_alone()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "Windows has no Unix file modes; CI's macOS and Linux jobs run this.");
+        using var root = new TempDirectory("guard");
+        var parent = root.Combine("parent");
+        var paths = new AppPaths(Path.Combine(parent, "data folder"));
+
+        using var guard = SingleInstanceGuard.TryTake(paths, new RecordingLog(), Patient);
+
+        // Another user who could open the lock file could hold its lock, and every start of the
+        // owner's would then find the folder held. The umask can only take bits away.
+        Assert.Equal(GuardOutcome.Taken, guard.Outcome);
+        Assert.Equal(UnixFileMode.None, UnixMode(paths.InstanceLockFile) & GroupOrOther);
+        foreach (var folder in new[] { parent, paths.DataDirectory })
+        {
+            Assert.Equal(UnixFileMode.None, UnixMode(folder) & GroupOrOther);
+        }
+    }
+
+    [Fact]
+    public void On_macOS_and_Linux_a_lock_file_and_a_data_folder_that_exist_keep_their_modes()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "Windows has no Unix file modes; CI's macOS and Linux jobs run this.");
+        using var root = new TempDirectory("guard");
+        var paths = DataFolder(root);
+        Directory.CreateDirectory(paths.DataDirectory);
+        File.WriteAllText(paths.InstanceLockFile, string.Empty);
+        const UnixFileMode Readable = UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.GroupRead | UnixFileMode.OtherRead;
+        const UnixFileMode Listable = Readable | UnixFileMode.UserExecute | UnixFileMode.GroupExecute | UnixFileMode.OtherExecute;
+        SetUnixMode(paths.DataDirectory, Listable);
+        SetUnixMode(paths.InstanceLockFile, Readable);
+
+        using var guard = SingleInstanceGuard.TryTake(paths, new RecordingLog(), Patient);
+
+        // The guard narrows only what it makes itself.
+        Assert.Equal(GuardOutcome.Taken, guard.Outcome);
+        Assert.Equal(Listable, UnixMode(paths.DataDirectory));
+        Assert.Equal(Readable, UnixMode(paths.InstanceLockFile));
+    }
+
+    [Fact]
     public void A_data_folder_under_a_file_is_unavailable_with_a_warning_and_nothing_thrown()
     {
         using var root = new TempDirectory("guard");
@@ -531,6 +889,73 @@ public sealed class SingleInstanceGuardTests
 
     /// <summary>Connect 5 s and Reply 300 ms: an asker that must connect and whose expected result is that no answer comes.</summary>
     private static SingleInstanceOptions Impatient { get; } = new(TimeSpan.FromSeconds(5), TimeSpan.FromMilliseconds(300), TimeSpan.FromSeconds(30));
+
+    /// <summary>
+    /// A held guard's request as <paramref name="caller"/> makes it: <see cref="SecondStart"/>, as
+    /// <c>Program.Main</c> does, or <see cref="TryAgain"/>, the notice's, which first tries the lock;
+    /// the notice's result told as the guard's.
+    /// </summary>
+    private static HeldResolution Resolve(SingleInstanceGuard guard, string caller) => caller switch
+    {
+        SecondStart => guard.ResolveHeld(),
+        TryAgain => InstanceNoticeViewModel.RetryOn(guard) switch
+        {
+            NoticeRetry.Free => HeldResolution.Taken,
+            NoticeRetry.HandedOver => HeldResolution.HandedOver,
+            _ => HeldResolution.NotAnswered,
+        },
+        _ => throw new ArgumentOutOfRangeException(nameof(caller), caller, "No such caller."),
+    };
+
+    private static UnixFileMode UnixMode(string path) =>
+        OperatingSystem.IsWindows() ? throw new PlatformNotSupportedException("Windows has no Unix file modes.") : File.GetUnixFileMode(path);
+
+    private static void SetUnixMode(string path, UnixFileMode mode)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            throw new PlatformNotSupportedException("Windows has no Unix file modes.");
+        }
+
+        File.SetUnixFileMode(path, mode);
+    }
+
+    /// <summary>An endpoint of the guard's form with nothing at it.</summary>
+    private static string FreeEndpoint()
+    {
+        var name = "VisualCommit-" + RandomNumberGenerator.GetHexString(16, lowercase: true);
+        return OperatingSystem.IsWindows() ? name : Path.GetTempPath() + name;
+    }
+
+    /// <summary>As a holder: waits for a second start's connection and reads its request.</summary>
+    private static async Task AwaitRequestAsync(NamedPipeServerStream server, CancellationToken cancel)
+    {
+        await server.WaitForConnectionAsync(cancel);
+        Assert.Contains("\"request\":\"come-forward\"", await ReadRequestAsync(server, cancel), StringComparison.Ordinal);
+    }
+
+    /// <summary>As a holder whose window has closed: the answer <c>closing</c>, sent after <see cref="AwaitRequestAsync"/>.</summary>
+    private static async Task AnswerClosingAsync(NamedPipeServerStream server, CancellationToken cancel)
+    {
+        await server.WriteAsync(Encoding.UTF8.GetBytes("{\"v\":1,\"answer\":\"closing\"}\n"), cancel);
+        await server.FlushAsync(cancel);
+    }
+
+    /// <summary>What a second start sent, up to its <c>\n</c>, as a holder reads it.</summary>
+    private static async Task<string> ReadRequestAsync(Stream stream, CancellationToken cancel)
+    {
+        var request = new MemoryStream();
+        var buffer = new byte[256];
+        while (true)
+        {
+            var read = await stream.ReadAsync(buffer, cancel);
+            request.Write(buffer, 0, read);
+            if (read == 0 || Array.IndexOf(buffer, (byte)'\n', 0, read) >= 0)
+            {
+                return Encoding.UTF8.GetString(request.ToArray());
+            }
+        }
+    }
 
     private static AppPaths DataFolder(TempDirectory root) => new(root.Combine("data folder"));
 

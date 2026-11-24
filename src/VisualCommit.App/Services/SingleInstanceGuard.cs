@@ -41,6 +41,19 @@ public enum ForwardAnswer
     NotAnswered,
 }
 
+/// <summary>How a second start's request ended (<see cref="SingleInstanceGuard.ResolveHeld"/>).</summary>
+public enum HeldResolution
+{
+    /// <summary>The lock came free: this process holds the data folder now and starts there.</summary>
+    Taken,
+
+    /// <summary>The instance that holds the data folder answered that it came to the front or is starting: this start ends.</summary>
+    HandedOver,
+
+    /// <summary>Another process still holds the lock and gave no such answer.</summary>
+    NotAnswered,
+}
+
 /// <summary>What the desktop app shows at its start.</summary>
 public enum AppStartMode
 {
@@ -57,7 +70,7 @@ public enum AppStartMode
 /// <param name="WaitWhileClosing">How long a second start waits for a closing holder to let the lock go.</param>
 public sealed record SingleInstanceOptions(TimeSpan Connect, TimeSpan Reply, TimeSpan WaitWhileClosing)
 {
-    /// <summary>5 s to connect, 3 s for a reply, 30 s for a closing instance: at most about 8.5 s before a second start gives up, the lock's 250 ms included.</summary>
+    /// <summary>5 s to connect, 3 s for a reply, 30 s for a closing instance: at most about 8.5 s before a second start gives up, the lock's 250 ms before the ask and 250 ms after it included.</summary>
     public static SingleInstanceOptions Default { get; } = new(TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(3), TimeSpan.FromSeconds(30));
 }
 
@@ -95,6 +108,12 @@ public sealed partial class SingleInstanceGuard : IDisposable
 
     private const string EndpointPrefix = "VisualCommit-";
 
+    /// <summary>On macOS and Linux, a lock file the guard makes: read and write for the user alone.</summary>
+    private const UnixFileMode UserOnlyFile = UnixFileMode.UserRead | UnixFileMode.UserWrite;
+
+    /// <summary>On macOS and Linux, a folder the guard makes: the user's alone.</summary>
+    private const UnixFileMode UserOnlyFolder = UserOnlyFile | UnixFileMode.UserExecute;
+
     /// <summary>The variable through which .NET is told to take no file locks on macOS and Linux.</summary>
     private const string LockingOffVariable = "DOTNET_SYSTEM_IO_DISABLEFILELOCKING";
 
@@ -127,6 +146,10 @@ public sealed partial class SingleInstanceGuard : IDisposable
     private CancellationTokenSource? _serving;
     private Task? _server;
     private string? _endpoint;
+
+    /// <summary>The endpoint an ask last reached (<see cref="AskOnce"/>), which <see cref="WaitToTake"/> tells a new holder's from.</summary>
+    private string? _askedEndpoint;
+
     private bool _disposed;
 
     private SingleInstanceGuard(AppPaths paths, IAppLog log, SingleInstanceOptions options)
@@ -136,7 +159,7 @@ public sealed partial class SingleInstanceGuard : IDisposable
         _options = options;
     }
 
-    /// <summary>What the first attempt found; <see cref="GuardOutcome.Held"/> turns <see cref="GuardOutcome.Taken"/> after a successful <see cref="TryTakeNow"/> or <see cref="WaitToTake"/>.</summary>
+    /// <summary>What the first attempt found; <see cref="GuardOutcome.Held"/> turns <see cref="GuardOutcome.Taken"/> after a successful <see cref="TryTakeNow"/> or <see cref="ResolveHeld"/>.</summary>
     public GuardOutcome Outcome { get; private set; }
 
     /// <summary>This guard's own endpoint while it is <see cref="GuardOutcome.Taken"/>; null otherwise.</summary>
@@ -206,26 +229,19 @@ public sealed partial class SingleInstanceGuard : IDisposable
         }
 
         var clock = Stopwatch.StartNew();
-        var why = "no instance.json";
-        var pid = "unknown";
         while (true)
         {
+            string why;
             if (ReadInstanceFile() is { } holder)
             {
-                pid = holder.Pid.ToString(CultureInfo.InvariantCulture);
-                if (OperatingSystem.IsWindows())
+                if (AskOnce(holder) is { } answer)
                 {
-                    // Lets the holder take the foreground, which this process, started by the user,
-                    // may give away; the holder's own attempt alone is refused by Windows.
-                    _ = AllowSetForegroundWindow(holder.Pid);
-                }
-
-                if (TryConnect(holder.Endpoint) is { } connection)
-                {
-                    using (connection)
+                    if (answer == ForwardAnswer.Closing)
                     {
-                        return Exchange(connection, pid);
+                        LogClosing(holder.Pid, _options.WaitWhileClosing);
                     }
+
+                    return answer;
                 }
 
                 why = "its endpoint refused the connection";
@@ -281,24 +297,83 @@ public sealed partial class SingleInstanceGuard : IDisposable
     }
 
     /// <summary>
-    /// After a <see cref="ForwardAnswer.Closing"/>: <see cref="TryTakeNow"/> every 250 ms until it
-    /// succeeds or <see cref="SingleInstanceOptions.WaitWhileClosing"/> has passed. Logs which.
+    /// A <see cref="GuardOutcome.Held"/> start's whole request, which <c>Program.Main</c> and the
+    /// notice's "Try again" both make: <see cref="AskToComeForward"/>, whose
+    /// <see cref="ForwardAnswer.Activated"/> or <see cref="ForwardAnswer.Starting"/> hands over, whose
+    /// <see cref="ForwardAnswer.Closing"/> is waited for (<see cref="WaitToTake"/>), and whose
+    /// <see cref="ForwardAnswer.NotAnswered"/> has the lock tried again for 250 ms
+    /// (<see cref="TakeAfterNoAnswer"/>).
     /// </summary>
-    public bool WaitToTake()
+    /// <exception cref="InvalidOperationException">The guard is not <see cref="GuardOutcome.Held"/>.</exception>
+    public HeldResolution ResolveHeld() => AskToComeForward() switch
+    {
+        ForwardAnswer.Activated or ForwardAnswer.Starting => HeldResolution.HandedOver,
+        ForwardAnswer.Closing => WaitToTake(),
+        _ => TakeAfterNoAnswer(),
+    };
+
+    /// <summary>
+    /// After a <see cref="ForwardAnswer.Closing"/>: <see cref="TryTakeNow"/> every 250 ms until it
+    /// succeeds (<see cref="HeldResolution.Taken"/>) or <see cref="SingleInstanceOptions.WaitWhileClosing"/>
+    /// has passed (<see cref="HeldResolution.NotAnswered"/>). Another start may take the lock the
+    /// closing instance lets go: while <see cref="AppPaths.InstanceFile"/> names an endpoint other than
+    /// the one asked last, that instance is asked instead, one attempt between two tries of the lock,
+    /// so that a new holder that ends before it answers leaves the lock to this start at once. Its
+    /// answer counts as the first one's would: a <see cref="ForwardAnswer.Closing"/> is waited for
+    /// within the same time, and the log tells it what is left of that time. Logs which.
+    /// </summary>
+    public HeldResolution WaitToTake()
     {
         var clock = Stopwatch.StartNew();
+
+        // What the last "is closing" line said this start waits: the whole wait for the first
+        // instance, what was left of it for one that answered while this start waited.
+        var waitsFor = _options.WaitWhileClosing;
+        string? announced = null;
+        var refused = false;
         while (true)
         {
             if (TryTakeNow())
             {
                 _log.Info("The other VisualCommit closed; this start goes on.");
-                return true;
+                return HeldResolution.Taken;
             }
 
             if (clock.Elapsed >= _options.WaitWhileClosing)
             {
-                _log.Warning($"The other VisualCommit did not close within {Seconds(_options.WaitWhileClosing)} s.");
-                return false;
+                // A new holder whose endpoint refused the last attempt holds the folder now: the
+                // closing one did close.
+                _log.Warning(refused
+                    ? $"VisualCommit holds the data folder {Folder} but did not answer (its endpoint refused the connection)."
+                    : $"The other VisualCommit did not close within {Seconds(waitsFor)} s.");
+                return HeldResolution.NotAnswered;
+            }
+
+            // No file: the closing instance deleted its own before letting the lock go, and no new
+            // holder has written one yet. The lock is tried again.
+            refused = false;
+            if (ReadInstanceFile() is { } holder && holder.Endpoint != _askedEndpoint)
+            {
+                if (holder.Endpoint != announced)
+                {
+                    _log.Info("Another VisualCommit took the data folder while this start waited; it is asked instead.");
+                    announced = holder.Endpoint;
+                }
+
+                switch (AskOnce(holder))
+                {
+                    case ForwardAnswer.Activated or ForwardAnswer.Starting:
+                        return HeldResolution.HandedOver;
+                    case ForwardAnswer.NotAnswered:
+                        return TakeAfterNoAnswer();
+                    case ForwardAnswer.Closing:
+                        waitsFor = LeftOfWait(clock.Elapsed);
+                        LogClosing(holder.Pid, waitsFor);
+                        continue;
+                    case null:
+                        refused = true;
+                        break;
+                }
             }
 
             Thread.Sleep(TakePause);
@@ -362,6 +437,44 @@ public sealed partial class SingleInstanceGuard : IDisposable
 
     private static string Seconds(TimeSpan span) => span.TotalSeconds.ToString("0.###", CultureInfo.InvariantCulture);
 
+    /// <summary>
+    /// What is left of <see cref="SingleInstanceOptions.WaitWhileClosing"/> after <paramref name="waited"/>,
+    /// in tenths of a second rounded down, so that a line that names it never names more; never less than 0.
+    /// </summary>
+    private TimeSpan LeftOfWait(TimeSpan waited) =>
+        TimeSpan.FromTicks(Math.Max(0L, (long)Math.Floor((_options.WaitWhileClosing - waited).TotalSeconds * 10)) * (TimeSpan.TicksPerSecond / 10));
+
+    /// <summary>The line for an instance that answered <see cref="ForwardAnswer.Closing"/>, with how long this start waits for it.</summary>
+    private void LogClosing(int pid, TimeSpan waitsFor) =>
+        _log.Info($"VisualCommit on the data folder {Folder} (process {pid.ToString(CultureInfo.InvariantCulture)}) is closing; this start waits up to {Seconds(waitsFor)} s for it.");
+
+    /// <summary>
+    /// After an ask that got no answer: the lock tried again for 250 ms, as the first attempt is,
+    /// since a holder that ended during the ask (closed, crashed, or ended by the user as the notice
+    /// advises) has let it go, and the notice would then name a VisualCommit that no longer runs.
+    /// <see cref="HeldResolution.Taken"/>, or <see cref="HeldResolution.NotAnswered"/> while another
+    /// process still holds it.
+    /// </summary>
+    private HeldResolution TakeAfterNoAnswer()
+    {
+        var clock = Stopwatch.StartNew();
+        while (true)
+        {
+            if (TryTakeNow())
+            {
+                _log.Info($"The data folder {Folder} is free now; this start goes on.");
+                return HeldResolution.Taken;
+            }
+
+            if (clock.Elapsed >= FirstOpenRetries)
+            {
+                return HeldResolution.NotAnswered;
+            }
+
+            Thread.Sleep(FirstOpenPause);
+        }
+    }
+
     /// <summary>The first attempt: the folder, the lock (tried for 250 ms while the file exists), then <see cref="BeginServing"/>.</summary>
     private void TakeFirst()
     {
@@ -379,7 +492,7 @@ public sealed partial class SingleInstanceGuard : IDisposable
         {
             try
             {
-                Directory.CreateDirectory(Folder);
+                CreateFolder();
                 var stream = OpenLock();
                 lock (_gate)
                 {
@@ -425,12 +538,41 @@ public sealed partial class SingleInstanceGuard : IDisposable
         }
     }
 
-    private FileStream OpenLock() => new(_paths.InstanceLockFile, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
+    /// <summary>
+    /// The data folder, made with each missing folder above it. On macOS and Linux a folder made here
+    /// is the user's alone; one that exists keeps its mode.
+    /// </summary>
+    private void CreateFolder()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            Directory.CreateDirectory(Folder);
+        }
+        else
+        {
+            Directory.CreateDirectory(Folder, UserOnlyFolder);
+        }
+    }
+
+    /// <summary>
+    /// The lock file, opened alone. On macOS and Linux a file made here is the user's alone, since
+    /// another user who could open it could hold its lock, and every start of this user's would then
+    /// find the folder held; one that exists keeps its mode.
+    /// </summary>
+    private FileStream OpenLock() => OperatingSystem.IsWindows()
+        ? new(_paths.InstanceLockFile, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None)
+        : new(_paths.InstanceLockFile, new FileStreamOptions
+        {
+            Mode = FileMode.OpenOrCreate,
+            Access = FileAccess.ReadWrite,
+            Share = FileShare.None,
+            UnixCreateMode = UserOnlyFile,
+        });
 
     /// <summary>
     /// The holder's steps, under <see cref="_gate"/> with the lock just opened: the old instance
-    /// file's socket removed if it names one of ours (its owner is gone, since the lock was free),
-    /// the server started on a new endpoint, the instance file written.
+    /// file's socket removed if it names one of ours that no server answers, the server started on a
+    /// new endpoint, the instance file written.
     /// </summary>
     private void BeginServing()
     {
@@ -490,7 +632,12 @@ public sealed partial class SingleInstanceGuard : IDisposable
         }
     }
 
-    /// <summary>A crashed run's socket, named in the instance file it left, exactly of this guard's form; deleted only then.</summary>
+    /// <summary>
+    /// A crashed run's socket, named in the instance file it left, exactly of this guard's form, that
+    /// no server answers; deleted only then. A free lock does not prove its owner gone: a data folder
+    /// copied while its instance ran names that instance's live socket, which a start on the copy
+    /// must leave to it (D421).
+    /// </summary>
     private void RemoveStaleSocket()
     {
         if (ReadInstanceFile() is not { } old || !IsOurSocketPath(old.Endpoint))
@@ -500,10 +647,19 @@ public sealed partial class SingleInstanceGuard : IDisposable
 
         try
         {
-            if (File.Exists(old.Endpoint))
+            if (!File.Exists(old.Endpoint))
             {
-                File.Delete(old.Endpoint);
+                return;
             }
+
+            if (TryConnect(old.Endpoint) is { } live)
+            {
+                // Hung up at once: its server drops a client that sends nothing, unanswered and unlogged.
+                live.Dispose();
+                return;
+            }
+
+            File.Delete(old.Endpoint);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -669,6 +825,31 @@ public sealed partial class SingleInstanceGuard : IDisposable
     }
 
     /// <summary>
+    /// One attempt to reach <paramref name="holder"/>: a connection within 100 ms and, made, the
+    /// request and its answer (<see cref="Exchange"/>); null when the endpoint refused the connection.
+    /// </summary>
+    private ForwardAnswer? AskOnce((int Pid, string Endpoint) holder)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            // Lets the holder take the foreground, which this process, started by the user, may give
+            // away; the holder's own attempt alone is refused by Windows.
+            _ = AllowSetForegroundWindow(holder.Pid);
+        }
+
+        if (TryConnect(holder.Endpoint) is not { } connection)
+        {
+            return null;
+        }
+
+        _askedEndpoint = holder.Endpoint;
+        using (connection)
+        {
+            return Exchange(connection, holder.Pid.ToString(CultureInfo.InvariantCulture));
+        }
+    }
+
+    /// <summary>
     /// A connection to <paramref name="endpoint"/>, or null when it refused it within the attempt's
     /// 100 ms. A name the pipe client refuses as it is made (the instance file is read as it stands)
     /// counts as a refused connection.
@@ -689,7 +870,7 @@ public sealed partial class SingleInstanceGuard : IDisposable
         }
     }
 
-    /// <summary>The request and its answer over a connected pipe, logged.</summary>
+    /// <summary>The request and its answer over a connected pipe, logged; a <see cref="ForwardAnswer.Closing"/> is logged by the caller (<see cref="LogClosing"/>).</summary>
     private ForwardAnswer Exchange(NamedPipeClientStream connection, string pid)
     {
         string? line;
@@ -720,7 +901,7 @@ public sealed partial class SingleInstanceGuard : IDisposable
                 _log.Info($"VisualCommit is starting on the data folder {Folder} (process {pid}); this start ends.");
                 return ForwardAnswer.Starting;
             case ForwardAnswer.Closing:
-                _log.Info($"VisualCommit on the data folder {Folder} (process {pid}) is closing; this start waits up to {Seconds(_options.WaitWhileClosing)} s for it.");
+                // Logged by the caller, which knows how long it waits (LogClosing).
                 return ForwardAnswer.Closing;
             default:
                 _log.Warning($"VisualCommit holds the data folder {Folder} but did not answer (a reply this version does not read).");

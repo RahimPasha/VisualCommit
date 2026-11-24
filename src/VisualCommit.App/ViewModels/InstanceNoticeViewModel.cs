@@ -130,7 +130,8 @@ public sealed partial class InstanceNoticeViewModel : ObservableObject
 
     /// <summary>
     /// One try over the guard, off the UI thread: the lock if it is free now; else the other is
-    /// asked again, and an answer hands over, while a closing one is waited for.
+    /// asked again as a second start asks it (<see cref="SingleInstanceGuard.ResolveHeld"/>), and an
+    /// answer hands over, while a closing one is waited for.
     /// </summary>
     public static NoticeRetry RetryOn(SingleInstanceGuard guard)
     {
@@ -140,10 +141,10 @@ public sealed partial class InstanceNoticeViewModel : ObservableObject
             return NoticeRetry.Free;
         }
 
-        return guard.AskToComeForward() switch
+        return guard.ResolveHeld() switch
         {
-            ForwardAnswer.Activated or ForwardAnswer.Starting => NoticeRetry.HandedOver,
-            ForwardAnswer.Closing => guard.WaitToTake() ? NoticeRetry.Free : NoticeRetry.NoAnswer,
+            HeldResolution.Taken => NoticeRetry.Free,
+            HeldResolution.HandedOver => NoticeRetry.HandedOver,
             _ => NoticeRetry.NoAnswer,
         };
     }
