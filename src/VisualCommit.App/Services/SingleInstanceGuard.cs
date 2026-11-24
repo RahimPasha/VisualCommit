@@ -147,7 +147,7 @@ public sealed partial class SingleInstanceGuard : IDisposable
     private Task? _server;
     private string? _endpoint;
 
-    /// <summary>The endpoint <see cref="AskToComeForward"/> last reached, which <see cref="WaitToTake"/> tells a new holder's from.</summary>
+    /// <summary>The endpoint an ask last reached (<see cref="AskOnce"/>), which <see cref="WaitToTake"/> tells a new holder's from.</summary>
     private string? _askedEndpoint;
 
     private bool _disposed;
@@ -229,27 +229,14 @@ public sealed partial class SingleInstanceGuard : IDisposable
         }
 
         var clock = Stopwatch.StartNew();
-        var why = "no instance.json";
-        var pid = "unknown";
         while (true)
         {
+            string why;
             if (ReadInstanceFile() is { } holder)
             {
-                pid = holder.Pid.ToString(CultureInfo.InvariantCulture);
-                if (OperatingSystem.IsWindows())
+                if (AskOnce(holder) is { } answer)
                 {
-                    // Lets the holder take the foreground, which this process, started by the user,
-                    // may give away; the holder's own attempt alone is refused by Windows.
-                    _ = AllowSetForegroundWindow(holder.Pid);
-                }
-
-                if (TryConnect(holder.Endpoint) is { } connection)
-                {
-                    _askedEndpoint = holder.Endpoint;
-                    using (connection)
-                    {
-                        return Exchange(connection, pid);
-                    }
+                    return answer;
                 }
 
                 why = "its endpoint refused the connection";
@@ -324,13 +311,17 @@ public sealed partial class SingleInstanceGuard : IDisposable
     /// After a <see cref="ForwardAnswer.Closing"/>: <see cref="TryTakeNow"/> every 250 ms until it
     /// succeeds (<see cref="HeldResolution.Taken"/>) or <see cref="SingleInstanceOptions.WaitWhileClosing"/>
     /// has passed (<see cref="HeldResolution.NotAnswered"/>). Another start may take the lock the
-    /// closing instance lets go: once <see cref="AppPaths.InstanceFile"/> names an endpoint other than
-    /// the one asked last, that instance is asked instead, and its answer counts as the first one's
-    /// would (a <see cref="ForwardAnswer.Closing"/> is waited for within the same time). Logs which.
+    /// closing instance lets go: while <see cref="AppPaths.InstanceFile"/> names an endpoint other than
+    /// the one asked last, that instance is asked instead, one attempt between two tries of the lock,
+    /// so that a new holder that ends before it answers leaves the lock to this start at once. Its
+    /// answer counts as the first one's would (a <see cref="ForwardAnswer.Closing"/> is waited for
+    /// within the same time). Logs which.
     /// </summary>
     public HeldResolution WaitToTake()
     {
         var clock = Stopwatch.StartNew();
+        string? announced = null;
+        var refused = false;
         while (true)
         {
             if (TryTakeNow())
@@ -341,24 +332,37 @@ public sealed partial class SingleInstanceGuard : IDisposable
 
             if (clock.Elapsed >= _options.WaitWhileClosing)
             {
-                _log.Warning($"The other VisualCommit did not close within {Seconds(_options.WaitWhileClosing)} s.");
+                // A new holder whose endpoint refused the last attempt holds the folder now: the
+                // closing one did close.
+                _log.Warning(refused
+                    ? $"VisualCommit holds the data folder {Folder} but did not answer (its endpoint refused the connection)."
+                    : $"The other VisualCommit did not close within {Seconds(_options.WaitWhileClosing)} s.");
                 return HeldResolution.NotAnswered;
             }
 
             // No file: the closing instance deleted its own before letting the lock go, and no new
             // holder has written one yet. The lock is tried again.
+            refused = false;
             if (ReadInstanceFile() is { } holder && holder.Endpoint != _askedEndpoint)
             {
-                _log.Info("Another VisualCommit took the data folder while this start waited; it is asked instead.");
-                switch (AskToComeForward())
+                if (holder.Endpoint != announced)
+                {
+                    _log.Info("Another VisualCommit took the data folder while this start waited; it is asked instead.");
+                    announced = holder.Endpoint;
+                }
+
+                switch (AskOnce(holder))
                 {
                     case ForwardAnswer.Activated or ForwardAnswer.Starting:
                         return HeldResolution.HandedOver;
                     case ForwardAnswer.NotAnswered:
                         return TakeAfterNoAnswer();
+                    case ForwardAnswer.Closing:
+                        continue;
+                    case null:
+                        refused = true;
+                        break;
                 }
-
-                continue;
             }
 
             Thread.Sleep(TakePause);
@@ -795,6 +799,31 @@ public sealed partial class SingleInstanceGuard : IDisposable
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             return (null, ex);
+        }
+    }
+
+    /// <summary>
+    /// One attempt to reach <paramref name="holder"/>: a connection within 100 ms and, made, the
+    /// request and its answer (<see cref="Exchange"/>); null when the endpoint refused the connection.
+    /// </summary>
+    private ForwardAnswer? AskOnce((int Pid, string Endpoint) holder)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            // Lets the holder take the foreground, which this process, started by the user, may give
+            // away; the holder's own attempt alone is refused by Windows.
+            _ = AllowSetForegroundWindow(holder.Pid);
+        }
+
+        if (TryConnect(holder.Endpoint) is not { } connection)
+        {
+            return null;
+        }
+
+        _askedEndpoint = holder.Endpoint;
+        using (connection)
+        {
+            return Exchange(connection, holder.Pid.ToString(CultureInfo.InvariantCulture));
         }
     }
 
