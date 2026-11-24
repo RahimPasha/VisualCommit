@@ -209,6 +209,15 @@ public abstract record FakeGitAnswer
             PathCandidate = candidate,
         });
 
+    /// <summary>
+    /// A git that is found and new enough at <paramref name="path"/>, made up: no git runs, so no
+    /// time limit can catch it on a busy machine. For a chosen file's probe (Choose's and the settings
+    /// row's Browse's), which reads the detection's availability alone; an answer to a search whose
+    /// git the session then runs is <see cref="RealAt"/>.
+    /// </summary>
+    public static FakeGitAnswer AvailableAt(string path, GitSource source = GitSource.Setting, string version = "2.47.1") =>
+        new Made(_ => new GitDetection(GitAvailability.Available, path, Version(version), null) { Source = source });
+
     /// <summary>A git older than the minimum at <paramref name="path"/>.</summary>
     public static FakeGitAnswer TooOld(string path, GitSource source = GitSource.Path, string version = FakeGitSetupProbe.TooOldVersion) =>
         new Made(_ => new GitDetection(GitAvailability.TooOld, path, Version(version), null) { Source = source });

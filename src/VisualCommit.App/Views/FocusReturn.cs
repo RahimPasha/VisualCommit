@@ -11,7 +11,8 @@ namespace VisualCommit.App.Views;
 /// <summary>
 /// Gives the focus back after a command whose run took it away: a dialog opened over a button that
 /// the command itself disables while it runs, so that the window's own return (D104) finds the
-/// opener disabled; or a row the command removed while one of its buttons had the focus.
+/// opener disabled; a row the command removed while one of its buttons had the focus; or a button
+/// the command hid.
 /// </summary>
 public static class FocusReturn
 {
@@ -123,6 +124,44 @@ public static class FocusReturn
                     NavigationMethod.Unspecified,
                     lost);
             }
+        };
+    }
+
+    /// <summary>
+    /// For a button whose command hides it as it runs (the choice it stands for dropped, the note it
+    /// dismisses gone): when it is pressed while it shows the keyboard's frame (Enter or Space after
+    /// Tab) and the press leaves it hidden with the focus lost, <paramref name="instead"/> takes the
+    /// focus, with the frame, once the layout has followed, as a branch's eye that hides itself gives
+    /// the focus to its row (D462): Avalonia gives the focus to nothing then. Only while the button
+    /// still has the data it was pressed for and <paramref name="instead"/> shows, enabled; a click
+    /// arms nothing, so the mouse's path stays as it was. Call once, when the view is made.
+    /// </summary>
+    public static void AfterKeyboardPressThatHides(Button button, Func<InputElement?> instead)
+    {
+        ArgumentNullException.ThrowIfNull(button);
+        ArgumentNullException.ThrowIfNull(instead);
+        button.Click += (_, _) =>
+        {
+            if (!button.IsFocused || !button.Classes.Contains(":focus-visible"))
+            {
+                return;
+            }
+
+            var armed = button.DataContext;
+            var topLevel = TopLevel.GetTopLevel(button);
+            var lost = LostFrom(topLevel, button, static () => false);
+            Dispatcher.UIThread.Post(
+                () =>
+                {
+                    if (ReferenceEquals(button.DataContext, armed)
+                        && !button.IsEffectivelyVisible
+                        && lost(topLevel?.FocusManager?.GetFocusedElement())
+                        && instead() is { IsEffectivelyVisible: true, IsEffectivelyEnabled: true } element)
+                    {
+                        element.Focus(NavigationMethod.Tab);
+                    }
+                },
+                DispatcherPriority.Loaded);
         };
     }
 

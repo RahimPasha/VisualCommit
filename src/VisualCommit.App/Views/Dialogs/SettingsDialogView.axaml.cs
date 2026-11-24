@@ -23,7 +23,11 @@ namespace VisualCommit.App.Views.Dialogs;
 /// the shown section starts at its top; a field the view model names takes the focus (the first
 /// wrong one after a refused Save, Other…'s program box). The Git program row's Browse…, disabled
 /// while its file dialog is open and its file is probed, takes the focus back once its run has
-/// ended with the focus lost, as by Tab when it had the keyboard outline as it was pressed.
+/// ended with the focus lost, as by Tab when it had the keyboard outline as it was pressed; it also
+/// takes the focus, as by Tab, from the row's "Use the Git on the PATH" ("Use the Git it found")
+/// when that button, pressed with the keyboard outline, hides itself with the choice it drops. The
+/// Accounts section's netrc note's Dismiss, pressed so, hides itself with the note, and the
+/// section's button, where the screen puts its first focus, takes the focus in the same way (D462).
 /// While the shown section is at its top, its scroller lets what is drawn just above its first row
 /// show, so that a radio button there shows its whole keyboard frame.
 /// </summary>
@@ -55,6 +59,8 @@ public partial class SettingsDialogView : DialogView
         DataContextChanged += (_, _) => Follow(DataContext as SettingsDialogViewModel);
         SettingsNav.AddHandler(KeyDownEvent, OnNavKeyDown, RoutingStrategies.Tunnel);
         GitProgramBrowseButton.Click += OnGitProgramBrowseClick;
+        FocusReturn.AfterKeyboardPressThatHides(GitProgramUsePathButton, () => GitProgramBrowseButton);
+        FocusReturn.AfterKeyboardPressThatHides(AccountsNetrcDismiss, () => SettingsNavAccounts);
         SectionScroller.TemplateApplied += OnSectionScrollerTemplateApplied;
         SectionScroller.PropertyChanged += OnSectionClipChanged;
     }

@@ -48,7 +48,7 @@ public sealed partial class GitProgramViewModel : ObservableObject
 
     /// <summary>The pending choice, which Save writes as <c>gitExecutable</c>; null for none.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsChanged), nameof(PathText), nameof(NoteText), nameof(ShowsUsePath), nameof(UsePathText))]
+    [NotifyPropertyChangedFor(nameof(IsChanged), nameof(PathText), nameof(NoteText), nameof(ShowsUsePath), nameof(UsePathText), nameof(BrowseHelpText))]
     public partial string? Choice { get; private set; }
 
     /// <summary>The choice differs from the one saved: Save writes it.</summary>
@@ -56,11 +56,22 @@ public sealed partial class GitProgramViewModel : ObservableObject
 
     /// <summary>
     /// <c>GitProgramStatus</c>: <c>Checking…</c> while Browse's probe runs, then Browse's refusal;
-    /// null for none. Also Browse's help text (D463).
+    /// null for none. Browse's help text while it has one (<see cref="BrowseHelpText"/>).
     /// </summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ShowsStatus), nameof(IsStatusRefusal))]
+    [NotifyPropertyChangedFor(nameof(ShowsStatus), nameof(IsStatusRefusal), nameof(BrowseHelpText))]
     public partial string? StatusText { get; private set; }
+
+    /// <summary>
+    /// Browse's help text, which describes it at all times (D463): its status while it has one
+    /// (<c>Checking…</c>, then the refusal), else what the row shows, its path then its note. Browse
+    /// gets the keyboard focus back after each of its runs, and a reader is told a focused button's
+    /// description with the focus, where the row's lines, which change with their text in one step
+    /// and are no live regions, reach no reader; so the focus that comes back after a Browse that
+    /// passes reads the chosen file and its note, and Tab onto Browse reads which git the row shows.
+    /// Raised whenever the status or the choice, which the path and the note follow, changes.
+    /// </summary>
+    public string BrowseHelpText => ShowsStatus ? StatusText! : PathText + ". " + NoteText;
 
     public bool ShowsStatus => !string.IsNullOrEmpty(StatusText);
 

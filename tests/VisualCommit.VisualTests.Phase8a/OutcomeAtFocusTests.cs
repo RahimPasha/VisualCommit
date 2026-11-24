@@ -19,9 +19,9 @@ namespace VisualCommit.VisualTests.Phase8a;
 /// after that outcome is described by it instead (its help text), which a reader is told with the
 /// focus event, as a form's field is described by its error: the notice's Try again by its status,
 /// the first-run screen's Choose by the error line and its Check again by the title, the settings
-/// row's Browse by its refusal. Each test takes the focus events as Windows' bridge takes them
-/// (<see cref="ClientWalk.RecordFocus"/>) and the peers as a client reaches them
-/// (<see cref="ClientWalk"/>); the names stay the buttons' own.
+/// row's Browse by its status, else by the row's path and note (ruling 101). Each test takes the
+/// focus events as Windows' bridge takes them (<see cref="ClientWalk.RecordFocus"/>) and the peers
+/// as a client reaches them (<see cref="ClientWalk"/>); the names stay the buttons' own.
 /// </summary>
 public sealed class OutcomeAtFocusTests : Phase8aChecks
 {
@@ -120,18 +120,23 @@ public sealed class OutcomeAtFocusTests : Phase8aChecks
     }
 
     /// <summary>
-    /// The settings row's Browse has no help text before Browse; while the chosen file is probed it is
-    /// described by the row's "Checking…"; once the file is refused, the focus comes back to it with
-    /// the refusal as its help text, its name still "Browse…". The row's status line (GitProgramStatus)
-    /// is no live region and is not what a reader is told when the focus comes back: before this, the
-    /// focus event said "Browse…" alone.
+    /// The settings row's Browse is described by the row at all times (D463 (3); ruling 101): by its
+    /// status while it has one, else by the row's path and note. Tab onto it reads the git the row
+    /// shows and where it came from; while the chosen file is probed it is described by the row's
+    /// "Checking…"; once the file is refused, the focus comes back to it with the refusal; once a
+    /// second file passes, the focus comes back to it with that file and its note; after "Use the Git
+    /// on the PATH" it is described by the row's path and note again. Its name stays "Browse…". The
+    /// row's lines (GitProgramPath, GitProgramNote, GitProgramStatus) are no live regions and are not
+    /// what a reader is told when the focus comes back: before this, the focus event after a Browse
+    /// that passed said "Browse…" alone.
     /// </summary>
     [AvaloniaFact]
-    public async Task The_rows_Browse_is_described_by_its_status_and_gets_the_focus_back_with_the_refusal()
+    public async Task The_rows_Browse_is_described_by_its_status_or_else_by_the_rows_path_and_note_when_the_focus_comes_to_it()
     {
         using var data = new TempDirectory("phase8a outcome");
         var probe = new FakeGitSetupProbe(FakeGitSetupProbe.Windows(), FakeGitAnswer.RealAt(F.WindowsGit, GitSource.Path))
-            .AnswerFor(F.Old, FakeGitAnswer.TooOld(F.Old, GitSource.Setting, F.TooOldVersion));
+            .AnswerFor(F.Old, FakeGitAnswer.TooOld(F.Old, GitSource.Setting, F.TooOldVersion))
+            .AnswerFor(F.Chosen, FakeGitAnswer.AvailableAt(F.Chosen));
         using var app = await StartEmptyAsync(data, gitProbe: probe);
         var dialog = await app.OpenSettingsAsync(SettingsOpening.Key);
         app.ChooseSection(SettingsSection.Git);
@@ -139,11 +144,13 @@ public sealed class OutcomeAtFocusTests : Phase8aChecks
         var browse = (Button)app.FindByAutomationId(app.TopDialogView!, F.ProgramBrowseId);
         browse.BringIntoView();
         app.Settle();
-        Assert.Equal((F.Browse, string.Empty), NameAndHelpText(app.Window, F.ProgramBrowseId));
+        var inUse = $"{F.WindowsGit}. {F.FoundOnPathNote}";
+        Assert.Equal((F.Browse, inUse), NameAndHelpText(app.Window, F.ProgramBrowseId));
         app.Folders.AnswerFile(F.Old);
         var hold = probe.HoldNext();
-        FocusByTab(app, browse, F.ProgramBrowseId);
         using var focus = ClientWalk.RecordFocus(app.Window);
+        FocusByTab(app, browse, F.ProgramBrowseId);
+        Assert.Equal(new FocusEvent(F.ProgramBrowseId, F.Browse, inUse), focus.Last);
 
         app.PressKey(Key.Enter);
         await hold.Started.WaitAsync(ShellDriver.DefaultWaitTimeout, TestContext.Current.CancellationToken);
@@ -158,6 +165,34 @@ public sealed class OutcomeAtFocusTests : Phase8aChecks
 
         Assert.Equal(new FocusEvent(F.ProgramBrowseId, F.Browse, refusal), focus.Last);
         Assert.Equal((F.Browse, refusal), NameAndHelpText(app.Window, F.ProgramBrowseId));
+
+        // A second Browse by Enter, a file that passes: the focus comes back with that file and its
+        // note. The probe's made-up answer is held, as a real probe, which runs the file, never
+        // answers within the key press: Browse is disabled meanwhile and the focus leaves it.
+        app.Folders.AnswerFile(F.Chosen);
+        var refused = focus.Events.Count;
+        hold = probe.HoldNext();
+        app.PressKey(Key.Enter);
+        await hold.Started.WaitAsync(ShellDriver.DefaultWaitTimeout, TestContext.Current.CancellationToken);
+        app.Settle();
+        Assert.Equal((F.Browse, F.Checking), NameAndHelpText(app.Window, F.ProgramBrowseId));
+        hold.Release();
+        await app.WaitForAsync(
+            () => !dialog.GitProgram.BrowseCommand.IsRunning && dialog.GitProgram.Choice == F.Chosen && app.FocusedAutomationId() == F.ProgramBrowseId && focus.Events.Count > refused,
+            "the chosen file, with the focus back on Browse");
+        app.Settle();
+        var chosen = $"{F.Chosen}. {F.ChosenHereNote}{F.NextStartSuffix}";
+
+        Assert.True(app.FocusVisible, "Browse has the focus without the keyboard's frame after the Browse that passed.");
+        Assert.Equal(new FocusEvent(F.ProgramBrowseId, F.Browse, chosen), focus.Last);
+        Assert.Equal((F.Browse, chosen), NameAndHelpText(app.Window, F.ProgramBrowseId));
+
+        // "Use the Git on the PATH" drops the choice: the row's path and note again.
+        app.Click(app.FindByAutomationId(app.TopDialogView!, F.ProgramUsePathId));
+        await app.WaitForAsync(() => dialog.GitProgram.Choice is null, "the choice to be dropped");
+        app.Settle();
+
+        Assert.Equal((F.Browse, inUse), NameAndHelpText(app.Window, F.ProgramBrowseId));
     }
 
     /// <summary>The name and help text of the element <paramref name="automationId"/>, as a client walking down from <paramref name="window"/> reaches it now.</summary>

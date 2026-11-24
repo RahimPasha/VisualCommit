@@ -205,6 +205,52 @@ public class GitProgramViewModelTests
         Assert.False(cancelled.ShowsStatus);
     }
 
+    /// <summary>
+    /// Browse is described by the row at all times (D463 (3); docs/phase-8a-design.md 13.1, ruling
+    /// 101): before any Browse by the row's path and note; while the chosen file is probed by
+    /// "Checking…"; after a refusal by the refusal; after a Browse that passes by the chosen file and
+    /// its note; after "Use the Git on the PATH" by the row's path and note again. Each change is
+    /// told to a binding as it comes (<see cref="System.ComponentModel.INotifyPropertyChanged"/>).
+    /// </summary>
+    [Fact]
+    public async Task Browse_is_described_by_its_status_while_it_has_one_and_else_by_the_rows_path_and_note()
+    {
+        var held = new TaskCompletionSource<GitDetection>();
+        var folders = new FakeFolderPicker().AnswerFile(Old).AnswerFile(Chosen);
+        var row = Row(null, OnPath, folders, (path, token) => path == Old ? held.Task : Probing(Chosen)(path, token));
+        string? told = null;
+        row.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(GitProgramViewModel.BrowseHelpText))
+            {
+                told = row.BrowseHelpText;
+            }
+        };
+
+        void AssertDescribedBy(string expected, string when)
+        {
+            Assert.True(row.BrowseHelpText == expected, $"Browse is described by \"{row.BrowseHelpText}\" {when}, not \"{expected}\".");
+            Assert.True(told == expected, $"A binding was last told \"{told}\" {when}, not \"{expected}\".");
+        }
+
+        var inUse = WindowsGit + ". Found on the PATH.";
+        Assert.True(row.BrowseHelpText == inUse, $"Browse is described by \"{row.BrowseHelpText}\" before any Browse, not \"{inUse}\".");
+
+        var browsing = row.BrowseCommand.ExecuteAsync(null);
+        AssertDescribedBy("Checking…", "while the file is probed");
+        held.SetResult(new GitDetection(GitAvailability.TooOld, Old, new GitVersion(2, 29, 0), null));
+        await browsing;
+        AssertDescribedBy($"Git 2.29.0 at this path is too old: VisualCommit needs {GitVersion.Minimum} or newer.", "after the refusal");
+
+        await row.BrowseCommand.ExecuteAsync(null);
+        Assert.Equal(Chosen, row.Choice);
+        AssertDescribedBy(Chosen + ". Chosen here. VisualCommit uses it from its next start.", "after a Browse that passed");
+
+        row.UsePathCommand.Execute(null);
+        Assert.Null(row.Choice);
+        AssertDescribedBy(inUse, "after \"Use the Git on the PATH\"");
+    }
+
     [Fact]
     public async Task Browse_stops_a_probe_that_does_not_answer_in_time_and_says_so()
     {
