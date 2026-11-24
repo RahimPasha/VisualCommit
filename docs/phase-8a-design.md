@@ -6512,6 +6512,75 @@ with one helper shared with the stage lists' walk. *after-frames*: the Theme opt
 whole with nothing else moved, and a link's frame clear of its text at every scaling from 1 to 2.
 The lead adds to U2/U3's step 4 the wait for the graph's reload (ruling 99, S19-27).
 
+**The second round as built, and what the lead ruled on it (the lead, 2026-11-24; D466).** 101. Run
+`wf_11b1bda1-1ef` (08:00 to 10:21 on 2026-11-24, nine agents, 2.87M tokens) built ruling 100's three
+packages, each with its tests first, read by an independent reader (ten points, all minor) and
+corrected. Merged on 2026-11-24 at 10:23: `950ca7d` (after-speech), `39c632f` (after-order) and
+`db7fbce` (after-frames). The result is
+`D:/Projects/Personal/phase8-work/wave4/review/after-result.json`, the picture comparisons under
+`…/review/compare/after-*`. As built, and the rulings:
+
+- *after-speech*. Four buttons are described by their outcome through
+  `AutomationProperties.HelpText`: the notice's Try again by `StatusLine`, the first-run screen's
+  Choose by `ErrorText` and its Check again by `Title`, the Git program row's Browse by
+  `StatusText`, which is its refusal and, while the file is probed, `Checking…`, as Choose's is
+  (D463 (3)). The builder read Avalonia 12.1.3 for it: a peer's help text is UI Automation's
+  HelpText on Windows and `accessibilityHelp` on macOS, and the window's peer raises a focus change
+  for which the bridge makes the focused peer's node there and then (`RootAutomationNode`,
+  `AutomationNode.GetOrCreate`), so the description reaches a reader with the focus also when no
+  client had reached the button before, which a live region's change does not (D455).
+  `OutcomeAtFocusTests` hold each focus event with its name and help text; what Narrator says is the
+  gate's listen (D460). The blame: a pick by the pointer puts the caret on the picked run's first
+  line in view, a line drawn in part at the view's top counting, and at the view's left edge when
+  the text is scrolled across, so that the next Up or Down scrolls nothing, also from an empty line
+  and when the pick clears a selection. The row's note reads as ruled
+  (`GitSetupTexts.NextStartLooksAgainSuffix`), and both new texts are in the expectations. Two of
+  the reader's points came to the lead. The error line also carries a failed start of winget or of
+  the Command Line Tools, so Choose can be described by a failure that is not its own, and that
+  failure is spoken nowhere at the moment it happens, its button keeping the focus: accepted and
+  recorded; a text that changes while its button keeps the focus needs another means than a
+  description (a Backlog row). And after a Browse that passes, the description is empty and nothing
+  tells the row's new path and note: ruled by D463 (3)'s own rule, Browse is described by the row at
+  all times, by its status while it has one and else by the path and the note; built in a third
+  round (below).
+- *after-order*. `RowOrderStackPanel`, the items panel the left panel's list, the commit details'
+  and the comparison's file lists and the two stage lists now share, answers Avalonia's Tab
+  navigation itself (D466): the stage lists' own walk of wave 2 moved into it. The builder's sweep
+  of every list of the app is in its account: the virtualizing lists whose rows hold stops went
+  wrong after an insert or a scroll (an opened folder's rows last, rows below the view never
+  reached, Tab into a scrolled list landing in its middle); the lists that are one stop (the
+  activity log, the interactive rebase, the list boxes) and the lists that make every control hold,
+  and two of them have guards now. Accepted: Tab into such a list reaches its first row and
+  Shift+Tab from after it its last, the list scrolled there; the left panel's walk visits every row,
+  those below the view included, before it leaves, as the stage lists' has since wave 2 (F6 leaves a
+  region in one press, and the arrows walk rows as before). K8's count of Tabs from the filter to
+  the splitter can grow at the gate, where it is recorded.
+- *after-frames*. While a settings section is at its top, its scroller's clip reaches 4 px higher,
+  so a Theme option's frame is drawn whole and nothing else moves; scrolled, the section is clipped
+  as before. A link's frame lies 4 px outside the link on every side (it was 3 above and below), and
+  `LinkFocusFrameTests` render every `VcLinkButton` of the app at scalings 1 to 2 in steps of 0.25
+  (42 cases in all): About's two, GitLab's two, and GitHub's and Azure DevOps' token link.
+  `a1b-about-link-focus` and `g3a-about-guide-link` change in the frame's rows alone; every settings
+  picture is the same file as before. `LayoutAudit` counts a parent's clip geometry, and `LinkFrame`
+  reads pictures drawn at a scaling above 1. Three things came to the lead, each accepted with its
+  numbers and a Backlog row at the close. The Theme note: at a scaling of 1 Dark's frame lies under
+  two faint ink pixels of the note's "follows"; at other scalings Dark's and System's frames touch
+  the note's ink or keep one row from it, and Light's keeps two rows or more. Clearing it means the
+  note 2 px lower, which moves the rest of General in every picture of it. GitLab's legacy token
+  link: its frame's top now reaches the token link's line box, one device row from that link's
+  descenders at 1, 1.25, 1.75 and 2 and touching them at 1.5, where 3 px had left two or three rows;
+  the two links would have to lie 6 apart, which moves the lower half of phase 7b's dialog. And a
+  radio button's frame is cut by the scroller when Tab brings the button to the edge of a scrolled
+  section: seen at the minimum window in the repository scope with "Other" shown (6 px of the
+  frame's bottom); with the default content no framed control reaches an edge. Its fix changes where
+  a section scrolls. The scaled link cases have run on Windows alone: CI's macOS and Linux jobs are
+  their first run there.
+
+**The third round** (one package in a worktree of its own, `wip/p8a-after-browse`, from `db7fbce`,
+built, read and corrected as the others): the Git program row's Browse described by the row at all
+times, and where the keyboard focus goes when "Use the Git on the PATH" or "Use the Git it found",
+pressed by the keys, hides itself with the choice it drops.
+
 ### 13.2 What the integration settled
 
 Beyond moving the packages' contracts into section 1: the broker's `gitVersion` goes at §3's merge,
