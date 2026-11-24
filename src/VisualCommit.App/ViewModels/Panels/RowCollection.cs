@@ -192,7 +192,12 @@ public sealed class RowCollection<T> : ObservableCollection<T>
     /// at the top of the view, a fetch that drops r03 and brings r99 moves the rows in view 87 px
     /// down. A rebuild that changes the number of rows removes and inserts its changed part in the
     /// same way, or, when it only inserts rows or only removes them, inserts or removes them in one
-    /// change, which the panel takes as it takes them one by one.
+    /// change, which the panel takes as it takes them one by one. So 60 branches scrolled by 400 px,
+    /// a branch created that sorts first, far above the view: the list is told of its row alone, the
+    /// offset stays 400, the rows in view are drawn 22 px lower, 4 px above their true places, each
+    /// with a new control, and a press on one of them loses its click, as when the header was
+    /// removed and inserted with the new row; the row under the pointer has moved a row down in any
+    /// case.
     /// </para>
     /// <para>
     /// How far the estimate misses depends on which of the rows the panel has made are left for its
