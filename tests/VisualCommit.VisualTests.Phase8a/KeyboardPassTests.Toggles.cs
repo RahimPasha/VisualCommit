@@ -279,8 +279,7 @@ public sealed partial class KeyboardPassTests
         var refRow = await app.RefRowAsync(U.LocalBranches, U.Feature, row.Text);
         if (byKeys)
         {
-            // The row by a click (its rows came after the panel's other rows were made, so Tab would
-            // reach them last), then Tab to its toggle.
+            // The row by a click, then Tab to its toggle.
             app.Click(refRow);
             await app.WaitForIdleAsync();
             app.MoveToNeutral();

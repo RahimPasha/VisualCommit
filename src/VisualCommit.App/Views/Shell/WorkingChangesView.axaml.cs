@@ -47,10 +47,6 @@ public partial class WorkingChangesView : UserControl
         UnstagedFileList.AddHandler(Button.ClickEvent, (_, e) => OnRowButtonClick(e, UnstagedFileList, StagedFileList));
         StagedFileList.AddHandler(Button.ClickEvent, (_, e) => OnRowButtonClick(e, StagedFileList, UnstagedFileList));
 
-        // Tab and Shift+Tab walk the lists' rows in their order, also those not made yet.
-        UnstagedFileList.AddHandler(KeyDownEvent, (_, e) => OnListKeyDown(e, UnstagedFileList), RoutingStrategies.Tunnel);
-        StagedFileList.AddHandler(KeyDownEvent, (_, e) => OnListKeyDown(e, StagedFileList), RoutingStrategies.Tunnel);
-
         // These may ask first, their buttons disabled meanwhile: one pressed by the keys gets the
         // focus back when its question is cancelled (D75 for Restore).
         FocusReturn.AfterKeyboardPress(StageAllButton);
@@ -263,115 +259,7 @@ public partial class WorkingChangesView : UserControl
     private static InputElement? RowAt(ItemsControl list, int index)
     {
         list.ScrollIntoView(index);
-        return list.ContainerFromIndex(index) is { } container ? TabStops(container).FirstOrDefault() : null;
-    }
-
-    /// <summary>The elements of a row that Tab stops at now, in the visual tree's order: its own button, and its action buttons while they show.</summary>
-    private static List<InputElement> TabStops(Control container) =>
-        [.. container.GetVisualDescendants().OfType<InputElement>()
-            .Where(element => element is { Focusable: true, IsEffectivelyEnabled: true, IsEffectivelyVisible: true } && KeyboardNavigation.GetIsTabStop(element))];
-
-    /// <summary>
-    /// Tab from a row's last stop, or Shift+Tab from its first, goes to the next or previous row in
-    /// the list's order: the row is brought into view and its own button takes the focus, as Tab
-    /// gives it. The list makes only the rows near its view and reuses the controls of the others,
-    /// so its controls' order is not its rows' order, which the keyboard's own navigation follows.
-    /// Past the list's last row Tab goes to the panel's next stop, past its first Shift+Tab to the
-    /// one before, the other list's rows taken in their order; beyond the panel, the keyboard's own
-    /// navigation goes on.
-    /// </summary>
-    private void OnListKeyDown(KeyEventArgs e, ItemsControl list)
-    {
-        if (e.Handled || e.Key != Key.Tab || (e.KeyModifiers & ~KeyModifiers.Shift) != KeyModifiers.None
-            || e.Source is not Control focused
-            || focused.GetSelfAndVisualAncestors().OfType<Control>().FirstOrDefault(control => list.IndexFromContainer(control) >= 0) is not { } container)
-        {
-            return;
-        }
-
-        var backwards = e.KeyModifiers.HasFlag(KeyModifiers.Shift);
-        var stops = TabStops(container);
-        if (!ReferenceEquals(backwards ? stops.FirstOrDefault() : stops.LastOrDefault(), focused))
-        {
-            return;
-        }
-
-        var next = list.IndexFromContainer(container) + (backwards ? -1 : 1);
-        if (next >= 0 && next < list.ItemCount)
-        {
-            e.Handled = true;
-            FocusRow(list, next);
-            return;
-        }
-
-        if (StopBeside(list, backwards) is { } beside)
-        {
-            e.Handled = true;
-            if (beside is ItemsControl other)
-            {
-                FocusRow(other, backwards ? other.ItemCount - 1 : 0);
-            }
-            else
-            {
-                ((InputElement)beside).Focus(NavigationMethod.Tab);
-            }
-        }
-    }
-
-    /// <summary>Brings row <paramref name="index"/> of <paramref name="list"/> into view and gives its first stop, its own button, the focus as Tab does.</summary>
-    private static void FocusRow(ItemsControl list, int index)
-    {
-        list.ScrollIntoView(index);
-        if (list.ContainerFromIndex(index) is { } made && TabStops(made).FirstOrDefault() is { } target)
-        {
-            target.Focus(NavigationMethod.Tab);
-            return;
-        }
-
-        // Not made yet: once the layout has made it.
-        Dispatcher.UIThread.Post(
-            () =>
-            {
-                if (list.ContainerFromIndex(index) is { } later && TabStops(later).FirstOrDefault() is { } element)
-                {
-                    element.Focus(NavigationMethod.Tab);
-                }
-            },
-            DispatcherPriority.Loaded);
-    }
-
-    /// <summary>
-    /// The panel's stop after <paramref name="list"/>, or with <paramref name="backwards"/> before it,
-    /// in the visual tree's order: a shown and enabled tab stop outside the lists, or the other list
-    /// as a whole when it has rows; null when there is none in the panel.
-    /// </summary>
-    private object? StopBeside(ItemsControl list, bool backwards)
-    {
-        ItemsControl[] lists = [UnstagedFileList, StagedFileList];
-        var stops = new List<object>();
-        foreach (var visual in this.GetVisualDescendants())
-        {
-            if (visual is ItemsControl candidate && lists.Contains(candidate))
-            {
-                stops.Add(candidate);
-            }
-            else if (visual is InputElement { Focusable: true, IsEffectivelyEnabled: true, IsEffectivelyVisible: true } element
-                && KeyboardNavigation.GetIsTabStop(element) && !lists.Any(inside => inside.IsVisualAncestorOf(element)))
-            {
-                stops.Add(element);
-            }
-        }
-
-        var at = stops.IndexOf(list);
-        for (var i = at + (backwards ? -1 : 1); i >= 0 && i < stops.Count; i += backwards ? -1 : 1)
-        {
-            if (stops[i] is not ItemsControl other || (other.ItemCount > 0 && other.IsEffectivelyVisible))
-            {
-                return stops[i];
-            }
-        }
-
-        return null;
+        return list.ContainerFromIndex(index) is { } container ? RowOrderStackPanel.StopsOf(container).FirstOrDefault() : null;
     }
 
     /// <summary>

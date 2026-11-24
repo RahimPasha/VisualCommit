@@ -222,9 +222,11 @@
               </ScrollViewer>
             </ControlTemplate>
           </ItemsControl.Template>
+          <!-- Tab and Shift+Tab go through the rows in their order, also rows inserted or not made
+               yet; Shift+Tab into a row reaches its own button (D425). -->
           <ItemsControl.ItemsPanel>
             <ItemsPanelTemplate>
-              <VirtualizingStackPanel />
+              <kr:RowOrderStackPanel BackwardToRowStart="True" />
             </ItemsPanelTemplate>
           </ItemsControl.ItemsPanel>
           <ItemsControl.ItemTemplate>
@@ -334,9 +336,11 @@
               </ScrollViewer>
             </ControlTemplate>
           </ItemsControl.Template>
+          <!-- Tab and Shift+Tab go through the rows in their order, also rows inserted or not made
+               yet; Shift+Tab into a row reaches its own button (D425). -->
           <ItemsControl.ItemsPanel>
             <ItemsPanelTemplate>
-              <VirtualizingStackPanel />
+              <kr:RowOrderStackPanel BackwardToRowStart="True" />
             </ItemsPanelTemplate>
           </ItemsControl.ItemsPanel>
           <ItemsControl.ItemTemplate>
