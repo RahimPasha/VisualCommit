@@ -54,19 +54,50 @@ public sealed partial class ShellDriver
     }
 
     /// <summary>
-    /// Waits for a read pass of the active dashboard (2.10): its line
-    /// <c>{workspace}: read … repositories in {ms} ms</c> logged after <paramref name="since"/> (a
-    /// <see cref="LogMark"/>; the start when null), then no row showing <c>Reading…</c> and no pass
-    /// under way.
+    /// Waits for a read of the active dashboard (2.10) after <paramref name="since"/> (a
+    /// <see cref="LogMark"/>; the start when null), then for no row showing <c>Reading…</c> and no
+    /// pass under way. The read is its pass's line <c>{workspace}: read … repositories in {ms} ms</c>
+    /// logged after the mark, or the rows themselves: a pass whose reads all ran past its patience
+    /// (a git call past <see cref="DashboardViewModel.GitCallPatience"/>, a folder check past
+    /// <see cref="DashboardViewModel.CheckPatience"/>, by the read clock) ends without counting them
+    /// and logs no line (WD35), and nothing logs one when those reads end. So the wait also ends
+    /// once no pass runs, no row reads, and every row that does not follow a tab has read after
+    /// the mark by the read clock (<see cref="DashboardRowViewModel.LastRead"/>, later than the clock
+    /// at the mark; read at all, from the start). A dashboard none of whose rows has read since
+    /// still fails the wait; for a mark that <see cref="LogMark"/> did not give, only the line counts.
     /// </summary>
     public async Task WaitForDashboardReadAsync(int? since = null, TimeSpan? timeout = null)
     {
         var dashboard = ActiveDashboard ?? throw new InvalidOperationException("The active tab is no dashboard.");
-        await WaitForLogLineAsync(ReadPassLine(dashboard.Name), mark: since ?? 0, timeout: timeout);
+        var mark = since ?? 0;
+        DateTimeOffset? readAfter = since is null ? DateTimeOffset.MinValue
+            : _markTimes.TryGetValue(mark, out var at) ? at
+            : mark == 0 ? DateTimeOffset.MinValue
+            : null;
+        var line = ReadPassLine(dashboard.Name);
+        await WaitForAsync(
+            () => LogLinesSince(mark).Any(line.IsMatch) || (readAfter is { } after && RowsReadAfter(dashboard, after)),
+            $"a read of {dashboard.Name} after the log's line {mark}: a log line like /{line}/, or every row without a tab read since and none reading",
+            timeout);
         await WaitForAsync(
             () => !dashboard.IsPassRunning && dashboard.Rows.All(row => row.State.Text != DashboardTexts.ReadingText),
             $"no row of {dashboard.Name} to read",
             timeout);
+    }
+
+    /// <summary>
+    /// No pass of <paramref name="dashboard"/> runs, none of its rows reads, and it has rows that do
+    /// not follow a tab, each read after <paramref name="after"/> by the read clock.
+    /// </summary>
+    private static bool RowsReadAfter(DashboardViewModel dashboard, DateTimeOffset after)
+    {
+        if (dashboard.IsPassRunning || dashboard.Rows.Any(row => row.IsReading || row.State.Text == DashboardTexts.ReadingText))
+        {
+            return false;
+        }
+
+        var own = dashboard.Rows.Where(row => !row.FollowsTab).ToList();
+        return own.Count > 0 && own.All(row => row.LastRead is { } read && read > after);
     }
 
     /// <summary>The pattern of a read pass's log line of <paramref name="workspace"/> (14.14).</summary>

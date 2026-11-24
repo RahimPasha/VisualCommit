@@ -22,12 +22,15 @@ namespace VisualCommit.Testing;
 /// the development machine with two other builds at work, against the design's estimate of 60 to
 /// 70 s), below the hang watchdog's limit, so a test that waits for <see cref="Held"/> releases
 /// well within about 60 s or the hold no longer holds: a fetch that gave up leaves a marker
-/// <c>gave-up-&lt;remote folder&gt;.&lt;pid&gt;</c>, on which <see cref="WaitForHeldAsync"/>,
-/// <see cref="Release"/> and <see cref="Dispose"/> fail, so that a test never passes on a hold that
-/// held nothing. It gives up only at a look that finds no <c>release</c> once its rounds are over: a
-/// fetch that saw <c>release</c> goes on without looking again, so that <see cref="Arm"/>, which
-/// deletes the file, never makes it give up. Disposing releases, so that a cancelled fetch's shell
-/// ends (call it in a <c>finally</c>, as <see cref="Scenarios.ReleaseWaitingMergeTool"/>).
+/// <c>gave-up-&lt;remote folder&gt;.&lt;pid&gt;</c>, on which <see cref="WaitForHeldAsync"/> and
+/// <see cref="Release"/> fail. It gives up only at a look that finds no <c>release</c> once its
+/// rounds are over: a fetch that saw <c>release</c> goes on without looking again, so that
+/// <see cref="Arm"/>, which deletes the file, never makes it give up. Disposing releases, so that a
+/// cancelled fetch's shell ends (call it in a <c>finally</c>, as
+/// <see cref="Scenarios.ReleaseWaitingMergeTool"/>), and never fails: a check's failing step is
+/// unwinding through it then, and an exception of its own would replace that step's. So that a
+/// check never passes on a hold that held nothing, it ends its body with a look of its own after
+/// its last held step: <see cref="Release"/>, or no <see cref="GaveUp"/> marker.
 /// </para>
 /// </summary>
 public sealed class FetchHold : IDisposable
@@ -46,8 +49,9 @@ public sealed class FetchHold : IDisposable
 
     /// <summary>
     /// The start of the marker a held fetch leaves when it gives up (its rounds over without a
-    /// release): <c>gave-up-&lt;remote folder&gt;.&lt;pid&gt;</c>. <see cref="WaitForHeldAsync"/>,
-    /// <see cref="Release"/> and <see cref="Dispose"/> fail on one.
+    /// release): <c>gave-up-&lt;remote folder&gt;.&lt;pid&gt;</c>. <see cref="WaitForHeldAsync"/>
+    /// and <see cref="Release"/> fail on one; <see cref="Dispose"/> does not, and notes it in the
+    /// test's output.
     /// </summary>
     public const string GaveUpPrefix = "gave-up-";
 
@@ -230,12 +234,24 @@ public sealed class FetchHold : IDisposable
         ThrowIfGaveUp();
     }
 
-    /// <summary>Releases (<see cref="Release"/>), if the harness folder is still there, and so fails as it does when a held fetch gave up.</summary>
+    /// <summary>
+    /// Writes <c>release</c>, if the harness folder is still there, and never fails: it runs while
+    /// a failing step's exception unwinds through the check's <c>using</c> or <c>finally</c>, and an
+    /// exception of its own would replace that one. A held fetch that gave up is only noted in the
+    /// test's output; the check's own end fails on it (<see cref="Release"/>, or no
+    /// <see cref="GaveUp"/> marker).
+    /// </summary>
     public void Dispose()
     {
-        if (Directory.Exists(Folder))
+        if (!Directory.Exists(Folder))
         {
-            Release();
+            return;
+        }
+
+        File.WriteAllText(Path.Combine(Folder, ReleaseName), string.Empty);
+        if (GaveUp() is { Count: > 0 } markers)
+        {
+            Xunit.TestContext.Current.TestOutputHelper?.WriteLine(GaveUpMessage(markers));
         }
     }
 
@@ -249,10 +265,12 @@ public sealed class FetchHold : IDisposable
     {
         if (GaveUp() is { Count: > 0 } markers)
         {
-            throw new InvalidOperationException(
-                string.Create(System.Globalization.CultureInfo.InvariantCulture, $"The hold gave up: the steps between hold and release took over {HeldFor.TotalSeconds:0.###} s ({string.Join(", ", markers)} in {Folder})."));
+            throw new InvalidOperationException(GaveUpMessage(markers));
         }
     }
+
+    private string GaveUpMessage(IReadOnlyList<string> markers) =>
+        string.Create(System.Globalization.CultureInfo.InvariantCulture, $"The hold gave up: the steps between hold and release took over {HeldFor.TotalSeconds:0.###} s ({string.Join(", ", markers)} in {Folder}).");
 
     /// <summary>The names of the markers in the harness folder now.</summary>
     private List<string> Markers() =>

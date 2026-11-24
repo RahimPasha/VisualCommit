@@ -12,8 +12,9 @@ namespace VisualCommit.Git.Tests;
 /// workspace's file remotes, from a data folder of the test's under the temp folder: the line
 /// reads back, held fetches wait until released, a fetch after the release goes through, a second
 /// run under one hold waits for its own, a fetch that saw its release does not give up when the
-/// hold is armed again before it goes on, and a repository without a remote is neither held nor
-/// holdable.
+/// hold is armed again before it goes on, a hold that gave up fails its waits and its release but
+/// not its disposal, so that a step that failed first keeps its own exception, and a repository
+/// without a remote is neither held nor holdable.
 /// </summary>
 public class FetchHoldTests
 {
@@ -84,8 +85,40 @@ public class FetchHoldTests
         var waited = await Assert.ThrowsAsync<InvalidOperationException>(() => hold.WaitForHeldAsync(1, StepTimeout));
         Assert.StartsWith("The hold gave up: the steps between hold and release took over 1 s (gave-up-api.git.", waited.Message, StringComparison.Ordinal);
         Assert.Throws<InvalidOperationException>(hold.Release);
-        Assert.Throws<InvalidOperationException>(hold.Dispose);
+
+        // Disposing releases and never fails: a check's own end says whether the hold held
+        // (Release, or no GaveUp), so that a failing step's exception is never replaced by this one.
+        File.Delete(Path.Combine(hold.Folder, FetchHold.ReleaseName));
+        hold.Dispose();
         Assert.True(File.Exists(Path.Combine(hold.Folder, FetchHold.ReleaseName)));
+    }
+
+    [Fact]
+    public async Task A_step_that_fails_under_a_hold_that_gave_up_is_reported_with_its_own_exception()
+    {
+        // CI's run 44969394972: a step failed while a held fetch ran out of its rounds, and the
+        // using's Dispose replaced the step's exception with the hold's give-up. Two rounds: a second.
+        using var data = new TempDirectory("data");
+        using var copy = await Scenarios.WorkspaceAsync();
+        var hold = FetchHold.Install(data.Path, rounds: 2);
+        hold.HoldIn(copy.PathOf("api"));
+        Assert.Equal(0, (await FetchAsync(copy.Repo("api"), TestCancelled).WaitAsync(StepTimeout, TestCancelled)).ExitCode);
+        Assert.Single(hold.GaveUp());
+
+        async Task StepThatFailsAsync()
+        {
+            using var held = hold;
+            await Task.Yield();
+            throw new TimeoutException("the step that failed first");
+        }
+
+        var thrown = await Assert.ThrowsAnyAsync<Exception>(StepThatFailsAsync);
+        Assert.IsType<TimeoutException>(thrown);
+        Assert.Equal("the step that failed first", thrown.Message);
+        Assert.True(File.Exists(Path.Combine(hold.Folder, FetchHold.ReleaseName)), "Disposing did not release.");
+
+        // A check that ends normally still fails on the hold that held nothing, at its own end.
+        Assert.Throws<InvalidOperationException>(hold.Release);
     }
 
     [Fact]

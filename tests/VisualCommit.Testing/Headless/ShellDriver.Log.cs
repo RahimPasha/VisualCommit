@@ -20,11 +20,28 @@ public sealed partial class ShellDriver
 
     private readonly List<StepTime> _steps = [];
 
+    /// <summary>
+    /// For each count <see cref="LogMark"/> returned, the dashboards' read clock at the latest call
+    /// that returned it: what <see cref="WaitForDashboardReadAsync"/> takes a row's read after that
+    /// mark by. The latest, as a line after a mark is one logged after the last look that found that
+    /// many lines.
+    /// </summary>
+    private readonly Dictionary<int, DateTimeOffset> _markTimes = [];
+
     /// <summary>The app's log so far, one entry per line (Debug lines included), read from the session's log folder.</summary>
     public IReadOnlyList<string> LogLines() => AppLogFile.ReadLines(Session.Paths.DataDirectory);
 
-    /// <summary>How many lines the log has now: a mark to read the lines added after an input (<see cref="LogLinesSince"/>).</summary>
-    public int LogMark() => LogLines().Count;
+    /// <summary>
+    /// How many lines the log has now: a mark to read the lines added after an input
+    /// (<see cref="LogLinesSince"/>). The dashboards' read clock is noted with it, for
+    /// <see cref="WaitForDashboardReadAsync"/>.
+    /// </summary>
+    public int LogMark()
+    {
+        var count = LogLines().Count;
+        _markTimes[count] = Session.Services.ReadClock.GetUtcNow();
+        return count;
+    }
 
     /// <summary>The lines added to the log since <paramref name="mark"/> (<see cref="LogMark"/>).</summary>
     public IReadOnlyList<string> LogLinesSince(int mark)

@@ -259,6 +259,9 @@ public sealed partial class Phase6ChecksW
             Assert.Equal("scratch", log.RepositoryName);
             Assert.Empty(log.Rows);
             AssertActivityToggle(app, enabled: true, PartW.HideActivityLog, selected: true);
+
+            // The end: no held fetch gave up (disposing the hold releases and never fails).
+            Assert.Empty(hold.GaveUp());
         }
         finally
         {
