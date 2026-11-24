@@ -6,6 +6,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using VisualCommit.App.Services;
+using VisualCommit.App.ViewModels;
 using VisualCommit.Core;
 using VisualCommit.Core.Logging;
 using VisualCommit.Testing;
@@ -38,6 +39,12 @@ public sealed class SingleInstanceGuardTests
     /// test's process, a line that names it shows whose id it took.
     /// </summary>
     private const int NoProcess = int.MaxValue;
+
+    /// <summary>The caller that asks as <c>Program.Main</c> does (<see cref="SingleInstanceGuard.ResolveHeld"/>).</summary>
+    private const string SecondStart = "a second start";
+
+    /// <summary>The caller that asks as the notice's "Try again" does (<see cref="InstanceNoticeViewModel.RetryOn"/>).</summary>
+    private const string TryAgain = "Try again";
 
     [Fact]
     public void A_second_guard_on_a_taken_folder_is_held_and_one_on_another_folder_takes_it()
@@ -172,6 +179,55 @@ public sealed class SingleInstanceGuardTests
         finally
         {
             holder.Dispose();
+        }
+    }
+
+    [Theory]
+    [InlineData(SecondStart)]
+    [InlineData(TryAgain)]
+    public async Task A_holder_that_ends_while_it_is_asked_leaves_the_folder_to_the_asker(string caller)
+    {
+        using var root = new TempDirectory("guard");
+        var paths = DataFolder(root);
+        Directory.CreateDirectory(paths.DataDirectory);
+        var endpoint = FreeEndpoint();
+        using var limit = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        limit.CancelAfter(WaitLimit);
+
+        // The test is the holder: it holds the lock and serves the endpoint that instance.json names.
+        var held = new FileStream(paths.InstanceLockFile, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
+        var server = new NamedPipeServerStream(endpoint, PipeDirection.InOut, 1, PipeTransmissionMode.Byte, SingleInstanceGuard.ServerPipeOptions);
+        try
+        {
+            WriteInstanceFile(paths, InstanceJson(NoProcess, endpoint));
+            var log = new RecordingLog();
+            using var asker = SingleInstanceGuard.TryTake(paths, log, Patient);
+            Assert.Equal(GuardOutcome.Held, asker.Outcome);
+
+            // On a thread of its own, which a busy pool cannot hold up. The holder reads the request,
+            // then ends as a closed, crashed or ended VisualCommit does: the lock goes, then the pipe.
+            var resolution = Task.Factory.StartNew(() => Resolve(asker, caller), CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+            await server.WaitForConnectionAsync(limit.Token);
+            Assert.Contains("\"request\":\"come-forward\"", await ReadRequestAsync(server, limit.Token), StringComparison.Ordinal);
+            held.Dispose();
+            server.Dispose();
+
+            Assert.Equal(HeldResolution.Taken, await resolution);
+            Assert.Equal(GuardOutcome.Taken, asker.Outcome);
+            Assert.NotNull(asker.Endpoint);
+            Assert.Contains(Warning($"VisualCommit holds the data folder {paths.DataDirectory} but did not answer (no reply within 5 s)."), log.Entries.Select(Line));
+            Assert.Contains(Info($"The data folder {paths.DataDirectory} is free now; this start goes on."), log.Entries.Select(Line));
+            using var file = JsonDocument.Parse(File.ReadAllBytes(paths.InstanceFile));
+            Assert.Equal(asker.Endpoint, file.RootElement.GetProperty("endpoint").GetString());
+        }
+        finally
+        {
+            server.Dispose();
+            held.Dispose();
+            if (!OperatingSystem.IsWindows())
+            {
+                File.Delete(endpoint);
+            }
         }
     }
 
@@ -531,6 +587,46 @@ public sealed class SingleInstanceGuardTests
 
     /// <summary>Connect 5 s and Reply 300 ms: an asker that must connect and whose expected result is that no answer comes.</summary>
     private static SingleInstanceOptions Impatient { get; } = new(TimeSpan.FromSeconds(5), TimeSpan.FromMilliseconds(300), TimeSpan.FromSeconds(30));
+
+    /// <summary>
+    /// A held guard's request as <paramref name="caller"/> makes it: <see cref="SecondStart"/>, as
+    /// <c>Program.Main</c> does, or <see cref="TryAgain"/>, the notice's, which first tries the lock;
+    /// the notice's result told as the guard's.
+    /// </summary>
+    private static HeldResolution Resolve(SingleInstanceGuard guard, string caller) => caller switch
+    {
+        SecondStart => guard.ResolveHeld(),
+        TryAgain => InstanceNoticeViewModel.RetryOn(guard) switch
+        {
+            NoticeRetry.Free => HeldResolution.Taken,
+            NoticeRetry.HandedOver => HeldResolution.HandedOver,
+            _ => HeldResolution.NotAnswered,
+        },
+        _ => throw new ArgumentOutOfRangeException(nameof(caller), caller, "No such caller."),
+    };
+
+    /// <summary>An endpoint of the guard's form with nothing at it.</summary>
+    private static string FreeEndpoint()
+    {
+        var name = "VisualCommit-" + RandomNumberGenerator.GetHexString(16, lowercase: true);
+        return OperatingSystem.IsWindows() ? name : Path.GetTempPath() + name;
+    }
+
+    /// <summary>What a second start sent, up to its <c>\n</c>, as a holder reads it.</summary>
+    private static async Task<string> ReadRequestAsync(Stream stream, CancellationToken cancel)
+    {
+        var request = new MemoryStream();
+        var buffer = new byte[256];
+        while (true)
+        {
+            var read = await stream.ReadAsync(buffer, cancel);
+            request.Write(buffer, 0, read);
+            if (read == 0 || Array.IndexOf(buffer, (byte)'\n', 0, read) >= 0)
+            {
+                return Encoding.UTF8.GetString(request.ToArray());
+            }
+        }
+    }
 
     private static AppPaths DataFolder(TempDirectory root) => new(root.Combine("data folder"));
 
