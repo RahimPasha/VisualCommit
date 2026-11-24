@@ -60,7 +60,7 @@ public class OperationsHarnessTests
     public async Task A_queue_that_stays_busy_fails_its_wait_by_name_with_the_operation_it_runs()
     {
         using var repo = await Scenarios.OperationsAsync();
-        using var app = await OperationsHarness.OpenAsync(repo, prompts: null, stepLimit: Short);
+        using var app = await OperationsHarness.OpenAsync(repo);
         var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var running = app.Repository.Queue.RunAsync(new GitOperation("Held step", "Holding…", OperationKind.Local, RefreshScope.None, async _ =>
         {
@@ -69,7 +69,7 @@ public class OperationsHarnessTests
         }));
         try
         {
-            var thrown = await Assert.ThrowsAsync<TimeoutException>(app.WaitForIdleAsync);
+            var thrown = await Assert.ThrowsAsync<TimeoutException>(() => app.WaitForIdleAsync(Short));
             Assert.StartsWith($"OperationsHarness: the queue of {repo.Path} to be idle did not end within 1 s: ", thrown.Message, StringComparison.Ordinal);
             Assert.EndsWith("; the queue runs \"Held step\", 0 waiting.", thrown.Message, StringComparison.Ordinal);
         }

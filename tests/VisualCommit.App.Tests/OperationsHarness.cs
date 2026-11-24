@@ -36,8 +36,9 @@ namespace VisualCommit.App.Tests;
 /// asserts right after awaiting it.
 /// <para>
 /// The harness's own steps (the open, the first read, <see cref="WaitForIdleAsync"/>) are held to
-/// a limit: what the hang watchdog leaves the test, less <see cref="WatchdogMargin"/>, or the
-/// limit the test gave the open (<c>stepLimit</c>). A step past it fails with a
+/// a limit: what the hang watchdog leaves the test, less <see cref="WatchdogMargin"/>, or, for the
+/// first read and <see cref="WaitForIdleAsync()"/>, the limit the test gave the open
+/// (<c>stepLimit</c>). A step past it fails with a
 /// <see cref="TimeoutException"/> that names it and says what
 /// ran meanwhile (the git calls that ended, the queue's operation), so that a step that stalls is
 /// told from one that crawls before the watchdog stops the whole test process, and a step that
@@ -151,8 +152,9 @@ internal sealed class OperationsHarness : IDisposable
     /// the broker's credential source; null: none, as before. <paramref name="gitEnvironment"/> is
     /// the session's git environment (D220), which the runner applies to every call and the broker
     /// reads as what git already gets (4.6), as an app session hands them both; null: none.
-    /// <paramref name="stepLimit"/> holds the harness's steps to that limit instead of the
-    /// watchdog's (the harness's own tests).
+    /// <paramref name="stepLimit"/> holds the first read and <see cref="WaitForIdleAsync()"/> to
+    /// that limit instead of the watchdog's (the harness's own tests); the open before the first
+    /// read keeps the watchdog's, so that a short limit meets only the step a test holds back.
     /// </summary>
     public static async Task<OperationsHarness> OpenAsync(TempRepo repo, Func<DialogHostViewModel, IGitPromptHandler>? prompts, Func<IGitRepository, IGitRepository>? wrap = null, ISessionStore? session = null, UndoHistories? undoHistories = null, IHostingSession? hosting = null, IReadOnlyDictionary<string, string?>? gitEnvironment = null, TimeSpan? stepLimit = null)
     {
@@ -161,7 +163,7 @@ internal sealed class OperationsHarness : IDisposable
         IGitRepository git = await WithinLimitAsync(
             GitRepository.OpenAsync(new GitRunner(GitPath, calls, environment: gitEnvironment), repo.Path, TestContext.Current.CancellationToken),
             $"opening {repo.Path}",
-            stepLimit,
+            limit: null,
             calls,
             queue: null);
         git = wrap?.Invoke(git) ?? git;
@@ -196,8 +198,14 @@ internal sealed class OperationsHarness : IDisposable
 
     /// <summary>Waits until the repository's queue has nothing running or waiting, within the harness's step limit.</summary>
     /// <exception cref="TimeoutException">The queue was still busy when the limit was up; the message says with what.</exception>
-    public Task WaitForIdleAsync() =>
-        WithinLimitAsync(Repository.Queue.WhenIdleAsync(), $"the queue of {Repo.Path} to be idle", _stepLimit, Calls, Repository.Queue);
+    public Task WaitForIdleAsync() => WaitForIdleWithinAsync(_stepLimit);
+
+    /// <summary>Waits as <see cref="WaitForIdleAsync()"/> does, within <paramref name="limit"/> (the harness's own tests).</summary>
+    /// <exception cref="TimeoutException">The queue was still busy when the limit was up; the message says with what.</exception>
+    public Task WaitForIdleAsync(TimeSpan limit) => WaitForIdleWithinAsync(limit);
+
+    private Task WaitForIdleWithinAsync(TimeSpan? limit) =>
+        WithinLimitAsync(Repository.Queue.WhenIdleAsync(), $"the queue of {Repo.Path} to be idle", limit, Calls, Repository.Queue);
 
     /// <summary>
     /// Waits until the repository's watcher is quiet (<see cref="RepositoryViewModel.IsWatcherQuiet"/>):
