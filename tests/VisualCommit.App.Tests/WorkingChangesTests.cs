@@ -238,6 +238,27 @@ public class WorkingChangesTests
     }
 
     [Fact]
+    public async Task When_the_row_comes_or_goes_at_an_offset_drawn_as_the_top_the_offset_stays()
+    {
+        // The graph control draws at the offset rounded to a whole pixel, so less than half a pixel
+        // down is the top of the graph: the new row shows there, as at offset 0, and the offset stays.
+        using var repo = await Scenarios.LinearAsync();
+        using var viewModel = await OpenAsync(repo);
+        Assert.False(viewModel.HasWorkingChanges);
+
+        viewModel.ScrollOffset = 0.4;
+        repo.WriteFile("notes.txt", "A note\n");
+        await viewModel.RefreshStatusAsync();
+        Assert.True(viewModel.HasWorkingChanges);
+        Assert.Equal(0.4, viewModel.ScrollOffset);
+
+        File.Delete(Path.Combine(repo.Path, "notes.txt"));
+        await viewModel.RefreshStatusAsync();
+        Assert.False(viewModel.HasWorkingChanges);
+        Assert.Equal(0.4, viewModel.ScrollOffset);
+    }
+
+    [Fact]
     public async Task When_the_row_goes_at_the_bottom_of_the_graph_the_rows_in_view_stay_put()
     {
         using var repo = await Scenarios.LinearAsync();
