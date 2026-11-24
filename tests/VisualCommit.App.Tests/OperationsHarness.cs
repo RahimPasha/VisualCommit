@@ -300,8 +300,9 @@ internal sealed class OperationsHarness : IDisposable
         {
             await step.WaitAsync(given);
         }
-        catch (TimeoutException ex) when (!step.IsCompleted)
+        catch (TimeoutException ex) when (!ReferenceEquals(ex, step.Exception?.InnerException))
         {
+            // The limit's, not one the step threw itself.
             throw new TimeoutException(StepPastItsLimit(what, given, calls.Snapshot().Skip(before).ToList(), queue), ex);
         }
     }
