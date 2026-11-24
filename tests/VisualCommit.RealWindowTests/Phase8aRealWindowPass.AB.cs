@@ -145,7 +145,9 @@ public partial class Phase8aRealWindowPass
     /// The guard before a launch's first key (design 12.3.3, 12.3.4 launches 3, 5 and 6, 12.3.5), and in
     /// launch 5 before its first capture too (D459): each look reads the two conditions once,
     /// <see cref="RealApp.ForegroundIsThis"/> and the id of UI Automation's focused element
-    /// (<see cref="RealApp.FocusedId"/>), and <paramref name="ready"/> judges those reads. When it does not
+    /// (<see cref="RealApp.FocusedId"/>, read through <see cref="RealApp.ReadOr{T}"/>, so that a read that fails,
+    /// also while another window is in front, counts as a look with no focused id and ends nothing), and
+    /// <paramref name="ready"/> judges those reads. When it does not
     /// hold, one real click on the window's title bar, away from its left end and its caption buttons
     /// (<see cref="RealApp.ClickTitleBar"/>), then a wait of at most 5 s until it holds, else the method fails
     /// with <paramref name="failure"/> before any key. When another window lies over the point the click
@@ -155,7 +157,7 @@ public partial class Phase8aRealWindowPass
     /// </summary>
     private bool EnsureForegroundBeforeFirstKey(RealApp app, Func<bool, string?, bool> ready, string what, string failure, string when = "before the first key")
     {
-        var (foreground, focused) = (app.ForegroundIsThis, app.FocusedId());
+        var (foreground, focused) = (app.ForegroundIsThis, RealApp.ReadOr(app.FocusedId, (string?)null));
         if (ready(foreground, focused))
         {
             Note($"{when}: {what}, with no click ({GuardReads(foreground, focused)})");
@@ -175,7 +177,7 @@ public partial class Phase8aRealWindowPass
         }
         try
         {
-            app.WaitFor(() => ready(foreground = app.ForegroundIsThis, focused = app.FocusedId()), what, I.ForegroundAgainWithin);
+            app.WaitFor(() => ready(foreground = app.ForegroundIsThis, focused = RealApp.ReadOr(app.FocusedId, (string?)null)), what, I.ForegroundAgainWithin);
         }
         catch (TimeoutException)
         {
