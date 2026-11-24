@@ -665,8 +665,10 @@ public sealed partial class KeyboardPassTests
 
     /// <summary>
     /// A keyboard Stage of README.md, held at <c>git add</c>, while the user goes to another tab whose
-    /// stage panel shows: once the stage has ended, the focus is where the switch of tabs left it, and
-    /// no row of the other tab's lists has taken it (6.3.4, 6.3.5).
+    /// stage panel shows: no row of the other tab's lists takes the focus (6.3.4, 6.3.5). The switch
+    /// finds the focus on nothing, Stage being disabled by its run, and leaves it there; once the
+    /// stage has ended, the graph area's target of the tab now shown, the graph, takes it, with the
+    /// frame Stage had (D462: a focus the press took away is put somewhere, also across a switch).
     /// </summary>
     [AvaloniaFact]
     public async Task A_keyboard_Stage_held_while_the_user_goes_to_another_tab_leaves_that_tabs_lists_alone()
@@ -696,14 +698,10 @@ public sealed partial class KeyboardPassTests
             () => ReferenceEquals(app.Session.Shell.ActiveTab.Repository, other) && app.StageRows("UnstagedFileList").Count > 0,
             "the second tab's stage panel");
         app.Settle();
-        var afterSwitch = app.FocusedElement;
-        var afterSwitchText = app.DescribeFocus();
         held.Release();
         await WaitForReadmeStagedAsync(app, first, mine);
 
-        Assert.True(
-            ReferenceEquals(app.FocusedElement, afterSwitch),
-            $"The stage's return moved the focus from {afterSwitchText}, where the switch of tabs left it, to {app.DescribeFocus()}.");
+        await AssertFocusAsync(app, GraphFramedFact, "the keyboard Stage's end in the other tab");
         Assert.False(
             app.FocusIsWithin(app.FindByAutomationId("UnstagedFileList")) || app.FocusIsWithin(app.FindByAutomationId("StagedFileList")),
             $"A row of the second tab's lists has the focus: {app.DescribeFocus()}.");

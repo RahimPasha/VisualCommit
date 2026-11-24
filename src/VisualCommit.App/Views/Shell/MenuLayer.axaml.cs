@@ -366,6 +366,14 @@ public partial class MenuLayer : UserControl
         // Where the focus was before the menu takes it; a menu that replaces another keeps what
         // the first one found.
         _focusBeforeMenu = FocusOutsideMenus(_topLevel?.FocusManager?.GetFocusedElement());
+
+        // An action chosen from a menu the keys opened may take away the element the menu's own
+        // return gives the focus back to (a branch it deletes): the focus goes somewhere (D462).
+        if (openedBy == MenuOpenedBy.Keyboard && _focusBeforeMenu is InputElement opener)
+        {
+            FocusReturn.AfterKeyboardMenu(opener);
+        }
+
         _flyout = flyout;
         flyout.ShowAt(MenuPanel);
     }

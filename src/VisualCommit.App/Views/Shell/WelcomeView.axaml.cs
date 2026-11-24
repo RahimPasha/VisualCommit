@@ -28,6 +28,13 @@ public partial class WelcomeView : UserControl
                 FocusReturn.AfterRun(viewModel.BrowseCommand, CloneForm, () => CloneFromGitHubButton, NavigationMethod.Unspecified);
             }
         };
+
+        // Pressed by the keys, they go with what they end (D462): Clone stands again where Cancel
+        // clone stood, and the form's Cancel gives the focus back to the Clone that opened the form;
+        // while a clone that Clone started runs, Clone is disabled and Cancel clone stands beside it.
+        FocusReturn.Instead(CloneCancelButton, () => CloneStartButton);
+        FocusReturn.Instead(CloneCloseButton, () => CloneRepoButton);
+        FocusReturn.Instead(CloneStartButton, () => CloneCancelButton, whileRunning: true);
     }
 
     private void Watch(WelcomeViewModel? viewModel)

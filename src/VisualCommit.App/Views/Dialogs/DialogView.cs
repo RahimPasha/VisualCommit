@@ -64,29 +64,50 @@ public class DialogView : UserControl
     /// <summary>Moves the focus as the dialog does when it opens; also after its card changed (the Remotes dialog's form).</summary>
     protected void FocusOnOpening()
     {
-        var box = !FocusesTextBoxOnOpening ? null
-            : InitialTextBox is { IsEffectivelyVisible: true, IsEffectivelyEnabled: true } chosen
-            ? chosen
-            : this.GetVisualDescendants().OfType<TextBox>()
-                .FirstOrDefault(candidate => candidate is { IsEffectivelyVisible: true, IsEffectivelyEnabled: true, IsReadOnly: false });
-        if (box is not null)
+        if (OpeningTextBox() is { } box)
         {
             box.Focus(NavigationMethod.Unspecified);
-            if (SelectsAllOnOpening)
-            {
-                box.SelectAll();
-            }
-            else
-            {
-                box.ClearSelection();
-                box.CaretIndex = box.Text?.Length ?? 0;
-            }
-
+            PlaceCaretAsOnOpening(box);
             return;
         }
 
         InitialFocus?.Focus(NavigationMethod.Tab);
     }
+
+    /// <summary>
+    /// The caret and selection a box gets as the dialog opens: all it holds selected when renaming
+    /// (<see cref="SelectsAllOnOpening"/>), else nothing selected and the caret at the end. A focus the
+    /// window's rule for an action by the keys gives this box back gets them too (D462).
+    /// </summary>
+    internal void PlaceCaretAsOnOpening(TextBox box)
+    {
+        ArgumentNullException.ThrowIfNull(box);
+        if (SelectsAllOnOpening)
+        {
+            box.SelectAll();
+        }
+        else
+        {
+            box.ClearSelection();
+            box.CaretIndex = box.Text?.Length ?? 0;
+        }
+    }
+
+    /// <summary>
+    /// What the dialog gives the focus to as it opens, as it shows now: its first text box that can
+    /// be typed into (or the one it names), else <see cref="InitialFocus"/> (the settings screen's
+    /// shown section's button). An action by the keys that hides its own element takes it as the
+    /// dialog's target (D462).
+    /// </summary>
+    internal Control? OpeningFocus() => OpeningTextBox() ?? InitialFocus;
+
+    /// <summary>The text box the dialog gives the focus to as it opens, or null for none.</summary>
+    private TextBox? OpeningTextBox() =>
+        !FocusesTextBoxOnOpening ? null
+            : InitialTextBox is { IsEffectivelyVisible: true, IsEffectivelyEnabled: true } chosen
+            ? chosen
+            : this.GetVisualDescendants().OfType<TextBox>()
+                .FirstOrDefault(candidate => candidate is { IsEffectivelyVisible: true, IsEffectivelyEnabled: true, IsReadOnly: false });
 
     /// <summary>
     /// Enter with no modifier in <paramref name="list"/>, while a row is selected, runs the confirm
@@ -128,6 +149,7 @@ public class DialogView : UserControl
                 if (this.FindControl<Button>("ConfirmButton") is { IsEffectivelyVisible: true, IsEffectivelyEnabled: true, Command: { } command } confirm
                     && command.CanExecute(confirm.CommandParameter))
                 {
+                    FollowFromSource(e, command);
                     command.Execute(confirm.CommandParameter);
                     e.Handled = true;
                 }
@@ -145,8 +167,22 @@ public class DialogView : UserControl
         if (this.FindControl<Button>("ConfirmButton") is { IsEffectivelyVisible: true, IsEffectivelyEnabled: true, Command: { } command } confirm
             && command.CanExecute(confirm.CommandParameter))
         {
+            FollowFromSource(e, command);
             command.Execute(confirm.CommandParameter);
             e.Handled = true;
+        }
+    }
+
+    /// <summary>
+    /// The confirm run by a key in <paramref name="e"/>'s source (a box, a row, an option): a run
+    /// that keeps the dialog open and disables that source while it lasts (a refused save) gives it
+    /// the focus back (D462).
+    /// </summary>
+    private static void FollowFromSource(KeyEventArgs e, System.Windows.Input.ICommand command)
+    {
+        if (e.Source is InputElement source)
+        {
+            FocusReturn.AfterKeyboardAction(source, command);
         }
     }
 
@@ -172,6 +208,7 @@ public class DialogView : UserControl
         if (this.FindControl<Button>("ConfirmButton") is { IsEffectivelyVisible: true, IsEffectivelyEnabled: true, Command: { } confirm } button
             && confirm.CanExecute(button.CommandParameter))
         {
+            FollowFromSource(e, confirm);
             confirm.Execute(button.CommandParameter);
         }
 

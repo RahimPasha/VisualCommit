@@ -308,11 +308,32 @@ public partial class MainWindow : Window
 
         if (shell.ActiveTab.Repository is { IsDiffOpen: true } repository)
         {
+            // Esc in the diff hides what has the focus: the graph area's target takes it, once the
+            // diff has gone, unless the diff stood over a page or a list that takes it back (D462).
+            var focused = FocusManager?.GetFocusedElement() as Control;
+            var inDiff = focused?.GetSelfAndVisualAncestors().OfType<Diff.DiffView>().Any() == true;
+            var framed = focused?.Classes.Contains(FocusVisibleClass) == true;
             repository.CloseDiff();
+            if (inDiff)
+            {
+                Dispatcher.UIThread.Post(() => Dispatcher.UIThread.Post(() => FocusGraphAreaIfLost(framed), DispatcherPriority.Loaded), DispatcherPriority.Loaded);
+            }
+
             return true;
         }
 
         return false;
+    }
+
+    /// <summary>When nothing, the window or an element no longer shown or enabled has the focus, the graph area's target takes it, with the frame when <paramref name="framed"/>.</summary>
+    private void FocusGraphAreaIfLost(bool framed)
+    {
+        var focused = FocusManager?.GetFocusedElement();
+        if (focused is null || ReferenceEquals(focused, this) || focused is Visual { IsEffectivelyVisible: false } || focused is InputElement { IsEffectivelyEnabled: false })
+        {
+            this.GetVisualDescendants().OfType<Shell.CommitGraphView>().FirstOrDefault(view => view.IsEffectivelyVisible)?.GraphAreaFocusTarget()
+                ?.Focus(framed ? NavigationMethod.Tab : NavigationMethod.Unspecified);
+        }
     }
 
     /// <summary>

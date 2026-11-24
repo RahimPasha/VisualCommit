@@ -24,7 +24,10 @@ namespace VisualCommit.App.Views;
 /// runs, Ctrl+Tab and Ctrl+Shift+Tab in the conflict resolver's result, and Mod+Enter outside the
 /// commit message boxes. Otherwise the window's commands run it when it applies and is enabled,
 /// and the key is handled either way: a disabled command's key is consumed, as D163's disabled
-/// Undo. The router logs nothing: a key's effect logs itself.
+/// Undo. The router logs nothing: a key's effect logs itself. A key it runs while the focused
+/// element shows the keyboard's frame is followed as a press by the keys on that element, so that a
+/// key that takes the element away (Stage all on a row, Close tab on the tab's own button) leaves
+/// the focus somewhere (<see cref="FocusReturn.AfterKeyboardShortcut"/>, D462).
 /// </para>
 /// </summary>
 public sealed class KeyRouter
@@ -70,6 +73,8 @@ public sealed class KeyRouter
             return;
         }
 
+        // A key that takes the focused element away puts the focus somewhere (D462).
+        FocusReturn.AfterKeyboardShortcut(_window.FocusManager?.GetFocusedElement());
         shell.Commands.Run(routed.Command, routed.Argument);
         e.Handled = true;
     }
@@ -100,6 +105,8 @@ public sealed class KeyRouter
         var command = undo ? toolbar.UndoCommand : toolbar.RedoCommand;
         if (command.CanExecute(null))
         {
+            // An undo that takes the focused element away (a row) puts the focus somewhere (D462).
+            FocusReturn.AfterKeyboardShortcut(_window.FocusManager?.GetFocusedElement());
             command.Execute(null);
         }
 
