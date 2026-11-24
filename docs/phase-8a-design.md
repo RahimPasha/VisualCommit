@@ -4855,8 +4855,11 @@ differ in the kinds that vary from run to run; none changed size. The lead's run
 through `scripts/heavy-run.sh` with the root `C:\demo`: 119 of 119 in 6 min 13 s (441 s with the
 lock), `LeakGuard` silent, and its 84 pictures are byte for byte the ones opened on the branch. The
 book built and the links' check found nothing (its self-test 117 cases). The lead's lines of 11.2
-are in CLAUDE.md and `VisualCommit.slnx`. CI's run and the guide workflow's first run on the push
-are in status.md's CI section (11.8 item 4); the site's hand check stays the gate's (ruling 79).
+are in CLAUDE.md and `VisualCommit.slnx`. On the push (`f0b4f8a`) CI's run 45306019513 is green in
+all six jobs, its Windows job building GuideShots, and the guide workflow's first run, 45306019644,
+is green: its step "App's links", the 119 tests of its pictures at `/home/demo`, the book and the
+links' check, no deploy job run, and the lead looked at its `guide-site` (11.8 item 4; status.md's
+CI section). The site's hand check stays the gate's (ruling 79).
 
 ## 12. realwindow: the real-window part for 8a's checks
 
