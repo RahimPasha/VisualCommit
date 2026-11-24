@@ -56,7 +56,7 @@ public sealed partial class GitProgramViewModel : ObservableObject
 
     /// <summary>
     /// <c>GitProgramStatus</c>: <c>Checking…</c> while Browse's probe runs, then Browse's refusal;
-    /// null for none.
+    /// null for none. Also Browse's help text (D463).
     /// </summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ShowsStatus), nameof(IsStatusRefusal))]

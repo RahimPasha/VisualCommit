@@ -79,7 +79,7 @@ public sealed partial class GitSetupViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(ShowsContinue), nameof(ShowsMoreLink), nameof(GuideLinkText))]
     public partial GitSetupContent? Content { get; private set; }
 
-    /// <summary>Why the last Choose was refused, <c>Checking…</c> while it runs, or a failed start (<c>GitSetupError</c>); null for none.</summary>
+    /// <summary>Why the last Choose was refused, <c>Checking…</c> while it runs, or a failed start (<c>GitSetupError</c>); null for none. Also Choose's help text (D463).</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ShowsError), nameof(IsChoiceBeingChecked))]
     public partial string? ErrorText { get; private set; }
