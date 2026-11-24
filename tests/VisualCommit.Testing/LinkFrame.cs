@@ -34,7 +34,12 @@ public static class LinkFrame
     /// <summary>The most rows the underline may take at a display scaling of 1 (a line of about one pixel, antialiased over two).</summary>
     public const int UnderlineRows = 2;
 
-    /// <summary>How far outside the text's box the frame's outer line is looked for.</summary>
+    /// <summary>
+    /// How far outside the text's box the frame's outer line is looked for, in the pictures' device
+    /// pixels. <c>VcLinkButton</c>'s outer line lies 2 to 4 px outside the link's bounds, which are its
+    /// text's box: its nearest whole row lies 3 device pixels out at a display scaling of 1 and 5 at 2,
+    /// and within this reach up to a scaling of 3.5.
+    /// </summary>
     public const int Reach = 8;
 
     /// <summary>
@@ -68,7 +73,7 @@ public static class LinkFrame
     /// </summary>
     /// <param name="unfocused">The window with the link neither focused nor hovered.</param>
     /// <param name="focused">The same window with the link focused by the keyboard (<c>:focus-visible</c>), not hovered.</param>
-    /// <param name="text">The link's text's bounds in window pixels (its <c>TextBlock</c>).</param>
+    /// <param name="text">The link's text's bounds (its <c>TextBlock</c>'s) in the pictures' device pixels: its bounds in the window times <paramref name="scale"/>, the window's pixels at a scaling of 1.</param>
     /// <param name="link">The link's text colour.</param>
     /// <param name="background">The colour behind the link.</param>
     /// <param name="frame">The frame's outer line's colour (Fluent's <c>SystemControlFocusVisualPrimaryBrush</c>).</param>
