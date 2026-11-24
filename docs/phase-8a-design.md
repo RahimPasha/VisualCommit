@@ -1090,8 +1090,8 @@ wave adds to it. What wave 2 tells §12's launches is in 12.3.5.
   chosen git gone, another found), `GitProgramPath` reads `None found` and `GitProgramNote` only
   `VisualCommit looks for Git again when you save.` (the lead's ruling). After the row's `Use the
   Git on the PATH` drops a chosen git that is in use and works, `GitProgramNote` reads `Chosen
-  here. VisualCommit looks for Git again at its next start.` (step 19's second round;
-  `GitSetupTexts.NextStartLooksAgainSuffix`; ruling 100). The netrc question is one
+  here. VisualCommit looks for Git again at its next start.` (the source's note, then
+  `GitSetupTexts.NextStartLooksAgainSuffix`; ruling 100's words). The netrc question is one
   of `SettingsDialogViewModel.Loaded`'s reads, not asked again that session once the note is
   dismissed. `MainWindowViewModel.HomeHasNetrc(variable, directoryExists, fileExists, windows)` is
   public static, for the tests. The ssh line is `AskPassBroker.AskPassRequireLineFor(OperatingSystem.IsWindows())`:
@@ -1105,9 +1105,12 @@ wave adds to it. What wave 2 tells §12's launches is in 12.3.5.
   `GitSetupTitle` and `GitSetupError` are polite live regions, and Check again's own text is no
   live region (D463 (2)); the error line shows with its text in one step, so a reader hears a
   refusal only if it reached the line during Choose's `Checking…`, and the title only once it has
-  read the screen (ruling 100). (Step 19's second round.) Choose and Check again, which get the
-  keyboard focus back after their outcome, are described by it through
-  `AutomationProperties.HelpText`: Choose by the error line, Check again by the title (D463 (3)).
+  read the screen (ruling 100). The buttons that get the keyboard focus back after an outcome are
+  described by it through `AutomationProperties.HelpText` (D463 (3), ruling 101; 5.3, 9.3.7):
+  Choose by `ErrorText`, the error line, Check again by `Title`, the title, and the row's
+  `GitProgramBrowseButton` by `GitProgramViewModel.StatusText`, its status, which is empty after a
+  pass (ruling 101: by the row's path and note when it has no status, step 19's third round);
+  `GitProgramStatus` is no live region.
 - **First run: the harness.** A headless test reaches a state by `StartEmptyAsync(data, gitProbe:,
   askPassHelper:)` with a `FakeGitSetupProbe`, then `WaitForGitSetupAsync`, as `GitSetupShellTests`
   does for twelve states (`ShellDriver.Phase8a.FirstRun.cs` also has `GitSetupPart`,
@@ -1121,7 +1124,8 @@ wave adds to it. What wave 2 tells §12's launches is in 12.3.5.
   to 10's facts: `RealWindowPictures`, `MissingLaunchScenario`, `MissingLaunchStandIn`,
   `TooOldVersionLine`, `NativePickerTitle`, `NativePickerWithin` (30 s), `FoundAgainWithin` (60 s),
   `ConfirmClosesWithin` (5 s), `MostF6Presses` (4), `FocusOrderWithWinget`, the two failure
-  messages, the log lines and F6's texts.
+  messages, the log lines and F6's texts. Since step 19 it also holds `ChooseNoAnswer` and
+  `NextStartLooksAgainSuffix`, which `Phase8aExpectationTests.F` holds to the app's.
 - **The keyboard pass** (§6, merged in `e463392`). `FocusReturn.AfterRun` (`Views/FocusReturn.cs`)
   takes a last, optional `Func<IInputElement?, bool>? stillLost`, and `FocusReturn.LostFrom(TopLevel?
   topLevel, InputElement pressed, Func<bool> stillThere)` is that test for a pressed element (`2185f06`;
@@ -1136,19 +1140,27 @@ wave adds to it. What wave 2 tells §12's launches is in 12.3.5.
   on `LeftSplitter` and `RightSplitter` (`94842f7`, D427); `DetailsBody` and `ActivityLogPartText` take
   no keyboard focus, so Tab never stops in them and `ActivityLogView.axaml` is unchanged; a tab's git
   calls take the detection's runner. The blame picks the caret's run after a caret key with any
-  modifier (`2185f06`; 6.3.2 as corrected).
+  modifier (`2185f06`; 6.3.2 as corrected). Since step 19 (rulings 100 and 101; merged at `a60056e`
+  and `950ca7d`) a pick by the pointer, a click in the gutter or a right-click (one on the text
+  inside a selection aside), puts the caret on the picked run's first line in view, a line drawn
+  in part at the view's top counting, at the view's left edge when the text is scrolled across, so
+  that the next arrow moves it one line from a line the user sees and the text scrolls only to show
+  a line out of view or one that ends left of the edge (6.3.2).
 - **The stage rows** (§6). A row that holds the keyboard focus shows its `rowActions` with its buttons
   at `Opacity` 0 (D425), in the visual tree and in UI Automation: a hovered row and a focused other row
   show two rows' buttons there, and §9's names (1.12) and its sweep meet a focused row's buttons too.
-  Tab and Shift+Tab walk both lists in their rows' order, rows below the view included, by
-  `WorkingChangesView`'s own tunnel `KeyDown` (`55b8d3a`; 6.3.4 as corrected). After a row's action by
-  the keys the focus moves only if the run took it away (6.3.5 as corrected). After a switch of
-  tabs, since step 19 (D462 (1)), the window gives a focus that the switch took away (to nothing,
-  the window or an element no longer shown or enabled) to the same panel's target in the tab now
-  shown, as F6 would give it without its memory of the other tab's element, when that tab has a
-  repository and shows that panel, else to the graph area's target, with the frame if the element
-  that lost it had it; nothing while a dialog is open or a tab still opens, and a focus placed
-  meanwhile stays (`MainWindow.Keys.cs`, `FocusAfterSwitch`; `KeyboardPassTests.TabSwitch.cs`).
+  Tab and Shift+Tab walk both lists in their rows' order, rows below the view included, by their
+  items panel, `RowOrderStackPanel`, which the left panel's list and the commit details' and a
+  comparison's file lists share since step 19's second round (D466, ruling 101; merged at
+  `39c632f`), where wave 2 had `WorkingChangesView`'s own tunnel `KeyDown` (`55b8d3a`); 6.3.4 has
+  its rules. After a row's action by the keys the focus moves only if the run took it away (6.3.5 as
+  corrected). After a switch of tabs, since step 19 (D462 (1)), the window gives a focus that the
+  switch took away (to nothing, the window or an element no longer shown or enabled) to the same
+  panel's target in the tab now shown, as F6 would give it without its memory of the other tab's
+  element, when that tab has a repository and shows that panel, else to the graph area's target,
+  with the frame if the element that lost it had it; nothing while a dialog is open or a tab still
+  opens, and a focus placed meanwhile stays (`MainWindow.Keys.cs`, `FocusAfterSwitch`;
+  `KeyboardPassTests.TabSwitch.cs`).
 - **Part K's harness** (§6). `HeldGitRunner` has `Probe`, `HoldNext(string word)`, `Started` (a
   `Task<GitCommand>`) and `Release()`; a row's Stage is `add --all -- <path>` (`K.AddWord`).
   `ShellDriver.Phase8a.Keyboard.cs` holds `FocusVisible`, `StageRows(list)`, `StageRow(list, path)`,
@@ -1159,6 +1171,8 @@ wave adds to it. What wave 2 tells §12's launches is in 12.3.5.
   `--numstat` lines, K2's `BlameDowns` (run, line, subject; none for run 1) and the launches
   `ChangesLaunch` and `HistoryLaunch`. K8's walks took 8 Tabs from the right panel to Cancel, then 1 to
   `LeftSplitter`: the splitters come after the panels in `MainWindow.axaml`, before the status bar.
+  Since step 19's second round Tab visits every row of a list before it leaves it (6.3.4), so a
+  walk's count can grow; the gate records K8's (ruling 101).
   Method 3 writes the copy's `origin` URL with forward slashes before `HoldIn` (the report's K3 note).
   Part K alone takes about two minutes. Phase 2's `17c-restored` flips between two files from run to
   run, on the branch's base too.
@@ -1312,7 +1326,10 @@ wave adds to it. What wave 2 tells §12's launches is in 12.3.5.
   `GitSetupTitle` and `GitSetupError` and the notice's `InstanceNoticeStatus` are polite live
   regions (D463 (2); "First run: names" above, 4.3.4); the tests take each peer as a client reaches
   it, walking down from the window's peer (`ClientWalk`, 8a's project;
-  `InstanceNoticeLiveRegionTests`).
+  `InstanceNoticeLiveRegionTests`). Since step 19's second round the buttons that get the focus
+  back after those outcomes are described by them (D463 (3); 9.3.7), and `ClientWalk.RecordFocus`
+  (with `FocusRecorder` and `FocusEvent`) records each focus event as Windows' bridge takes it, the
+  focused peer's id, name and help text read at that moment (`OutcomeAtFocusTests`).
 - **At wave 3's merges** (the lead, 2026-11-21). The notices quote the copyright lines word for
   word, their holders' e-mail addresses included (8.3.4 as written): the builder had read its
   brief's "no e-mail address" as reaching third parties' notices, where it meant the owner's address
@@ -1359,57 +1376,79 @@ wave adds to it. What wave 2 tells §12's launches is in 12.3.5.
   box, over the first and last letters and the underline, is fixed in `VcLinkButton`
   (`Theme/Controls.axaml`; `8ef7e86`, `77c1936` and `5177cec`, merged at `fcf8c1e`). Its
   `FocusAdorner` is null, and its template is a `Panel` with the content and, laid over it, the
-  `Border` `FocusFrame` (2 px, margin -4,-3) holding `FocusFrameInner` (1 px), which take Fluent's
+  `Border` `FocusFrame` (2 px, margin -4) holding `FocusFrameInner` (1 px), which take Fluent's
   `SystemControlFocusVisualPrimaryBrush` and `SystemControlFocusVisualSecondaryBrush` under
-  `:focus-visible` alone. The frame reaches 4 px outside the bounds left and right, keeping 1 px of
-  background between its inner line and the ink, and 3 above and below, where the line box keeps the
-  letters 2 px and the underline 1 px clear of it; its negative margin gives back its borders, so
-  nothing moves; it is never hit (`IsHitTestVisible` false), so a pointer on it reaches what lies
-  under it; without the keyboard's focus it draws nothing, and a link focused by a click is
-  underlined without it. The rule for whoever uses the theme: the button does not clip
-  (`ClipToBounds` false), and neither may what holds it; 4 px left and right of a link and 3 above
-  and below stay free of other controls (GitLab's two token links lie 4 apart). `LinkFrame`
-  (`tests/VisualCommit.Testing`) reads a focused link against the same window unfocused: the text's
-  pixels unchanged but for the underline's rows, the underline shown, a whole frame in the theme's
-  frame colour on four sides outside the text, and background between frame and ink. A1's step 9
-  asserts it (`AssertFramedLink`), and `LinkFocusFrameTests` (App.Tests, 12 cases) holds it for
-  About's links, in dark and in light, and for GitLab's two token links, with nothing moved, nothing
-  drawn outside the bounds without the focus, no other control under the frame, the frame never hit
-  and no frame after a click. `VcRadioButton` (`Theme/Dialogs.axaml`) built its focus frame as two
-  borders round the ring and the content and was not changed then; that the frame took clicks just
-  outside the button while it had the keyboard's focus went to the list of the review before the
-  gate (status step 19). It did: its strokes, up to 7 px outside the button, took the pointer, and a
-  click in the gap above Hard in the Reset dialog checked Hard. Step 19 rebuilt it as the link's
-  (`763a1c5`, merged at `ce144f4`): the `Border` `FocusFrame` holding `FocusFrameInner` is laid over
-  the ring and the content with `IsHitTestVisible` false, its lines on the pixels they had, so it is
-  only drawn, never hit, and moves nothing; `RadioFocusFrameTests` (App.Tests) hold it for the Reset
-  dialog's three options and the settings screen's Theme and Pull options. The references
-  of every later merge are wave 3's, `D:/Projects/Personal/phase8-work/references/wave3/` (1,235
-  scripted pictures; `a1b-about-link-focus` there is the fix's). The "before" series (10.3.6, as
-  built) was taken three times, none of them quiet throughout (D457 (1)), the second because of the
-  first's build and the third because of the second's updater: the first (00:47, `86ef5b0`) and the
-  third (05:53, `1afb980`) ran M2 within two minutes of a Release build that the command itself
-  made, the third because a docs commit after the build changed the commit the build is stamped
-  with, and the second (04:59, `fcf8c1e`) met Office's updater, an idle-triggered task of Windows'
-  Task Scheduler, as M3 began. From now on a series is taken as D457 (2) and CLAUDE.md's row for it
-  say: the real-window project built in Release on the very commit at least ten minutes before,
-  nothing committed in between, the Task Scheduler read for what is due in the next ten minutes and
-  afterwards for what ran. The bounds are the ones D457 gives, in a commit of their own: M2 6,100
-  ms, from the second series alone; M4 370 MB after the load and 440 MB at the peak; M5 4,600 ms; M6
-  8,800 ms; M7 630 ms; M3's stays unset until its change's "after" series. M4's trigger did not
-  fire. M5's and M6's fired in every series and go to plan.md's Backlog: no stall of the window was
-  seen, and every change that would cut the reload amends D47 or D52. M7's fired in every series and
-  goes to the Backlog, by two judges to one; a rested median of about 600 ms, or the owner, reopens
-  it. M3's fired wherever a quiet M3 is set against the quiet M2 (D457 (4)) and gets a change in
-  wave 4: ruling 76 (13.1), the restore order, by which the session's active restored tab opens
-  first and alone and the others after its first page, or after 5 s at the latest, at most four at
-  once, with `InitializeAsync`'s contract kept. Wave 4 builds and proves that package, `restore`,
-  subject to the week's share the owner is asked for before wave 4 (D241); it gets a design section
-  of its own when wave 4 starts, written from D457 (5). §11's page
-  `troubleshooting/large-repositories.md` takes from the report's table ("The performance series")
-  what 10.3.6's step 5 names, as indications on the laptop (ruling 19): 100,000 commits, ten
-  restored tabs of that size and the memory measured; its "first rows in about 2 s (Q1)" is one
-  restored tab's.
+  `:focus-visible` alone. The frame reaches 4 px outside the bounds on every side, so that its inner
+  line keeps at least a device pixel of background outside the line box at every display scaling
+  from 1 to 2: the ink reaches the line box's left and right, and at 1.5 and 1.75 the descenders
+  and the underline reach its last row. At wave 3's close the margin was -4,-3, 3 px above and
+  below, and at 1.5 the inner line lay on the text's first and last rows and at 1.75 touched them;
+  step 19's second round made it -4 (ruling 101; `c12749c`, merged at `db7fbce`). Its negative
+  margin gives back its borders, so nothing moves; it is never hit (`IsHitTestVisible` false), so a
+  pointer on it reaches what lies under it; without the keyboard's focus it draws nothing, and a
+  link focused by a click is underlined without it. The rule for whoever uses the theme: the button
+  does not clip (`ClipToBounds` false), and neither may what holds it; 4 px round a link stay free
+  of other controls (GitLab's two token links lie 4 apart, so the frame of one reaches the other's
+  line box and stops there: with the legacy link focused, its frame touches the token link's
+  descenders at 1.5 and keeps one device row from them at the other scalings, accepted by ruling
+  101). `LinkFrame` (`tests/VisualCommit.Testing`) reads a focused link against the same window
+  unfocused: the text's pixels unchanged but for the underline's rows, the underline shown, a whole
+  frame in the theme's frame colour on four sides outside the text, and background between frame
+  and ink; since step 19's second round also in pictures drawn at a scaling above 1 (`Problems`'
+  `scale`, with the text's bounds in the pictures' device pixels; the underline may take
+  `UnderlineRowsAt(scale)` rows, 2 at 1 and 3 from 1.25 to 2). A1's step 9 asserts it
+  (`AssertFramedLink`), and `LinkFocusFrameTests` (App.Tests) holds it for About's links, in dark
+  and in light, and for GitLab's two token links, with nothing moved, nothing drawn outside the
+  bounds without the focus, no other control under the frame, the frame never hit and no frame
+  after a click; since step 19's second round also for GitHub's and Azure DevOps' token link, the
+  app's last `VcLinkButton`, with nothing moved, no other control under the frame and the frame
+  never hit, and for all six links in dark at scalings 1 to 2 in steps of 0.25 (three theories, 30
+  cases): 42 cases where it had 12, and `LinkFrameTests` 10. `VcRadioButton` (`Theme/Dialogs.axaml`)
+  built its focus frame as two borders round the ring and the content and was not changed then; that
+  the frame took clicks just outside the button while it had the keyboard's focus went to the list
+  of the review before the gate (status step 19). It did: its strokes, up to 7 px outside the
+  button, took the pointer, and a click in the gap above Hard in the Reset dialog checked Hard. Step
+  19 rebuilt it as the link's (`763a1c5`, merged at `ce144f4`): the `Border` `FocusFrame` holding
+  `FocusFrameInner` is laid over the ring and the content with `IsHitTestVisible` false, its lines
+  on the pixels they had, so it is only drawn, never hit, and moves nothing; `RadioFocusFrameTests`
+  (App.Tests) hold it for the Reset dialog's three options and the settings screen's Theme and Pull
+  options. Since step 19's second round (ruling 101; `9a04ebb`, merged at `db7fbce`) the Theme
+  options, at the top of General, draw it whole: while a settings section is at its top, its
+  scroller and the scroller's presenter clip to their bounds grown 4 px upward
+  (`SettingsDialogView.ClipSection`, `SectionTopReach`), and a section scrolled is clipped as before
+  (`SettingsDialogViewTests.A_scrolled_section_shows_none_of_its_rows_above_its_top`), so a radio
+  button that Tab brings to the edge of a scrolled section has its frame cut there (seen at the
+  minimum window in the repository scope with "Other" shown; accepted, ruling 101); Theme's note,
+  4 px below the options, has its top 2 px inside the frame's bottom, and at a scaling of 1 two
+  faint pixels of its ink lie on Dark's frame (accepted, ruling 101). `LayoutAudit` counts a
+  parent's clip geometry as a clip. The references of every later merge are wave 3's,
+  `D:/Projects/Personal/phase8-work/references/wave3/` (1,235 scripted pictures;
+  `a1b-about-link-focus` there is the fix's of wave 3's close: step 19's second round changes it in
+  the frame's rows alone, as it changes part G's `g3a-about-guide-link`, which has no reference
+  there). The "before" series (10.3.6, as built) was taken three times, none of them quiet
+  throughout (D457 (1)), the second because of the first's build and the third because of the
+  second's updater: the first (00:47, `86ef5b0`) and the third (05:53, `1afb980`) ran M2 within two
+  minutes of a Release build that the command itself made, the third because a docs commit after the
+  build changed the commit the build is stamped with, and the second (04:59, `fcf8c1e`) met Office's
+  updater, an idle-triggered task of Windows' Task Scheduler, as M3 began. From now on a series is
+  taken as D457 (2) and CLAUDE.md's row for it say: the real-window project built in Release on the
+  very commit at least ten minutes before, nothing committed in between, the Task Scheduler read for
+  what is due in the next ten minutes and afterwards for what ran. The bounds are the ones D457
+  gives, in a commit of their own: M2 6,100 ms, from the second series alone; M4 370 MB after the
+  load and 440 MB at the peak; M5 4,600 ms; M6 8,800 ms; M7 630 ms; M3's stays unset until its
+  change's "after" series. M4's trigger did not fire. M5's and M6's fired in every series and go to
+  plan.md's Backlog: no stall of the window was seen, and every change that would cut the reload
+  amends D47 or D52. M7's fired in every series and goes to the Backlog, by two judges to one; a
+  rested median of about 600 ms, or the owner, reopens it. M3's fired wherever a quiet M3 is set
+  against the quiet M2 (D457 (4)) and gets a change in wave 4: ruling 76 (13.1), the restore order,
+  by which the session's active restored tab opens first and alone and the others after its first
+  page, or after 5 s at the latest, at most four at once, with `InitializeAsync`'s contract kept.
+  Wave 4 builds and proves that package, `restore`, subject to the week's share the owner is asked
+  for before wave 4 (D241); it gets a design section of its own when wave 4 starts, written from
+  D457 (5). §11's page `troubleshooting/large-repositories.md` takes from the report's table
+  ("The performance series") what 10.3.6's step 5 names, as indications on the laptop (ruling 19):
+  100,000 commits, ten restored tabs of that size and the memory measured; its "first rows in about
+  2 s (Q1)" is one restored tab's.
 - **After wave 3's close: CI's two failures and the row list** (the lead, 2026-11-22 and 23; the
   report's "CI's two failures after the link frame's merge, and the row list" has the account and
   the numbers). CI's run 45019059991 on the link frame's merge failed one test on macOS,
@@ -2280,9 +2319,11 @@ try closes at once and drops its result. Every other close leaves `ExitCode` 2 a
 The status (`InstanceNoticeViewModel.StatusLine`, empty until a try goes unanswered) is a polite
 live region since step 19 (D463 (2)); it shows with its text in one step, before a screen reader
 can have reached it, so a reader most likely finds the words only when it reads the notice
-(ruling 100). (Step 19's second round.) "Try again", which has the focus again after an unanswered
-try, is described by the status through `AutomationProperties.HelpText`, so that the focus's
-announcement carries it (D463 (3)).
+(ruling 100). "Try again", which has the focus again after an unanswered try, is described by the
+status: its `AutomationProperties.HelpText` is `StatusLine`, empty before, so that the focus given
+back is announced with `It still did not answer.` (D463 (3); 9.3.7).
+`OutcomeAtFocusTests.Try_again_is_described_by_the_status_when_the_focus_comes_back_after_an_unanswered_try`
+holds that focus event.
 
 #### 4.3.5 Log lines
 
@@ -2605,7 +2646,8 @@ buttons (`VcActionButton`), `GitSetupError`, links (`VcFlatButton`s of class `gi
 `GitSetupView`'s own styles). Tokens only.
 `GitSetupView`'s `AutomationProperties.Name` is the state's title and its `AutomationProperties.HelpText`
 the state's body, so that a screen reader speaks them when the screen shows with the focus on its first
-button (§9's sweep and Narrator steps 20 and 21 read them); no picture changes.
+button (§9's sweep and Narrator steps 20 and 21 read them); no picture changes. Choose and Check
+again have help texts of their own since step 19 (below).
 
 **Buttons** (W, M, L the guidance's platform; "chosen": the git came from the setting):
 
@@ -2700,9 +2742,18 @@ that would place it: since step 19, once its run has ended with the focus on not
 or on a control no longer shown or enabled, the button takes it back, as by Tab when it had
 `:focus-visible` as it was pressed (`FocusReturn.AfterRun` with `FocusReturn.LostFrom`, from
 `GitSetupView`'s click handler), and the settings row's Browse does the same (`SettingsDialogView`);
-a Choose that found git hides the button, and the search's end places the focus. (Step 19's second
-round.) The button that gets the focus back is described by the outcome through
-`AutomationProperties.HelpText`: Choose by the error line, Browse by its refusal (D463 (3)).
+a Choose that found git hides the button, and the search's end places the focus. The button that
+gets the focus back is described by the outcome through `AutomationProperties.HelpText`, which a
+reader is told with the focus (D463 (3); 9.3.7): Choose by `ErrorText`, the error line, which reads
+`Checking…` while its file is probed and the refusal once it is refused (empty before); the row's
+Browse by `GitProgramViewModel.StatusText`, its status, with the same `Checking…` and refusals, and
+empty after a file that passes (ruling 101: by the row's path and note when it has no status, step
+19's third round). The error line also carries a failed start of winget or of the Command Line
+Tools (`{winget|xcode-select} could not be started: {message}`, above), so Choose is then described
+by a failure that is not its own until a new state, a chosen file or another start replaces it; and
+that failure is spoken nowhere as it happens: its button keeps the focus, so no focus event follows,
+and the error line's live region has no node (D455). Accepted, with a Backlog row (ruling 101): a
+text that changes while its button keeps the focus needs another means than a description.
 
 **Check again** (`MainWindowViewModel.Git.cs`), 1.2's order: `Looking for Git...`; the search; `Git`,
 `GitStatusText`, `GitStatusToolTip`; `CheckHelper()` off the UI thread, only while git works and the
@@ -2715,10 +2766,9 @@ dashboard's `RefreshCommand`. In HelperMissing git works, so Check again looks f
 focus (keyboard.md D-a): when the search ends with the focus on nothing or the window,
 `GitSetupCheckAgainButton` takes it again (`Tab` if it had `:focus-visible` when pressed, else
 `Unspecified`), or, the screen gone, the graph area's target. The title is a polite live region
-since step 19 (D463 (2)), heard by a reader that has read the screen (ruling 100); (step 19's
-second round) the button that takes the focus again is described by the title through
-`AutomationProperties.HelpText`, so that the focus's announcement names the state the search ended
-on (D463 (3)).
+since step 19 (D463 (2)), heard by a reader that has read the screen (ruling 100); the button is
+described by the title at all times, its `AutomationProperties.HelpText` being `Title`, so that the
+focus given back is announced with the title of the state the search ended on (D463 (3); 9.3.7).
 
 **Status bar.** `GitStatus` unchanged but for its help text (below); new texts `Chosen Git not found`, `Git {v} (helper missing)`;
 `ToolTip.Tip` `{path}, found on the PATH`, `{path}, found in Git for Windows' install folder` (else `in
@@ -2742,12 +2792,14 @@ the Git it found` while the chosen git is gone and another was found, the note i
 looks for Git again when you save.` alone (no git is in use, yet one was found, so none of the texts
 above is true); after `Use the Git on the PATH` drops a chosen git that is in use and works, also on
 reopening after Save, the note is `Chosen here. VisualCommit looks for Git again at its next
-start.` (step 19's second round; `GitSetupTexts.NextStartLooksAgainSuffix`; ruling 100: the next
-start's search looks in the usual install folders too, so it need not use the Git on the PATH;
-before step 19 the row said ` VisualCommit uses it from its next start.`, of the git Save drops);
-a chosen git in use that does not work keeps ` VisualCommit looks for Git again when you save.`;
-`GitProgramBrowseButton` `Browse…` (Choose's checks, its probe's limit and its focus given back, as
-above; `GitProgramStatus`); `GitProgramUsePathButton`
+start.` (the source's note, then `GitSetupTexts.NextStartLooksAgainSuffix`; ruling 100's words: the
+next start's search looks in the usual install folders too, so it need not use the Git on the
+PATH; before step 19 the row said ` VisualCommit uses it from its next start.`, of the git Save
+drops); a chosen git in use that does not work keeps ` VisualCommit looks for Git again when you
+save.`; `GitProgramBrowseButton` `Browse…` (Choose's checks, its probe's limit, its focus given back
+and its description by its status, empty after a pass, as above (ruling 101: by the row's path and
+note when it has no status, step 19's third round); `GitProgramStatus`, no live region);
+`GitProgramUsePathButton`
 `Use the Git on the PATH` while a path is chosen; `Use the Git it found` instead in ChosenMissing with a
 candidate, as on the screen, and while a pending choice would give way to a git in use that the install
 folders gave (`GitSource.InstallFolder`). Save's step 2 writes `GitExecutable`. After the screen
@@ -2971,18 +3023,46 @@ commit. No other key picks. `OnContextRequested`'s keyboard branch takes `Select
 run`, so Shift+F10 right after opening shows run 0's menu. Opening picks nothing (b6a to b6h come from
 clicks). Enter does nothing new; "Show in graph" is in the run's menu. Tab leaves the text.
 
-As built since step 19 (ruling 100; the review's keyboard-5, the speech package, merged at
-`a60056e`): a pick by the pointer, a click in the gutter or a right-click on the gutter or the text,
-also puts the caret, which is not drawn, on the picked run and clears a selection
-(`BlameView.PutCaretOn`), without scrolling the text, so that the arrows go on from the run the user
-picked and not from where the caret was left. The caret goes to the first line of the picked run
-that is in view (step 19's second round); the first round put it on the run's first line, which
-the next arrow scrolled up to when it lay above the view. A click on the text leaves the caret to
-AvaloniaEdit, on the line clicked, and a right-click on the text inside a selection leaves the
-selection and the caret as they were. The first round's tests:
-`BlameViewTests.A_click_in_the_gutter_puts_the_caret_on_its_runs_first_line_so_that_the_arrows_go_on_from_that_run`,
-`BlameViewTests.A_click_in_the_gutter_moves_no_text_however_far_its_runs_first_line_lies` and
-`KeyboardPassTests.A_right_click_on_the_text_inside_a_selection_keeps_the_selection_and_one_outside_it_takes_the_caret_to_the_run`.
+As built since step 19 (rulings 100 and 101; the review's keyboard-5, the speech package's two
+rounds, merged at `a60056e` and `950ca7d`): a pick by the pointer, a click in the gutter or a
+right-click on the gutter or the text, also puts the caret, which is not drawn, on the picked run
+and clears a selection (`BlameView.PutCaretOn`), without scrolling the text, so that the arrows go
+on from the run the user picked and not from where the caret was left. The caret goes to the first
+of the run's lines that is in view: the line drawn at the view's top, also when part of it lies
+above, or the run's first line when that one lies lower (`FirstLineInView`, read from the lines'
+heights, which a redraw leaves as they were). It stands at the view's left edge (`AtLeftEdge`):
+column 1 while the text is not scrolled across; else the first caret position at or right of the
+edge, its x kept for Up and Down (`Caret.DesiredXPos`), or, on a line that ends left of the edge
+(an empty one, or `}`), the line's end, with an x half a space right of the edge kept, which
+AvaloniaEdit rounds on the next line to the nearest caret position, one at or right of the edge in
+the blame's monospace text. So the next arrow moves the caret one line from a line the user sees,
+and AvaloniaEdit, which brings a moved caret into view, scrolls only when the line it reaches lies
+out of view or ends left of the edge: from a run whose first line lies above the view the next Down
+scrolls nothing, also from an empty line and when the pick clears a selection, and one Up from a run
+whose first line is in view picks the run above. The first round put the caret on the run's first
+line at column 1, which the next arrow scrolled up to when it lay above the view (ruling 100) and,
+with the text scrolled across, back across (found in the second round). A click on the text leaves
+the caret to AvaloniaEdit, on the line clicked, and a right-click on the text inside a selection
+leaves the selection and the caret as they were. The tests, in `BlameViewTests` (App.Tests;
+700 × 400, dark):
+`A_click_in_the_gutter_puts_the_caret_on_its_runs_first_line_so_that_the_arrows_go_on_from_that_run`
+(three runs, nothing scrolled: a click beside line 5 puts the caret on line 4, run 2's first, and
+Up on line 3, run 1 picked); on two runs, lines 1 to 45 over 150 characters long and 46 to 85
+short, `A_click_in_the_gutter_moves_no_text_however_far_its_runs_first_line_lies` (scrolled 60
+across and down until line 46 is the last in view: a click on line 40 puts it on the line drawn at
+the top, Down one line lower with nothing scrolled; a click on line 46 puts it on 46, and Up on 45,
+run 0 picked),
+`A_click_on_a_run_whose_first_line_shows_in_part_at_the_top_puts_the_caret_there_and_one_Up_picks_the_run_above`
+(line 46 cut 6 px at the top: a click on line 50 puts it on 46, Down on 47 with nothing scrolled,
+and after a click on line 52 Up on 45, run 0 picked),
+`A_click_in_the_gutter_moves_no_text_across_when_the_runs_first_line_in_view_is_empty` (run 0's
+even lines empty, scrolled 60 across with the empty line 20 at the top: a click on line 30 puts it
+on 20, Down on 21 with nothing scrolled) and
+`A_click_in_the_gutter_that_clears_a_selection_in_view_moves_no_text_across` (scrolled 60 across,
+part of line 30 selected: a click on line 40 puts it on the line drawn at the top, the selection
+gone, Down one line lower with nothing scrolled); in `KeyboardPassTests` (8a's project, a blame not
+scrolled), `After_a_right_click_in_the_gutter_and_Esc_Up_picks_the_run_above_the_one_clicked` and
+`A_right_click_on_the_text_inside_a_selection_keeps_the_selection_and_one_outside_it_takes_the_caret_to_the_run`.
 
 **6.3.3 F3, Cancel.** The entry of 1.8. Its `run` keeps the title it was listed with and runs
 `OperationStatus.CancelCommand` only if `CanExecute` still holds and `OperationStatus.RunningTitle`
@@ -3000,17 +3080,50 @@ become, in this order: `Panel.stageRow StackPanel.rowActions` hidden; shown on `
 last `Panel.stageRow StackPanel.rowActions Button:focus-visible` opacity 1.
 - F6 still gives the row's own button (`KeyRegions.cs:237-243`): `k12b`'s state, nothing drawn.
 - Tab from it: "Stage" then "Discard" (unstaged) or "Unstage" (staged), each drawn and framed, then
-  the next row's own button. `WorkingChangesView` handles Tab from a row's last stop and Shift+Tab from
-  its first inside the two lists itself (a tunnel `KeyDown`), in the rows' order: the row is brought into
-  view first, and past a list's end the panel's next or previous stop takes the focus, the other list's
-  rows in their order. The lists virtualize and reuse their rows' controls, so Avalonia's own order
-  stops at the rows made. Shift+Tab reaches a row's own button, not its buttons. The panel is an overlay.
+  the next row's own button, in the rows' order, rows below the view included (the lists' items
+  panel, below). Shift+Tab reaches a row's own button, not its buttons. The panel is an overlay.
 - After a row action started by keyboard (the button had `:focus-visible`), once the lists show its
   result, the focus is on the row now at its place in that list, else that list's last row, else the
   other list's first row, else the summary (`Tab`, 6.3.5). When the action leaves the tree clean (a
   Discard of the only change), the panel goes with the focused button
   (`RepositoryViewModel.cs:1418-1422`): the focus then goes to the graph (`GraphRows`, the main
   region's target), `Tab`. A Discard cancelled in its question gives the focus back to its row.
+
+**Tab through a list's rows** (D466, ruling 101; step 19's second round, merged at `39c632f`). A
+list that virtualizes makes only the rows near its view, reuses the controls of the others and adds
+the control of a row it makes last, and Avalonia's Tab follows the order of the controls: an opened
+folder's rows came last, rows below the view were never reached, and Tab into a scrolled list
+landed in its middle. Wave 2 mended the stage lists alone, with a tunnel `KeyDown` in
+`WorkingChangesView` (`55b8d3a`). Every list that virtualizes and whose rows hold Tab stops (its Tab
+navigation `Continue`) now has one items panel, `RowOrderStackPanel`
+(`Views/RowOrderStackPanel.cs`), a `VirtualizingStackPanel` that answers Avalonia's Tab navigation
+itself (`ICustomKeyboardNavigation`): the left panel's `RefList`, the commit details' `FileList`,
+the comparison's `CompareFileList` and the stage panel's `UnstagedFileList` and `StagedFileList`,
+these two with `BackwardToRowStart`. For Tab and Shift+Tab alone:
+- Inside a row the focus goes from stop to stop in the row's own order
+  (`RowOrderStackPanel.StopsOf`: the row's elements that take the focus by Tab, shown and enabled:
+  its button, then a branch's eye or solo button, a file's Stage and Discard or Unstage).
+- From a row's last stop Tab goes to the next row's first, the row made and brought into view
+  within the key press; from a row's first stop Shift+Tab goes to the previous row's last stop, in
+  the stage lists to its own button (D425). A row without a stop (its button disabled) is passed
+  over.
+- Tab into the list from a stop before it reaches its first row, and Shift+Tab from a stop after it
+  its last (the row's own button in the stage lists), the list scrolled there: Avalonia asks the
+  panel when its own move lands in the list.
+- Past the last row Tab, and before the first Shift+Tab, leave the list as Avalonia leaves it, to
+  the stop after or before the list, except that a list of the same kind right beside it in the same
+  region is entered at its end: the stage panel's two lists when no stop lies between them (Unstage
+  all disabled, as it is while its own run goes on).
+- A list whose Tab navigation is not `Continue` is left to Avalonia. F6, the arrows and Enter or
+  Space on a row are not touched.
+
+The lists that are one stop (the activity log's and the interactive rebase's rows, `Once`; the list
+boxes of the file history, the reflog, the dashboard, the repository browser and the Pick dialog)
+are not changed, nor the lists without a stop in their rows (the palette's, the multi-selection
+list's) and the lists that do not virtualize, which insert each control at its item's index.
+`WorkingChangesView`'s `RowAt`, which places the focus after a row's action, takes a row's stops
+from `RowOrderStackPanel.StopsOf`. Tab visits every row before it leaves a list, a long list costing
+as many presses; F6 leaves a region in one press (ruling 101). 6.3.9 has the tests.
 
 **6.3.5 F5, the focus after "Choose"** (F5-A: D104's rule where the opener was disabled). New
 `FocusReturn.AfterRun(IAsyncRelayCommand command, Control scope, Func<InputElement?> target,
@@ -3108,11 +3221,11 @@ one (Grep of `Key.Tab`, `VirtualKeyShort.TAB` in `tests/`).
 **6.3.9 The inventory for the report**, returned in the merge report. K a key; P the palette; M
 Shift+F10 or Menu on a row that F6 or Tab reaches; T Tab or arrows. Unchanged: toolbar (K, P; theme
 P, settings), tabs (K), open, clone, init (K, P), graph selection (F6, arrows, Shift), its menus (M),
-left panel (Mod+Shift+E, T, M, P), drags (their menus, ruling 11), working changes' keys (K), a file's
-diff (T, Enter), diff close, history, blame (Esc, K), file actions in the diff (M, P), pages (arrows,
-M, Esc), search (K), resolver (K, T bar to bar), rebase list (Alt+arrows, p r s f d), conflict banner
-(Mod+Enter, P, T), activity log (K, F6, arrows, M), dashboard (K, M), dialogs, settings (K, T).
-Changed or proven by 8a:
+left panel (Mod+Shift+E, arrows, M, P; its Tab changed, below), drags (their menus, ruling 11),
+working changes' keys (K), a file's diff (T, Enter), diff close, history, blame (Esc, K), file
+actions in the diff (M, P), pages (arrows, M, Esc), search (K), resolver (K, T bar to bar), rebase
+list (Alt+arrows, p r s f d), conflict banner (Mod+Enter, P, T), activity log (K, F6, arrows, M),
+dashboard (K, M), dialogs, settings (K, T). Changed or proven by 8a:
 
 | Action | After 8a | Proof |
 |---|---|---|
@@ -3129,6 +3242,7 @@ Changed or proven by 8a:
 | Switch tabs with the focus in a panel | K, P; since step 19 a focus the switch took away goes to the same panel's target in the tab now shown, else the graph area's, with the frame if it had it (6.3.5; D462 (1)) | `KeyboardPassTests`: `Ctrl_Tab_from_a_focused_stage_row_gives_the_focus_to_the_other_tabs_first_row_with_the_frame` and `Ctrl_Tab_from_a_stage_rows_Stage_reached_by_Tab_gives_the_focus_to_the_other_tabs_first_row_with_the_frame`, renamed and rewritten at step 19 (they were `…_leaves_the_focus_on_nothing_and_F6_then_starts_at_the_left_panel`), the graph's and the summary's two as they were, and the ten facts of `KeyboardPassTests.TabSwitch.cs` |
 | A question cancelled after a press by the keys; Stage, Unstage or Discard from a stage row's menu opened by the keys | since step 19 the focus back on the button, with the frame (on the diff's text, without it, after Discard lines); the row now at the file's place (6.3.5; D462 (2)) | `KeyboardPassTests.FocusReturns.cs` (Amend's palette fact among them) |
 | A section, folder or tree folder opened or closed by Enter or Space; an eye or solo button that hides itself | since step 19 the focus kept on its control, with the frame; the branch's row (6.3.5; D462 (3)) | `KeyboardPassTests.Toggles.cs` |
+| Tab through a list's rows: the left panel's, a commit's or a comparison's changed files, the stage lists | since step 19's second round T in the rows' order, also after rows were inserted or the list scrolled, rows below the view included; Tab into a list reaches its first row, Shift+Tab its last (6.3.4; D466) | `KeyboardPassTests.RowOrder.cs`, eight facts: six walks, each from the stop before the list through every stop its rows hold to the stop after it and back with Shift+Tab, each stop framed (the left panel after a folder opened, a branch hidden and a branch made outside the app, and after a scroll down and up; a commit's and a comparison's tree after a folder closed and opened; the unstaged list after a file made outside the app came first; the two stage lists walked as one when no stop lies between them), and two guards, the activity log's and the interactive rebase's rows one stop after a row was inserted or moved |
 | Commits not next to each other | the mouse only (ruling 50) | the guide |
 
 **6.3.10 For the guide** (ruling 53), to §11: Tab in a diff reaches the hunks' buttons, Shift+Tab its
@@ -4194,7 +4308,7 @@ not over `RefItemRow.Text`, as the menus word it: `Show feature/alpha in the gra
 `AutomationNames` if the compiled binding refuses that. As built, the compiled binding takes
 `StringFormat` with `x:Static`, so no converter exists, and the toggles bind
 `{Binding ToolTip, StringFormat=…}` over `RefItemRow.ToolTip`. No tooltip, help text, key, template
-or style changes, but one help text, the one exception to ruling 34 (D456 (3)): the branch row's
+or style changes, but one help text, §9's one exception to ruling 34 (D456 (3)): the branch row's
 `RefItem` button binds `AutomationProperties.HelpText` to `RefItemRow.ToolTip`, the ref's full name
 (`feature/alpha`, `origin/feature/alpha`), never `NameToolTip`, which reads "… is hidden in the
 graph" for a hidden branch; no tooltip is added to the button, and nothing drawn changes. 9.3.8's
@@ -4205,6 +4319,8 @@ none: a section (`RefSectionRow`) has no tooltip, and an open pull request (`Pul
 message of the Pull requests section (`PullRequestMessageRow`) have theirs on a part inside the
 button, which the button's peer does not read (9.9 item 7). A control outside 1.12 that the sweep
 reports is named only at the lead's word, from its area's texts class, never by a tooltip's change.
+Since step 19 four buttons more carry a help text, the outcome after which they get the focus back,
+and no name changes with it (D463 (3); 9.3.7).
 
 #### 9.3.7 The status bar
 
@@ -4245,11 +4361,26 @@ as it comes. The tests take each peer as a client reaches it, walking down from 
 `GitSetupShellTests.The_error_line_is_a_polite_live_region_that_a_client_which_reached_it_during_Chooses_check_hears_refuse_the_file`
 and
 `InstanceNoticeLiveRegionTests.The_status_is_a_polite_live_region_that_a_client_reaches_only_once_a_try_went_unanswered`.
-So the outcome is said where the focus lands (step 19's second round; D463 (3)): each button that
-gets the keyboard focus back after such an outcome is described by it through
-`AutomationProperties.HelpText`, the notice's Try again by the status line, the first-run screen's
-Choose by the error line and its Check again by the title, the Git program row's Browse by its
-refusal.
+So, as built since step 19 (D463 (3), ruling 101), the outcome is said where the focus lands: each
+button that gets the keyboard focus back after such an outcome is described by it through
+`AutomationProperties.HelpText`: the notice's Try again by the status line (`StatusLine`, empty
+before an unanswered try), the first-run screen's Choose by the error line (`ErrorText`:
+`Checking…` while its file is probed, then the refusal; also a failed start of winget or of the
+Command Line Tools, 5.3) and its Check again by the title (`Title`, at all times), and the Git
+program row's Browse by its status (`GitProgramViewModel.StatusText`: `Checking…` while its file
+is probed, then the refusal; empty after a pass) (ruling 101: by the row's path and note when it has
+no status, step 19's third round). In Avalonia 12.1.3 a peer's help text is UI Automation's
+HelpText on Windows and `accessibilityHelp` on macOS, which VoiceOver speaks as a hint. The
+window's peer raises a focus change at each change of the focused control, and Windows' bridge
+makes the focused peer's node for it there and then (`RootAutomationNode`,
+`AutomationNode.GetOrCreate`), so the description reaches a reader with the focus also when no
+client had reached the button before, which a live region's change does not (D455).
+`OutcomeAtFocusTests` (8a's project, four facts) records each focus event as the bridge takes it,
+the focused peer's id, name and help text read at that moment (`ClientWalk.RecordFocus`), and reads
+each button as a client reaches it: no help text before an outcome (Check again's is the title from
+the start), `Checking…` while Choose's or Browse's file is held in its probe, and the focus back on
+the button with the outcome as its help text, its name its own. What Narrator says is the gate's
+listen (D460).
 
 #### 9.3.8 The sweep
 
@@ -4358,20 +4489,28 @@ matches the search" if its hint is read; the focus stays in the box. 16. Ctrl+Sh
 entries with keys. 17. Ctrl+,, Down to About, Enter, then Narrator+W: the owner's name and the
 version. 18. The resolver: "Next conflict, button, Alt+Down". 19. Narrator+Tab on the graph: "Commit
 graph, list" (ruling 35). 20. The first-run screen shows: the state's title, "VisualCommit needs
-Git", and its body. 21. Tab to "Check again", Enter: nothing is read while the search runs (the
-button is disabled and without the focus, and its text is no live region, 9.3.7); when it ends (no
-Git found again) the focus is given back, and Narrator reads "Check again, button" with the title of
-the state the search ended on, "VisualCommit needs Git", as its description (5.3; D463 (3); step
-19's second round).
-21a. Shift+Tab to "Choose git.exe…", Enter, and in the Open dialog a program that is no git
-(`C:\Windows\System32\whoami.exe`, which the report names): Choose refuses it, `GitSetupError` shows
-why, nothing is saved, the focus comes back to "Choose git.exe…", and Narrator reads "Choose
-git.exe…, button" with the refusal as its description (D463 (3); step 19's second round).
+Git", and its body. 21. Tab to "Check again", Enter: no "Checking…" is read while the search runs
+(the button is disabled and without the focus then, and its text is no live region, 9.3.7; Narrator
+may name the window as the focus leaves the button); when it ends (no Git found again) the focus is
+given back, and Narrator reads "Check again, button" and, as its description, the title of the
+state the search ended on, here "VisualCommit needs Git" (5.3; D463 (3): the button's help text is
+the title at all times, so the Tab to it may already be heard with it).
+21a. Shift+Tab to "Choose git.exe…" (the button before "Check again"), Enter, and in the Open
+dialog a program that is no git (`C:\Windows\System32\whoami.exe`, which answers `--version` with
+an error of its own): Choose runs it whatever the stand-in says and refuses it, `GitSetupError`
+shows `This Git did not report its version. Git said: {first line}`, nothing is saved, the focus
+comes back to "Choose git.exe…", and Narrator reads "Choose git.exe…, button" with the refusal as
+its description (D463 (3)).
+Narrator reads a help text as what its settings call advanced detail ("Hear advanced detail, like
+help text, on buttons and other controls", whose default was not checked): when no description
+follows "button" in steps 21 and 21a, how that setting stood is written down.
 Steps 14 and 21 were reworded and step 21a added at step 19 (ruling 100), with the reasons in the
 report: the live region spoke git's progress before (9.3.7), "Checking…" was never spoken, and no
-step reached a refused Choose. The notice's Try again, described by its status in the same way
-(step 19's second round), has no step: an unanswered try cannot be made by hand, and
-`InstanceNoticeLiveRegionTests` holds the status and the focus back on Try again.
+step reached a refused Choose. The notice's Try again, described by its status in the same way,
+has no step: an unanswered try needs a process that holds the data folder's `instance.lock` and
+answers nothing, as part I's launch 5 has in its test process, and the walk-through stages none;
+`InstanceNoticeLiveRegionTests` holds the status and the focus back on Try again, and
+`OutcomeAtFocusTests` that focus event with the status as its description.
 Silence where a row's name is expected (step 3's rows, step 5's Home and End): the live region does
 not reach Narrator (9.9, risk 1). Step 2's lone "Commit graph, list" and step 5's PageDown on the last
 row are no finding.
@@ -4411,7 +4550,8 @@ New, each written first and failing on the code before (recorded in the merge no
   `StatusBarTests.The_operation_texts_live_region_speaks_the_start_and_the_result_not_the_progress`
   (9.3.7); `OperationStatusViewModelTests` and `DashboardBulkViewModelTests` for `SpokenText`; the
   live regions as a client reaches them, `GitSetupShellTests` and `InstanceNoticeLiveRegionTests`
-  over `ClientWalk` (8a's project; 9.3.7).
+  over `ClientWalk` (8a's project; 9.3.7); since step 19's second round the buttons described by
+  their outcome at the focus event, `OutcomeAtFocusTests` (8a's project, four facts; 9.3.7).
 - `Phase8aExpectationTestsU` (8a project, 6 tests): part U's expectations against the app's
   constants and `GraphRowSpeech`.
 
@@ -5660,11 +5800,11 @@ from the caption buttons.
   path); the 18 real Tabs then reach, in order, the (row, id) pairs of
   `Phase8aExpectations.K.CalculatorWalk` (built from `UnstagedRows` and `RowStops`: each row's
   `StageFileRow`, `RowStageButton`, `RowDiscardButton`), ending on `src/Calculator.cs`'s
-  `StageFileRow`. Tab and Shift+Tab between rows are `WorkingChangesView`'s own (a tunnel
-  `KeyDown`): it scrolls the list to the next row and, when that row has not been made yet, gives it
-  the focus one layout pass later (posted at `Loaded`), so each Tab is waited on by its focused
-  element, never by time. `src/Calculator.cs` lies below the list's view at 1100×700, and the walk
-  leaves the list scrolled as the scripted twin leaves it.
+  `StageFileRow`. Tab and Shift+Tab between rows are the lists' items panel's, `RowOrderStackPanel`
+  (6.3.4; since step 19's second round, where they were `WorkingChangesView`'s tunnel `KeyDown`):
+  it makes the next row, scrolls the list to it and gives it the focus within the key press, and
+  each Tab is waited on by its focused element, never by time. `src/Calculator.cs` lies below the
+  list's view at 1100×700, and the walk leaves the list scrolled as the scripted twin leaves it.
 - The real pointer stays off the stage rows through the walk and at every capture (the neutral
   point): a row that holds the keyboard focus has its `RowStageButton` and `RowDiscardButton` in UI
   Automation at `Opacity` 0 (D425), and a hovered other row adds its own, drawn, so a find of a
