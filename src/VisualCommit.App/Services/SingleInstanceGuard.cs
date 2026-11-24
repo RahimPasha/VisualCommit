@@ -509,8 +509,8 @@ public sealed partial class SingleInstanceGuard : IDisposable
 
     /// <summary>
     /// The holder's steps, under <see cref="_gate"/> with the lock just opened: the old instance
-    /// file's socket removed if it names one of ours (its owner is gone, since the lock was free),
-    /// the server started on a new endpoint, the instance file written.
+    /// file's socket removed if it names one of ours that no server answers, the server started on a
+    /// new endpoint, the instance file written.
     /// </summary>
     private void BeginServing()
     {
@@ -570,7 +570,12 @@ public sealed partial class SingleInstanceGuard : IDisposable
         }
     }
 
-    /// <summary>A crashed run's socket, named in the instance file it left, exactly of this guard's form; deleted only then.</summary>
+    /// <summary>
+    /// A crashed run's socket, named in the instance file it left, exactly of this guard's form, that
+    /// no server answers; deleted only then. A free lock does not prove its owner gone: a data folder
+    /// copied while its instance ran names that instance's live socket, which a start on the copy
+    /// must leave to it (D421).
+    /// </summary>
     private void RemoveStaleSocket()
     {
         if (ReadInstanceFile() is not { } old || !IsOurSocketPath(old.Endpoint))
@@ -580,10 +585,19 @@ public sealed partial class SingleInstanceGuard : IDisposable
 
         try
         {
-            if (File.Exists(old.Endpoint))
+            if (!File.Exists(old.Endpoint))
             {
-                File.Delete(old.Endpoint);
+                return;
             }
+
+            if (TryConnect(old.Endpoint) is { } live)
+            {
+                // Hung up at once: its server drops a client that sends nothing, unanswered and unlogged.
+                live.Dispose();
+                return;
+            }
+
+            File.Delete(old.Endpoint);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
