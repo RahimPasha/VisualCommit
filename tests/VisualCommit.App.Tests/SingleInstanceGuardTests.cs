@@ -688,7 +688,7 @@ public sealed class SingleInstanceGuardTests
     }
 
     [Fact]
-    public void On_macOS_and_Linux_the_lock_file_and_the_folders_the_guard_makes_are_the_users_alone()
+    public void On_macOS_and_Linux_the_lock_file_and_the_data_folder_the_guard_makes_are_the_users_alone()
     {
         Assert.SkipWhen(OperatingSystem.IsWindows(), "Windows has no Unix file modes; CI's macOS and Linux jobs run this.");
         using var root = new TempDirectory("guard");
@@ -701,10 +701,12 @@ public sealed class SingleInstanceGuardTests
         // owner's would then find the folder held. The umask can only take bits away.
         Assert.Equal(GuardOutcome.Taken, guard.Outcome);
         Assert.Equal(UnixFileMode.None, UnixMode(paths.InstanceLockFile) & GroupOrOther);
-        foreach (var folder in new[] { parent, paths.DataDirectory })
-        {
-            Assert.Equal(UnixFileMode.None, UnixMode(folder) & GroupOrOther);
-        }
+        Assert.Equal(UnixFileMode.None, UnixMode(paths.DataDirectory) & GroupOrOther);
+
+        // A missing folder above the data folder is made as mkdir -p makes it, with the system's
+        // default mode less the umask (.NET gives the mode asked for to the last folder alone): it
+        // is not the app's own, and the data folder's mode keeps other users out of all below it.
+        Assert.True(Directory.Exists(parent));
     }
 
     [Fact]

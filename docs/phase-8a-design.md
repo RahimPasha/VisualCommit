@@ -5947,17 +5947,27 @@ harness `876c197`; the real-window part's three fixes are on its branch and merg
   `Program.Main` and Try again share; a start that waits for a closing VisualCommit looks at
   `instance.json` at each try of the lock and asks whoever took the folder meanwhile, once per look,
   on the same 30 s; an ask that goes unanswered tries the lock for 250 ms more before the notice; on
-  macOS and Linux the lock file the guard makes is the user's alone (0600) and so are the folders it
-  makes (0700, a missing parent included, as the XDG specification asks), while whatever exists
-  keeps its mode; a stale socket is deleted only when no server answers on it (D464; 1.11, 4.3).
-  Accepted: a new holder that keeps the lock while its endpoint refuses holds a waiting start until
-  the closing wait ends, where the first form of the fix gave up after five seconds, and the log
-  names the case. Accepted as known: a start whose ask is in flight at the moment a closing holder's
-  server is cancelled gets no answer, and if another start takes the lock within its 250 ms it shows
-  the notice instead of asking that start; Try again then hands over. The three tests that can fail
-  only on macOS and Linux (the two of the modes, the copied folder's) were shown failing by
-  reasoning alone, no builder having such a machine: CI's macOS, Linux and container jobs are their
-  first run, read at the push.
+  macOS and Linux the lock file the guard makes is the user's alone (0600) and so is the data folder
+  when the guard makes it (0700), while a missing folder above it gets the system's default mode and
+  whatever exists keeps its mode; a stale socket is deleted only when no server answers on it (D464;
+  1.11, 4.3). Accepted: a new holder that keeps the lock while its endpoint refuses holds a waiting
+  start until the closing wait ends, where the first form of the fix gave up after five seconds, and
+  the log names the case. Accepted as known: a start whose ask is in flight at the moment a closing
+  holder's server is cancelled gets no answer, and if another start takes the lock within its 250 ms
+  it shows the notice instead of asking that start; Try again then hands over. The three tests that
+  can fail only on macOS and Linux (the two of the modes, the copied folder's) were shown failing by
+  reasoning alone, no builder having such a machine: CI's macOS, Linux and container jobs were their
+  first run. **CI's run 45421164866** (on `b2ce493`, the six merges) passed on Windows and failed in
+  the five other jobs on one test of 8,699, the modes' first: it expected a missing folder above the
+  data folder to be the user's alone too, as the package's reader had read the SDK's documentation,
+  and .NET gives the mode asked for to the last folder alone (`FileSystem.Unix.cs`,
+  `CreateParentsAndDirectory`: every folder above it gets the default). The lead's ruling: the guard
+  narrows what is the app's own, the lock file and the data folder, whose mode already keeps other
+  users out of all below it; a parent gets what `mkdir -p` gives it. The test holds the two (renamed
+  `…the_lock_file_and_the_data_folder_the_guard_makes_are_the_users_alone`), the comment says so,
+  and D464 (4) is corrected. The other tests that could fail only there passed: the modes kept, the
+  copied data folder, and the four that play a holder on a raw socket; so did the floor's new rows
+  of `PullConfigurationTests` on git 2.34.1.
 - *git*. As built: when `git config --type=bool --get <key>` fails and the value in effect can be a
   boolean, `git config --type=bool --fixed-value --get <key> <value>` converts the entries of that
   value alone, one command for every case where floor-1's verified fix had three (D465;

@@ -111,7 +111,7 @@ public sealed partial class SingleInstanceGuard : IDisposable
     /// <summary>On macOS and Linux, a lock file the guard makes: read and write for the user alone.</summary>
     private const UnixFileMode UserOnlyFile = UnixFileMode.UserRead | UnixFileMode.UserWrite;
 
-    /// <summary>On macOS and Linux, a folder the guard makes: the user's alone.</summary>
+    /// <summary>On macOS and Linux, the data folder when the guard makes it: the user's alone.</summary>
     private const UnixFileMode UserOnlyFolder = UserOnlyFile | UnixFileMode.UserExecute;
 
     /// <summary>The variable through which .NET is told to take no file locks on macOS and Linux.</summary>
@@ -539,8 +539,10 @@ public sealed partial class SingleInstanceGuard : IDisposable
     }
 
     /// <summary>
-    /// The data folder, made with each missing folder above it. On macOS and Linux a folder made here
-    /// is the user's alone; one that exists keeps its mode.
+    /// The data folder, made with each missing folder above it. On macOS and Linux the data folder,
+    /// when it is made here, is the user's alone, which keeps other users out of all below it; a
+    /// missing folder above it gets the system's default mode, as <c>mkdir -p</c> gives it, and a
+    /// folder that exists keeps its mode.
     /// </summary>
     private void CreateFolder()
     {

@@ -387,6 +387,26 @@ Phase 8a's runs on `phase/8a-release-readiness`, the newest first. CI has six jo
 `e04762b`: the sixth, "ubuntu 22.04 container, git 2.34 (the floor)", did not fail the run until
 `bba59c7`, which made it required after its first green run.
 
+- [45421164866](https://github.com/RahimPasha/VisualCommit/actions/runs/45421164866), for `b2ce493`
+  (the six merges of the review's fixes, `c0bedc6` to `876c197`, with `53b9c77` and `8854838`):
+  **failure: `windows-latest` passed, the five other jobs failed on one test.** `windows-latest`:
+  8,702 tests, 8,695 passed, 7 skipped, Test step 45 min 27 s of 70. `macos-latest`: 8,699 tests,
+  8,695 passed, 1 failed, 3 skipped, Test step 40 min 57 s of 70. `ubuntu-latest`, the floor's job
+  (git 2.34.1) and the two containers: 8,699 tests each, 8,694 passed, 1 failed, 4 skipped, Test
+  steps 5 min 34 s, 5 min 26 s, 5 min 49 s (Microsoft's installer) and 6 min 7 s (Ubuntu's
+  packages). The one failure, the same in all five:
+  `SingleInstanceGuardTests.On_macOS_and_Linux_the_lock_file_and_the_folders_the_guard_makes_are_the_users_alone`,
+  "Expected: None, Actual: OtherExecute | OtherRead | GroupExecute | GroupRead", at the folders'
+  assertion. It was the first run anywhere of a test that Windows skips: the instance package's
+  builders had no such machine (ruling 100). The lock file and the data folder are the user's alone,
+  as the fix meant; the test also expected the missing folder above the data folder to be, and .NET
+  gives the mode asked for to the last folder alone. Corrected in the commit after it (the test
+  holds the lock file and the data folder; D464 (4) and ruling 100 say so). The other tests that
+  could fail only off Windows passed in all five jobs, and so did the floor's new rows of
+  `PullConfigurationTests`. 136 tests more than the run before, the fixes'. The failed jobs' logs
+  are in `D:/Projects/Personal/phase8-work/wave4/review/ci-45421164866/`. **The guide's workflow**
+  on the same push,
+  [45421164873](https://github.com/RahimPasha/VisualCommit/actions/runs/45421164873): **success**.
 - [45306019513](https://github.com/RahimPasha/VisualCommit/actions/runs/45306019513), for `f0b4f8a`
   (the user guide's merge `57ad86e` and its docs): **success in all six jobs**. `windows-latest`:
   8,566 tests, 8,561 passed, 5 skipped, Test step 43 min 6 s of 70; it built the opt-in projects,
