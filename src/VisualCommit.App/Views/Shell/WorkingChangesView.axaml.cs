@@ -83,7 +83,8 @@ public partial class WorkingChangesView : UserControl
     /// is its index in the list. A Discard cancelled in its question gives the focus back to its
     /// row. The focus comes with the keyboard's frame, as Tab gives it. This happens only when the
     /// run took the focus away: a focus the user moved meanwhile, to the summary or elsewhere, stays,
-    /// and after a switch to another tab the panel's lists are that tab's and nothing is done.
+    /// and after a switch to another tab the panel's lists are that tab's and nothing is done here
+    /// (the window places a focus that the switch itself took away).
     /// </summary>
     private void OnRowButtonClick(RoutedEventArgs e, ItemsControl list, ItemsControl other)
     {
