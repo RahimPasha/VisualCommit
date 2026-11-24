@@ -85,6 +85,14 @@ public class AskPassBrokerHelperTests
             Assert.Single(log.Entries, entry => entry == line);
         }
 
-        Assert.Equal(AskPassBroker.AskPassRequireLine, line.Item2);
+        Assert.Equal(AskPassBroker.AskPassRequireLineFor(OperatingSystem.IsWindows()), line.Item2);
+    }
+
+    [Fact]
+    public void Each_system_has_its_own_words_and_only_macOS_and_Linux_name_a_terminal()
+    {
+        Assert.Equal(WindowsLine, AskPassBroker.AskPassRequireLineFor(windows: true));
+        Assert.Equal(UnixLine, AskPassBroker.AskPassRequireLineFor(windows: false));
+        Assert.DoesNotContain("the terminal VisualCommit was started from", AskPassBroker.AskPassRequireLineFor(windows: true), StringComparison.Ordinal);
     }
 }
