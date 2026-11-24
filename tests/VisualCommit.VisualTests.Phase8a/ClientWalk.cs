@@ -60,4 +60,50 @@ internal static class ClientWalk
             .Select(peer => peer.GetAutomationId() ?? $"{peer.GetClassName()} \"{peer.GetName()}\"")
             .ToList();
     }
+
+    /// <summary>
+    /// Records what a client is told at each of <paramref name="window"/>'s focus events: the focused
+    /// element's automation id, name and help text, read from its peer at the event. Windows' bridge
+    /// makes the focused peer's node at that event, whether or not a client had reached it before
+    /// (Avalonia 12.1.3, <c>RootAutomationNode.OnRootFocusChanged</c>), and a screen reader reads the
+    /// node's name, type and help text then; macOS reads the same help text as the element's help.
+    /// Dispose it to stop.
+    /// </summary>
+    public static FocusRecorder RecordFocus(TopLevel window)
+    {
+        ArgumentNullException.ThrowIfNull(window);
+        return ControlAutomationPeer.CreatePeerForElement(window) is WindowBaseAutomationPeer root
+            ? new FocusRecorder(root)
+            : throw new InvalidOperationException("The window's peer is no window's: it raises no focus events.");
+    }
+}
+
+/// <summary>What a client is told at one focus event (<see cref="ClientWalk.RecordFocus"/>); all null when the focus left the window's elements.</summary>
+internal sealed record FocusEvent(string? AutomationId, string? Name, string? HelpText);
+
+/// <summary>A window's focus events, in order, as a client receives them (<see cref="ClientWalk.RecordFocus"/>).</summary>
+internal sealed class FocusRecorder : IDisposable
+{
+    private readonly WindowBaseAutomationPeer _root;
+    private readonly List<FocusEvent> _events = [];
+
+    internal FocusRecorder(WindowBaseAutomationPeer root)
+    {
+        _root = root;
+        root.FocusChanged += OnFocusChanged;
+    }
+
+    /// <summary>Every focus event so far, the oldest first.</summary>
+    public IReadOnlyList<FocusEvent> Events => _events;
+
+    /// <summary>The last event; throws when none has come.</summary>
+    public FocusEvent Last => _events.Count > 0 ? _events[^1] : throw new InvalidOperationException("No focus event has come.");
+
+    public void Dispose() => _root.FocusChanged -= OnFocusChanged;
+
+    private void OnFocusChanged(object? sender, EventArgs e)
+    {
+        var focus = _root.GetFocus();
+        _events.Add(new FocusEvent(focus?.GetAutomationId(), focus?.GetName(), focus?.GetHelpText()));
+    }
 }
