@@ -2660,18 +2660,20 @@ Expected:
 - After step 4: `AboutShowLicenseButton` focused, framed (the first Tab from `SettingsNavAbout`, 8.3.1);
   no dialog; the launcher has no request.
 - After step 5: the text dialog stacked over the settings screen, which stays open on About under the
-  dialog's own backdrop (`#99000000`; D104, D432). Its card (`dialogCard document`) 760 × 600 at (170, 50)
-  (open point 58), on `#1A1D24`. Top to bottom: `DialogTitle` `MIT License` (`dialogTitle`: font size 16,
-  `SemiBold`); no `TextDocumentSwitch` (one part); `TextDocumentText`; then, on one line 20 below the
-  text, `TextDocumentCopyButton` `Copy all` at the card's content's left and `ConfirmButton` `Close`
+  dialog's own backdrop (`#99000000`; D104, D432). Its card (`dialogCard document`) 760 × 600 at (170,
+  50) (open point 58), on `#1A1D24`. Top to bottom: `DialogTitle` `MIT License` (`dialogTitle`: font
+  size 16, `SemiBold`); no `TextDocumentSwitch` (one part); `TextDocumentText`, 12 below the title
+  (`TextBelowTitleAlone`, within 0.5; open point 59); then, on one line 20 below the text,
+  `TextDocumentCopyButton` `Copy all` at the card's content's left and `ConfirmButton` `Close`
   (`VcPrimaryButton`) at its right. `TextDocumentText`: read-only, word-wrapped, `Options.AcceptsTab`
   false (ruling 52), `VcCodeFontFamily` at 11.5; its text `#E4E7EC` on `#272C36` inside a 1 px border
   `#323845`; its document's text equals `LICENSE` (`\n` line ends): the file's 21 lines, which the
   document holds as lines 1 to 21, with the empty line 22 that AvaloniaEdit counts after the final line
-  end (`Document.LineCount` 22, as open point 61 says of the notices); all in view: the view shows line 1,
-  `MIT License`, line 21 and the empty line 22 whole, and its extent is no taller than its viewport (8.5);
-  no caret drawn (8.3.2; open point 66); the keyboard focus is in it (its text area). Its automation peer
-  is a Document named `MIT License`. Nothing clipped. The launcher has no request; the clipboard is empty.
+  end (`Document.LineCount` 22, as open point 61 says of the notices); all in view: the view shows line
+  1, `MIT License`, line 21 and the empty line 22 whole, and its extent is no taller than its viewport
+  (8.5); no caret drawn (8.3.2; open point 66); the keyboard focus is in it (its text area). Its
+  automation peer is a Document named `MIT License`. Nothing clipped. The launcher has no request; the
+  clipboard is empty.
 - After step 6: the clipboard's `Text` equals `LICENSE` with `\n` line ends, whole (8.3.2: the shown text
   whole), and `Texts` holds that one text; the dialog still open; the log has no `Copying the text to the
   clipboard failed.`.
@@ -3158,7 +3160,9 @@ Expected:
   stacked dialogs' Cancel were left, outside the table: D456 (1) and (2) settle them (open point 90).
 - After step 2: the search bar's names as U3's table; after its Esc no search bar.
 - After step 3: the comparison of `feature/conflict` with `main`, a branch comparison (`IsBranches`), so
-  `CompareSwap` and `CompareClose` show (U3's table); after the click on `CompareClose` it has closed.
+  `CompareSwap` and `CompareClose` show (U3's table), and its ends read `From main` and `To
+  feature/conflict` (`U.CompareFrom`, `U.CompareTo`; open point 82); after the click on `CompareClose`
+  it has closed.
 - After step 4: the graph without "Alpha one" and "Alpha two"; under Local branches `alpha` dimmed with
   its `RefHiddenToggle`, and under `Remotes › origin › feature` `alpha` dimmed with its
   `RefHiddenToggle` (phase 5's FL1: the upstream hidden with it); `conflict`, `ff` and `main` as before.
@@ -4140,15 +4144,19 @@ cannot be resized, the default button); I3 asserts it now (`79d6ac8`).
 
 ### The floor: git's words by version, no picture (design 3.4, 3.6)
 
-The floor's package (`d0d4279`, `3e6f89e` on `wip/p8a-floor`, merged in `a63390c`) changes earlier
-tests so that they hold on every git from 2.34.1: where git 2.34 words a message or an exit code
-otherwise, the test takes the words through `GitWords`; the scenarios' stashes are rebuilt below 2.36,
-so that the ids the earlier reports pin hold on every git; phase 5's U18 finds the undo's stash by
-`git fsck` where git names it otherwise. On the laptop's git 2.56 every one of them asserts what it
-asserted before. Which of them hold on 2.34.1 is CI's floor job's to say (design 3.3.5); its rounds
-are recorded in status.md's CI section and, at the close, here under "Other platforms". No earlier
-picture changes on the laptop; on macOS phase 5's `a2d-show-reads` shows the second `rev-parse` call
-with `--path-format=absolute` (design 3.6).
+The floor's package (`d0d4279`, `3e6f89e` on `wip/p8a-floor`, merged in `a63390c`) changes earlier tests
+so that they hold on every git from 2.34.1: where git 2.34 words a message or an exit code otherwise,
+the test takes the words through `GitWords`; the scenarios' stashes are rebuilt below 2.36, so that the
+ids the earlier reports pin hold on every git; phase 5's U18 finds the undo's stash by `git fsck` where
+git names it otherwise. On the laptop's git 2.56 every one of them asserts what it asserted before.
+Which of them hold on 2.34.1 is CI's floor job's to say (design 3.3.5); its rounds are recorded in
+status.md's CI section and, at the close, here under "Other platforms". No earlier picture changes on
+the laptop. Design 3.6 expected that on macOS phase 5's `a2d-show-reads` would show the opening's second
+`rev-parse` call with `--path-format=absolute`; this report said so as a fact until 2026-11-24, before
+anyone had opened the picture (the review before the gate, floor-2). Read then, in CI's run 45306019513:
+the picture shows the activity log's end and cannot show the opening's calls, on any platform;
+`ActivityLogViewTests`' test of a repository opened through a link holds the second call on every
+platform ("Other platforms"; design 3.6's note).
 
 ### Part F: the Git program row in nine of phase 6's pictures; no earlier expectation (design 0.7, 5.4, 5.6; rulings 3, 40)
 
@@ -4768,6 +4776,14 @@ so A1's capture at that size is not run there (run.txt says so).
   launch 3's guard before B1 (c)'s capture; F4's guarded dialog and its exact reading of the chosen
   path; K1's caret keys' waits and K2's three gutter spots; part F's resting point for `f5a` and `f10c`.
   The reasons are in "§12, the real-window part" above. No scripted expected result changed.
+- **A4, after step 5, and U2 and U3, method 3, after step 3** (2026-11-24; the review before the gate,
+  S19-15; design 13.1's ruling 99). Two expected results gain what their checks have asserted since they
+  were built: A4's text lies 12 below the title (`TextBelowTitleAlone`, within 0.5), and the comparison
+  of U's method 3 has the ends `From main` and `To feature/conflict` (`U.CompareFrom`, `U.CompareTo`).
+  Reason: both values were left to the builders by open points 59 and 82, settled by the lead on
+  2026-11-21 and fixed at §8's and §9's merges, but written only into those open points and this
+  report's texts, so each check asserted something no expected result named, which could then have been
+  changed with no reason recorded. No check and no picture changes.
 
 ### Wave 1's comparison with phase 7b's references (2026-11-20)
 
@@ -5461,14 +5477,15 @@ ruling 92 leaves out, ran during no run.
 **The rule** (D457 (5), ruling 89), on the five kept pairs: the fix's M3 median, 6,876 ms, is at or
 under 1.25 times its M2 median (5,736 ms: 7,170 ms); the base's M3 median, 10,078 ms, is above 1.25
 times its M2 median (4,942 ms: 6,177.5 ms); and the fix's M2 median lies within the base's range (4,753
-to 6,143 ms). **Proven.** The first condition holds by 294 ms, and by about as much counted from the
-window's opening (309 ms: 2,511 ms against 1.25 times 2,256 ms, 2,820 ms): the margin is narrow, the
-effect is not. The window's own opening, which comes before git is looked for and which the order does
-not touch, took 2.7 to 4.7 s in the kept runs. Counted from it, the active tab's first rows came after
-1,939 to 2,699 ms with the order (median 2,511) and after 4,155 to 6,789 ms without (median 5,730); M2's
-after 1,801 to 3,061 ms (2,256) and 1,811 to 2,340 ms (1,963). The four dropped pairs read the same way:
-the base's M3 from 7,604 to 10,821 ms, the fix's from 4,532 to 5,450 ms. The working set after the ten
-loads was 779 to 793 MB with the order and 804 to 823 MB without.
+to 6,143 ms). **Proven, as it was recorded on 2026-11-23; the third condition is not shown by this
+series ("The proof is taken again", below; D461).** The first condition holds by 294 ms, and by about as
+much counted from the window's opening (309 ms: 2,511 ms against 1.25 times 2,256 ms, 2,820 ms): the
+margin is narrow, the effect is not. The window's own opening, which comes before git is looked for and
+which the order does not touch, took 2.7 to 4.7 s in the kept runs. Counted from it, the active tab's
+first rows came after 1,939 to 2,699 ms with the order (median 2,511) and after 4,155 to 6,789 ms
+without (median 5,730); M2's after 1,801 to 3,061 ms (2,256) and 1,811 to 2,340 ms (1,963). The four
+dropped pairs read the same way: the base's M3 from 7,604 to 10,821 ms, the fix's from 4,532 to 5,450
+ms. The working set after the ten loads was 779 to 793 MB with the order and 804 to 823 MB without.
 
 **What the proof leaves open.** The fix's M2 median lies 794 ms above the base's, and its one-tab clock
 in the probe about 0.3 s above (medians 2,113 and 1,809 ms). A start with one restored tab makes no
@@ -5482,7 +5499,24 @@ where the fix runs nothing new but one assignment. Counted from the window's ope
 first rows came sooner than the base's in four of the nine pairs and later in five (medians of all nine
 2,193 and 1,999 ms), and the base's own M2 read from 4,753 to 7,374 ms that hour in its runs that met no
 task. So the lead reads it as the laptop's spread; the review before the gate looks at the one-tab path
-once more (status.md's step 19).
+once more (status.md's step 19). It did: the next paragraph.
+
+**The proof is taken again** (D461, 2026-11-24; the review before the gate, performance-restore-rows-1
+and -2). The review found what the table above does not say. Pair 5's base run began at 14:11:15, 15 s
+after `\Microsoft\Office\Office Feature Updates` started at 14:11:00, the task for which pair 4 was
+dropped; the reading after a run listed only tasks that started at or after the run's begin, so it read
+"nothing", and the script waited for a task's end only when it had waited for that task's time. That run
+has the base's highest kept M2 and M3 (6,143 and 10,428 ms), and its window opened after 3,803 ms where
+the other four kept base runs of M2 read 2,765 to 3,216 ms. Without it the base's M2 range is 4,753 to
+5,179 ms, and the fix's M2 median, 5,736 ms (6,145.5 ms with the pair dropped whole), lies above it: the
+third condition is not shown. The first two hold without the pair: the fix's M3 median 6,972 ms against
+1.25 times its M2 median, 7,682 ms, and the base's 9,253 ms against 6,137 ms. So the series is taken
+again before the gate: the same two builds, ten pairs, the builds' order alternating by pair, with a
+script that before every run waits out what is due within five minutes, any task that started in the
+last five minutes and still runs, and 90 s after any task's start, and that reads the scheduler after a
+run from 60 s before its begin
+(`D:/Projects/Personal/phase8-work/wave4/restore/series2/run_series2.sh`). D457 (5)'s rule and its
+consequence apply to the ten kept pairs; the outcome is recorded here.
 
 **The bounds after it** (ruling 93; D458; the commit `23bea54`). M3's: 8,900 ms, the slowest of the five
 counted runs with the order (7,077 ms) times 1.25, rounded up. M2's: raised from 6,100 to 9,500 ms, as
@@ -5529,7 +5563,21 @@ Not yet.
 
 ## Other platforms
 
-Not yet.
+Not complete yet: the close fills this section. Read so far:
+
+- **macOS, phase 5's `a2d-show-reads`** (the lead, 2026-11-24; CI's run 45306019513 on `f0b4f8a`, the
+  macOS job's artifact `visual-macos-latest`, kept in
+  `D:/Projects/Personal/phase8-work/wave4/review/ci-45306019513-macos/`; design 3.6 and 3.8). The status
+  bar reads Git 2.56.1. The activity log, "Show reads" checked, stands at its end: the last lines of the
+  refused checkout's output and then the reads `git rev-parse HEAD --symbolic-full-name …`, `git
+  for-each-ref`, `git status`, `git diff-tree`, `git for-each-ref`, `git config --null --get-regexp
+  ^remote\.` (exit 1), `git stash list`, `git symbolic-ref -q HEAD`, `git rev-parse -q --verify HEAD`
+  and `git status`. The laptop's picture has the same rows without the first `git status`; why the macOS
+  log holds that one read more was not looked into. Neither shows the tab's opening, whose reads lie far
+  above, so the picture does not show `git rev-parse --path-format=absolute --git-common-dir`, which
+  design 3.6 expected to see there. The call itself is held on macOS by
+  `ActivityLogViewTests.A_repository_opened_through_a_link_shows_its_openings_reads_under_Show_reads`,
+  which passed in that job.
 
 ## macOS checklist for the owner
 

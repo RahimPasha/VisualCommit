@@ -1900,6 +1900,23 @@ The lead reads the macOS job's after round 1 (3.8), and the report notes the cha
 platforms". The floor job's pictures (`visual-ubuntu-22.04-git-floor`) show 2.34's words and are
 compared with nothing.
 
+**As read (the lead, 2026-11-24; the finding floor-2 of the review before the gate, ruling 99).**
+The picture cannot show it. In the macOS job's pictures of CI's run 45306019513
+(`visual-macos-latest`, `phase-5/scripted/a2d-show-reads.png`; the status bar reads Git 2.56.1) the
+activity log stands at its end, as it does on the laptop: under "Show reads" it shows the reads that
+follow the refused checkout (`git rev-parse HEAD --symbolic-full-name …`, `git for-each-ref`, `git
+status`, `git diff-tree`, `git for-each-ref`, `git config --null --get-regexp ^remote\.` with exit
+1, `git stash list`, `git symbolic-ref -q HEAD`, `git rev-parse -q --verify HEAD`, `git status`; the
+laptop's picture has the same rows without the first `git status`). The opening's reads lie far
+above what the panel shows, so this picture shows neither the opening's first call nor its second,
+on any platform, and no other picture of CI's shows the log's top. What holds the second call
+instead is a test:
+`ActivityLogViewTests.A_repository_opened_through_a_link_shows_its_openings_reads_under_Show_reads`
+opens one repository through a link and one in a folder below its top and asserts the log's first
+two rows, the opening's call and then `git rev-parse --path-format=absolute --git-common-dir`; it
+runs on every platform and passed in that run's macOS job. The sentence above and 3.8's item on the
+picture are wrong about what the picture shows; they stay as written, with this note.
+
 ### 3.7 Lagged list, run time, real-window pass
 
 The lagged list gains nothing of §3's own: 0.4's App.Tests command names
@@ -1922,6 +1939,8 @@ constants keep 2.36's words).
   (`visual-macos-latest`): its "Show reads" shows the second call as
   `git rev-parse --path-format=absolute --git-common-dir`, as 3.6 expects; the report notes it under
   "Other platforms".
+  **Read on 2026-11-24** in run 45306019513's macOS pictures: the picture shows the log's end and
+  cannot show the opening's calls; a test holds the second call (3.6's note).
 - At the merge the lead removes the broker's `gitVersion` (0.4) and changes: D420 in decisions.md;
   `requirements.md:21`, `README.md:40` and `:55`, `CLAUDE.md:530-531` (Git 2.34.1 or newer, the app's
   minimum and the tests'), and CLAUDE.md's sentence on the floor job in "What to know" (from this
@@ -5298,8 +5317,9 @@ None changed by this package: its diff is under `tests/VisualCommit.RealWindowTe
 files of 8a's walk-through that 12.3.5's first ruling changes (`Phase8aExpectations.F.cs`,
 `Phase8aChecks.F.cs`, `Phase8aChecks.F.Helpers.cs`; ruling 96), whose two scripted pictures stay the
 same files, so no scripted picture can change, and `StartInfoFor` changes no launch. Proof: `git diff
---stat <base> wip/p8a-realwindow -- . ':(exclude)tests/VisualCommit.RealWindowTests'` prints those three
-files alone; at the gate the
+--stat phase/8a-release-readiness...wip/p8a-realwindow -- . ':(exclude)tests/VisualCommit.RealWindowTests'`, in its
+three-dot form, which reads from the two branches' merge base (`f0b4f8a`) whatever the phase's branch
+has gained since (the review before the gate, realwindow-3; ruling 99), prints those three files alone; at the gate the
 earlier captures differ from phase 7b's only as 0.7 names (§2's, §7's three framed and §2's placeholder in the same three, §8's eight, the two
 palette captures). New files: the 31 captures above (32 where 1920×1080 fits) and their 25 (26) difference pictures in
 `artifacts/visual/phase-8a/real-window/`, with run.txt.
@@ -5315,7 +5335,9 @@ palette captures). New files: the 31 captures above (32 where 1920×1080 fits) a
 The lead checks at the merge (status step 19):
 1. `dotnet build tests/VisualCommit.RealWindowTests -c Release` has no warning; the merge's CI run is
    green in every job, its Windows job compiling the project.
-2. 12.6's `git diff --stat` prints nothing.
+2. 12.6's `git diff --stat`, in its three-dot form, prints `Phase8aExpectations.F.cs`,
+   `Phase8aChecks.F.cs` and `Phase8aChecks.F.Helpers.cs` alone (it read "prints nothing" until
+   2026-11-24, which ruling 96's change of part F's resting point had made untrue; ruling 99).
 3. During the build (status step 18), the builder made the twins in one command, since each run
    empties the scripted folder (`dotnet test --project tests/VisualCommit.VisualTests.Phase8a` with
    `--filter-class` `"*Phase8aChecksL"`, `"*Phase8aChecksA"`, `"*Phase8aChecksI"`, `"*Phase8aChecksF"`,
@@ -5726,6 +5748,101 @@ full: each of Up, Down, Down raised one LiveRegionChanged from `GraphSelectedRow
 change (D450). 12.8's items 3 and 4 hold; items 1, 2 and 5 are the merge's and the gate's. 12.10 has
 the part as built.
 
+**The review before the gate (the lead, 2026-11-23 and 24; status step 19).** 99. Run
+`wf_151e85d5-daa`, read only, from 22:45 to about midnight: first a compiler of every item the notes
+kept for the review, 35 items (S19-01 to S19-35); then ten reviewers by area and three across the
+phase; a verifier for each major and one per reviewer for its minors; and a last reader for the
+changed source files nobody had read, who found nothing more. **48 findings: 43 confirmed, five of
+them major, and five refuted.** The majors: the keyboard focus left on nothing when the active tab
+changes while it lies in the stage panel (S19-01) or in another region whose rows the new tab does
+not have (keyboard-1, keyboard-2); the same after Enter or Space folds a section, a folder or a tree
+folder (keyboard-3); the blame's arrows going on from the hidden caret and not from the run a click
+picked (keyboard-5); and the status bar's polite live region told of every progress tick of git
+(screenreaders-1). Refuted, each by its verifier: the placeholder in a disabled box (colours-2: the
+order 2.3 promises is measured on the enabled box, and holds); the first-run links' accent while
+disabled (colours-3: the state cannot be reached with the app's launcher); "Discard hunk" given its
+focus back without the frame (keyboard-8: D104's return, as 6.3.1 writes it); the live region
+speaking the new tab's status at a tab switch (screenreaders-2: 9.3.7's rule); and two tabs on one
+worktree from Recent repositories (concurrency-lifetime-5: the state phases 5 and 6 accepted, D209).
+The result is `D:/Projects/Personal/phase8-work/wave4/review/review-result.json`.
+
+**The fixes** (run `wf_ccc5f713-fa5`, started on 2026-11-24 at about 00:10): 38 of the confirmed
+findings in eight packages, each built with its tests first where a test can hold it, read by an
+independent reader and corrected, in worktrees from `57ebeff`
+(`D:/Projects/Personal/vc-wt/p8a-fix-<key>` on `wip/p8a-fix-<key>`; the real-window part's three in
+that part's own worktree). The lead's rulings to their builders:
+
+- *focus*, two packages one after the other in one worktree. The loss at a tab change is one fix,
+  made where the tab changes (the window) and not in the stage panel's view alone, as the lead first
+  ruled on 2026-11-20: a focus that lies in a region of the window when the active tab changes, and
+  is on nothing afterwards, goes to that region's target in the new tab (the stage panel's rows to
+  the graph area's target when the new tab shows no such row), with the keyboard's frame if it had
+  it; 8a's four facts that state today's loss are rewritten. With it keyboard-7 and keyboard-9, and
+  keyboard-6 per site, armed only when the pressed button had the keyboard's frame, so that mouse
+  paths and earlier pictures stay. Then the rows: a row that only changes itself keeps its control
+  (`IsOpen` becomes something a row updates in place, and `RowCollection`'s scans count a row that
+  can update itself as kept: keyboard-3, screenreaders-4, performance-restore-rows-3), and where a
+  control truly goes (the eye of a branch that is shown again, keyboard-4) the focus goes to its
+  row. No scripted picture may change but for a focus that is now kept.
+- *speech*. The live region speaks an operation's start and its result, not its progress, and
+  nothing a sighted user sees changes (screenreaders-1); a polite live setting on the first-run
+  screen's title and its error or checking line and on the notice's status, nothing else
+  (screenreaders-3); a pick by the pointer moves the blame's caret to the picked run's first line
+  (keyboard-5).
+- *instance*. instance-1 to instance-4, each with a test; the notice's look and texts, every wait's
+  limit and the exit codes stay; the narrower modes apply only to a file or folder the app itself
+  creates, and nothing changes on Windows.
+- *git*. The boolean read keeps its first command and acts only when that command fails, with what
+  git 2.34.1 has (floor-1, performance-restore-rows-5); the commit at the top of a scrolled graph
+  stays there across a reload, the unscrolled graph behaves as today, and the restore order's code
+  is not touched (performance-restore-rows-4); the log's line and the guide's page on an old OpenSSH
+  say what is true on each system (security-privacy-1, guide-2); the guide's About page names the
+  four libraries the built site ships (S19-12).
+- *firstrun*. firstrun-1 to firstrun-3, icon-about-1 to icon-about-3, concurrency-lifetime-1 and
+  concurrency-lifetime-2; a radio button's drawn pixels do not change; firstrun-3's new note says
+  what the next start uses, and a check that shows the old note is reported, not changed. Its
+  builder also renders a link's frame at the scalings 1.25, 1.5 and 1.75 and reports (S19-18), on
+  which the lead then rules.
+- *harness*. No test is loosened. `FetchHold`'s `Dispose` no longer hides the exception that failed
+  a check first, and a hold that held nothing still fails its check (concurrency-lifetime-3,
+  tests-ci-2); the dashboard's wait no longer hangs on a line a pass rightly does not write, and a
+  dashboard that did not read still fails it (concurrency-lifetime-4, tests-ci-1); phase 1's check
+  10 takes `10b-second-tab` with the pointer at the neutral point and no tooltip open (tests-ci-3);
+  the links' check reads more of the forms that load (guide-1); `OperationsHarness`' awaits get
+  limits that name the step (S19-32).
+- *realwindow*, in the part's own worktree, never run by its builder. A missing rectangle for L6's
+  ink fails the launch (realwindow-4); more than one taskbar button named for VisualCommit fails
+  B2's taskbar step with the advice to close the other one (realwindow-2); the executable's icon is
+  extracted at a size the `.ico` holds, whatever the scaling (realwindow-1). The lead runs launches
+  2 and 3 again on them, the owner told.
+
+**The lead's own five.** performance-restore-rows-1: D461, the restore order's proof is taken again
+(14.10's amendment). performance-restore-rows-2: the series' script corrected for it (D461 (2)).
+floor-2: the macOS picture read (3.6's note). realwindow-3: 12.6's command in its three-dot form and
+12.8's item 2. colours-1: text that the app dims on purpose on rows the user still acts on lies
+under 4.5:1 in both themes and outside `ThemeTokensTests`' table (a hidden branch's name and, in
+solo mode, every branch left out; a dropped row of the interactive rebase; the rows a search dims;
+all three older than the phase). D410 is the owner's answer and D418 says "no list of gaps", so it
+is the owner's (13.3; status.md's "Waiting on the owner"), asked before step 19's whole default run,
+because a change of those colours changes earlier pictures.
+
+**The list's items ruled without a change.** S19-03 and S19-04 (the restore order's risk 3):
+accepted as bounded, by the first tab's trigger of at most 5 s and a free slot, as for a tab that is
+still opening today. S19-05: the one-tab path adds no wait and no process; D461 settles what the
+series showed. S19-07 and S19-10 (the overlay scroll bar over the graph's widest dates, and over a
+conflict's last line): the app's look, rows for plan.md's Backlog at the close. S19-08 (Recent
+repositories opens a second tab on a worktree): the state phases 5 and 6 accepted (D209), a Backlog
+row for the owner. S19-09: corrected at §11's merge already. S19-15: A4's 12 below the title and
+U2/U3's two ends are written into those checks' expected results, with the reason in the report.
+S19-19: no fault. S19-22: the pass and the series keep the test host's PATH in 8a, as every gate
+since phase 0 measured, so Q1's limit and the bounds stay comparable; a Backlog row for git found
+behind Git for Windows' launcher (D457's last note; plan.md's risk 10). S19-26 and S19-28 (a row
+that shows something new loses its press; Avalonia's estimate after a change above the view):
+Backlog rows, the second older than the phase. S19-27 and S19-29: no fault found. S19-31: not
+reproduced by reading; the test stays on the lagged list with its message. S19-33: no fix touches
+the order's code, and the git package's builder is told so. S19-34: the part merges last, after its
+three fixes. S19-35: the route holds as built; the listen is the gate's (D460).
+
 ### 13.2 What the integration settled
 
 Beyond moving the packages' contracts into section 1: the broker's `gitVersion` goes at §3's merge,
@@ -5745,6 +5862,7 @@ activity log's splitter goes to a fixer (D427).
 | §9's spike and merge | Told before the spike (a minute of keys and clicks); at §9's merge, a short Narrator listen (9.3.9's steps 2 to 6 and 14, about 5 minutes; 13.4 item 13). |
 | §10's merge and the series | Told before the first run (about 5 minutes of the desktop) and the series (rested, the desktop for 12 to 18 minutes per run as estimated, about 8 as taken (10.7); M6 clicks Fetch). |
 | The restore order's proof (ruling 76, D457; wave 4) | Asked first for the week's share (D241; answered on 2026-11-23: all of wave 4). Told in the chat just before each takeover, with no agent at work (ruling 23; 14.7, 14.8): the lead's probe (two warm-up launches and 18 counted ones on data folders of its own, no input, about 9 minutes) and the alternated series of M2 and M3 (the two builds five times each, taken as D457 (2) says, about 30 minutes), each after a rest of at least ten minutes behind its builds: about 50 minutes of the rested desktop in all, about 70 with a trial of two at once, about 80 when four stays after that trial. **Taken on 2026-11-23**, the owner told at 13:26: 13:36 to 14:52, the probe 8 minutes and the series 67 with its waits for the scheduler (ruling 92) and four pairs taken again; no trial of two. |
+| The review's fixes and the proof taken again (status step 19; ruling 99, D461) | Told in the chat just before each takeover, with no agent at work: launches 2 and 3 of the real-window part run alone again on their fixes (about two minutes), and the restore order's alternated series taken again, ten pairs, the builds' order alternating (about an hour of the rested desktop). **Asked before step 19's whole default run:** what to do with the three texts the app dims on purpose, which lie under 4.5:1 (colours-1): fix them in 8a, which changes earlier pictures, or keep them as recorded exceptions (status.md's "Waiting on the owner"). |
 | §12's build (status step 18) | Told before each of its 13 methods runs alone and before phase 0's `Check_8` runs alone (12.4, 12.8 item 3): about 15 minutes of the desktop in all, never beside a heavy run (ruling 23). |
 | Before the counted round | Nothing: the owner chose the mark before §7 was built (1.17, 7.8), and §7 built with it, so nothing waits there. |
 | Before the gate | The three live tokens made again (GitHub's expires on 2026-11-29, Azure DevOps' and GitLab's on 2026-12-04), through the masked script; told before each live run (D335). Present for D246's two runs of 8a's real-window checks; told before the pass. |
@@ -6972,6 +7090,16 @@ against 6,177.5 ms; the fix's M2 median 5,736 ms within the base's 4,753 to 6,14
 lasted from 13:36 to 14:52, where 14.7 had estimated about 50 minutes: four pairs met a task the
 scheduler had not shown as due and were taken again.
 
+**Amended on 2026-11-24 (D461; the review before the gate, performance-restore-rows-1 and -2; ruling
+99).** The series does not show the third condition. Pair 5's base run, which gives the top of the
+base's M2 range (6,143 ms), began 15 s after `Office Feature Updates` started at 14:11:00, the task
+for which pair 4 was dropped, and the reading after a run could not see a task that started before
+it. Without that run the base's range is 4,753 to 5,179 ms and the fix's M2 median lies above it;
+the first two conditions and the probe stand without it. The series is taken again before the gate,
+ten pairs, the builds' order alternating by pair, with a script that waits before every run and
+reads the scheduler from 60 s before a run's begin (`…/wave4/restore/series2/run_series2.sh`); D457
+(5)'s rule and its consequence apply to the retake. The order stays merged meanwhile.
+
 **Merged** (step 8). `aedb12f`; the bounds in `23bea54`, a commit of their own: M3's 8,900 ms, and
 M2's raised from 6,100 to 9,500 ms by ruling 93. On `23bea54`, 15:01 to 16:03, with no builder at
 work: the package's four classes, 39 of 39, then 0.4's lagged list through `scripts/heavy-run.sh`
@@ -6991,3 +7119,7 @@ Backlog row at the close.
 base's in the series and the probe, within the laptop's spread by the lead's reading (ruling 93),
 and M2's bound counts both builds on that reading; and the series' script began a run 7 to 29 s
 after a waited task's time without checking that the task had ended, which the script now does.
+**The review's answer (2026-11-24):** on the one-tab path the code adds no wait and no process
+(S19-05); what the series showed for it is not a proof of the third condition, and D461 has it taken
+again; the script's first correction covered only a task it had waited for, and the retake's script
+covers the rest (S19-06).

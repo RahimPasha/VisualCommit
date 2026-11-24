@@ -186,25 +186,27 @@ Wave 1:
   with phase 7b's references: 326 changed pictures, 304 inside their expected regions, 22 outside,
   each explained (caret blinks, progress bars, temporary names, placeholders the scan cannot see).
   The comparison of the whole run is step 8's.
-- [x] 6. §3, the git floor (D406, D420): the worktree check before a fast-forward on every git,
-  the stash names below 2.36, the branches the floor makes dead removed; CI's floor job green, and
-  in that commit `GitVersion.Minimum` 2.34.1 with the "too old" texts, `continue-on-error`
-  removed, `requirements.md`, the README and CLAUDE.md's prerequisites.
-  Done 2026-11-20. The package was merged in `a63390c` (`wip/p8a-floor`, two commits, 33 files;
-  its review found no major), and the lead removed the broker's `gitVersion` at the merge (D420).
-  **CI's floor job passed on its first round**: run 44727459663, on the three merges (`d63c012`),
-  7,989 tests on git 2.34.1 with 3 skipped and none failed, in a Test step of 7 min 6 s; before
-  the package it failed 20. So the rewritten stash ids, 2.34's refusal of `zdiff3`, phase 5's U18
-  from its undo's stash on and the fast-forward's worktree read all hold on 2.34.1, and the 20
-  tests hid no further assertion. The lead's commit after it moves `GitVersion.Minimum` to 2.34.1
-  (with `GitVersionTests` and `MainWindowViewModelTests`' "too old" text), removes the floor job's
-  `continue-on-error`, so that its failure fails the run from now on, and changes
-  `requirements.md`, the README, CLAUDE.md's prerequisites and plan.md's line; on that tree
-  `dotnet build` has no warning, and `GitVersionTests`, `GitLocatorTests`, `GitSetupStatesTests`
-  (36 of 36), `MainWindowViewModelTests`, `GitRepositoryProviderTests`, `GitAccessTests` and
-  `StatusBarTests` (28 of 28) pass. No fixer's round was needed. Still to read, in the macOS job's
-  pictures: phase 5's `a2d-show-reads`, which should show the second `rev-parse` call with
-  `--path-format=absolute` (design 3.6).
+- [x] 6. §3, the git floor (D406, D420): the worktree check before a fast-forward on every git, the
+  stash names below 2.36, the branches the floor makes dead removed; CI's floor job green, and in
+  that commit `GitVersion.Minimum` 2.34.1 with the "too old" texts, `continue-on-error` removed,
+  `requirements.md`, the README and CLAUDE.md's prerequisites. Done 2026-11-20. The package was
+  merged in `a63390c` (`wip/p8a-floor`, two commits, 33 files; its review found no major), and the
+  lead removed the broker's `gitVersion` at the merge (D420). **CI's floor job passed on its first
+  round**: run 44727459663, on the three merges (`d63c012`), 7,989 tests on git 2.34.1 with 3
+  skipped and none failed, in a Test step of 7 min 6 s; before the package it failed 20. So the
+  rewritten stash ids, 2.34's refusal of `zdiff3`, phase 5's U18 from its undo's stash on and the
+  fast-forward's worktree read all hold on 2.34.1, and the 20 tests hid no further assertion. The
+  lead's commit after it moves `GitVersion.Minimum` to 2.34.1 (with `GitVersionTests` and
+  `MainWindowViewModelTests`' "too old" text), removes the floor job's `continue-on-error`, so that
+  its failure fails the run from now on, and changes `requirements.md`, the README, CLAUDE.md's
+  prerequisites and plan.md's line; on that tree `dotnet build` has no warning, and
+  `GitVersionTests`, `GitLocatorTests`, `GitSetupStatesTests` (36 of 36),
+  `MainWindowViewModelTests`, `GitRepositoryProviderTests`, `GitAccessTests` and `StatusBarTests`
+  (28 of 28) pass. No fixer's round was needed. **Read on 2026-11-24** (the review before the gate,
+  floor-2; design 3.6's note): in the macOS job's pictures of run 45306019513 phase 5's
+  `a2d-show-reads` shows the activity log's end, as on the laptop, so it cannot show the opening's
+  second `rev-parse` call, which design 3.6 expected there; `ActivityLogViewTests`' test of a
+  repository opened through a link holds that call on every platform.
 - [x] 7. §4, one instance per data folder (D421, D422, D448), part I, and the macOS data folder's
   test in CI's macOS job.
   Merged on 2026-11-20 in `b70abdb` (`wip/p8a-single`, seven commits, 19 files): the guard with
@@ -334,8 +336,13 @@ Wave 4 and the review:
   captures inspected. It is reviewed in step 19 and merged last, in that step.
 - [ ] 19. (With it, the lead's ruling of 2026-11-20: Ctrl+Tab from a stage row gives the focus to
   the graph area's target; Notes, "Wave 2 is built and merged".) An independent review of the code
-  before the gate, each finding verified, the confirmed
-  ones fixed with tests; then §12's merge, the lagged list and the whole default run.
+  before the gate, each finding verified, the confirmed ones fixed with tests; then §12's merge, the
+  lagged list and the whole default run. **The review is done (2026-11-24; design 13.1's ruling
+  99):** 48 findings, 43 confirmed, five of them major, five refuted. 38 are being fixed in eight
+  packages (run `wf_ccc5f713-fa5`); the lead's own five are recorded, among them D461: the restore
+  order's proof is taken again before the gate. Still open: the fixes' merges, launches 2 and 3 of
+  the real-window part again, the series taken again, the owner's answer on the dimmed texts, §12's
+  merge, the lagged list, the whole default run and CI.
 
 Gate:
 
@@ -814,20 +821,36 @@ design 12.10, rulings 96 to 98, D459). Written and compiled by run `wf_b0d89b0f-
 what a real key or click could reach; the lead ran each of its 13 methods alone on the desktop, the
 owner told: 11 of 13 green at 21:15, and, after the fixes of runs `wf_1d035720-312` and
 `wf_44f114fb-844`, 13 of 13 with phase 0's method at 22:28. The captures were inspected: no fault of
-the app. **Step 19 is under way.** The owner, asked again for the Narrator listen at 22:50, chose
-"Later, at the gate" (D460, amending D455): the review judges the screen readers' code as built, and
-the gate's walk-through is the first time Narrator is heard. **The review runs** since 22:45 (run
-`wf_151e85d5-daa`, script `…/workflows/scripts/phase8a-review-before-the-gate-wf_151e85d5-daa.js`,
-read only): first every item the notes kept for it is compiled into one list; then ten reviewers by
-area (colours, the floor, the single instance, the first run, the keyboard, the icon and About,
-screen readers, performance with the restore order and the row list, the guide's machinery, the
-real-window part in its worktree) and three across the phase (security and privacy; concurrency and
-lifetime; the tests and CI); a verifier for each major and one per reviewer for its minors; and a
-last reader for the changed source files nobody read. **Next for the lead, when it ends:** read its
-result; rule on each confirmed finding and each "for the lead" item of the list; give the confirmed
-ones to fixers, each fix with its test, in worktrees; merge them; then the independent review of the
-code before the gate is done when, with the fixes in, §12 is merged with the lead's CLAUDE.md rows
-and the lagged list and the whole default run have passed on that commit. The package is reviewed
+the app. **Step 19 is under way.** The owner, asked again for the Narrator listen at about 22:45,
+chose "Later, at the gate" (D460, amending D455). **The review is done** (run `wf_151e85d5-daa`,
+read only, 22:45 to about midnight; its result
+`D:/Projects/Personal/phase8-work/wave4/review/review-result.json`; design 13.1's ruling 99): the 35
+items the notes kept for it, ten reviewers by area and three across the phase, the findings
+verified: 48 findings, 43 confirmed, five of them major (the keyboard focus lost at a tab change and
+at a fold, the blame's arrows after a click, the status bar's live region told of every progress
+tick), five refuted. **The fixes are being built** (run `wf_ccc5f713-fa5`, script
+`…/workflows/scripts/phase8a-review-fixes-wf_ccc5f713-fa5.js`, started on 2026-11-24 at about 00:10;
+the findings by package in `…/wave4/review/fix-packages.json`): 38 findings in eight packages, each
+built with its tests, read by an independent reader and corrected, in six worktrees from `57ebeff`
+(`D:/Projects/Personal/vc-wt/p8a-fix-focus`, `-speech`, `-instance`, `-git`, `-firstrun` and
+`-harness`, on `wip/p8a-fix-<key>`) and, for the real-window part's three, in `p8a-realwindow`. The
+lead's own five are recorded (ruling 99): **D461, the restore order's proof is taken again**,
+because the first series cannot vouch for the run that carries its third condition; the series'
+corrected script; the macOS picture read (Progress, step 6); design 12.6's command; and the dimmed
+texts' contrast, which is the owner's ("Waiting on the owner"). **Next for the lead, in this
+order:** (1) when the fix run ends, read each package's result, diff and pictures, rule, and merge
+the six fix branches one at a time, each with its test classes run, then push them together; (2)
+with no agent at work and the owner told just before, run launches 2 and 3 of the real-window part
+alone again on their fixes (`Check_L_graph_danger_item_and_head_row` and
+`Check_A_and_B_about_and_icon`), then take the restore order's series again as D461 says: the
+worktrees `p8a-restore-base` at `3f67850` and `p8a-restore` on `wip/p8a-restore` made again, each
+Release build at least ten minutes before, `bash
+D:/Projects/Personal/phase8-work/wave4/restore/series2/run_series2.sh 1 10`, about an hour, a void
+pair taken again under its number plus ten, and its outcome recorded by D457 (5)'s rule; (3) ask the
+owner about the dimmed texts before the whole default run, since a change of those colours changes
+earlier pictures; (4) merge §12 last, with CLAUDE.md's rows for 8a's real-window checks; then the
+lagged list, the whole default run (`bash scripts/heavy-run.sh`), the comparison of its pictures
+with wave 3's references, the push and CI's run; then step 19 is ticked. The package is reviewed
 with the rest in step 19 and merged last, in that step. The three finished worktrees (`p8a-restore`,
 `p8a-restore-base`, `p8a-guide`) are removed; their `wip/` branches stay local (D396). §11's
 builders got with their briefs: mdBook at
@@ -1066,7 +1089,17 @@ every commit.
   `…/wave4/realwindow/run2/`. What they show beyond design 12.10: at each of the notice launches and
   at launch 3 the app's window was not the foreground window when the launch began (Windows keeps a
   process started by the test host behind), and the one click on the title bar brought it forward
-  each time. Wave 4's runs so far: 26.8M tokens.
+  each time. Wave 4's runs so far: 26.8M tokens. **Step 19's review and what followed (22:45 to
+  2026-11-24, 01:30).** Run `wf_151e85d5-daa` (8.05M tokens, read only): its result is
+  `…/wave4/review/review-result.json` (the list, each reviewer's summary and what it did not check,
+  the findings with their verdicts, the list's verdicts, the last reader's coverage). The lead's
+  rulings on it are design 13.1's ruling 99, and D461. The fix run `wf_ccc5f713-fa5` works from
+  `…/wave4/review/fix-packages.json`; its builders stop and report where a fix would change an
+  expected result or an earlier picture. For the series taken again:
+  `…/wave4/restore/series2/run_series2.sh <first pair> <last pair>` writes `series.log` and each
+  run's files beside itself and expects the two worktrees at their old paths. The macOS job's 1,239
+  pictures of run 45306019513 are in `…/wave4/review/ci-45306019513-macos/`. Wave 4's runs so far:
+  34.9M tokens, before the fix run.
 - **Wave 3 is under way (2026-11-21).** The owner's word that day: "Continue", all of wave 3 now, and
   the three takeovers of the desktop (the spike, §10's first run, the "before" series) each as soon
   as it is ready. **The checks** of parts A and U were written by a writer each, reviewed by two
@@ -1936,6 +1969,27 @@ every commit.
 
 - **Phase 8a, from the owner** (2026-11-19; the owner's answers D399 to D415 are below, under "For
   phase 8, before its design"):
+  - **To answer before step 19's whole default run: the texts the app dims on purpose** (the review
+    before the gate, colours-1; design 13.1's ruling 99). Three older looks draw text under 4.5:1 on
+    rows the user still acts on, in both themes, and `ThemeTokensTests`' table does not hold them: a
+    hidden branch's name and, in solo mode, every branch left out (the disabled text colour: 2.15 to
+    2.96:1 in dark, 1.84 to 2.22:1 in light); a dropped row of the interactive rebase (2.23:1 in
+    dark on a selected row); and the rows a search dims (the text at 35 % opacity: about 2.8:1 in
+    dark, 2.2:1 in light). WCAG exempts disabled controls, and these rows are not disabled: their
+    menus, clicks and actions work. D410, the contrast round, was the owner's answer and named three
+    fixes; D418 says "4.5:1 on every pair a text lies on" and "no list of gaps". Two ways. (1) Fix
+    them in 8a: the dimmed names and the dropped row in the secondary text colour (4.5:1 or more on
+    every row state), their state still shown by the eye, the solo mark and the strikethrough, and
+    the search's dimming raised to about 60 % opacity; one more fix package, and every earlier
+    picture with a hidden branch, a solo, a dropped row or a search changes and is inspected against
+    the references. (2) Keep the looks and record them: a decision that amends D418 and names the
+    three texts as accepted exceptions, their ratios pinned in `ThemeTokensTests` under it, a test
+    that fails when the disabled colour is used for text on any other active row, and a Backlog row
+    for a de-emphasis that keeps 4.5:1. **The lead's recommendation: (2) for 8a.** Each state is one
+    the user sets and can undo, two of the three carry a second mark, the looks were inspected and
+    accepted at phase 5's gate, and (1) changes the look of three finished features just before the
+    gate. The lead asks when the review's fixes are merged; an answer in the chat before that is
+    taken as it comes.
   - **To ask before wave 4: the week's share, with the restore order in it** (D241, D457; the lead
     asks when step 16 is ticked). Wave 4 was the guide (§11), the real-window part (§12) and the
     review before the gate; D457 adds a small package, the restore order (ruling 76): with several
