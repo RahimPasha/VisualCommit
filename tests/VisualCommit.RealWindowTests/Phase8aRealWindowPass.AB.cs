@@ -71,13 +71,15 @@ public partial class Phase8aRealWindowPass
 
         // B1 (a) and (b): the icons against the .ico's frames, noted now, asserted at the end.
         var frames = IconFile.Read(IconFile.RepositoryPath(IconFile.IcoFile));
-        Assert.Equal(B.IcoSizes, frames.Select(frame => frame.Size));
+        var sizes = frames.Select(frame => frame.Size).ToList();
+        Note($"B1: the .ico's frames {string.Join(", ", sizes)} px; expected {string.Join(", ", B.IcoSizes)}");
+        Assert.Equal(B.IcoSizes, sizes);
         List<string> b1 = [.. ExecutableIcon(frames)];
         b1.AddRange(WindowIcons(app, frames));
 
         // Before B1 (c)'s capture and the first key (B1 presses nothing): the window the foreground window,
         // so that B1 (c)'s title bar is the active caption, as B2's is after its click.
-        EnsureForegroundBeforeFirstKey(app, () => app.ForegroundIsThis, "the app's window the foreground window", MainNotForegroundMessage);
+        EnsureForegroundBeforeFirstKey(app, (foreground, _) => foreground, "the app's window the foreground window", MainNotForegroundMessage);
 
         // B1 (c): the title bar, dark, the pointer at the neutral point.
         var darkTitleBar = TitleBarPictures(app, B.B1TitleBarDarkWithFrame, B.B1TitleBarIconDark);
@@ -123,7 +125,7 @@ public partial class Phase8aRealWindowPass
         TaskbarButtonPictures(app);
 
         Assert.True(b1.Count == 0, string.Join('\n', b1));
-        Assert.Equal(0, app.Close());
+        Assert.Equal(0, CloseNoted(app));
     }
 
     // ---- What launches 3 to 6 share ----
@@ -141,23 +143,26 @@ public partial class Phase8aRealWindowPass
 
     /// <summary>
     /// The guard before a launch's first key (design 12.3.3, 12.3.4 launches 3, 5 and 6, 12.3.5), and in
-    /// launch 5 before its first capture too (D459): when
-    /// <paramref name="ready"/> does not hold, one real click on the window's title bar, away from its left
-    /// end and its caption buttons (<see cref="RealApp.ClickTitleBar"/>), then a wait of at most 5 s until
-    /// it holds, else the method fails with <paramref name="failure"/> before any key. When another window
-    /// lies over the point the click would land on, nothing is clicked and the method fails with
-    /// <paramref name="failure"/> and that window's words. run.txt says whether the click was needed, each line
-    /// starting with <paramref name="when"/>. Returns it.
+    /// launch 5 before its first capture too (D459): each look reads the two conditions once,
+    /// <see cref="RealApp.ForegroundIsThis"/> and the id of UI Automation's focused element
+    /// (<see cref="RealApp.FocusedId"/>), and <paramref name="ready"/> judges those reads. When it does not
+    /// hold, one real click on the window's title bar, away from its left end and its caption buttons
+    /// (<see cref="RealApp.ClickTitleBar"/>), then a wait of at most 5 s until it holds, else the method fails
+    /// with <paramref name="failure"/> before any key. When another window lies over the point the click
+    /// would land on, nothing is clicked and the method fails with <paramref name="failure"/> and that
+    /// window's words. run.txt says whether the click was needed and, on each of its lines, what the look
+    /// behind it read; each line starts with <paramref name="when"/>. Returns it.
     /// </summary>
-    private bool EnsureForegroundBeforeFirstKey(RealApp app, Func<bool> ready, string what, string failure, string when = "before the first key")
+    private bool EnsureForegroundBeforeFirstKey(RealApp app, Func<bool, string?, bool> ready, string what, string failure, string when = "before the first key")
     {
-        if (ready())
+        var (foreground, focused) = (app.ForegroundIsThis, app.FocusedId());
+        if (ready(foreground, focused))
         {
-            Note($"{when}: {what}, with no click");
+            Note($"{when}: {what}, with no click ({GuardReads(foreground, focused)})");
             return false;
         }
 
-        Note($"{when}: not {what}; one real click on the title bar");
+        Note($"{when}: not {what} ({GuardReads(foreground, focused)}); one real click on the title bar");
         try
         {
             app.ClickTitleBar();
@@ -170,17 +175,22 @@ public partial class Phase8aRealWindowPass
         }
         try
         {
-            app.WaitFor(ready, what, I.ForegroundAgainWithin);
+            app.WaitFor(() => ready(foreground = app.ForegroundIsThis, focused = app.FocusedId()), what, I.ForegroundAgainWithin);
         }
         catch (TimeoutException)
         {
+            Note($"{when}: the last look after the click read {GuardReads(foreground, focused)}");
             Note(failure);
             throw new XunitException(failure);
         }
 
-        Note($"{when}: {what} after the click on the title bar");
+        Note($"{when}: {what} after the click on the title bar ({GuardReads(foreground, focused)})");
         return true;
     }
+
+    /// <summary>The guard's two reads of one look in words for run.txt.</summary>
+    private static string GuardReads(bool foreground, string? focusedId) =>
+        $"ForegroundIsThis {(foreground ? "true" : "false")}, UI Automation's focused element {(string.IsNullOrEmpty(focusedId) ? "none, or one without an id" : focusedId)}";
 
     /// <summary>
     /// Waits until the keyboard focus is in the text <paramref name="textId"/>, an AvaloniaEdit editor
@@ -391,7 +401,9 @@ public partial class Phase8aRealWindowPass
         Assert.Matches(PictureName(), enlarged);
         app.MoveToNeutral();
         app.WaitFor(() => ToolTipsShown(app).Count == 0, $"no tooltip in the window before {framed}", StepTimeout);
-        Assert.Equal(B.WindowTitle, app.Window.Title);
+        var title = app.Window.Title;
+        Note($"{framed}: the window's title \"{title}\", expected \"{B.WindowTitle}\"");
+        Assert.Equal(B.WindowTitle, title);
         var visible = app.VisibleFrameOffset(out var frames);
         var foreground = app.ForegroundIsThis;
         using var frame = app.CaptureWindow();

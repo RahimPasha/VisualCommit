@@ -86,7 +86,7 @@ public partial class Phase8aRealWindowPass
     /// <c>{path}, chosen in Settings</c> and settings.json's <c>gitExecutable</c> that path exactly;
     /// <c>f4a-found-again</c>. run.txt notes the per-user recent lists the confirmed dialog writes.</item>
     /// </list>
-    /// The app closed by its window, exit code 0; the repository as it was.
+    /// The app closed by its window, exit code 0; the repository as it was, both noted before they are asserted.
     /// </summary>
     [Fact]
     public async Task Check_F_missing_offers_keys_and_choose()
@@ -99,6 +99,7 @@ public partial class Phase8aRealWindowPass
         Note($"the machine's git's version (git --version, as the app reads it): {version}");
         using var repo = await Scenarios.GraphAsync();
         var name = NameOf(repo);
+        Note($"the scenario's copy \"{name}\" at {repo.Path}");
         Assert.Equal(F.MissingLaunchScenario, name);
         var exact = await repo.ExactStateAsync();
         var data = Run.NewDataDirectory();
@@ -180,8 +181,8 @@ public partial class Phase8aRealWindowPass
         Assert.Empty(app.ShownElements(F.SetUpButtonId));
         Picture(app, F.F4aFoundAgain, keepPointer: false, _ => []);
 
-        Assert.Equal(0, app.Close());
-        Assert.Equal(exact, await repo.ExactStateAsync());
+        Assert.Equal(0, CloseNoted(app));
+        await AssertStateUnchangedAsync(repo, exact, "at the end");
     }
 
     /// <summary>
@@ -238,7 +239,7 @@ public partial class Phase8aRealWindowPass
         RestAtFirstRunPoint(app, F.F5aTooOld);
         Picture(app, F.F5aTooOld, keepPointer: true, _ => NoToolTip(app, F.F5aTooOld));
 
-        Assert.Equal(0, app.Close());
+        Assert.Equal(0, CloseNoted(app));
     }
 
     /// <summary>
@@ -274,7 +275,7 @@ public partial class Phase8aRealWindowPass
         Note($"F6: the log has \"{noVersion}\" {CountLogLines(app, noVersion)} times and \"{lookedOnlyAt}\" {CountLogLines(app, lookedOnlyAt)} times");
         Picture(app, F.F6aConfigFault, keepPointer: false, _ => []);
 
-        Assert.Equal(0, app.Close());
+        Assert.Equal(0, CloseNoted(app));
     }
 
     /// <summary>
@@ -284,7 +285,7 @@ public partial class Phase8aRealWindowPass
     /// <see cref="RealApp.SeedGlobalGitConfig"/>. A wait until the screen shows with guidance that starts <c>Git cannot read line 1 of</c>;
     /// the title <c>Git is not working</c>; <c>GitSetupGitSaid</c> starts <c>fatal: bad config line 1 in
     /// file</c> and names that file (separators and case aside), the guidance names it too; <c>Show the
-    /// file</c> shown, not pressed; <c>GitSetupPath</c> the machine's git as the test process finds it, over
+    /// file</c> shown once, its count in run.txt, not pressed; <c>GitSetupPath</c> the machine's git as the test process finds it, over
     /// the <c>PATH</c> the launch passes on (design 12.3.5); git's line in run.txt. No picture: the path and
     /// the file differ from machine to machine. The app closed by its window, exit code 0.
     /// </summary>
@@ -312,7 +313,9 @@ public partial class Phase8aRealWindowPass
         var named = said[F.ConfigFaultPrefix.Length..].Split('\n')[0].TrimEnd('\r');
         Assert.True(GitFileNames.SamePath(file, named), $"Git named {named}, not the launch's global file {file}.");
         Assert.Equal(string.Format(CultureInfo.InvariantCulture, F.ConfigFaultGuidanceFormat, 1, named), guidance);
-        Assert.Single(app.ShownElements(F.ShowFileId));
+        var showFile = app.ShownElements(F.ShowFileId);
+        Note(string.Create(CultureInfo.InvariantCulture, $"F6b: {F.ShowFileId} shown {showFile.Count} times (one expected; never pressed)"));
+        Assert.Single(showFile);
         Assert.Equal(git, path);
 
         var status = OneShownName(app, F.StatusId);
@@ -321,7 +324,7 @@ public partial class Phase8aRealWindowPass
         Note($"F6b: GitStatus \"{status}\", its help text \"{help}\"; the log's Warning: {warning ?? "none"}");
         Assert.Equal(F.GitNotWorking, status);
 
-        Assert.Equal(0, app.Close());
+        Assert.Equal(0, CloseNoted(app));
     }
 
     // ---- Part F's steps ----

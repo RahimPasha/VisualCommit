@@ -1,7 +1,8 @@
 // Part K's two launches of the 8a pass (docs/test-reports/phase-8a.md, K1, K2 and "The real window (part
 // K)"; docs/phase-8a-design.md 6.3, 12.3.4 launches 11 and 12, 12.3.5; D425, D426): a hunk and two chosen
 // lines staged by real keys from a stage row reached by F6 and Tab, with the toolbar reached by Shift+Tab;
-// and a blame run picked by real arrows, with its menu by Shift+F10. Each launch is the twin of part K's
+// and a blame run picked by real arrows, its gutter read at the twin's three spots, with its menu by
+// Shift+F10. Each launch is the twin of part K's
 // scripted method 1 or 2 and takes its steps in the same order, every key pressed only after the wait its
 // twin makes. The real pointer stays at the neutral point, off the stage rows, through the walks and at
 // every capture: a hovered row would show its own buttons beside the focused row's (D425). Nothing is
@@ -43,6 +44,12 @@ public partial class Phase8aRealWindowPass
     /// <summary>How often a wait on git's state reads it again.</summary>
     private static readonly TimeSpan GitPollInterval = TimeSpan.FromMilliseconds(100);
 
+    /// <summary>How far inside the blame gutter's right edge K2's spots lie, in logical pixels: 2, where the report's K2 and the twin read the gutter.</summary>
+    private const float GutterSpotInset = 2;
+
+    /// <summary>How many of the lines that changed K1's end notes in run.txt, each clipped; the count is noted whole.</summary>
+    private const int ChangedLinesNoted = 6;
+
     /// <summary>
     /// Launch 11 (design 12.3.4; the twin of part K's method 1, <c>Check_K1_hunk_by_keys</c>), one tab on a
     /// fresh "changes", dark, 1100×700:
@@ -68,8 +75,9 @@ public partial class Phase8aRealWindowPass
     /// src/Calculator.cs</c>, <c>git diff --numstat</c> <c>2 0 src/Calculator.cs</c>.</item>
     /// </list>
     /// run.txt gets the focused element after each key of the walk, which of the text's two conditions held at
-    /// each of its waits, and the <c>--numstat</c> lines. The app closed by its window, exit code 0; the
-    /// repository changed only in <c>src/Calculator.cs</c>'s index entry and status line.
+    /// each of its waits, the <c>--numstat</c> lines and the repository's state wherever it is asserted. The
+    /// app closed by its window, exit code 0; the repository changed only in <c>src/Calculator.cs</c>'s index
+    /// entry and status line, the lines that changed noted before it is asserted.
     /// </summary>
     [Fact]
     public async Task Check_K1_hunk_by_keys()
@@ -78,6 +86,7 @@ public partial class Phase8aRealWindowPass
         AssertDesktopReady();
         using var repo = await Scenarios.ChangesAsync();
         var name = NameOf(repo);
+        Note($"the scenario's copy \"{name}\" at {repo.Path}");
         Assert.Equal(K.ChangesLaunch.Scenario, name);
         using var app = Opened(Launch(Run.NewDataDirectory(), OneTab(repo.Path)), name);
         var exact = await repo.ExactStateAsync();
@@ -101,7 +110,7 @@ public partial class Phase8aRealWindowPass
             WaitForWalkStop(app, K.Ids.UnstagedFileList, row, id, string.Create(CultureInfo.InvariantCulture, $"Tab {tab}"));
         }
 
-        Assert.Equal(exact, await repo.ExactStateAsync());
+        await AssertStateUnchangedAsync(repo, exact, "after the walk");
 
         // Step 5: a real Enter opens the diff, sent only while the walk's last stop, src/Calculator.cs's
         // own button, still has the focus after the read of git; the text's wait comes straight after it,
@@ -114,7 +123,7 @@ public partial class Phase8aRealWindowPass
         Keys(app, VirtualKeyShort.TAB);
         var firstHunk = WaitForFirstStageHunk(app);
         Picture(app, K.K1aHunkButton, keepPointer: false, _ => []);
-        Assert.Equal(exact, await repo.ExactStateAsync());
+        await AssertStateUnchangedAsync(repo, exact, $"after {K.K1aHunkButton}");
 
         // Step 7 (k1b): a real Enter stages that hunk alone, sent only while that very button still has
         // the focus after the picture and the read of git. The focus stays on the button until the
@@ -153,7 +162,7 @@ public partial class Phase8aRealWindowPass
         await WaitForNumstatAsync(app, repo, cached: true, K.StagedAfterLines, "after the two lines");
         await AssertNumstatAsync(repo, "after the two lines", K.StagedAfterLines, K.UnstagedAfterLines);
 
-        Assert.Equal(0, app.Close());
+        Assert.Equal(0, CloseNoted(app));
         AssertChangedOnlyIn(exact, await repo.ExactStateAsync(), K.Calculator);
     }
 
@@ -169,14 +178,19 @@ public partial class Phase8aRealWindowPass
     /// <item>Three real Downs (<c>K.DownsToRun2</c>), each followed by a wait for what its pick shows in UI
     /// Automation: <c>DetailsSubject</c> <c>Add the parser</c>; the stage panel (<c>UnstagedTitle</c>
     /// <c>Unstaged files (1)</c>, no details) for the run not committed yet; <c>DetailsSubject</c> <c>Rename
-    /// the parser to reader</c>; and the focus still in <c>BlameText</c> after each. <c>k2a-blame-run</c>.</item>
+    /// the parser to reader</c>; and the focus still in <c>BlameText</c> after each. <c>k2a-blame-run</c>, and
+    /// in it the gutter read at the twin's three spots (the report's K2 after step 5, within 3 a channel,
+    /// <c>BlameGutterSpots</c>): beside line 4, run 2 picked, <c>#DDE1FA</c>; beside line 1, run 0, an even
+    /// run, <c>#F5F6F8</c>; beside line 3, run 1, an odd run, <c>#FFFFFF</c>. The 3 % comparison, which
+    /// matches colours within 48 a channel, cannot tell these apart, so the spots are asserted after it.</item>
     /// <item>The pointer at the neutral point; a real Shift+F10: the run's menu headed <c>0575c7f Rename the
     /// parser to reader</c>, <c>Show in graph</c> highlighted; <c>k2b-blame-menu</c>, pointer kept.</item>
     /// <item>A real Esc: no menu; a real Esc: no page, the graph shown.</item>
     /// </list>
-    /// run.txt gets each Down's wait, which of the text's two conditions held at each of its waits, and the
-    /// menu's header and items. Nothing in the menu is pressed. The app closed by its window, exit code 0;
-    /// the repository as it was.
+    /// run.txt gets each Down's wait, which of the text's two conditions held at each of its waits, the
+    /// gutter's three spots with their expected colours, the menu's header and items, and what the second
+    /// Esc's wait read. Nothing in the menu is pressed. The app closed by its window, exit code 0; the
+    /// repository as it was, noted before it is asserted.
     /// </summary>
     [Fact]
     public async Task Check_K2_blame_by_arrows()
@@ -185,6 +199,7 @@ public partial class Phase8aRealWindowPass
         AssertDesktopReady();
         using var repo = await Scenarios.HistoryAsync();
         var name = NameOf(repo);
+        Note($"the scenario's copy \"{name}\" at {repo.Path}");
         Assert.Equal(K.HistoryLaunch.Scenario, name);
         Assert.False(K.HistoryLaunch.Dark, "Launch 12's twin starts light.");
         var data = Run.NewDataDirectory();
@@ -244,7 +259,8 @@ public partial class Phase8aRealWindowPass
             WaitForFocusInText(app, K.Ids.BlameText, StepTimeout);
         }
 
-        Picture(app, K.K2aBlameRun, keepPointer: false, _ => []);
+        // k2a: the gutter's three spots read in the capture, noted, and asserted after the comparison.
+        Picture(app, K.K2aBlameRun, keepPointer: false, capture => BlameGutterSpots(app, capture));
 
         // Step 6 (k2b): the pointer at the neutral point; a real Shift+F10, run 2's menu.
         app.MoveToNeutral();
@@ -258,13 +274,17 @@ public partial class Phase8aRealWindowPass
         app.WaitFor(() => app.FindAll("ContextMenu").Count == 0, "the menu to close", StepTimeout);
         Note($"after the menu's Esc: the focus on {FocusNow(app)}");
         Keys(app, VirtualKeyShort.ESCAPE);
+        var (pages, texts, graphs) = (-1, -1, -1);
         app.WaitFor(
-            () => app.ShownElements(BlamePageId).Count == 0 && app.ShownElements(K.Ids.BlameText).Count == 0 && app.ShownElements("GraphRows").Count == 1,
+            () => (pages = app.ShownElements(BlamePageId).Count) == 0
+                && (texts = app.ShownElements(K.Ids.BlameText).Count) == 0
+                && (graphs = app.ShownElements("GraphRows").Count) == 1,
             "the blame page to close and the graph to show",
             StepTimeout);
+        Note(string.Create(CultureInfo.InvariantCulture, $"after the second Esc: no page, GraphRows shown ({BlamePageId} shown {pages} times, {K.Ids.BlameText} {texts}, GraphRows {graphs})"));
 
-        Assert.Equal(0, app.Close());
-        Assert.Equal(exact, await repo.ExactStateAsync());
+        Assert.Equal(0, CloseNoted(app));
+        await AssertStateUnchangedAsync(repo, exact, "at the end");
     }
 
     // ---- Part K's steps ----
@@ -512,16 +532,68 @@ public partial class Phase8aRealWindowPass
         return (await repo.GitAsync(arguments)).StandardOutput.Trim().Replace('\t', ' ');
     }
 
-    /// <summary>Two exact states (<see cref="TempRepo.ExactStateAsync"/>) differ, and only in lines that name <paramref name="path"/>: its index entry and its status line (K1's end).</summary>
-    private static void AssertChangedOnlyIn(string before, string after, string path)
+    /// <summary>
+    /// Two exact states (<see cref="TempRepo.ExactStateAsync"/>) differ, and only in lines that name
+    /// <paramref name="path"/>: its index entry and its status line (K1's end). run.txt gets what the
+    /// assertions read, before they run: both states' line counts and each line that changed.
+    /// </summary>
+    private void AssertChangedOnlyIn(string before, string after, string path)
     {
         var old = before.Split('\n');
         var now = after.Split('\n');
-        Assert.Equal(old.Length, now.Length);
         var changed = old.Zip(now).Where(pair => pair.First != pair.Second).ToList();
+        var others = changed.Count(pair => !(pair.First.Contains(path, StringComparison.Ordinal) && pair.Second.Contains(path, StringComparison.Ordinal)));
+        var held = old.Length == now.Length && changed.Count > 0 && others == 0;
+        var lines = string.Join("; ", changed.Take(ChangedLinesNoted).Select(pair => $"\"{Clipped(pair.First)}\" became \"{Clipped(pair.Second)}\""))
+            + (changed.Count > ChangedLinesNoted ? "; …" : string.Empty);
+        Note(string.Create(
+            CultureInfo.InvariantCulture,
+            $"at the end: {(held ? $"the repository changed only in {path}'s index entry and status line" : "the repository did not change only where expected")}: {old.Length} lines after the start, {now.Length} now; {changed.Count} changed, {others} of them not naming {path}{(changed.Count == 0 ? string.Empty : ": " + lines)}"));
+        Assert.Equal(old.Length, now.Length);
         Assert.NotEmpty(changed);
         Assert.All(changed, pair => Assert.True(
             pair.First.Contains(path, StringComparison.Ordinal) && pair.Second.Contains(path, StringComparison.Ordinal),
             $"A line changed that is not {path}'s: \"{pair.First}\" became \"{pair.Second}\"."));
+    }
+
+    /// <summary>
+    /// K2's step 5 (<c>k2a-blame-run</c>; the report's K2 after step 5, design 12.3.4 launch 12): the gutter
+    /// read in <paramref name="capture"/> at the three spots its twin, <c>Phase8aChecks.Check_K2_blame_by_arrows</c>,
+    /// reads, each by <see cref="ReadSpot"/>, which notes it with its expected colour in run.txt and returns a
+    /// problem when it lies further than 3 from it in a channel: the picked run's <c>#DDE1FA</c> beside line 4
+    /// (run 2), an even run's <c>#F5F6F8</c> beside line 1 (run 0) and an odd run's <c>#FFFFFF</c> beside
+    /// line 3 (run 1), the light theme's <c>K.SelectionLight</c>, <c>K.PanelLight</c> and <c>K.WindowLight</c>.
+    /// <c>Phase8aExpectations.K</c> gives no points, so they are derived from the blame view's layout as the
+    /// twin derives them: <see cref="GutterSpotInset"/> inside <c>BlameGutter</c>'s right edge, at the line's
+    /// centre, which lies <see cref="RealApp.BlameLineHeight"/> a line below <c>BlameText</c>'s top, as
+    /// <see cref="RealApp.BlameGutterPoint"/> places a line (the page scrolls nothing); both bounds from UI
+    /// Automation, in logical pixels of the client area, so that the display's scaling is applied once, by the
+    /// read. The spot lies right of the run's date, which ends about 8 px short of the gutter's edge at
+    /// 1100×700, on the gutter's flat colour. A gutter or text that is not on screen once is a problem, not an
+    /// exception, so that the comparison still runs.
+    /// </summary>
+    private IEnumerable<string> BlameGutterSpots(RealApp app, Bitmap capture)
+    {
+        var gutters = app.ShownElements(K.Ids.BlameGutter);
+        var texts = app.ShownElements(K.Ids.BlameText);
+        if (gutters is not [var gutterElement] || texts is not [var textElement])
+        {
+            var missing = string.Create(CultureInfo.InvariantCulture, $"{K.K2aBlameRun}: {gutters.Count} {K.Ids.BlameGutter} and {texts.Count} {K.Ids.BlameText} on screen, not one each: the gutter's three spots are not read.");
+            Note(missing);
+            return [missing];
+        }
+
+        var gutter = app.BoundsOf(gutterElement);
+        var text = app.BoundsOf(textElement);
+        PointF Beside(int line) => new(gutter.Right - GutterSpotInset, text.Top + ((line - 0.5f) * RealApp.BlameLineHeight));
+        Note(string.Create(
+            CultureInfo.InvariantCulture,
+            $"{K.K2aBlameRun}: {K.Ids.BlameGutter} at {gutter}, {K.Ids.BlameText} at {text} (logical pixels of the client area); each spot {GutterSpotInset:0.#} px inside the gutter's right edge at its line's centre, {RealApp.BlameLineHeight:0.##} a line below the text's top, as the twin reads them"));
+        return
+        [
+            .. ReadSpot(capture, app.Scaling, "run 2's gutter beside line 4, the picked run (VcSelectionBrush)", Beside(4), K.SelectionLight),
+            .. ReadSpot(capture, app.Scaling, "run 0's gutter beside line 1, an even run (VcPanelBackgroundBrush)", Beside(1), K.PanelLight),
+            .. ReadSpot(capture, app.Scaling, "run 1's gutter beside line 3, an odd run (VcWindowBackgroundBrush)", Beside(3), K.WindowLight),
+        ];
     }
 }

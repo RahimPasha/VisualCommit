@@ -79,10 +79,13 @@ public partial class Phase8aRealWindowPass
         var graphRows = ShownOne(app, U.GraphRowsId);
         var first = RealApp.ReadOr<AutomationElement?>(() => graphRows.FindFirstChild(), null)
             ?? throw new XunitException($"{U.GraphRowsId} has no child that UI Automation gives after a click on \"{U.OursEdits.Subject}\".");
-        Note($"the graph's first child, read before the recording (D455): {Describe(first)}");
-        Assert.Equal(U.SelectedRowId, ReadText(() => first.Properties.AutomationId.ValueOrDefault));
+        var firstId = ReadText(() => first.Properties.AutomationId.ValueOrDefault);
+        Note($"the graph's first child, read before the recording (D455): {Describe(first)}; its id \"{firstId}\", expected \"{U.SelectedRowId}\"");
+        Assert.Equal(U.SelectedRowId, firstId);
         WaitForRowName(app, first, U.OursEdits.Name, "after the click");
-        Assert.Equal(U.OursEdits.Hint, ReadText(() => RealApp.HelpTextOf(first)));
+        var firstHint = ReadText(() => RealApp.HelpTextOf(first));
+        Note($"after the click: {U.SelectedRowId} named \"{U.OursEdits.Name}\" (waited for), its help text \"{firstHint}\"");
+        Assert.Equal(U.OursEdits.Hint, firstHint);
 
         using (var events = app.RecordSelectedRowEvents())
         {
@@ -156,7 +159,7 @@ public partial class Phase8aRealWindowPass
         problems.AddRange(ReadRowName(app, RowButton(app, unstage.List, unstage.Row, unstage.Id), unstage));
 
         Note($"git status --porcelain at the end: {await StatusAsync(repo)}");
-        Assert.Equal(0, app.Close());
+        Assert.Equal(0, CloseNoted(app));
         Assert.True(problems.Count == 0, string.Join('\n', problems));
     }
 

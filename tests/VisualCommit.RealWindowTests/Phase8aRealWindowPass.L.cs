@@ -81,7 +81,7 @@ public partial class Phase8aRealWindowPass
         var modified = status.Split('\n').Any(line => line.TrimEnd('\r') == " M " + L.Calculator);
         Note($"after Cancel, git status --porcelain lists {L.Calculator} modified: {modified}");
         Assert.True(modified, $"After Cancel, git status --porcelain does not list {L.Calculator} modified: {status}");
-        Assert.Equal(exact, await repo.ExactStateAsync());
+        await AssertStateUnchangedAsync(repo, exact, "after Cancel");
 
         // A real click on ThemeSwitch; the window light, named by FilterBox's background turned white.
         Press(app, app.Find("ThemeSwitch"));
@@ -95,8 +95,8 @@ public partial class Phase8aRealWindowPass
         TypeIntoFilter(app);
         Picture(app, L.L2bFilterTypedLight, keepPointer: false, capture => TypedText(app, capture, L.Light));
 
-        Assert.Equal(0, app.Close());
-        Assert.Equal(exact, await repo.ExactStateAsync());
+        Assert.Equal(0, CloseNoted(app));
+        await AssertStateUnchangedAsync(repo, exact, "at the end");
     }
 
     /// <summary>
@@ -183,9 +183,11 @@ public partial class Phase8aRealWindowPass
             .. ReadSpot(capture, app.Scaling, "feature/login's row no longer selected (VcPanelBackgroundBrush)", login, dark.Panel),
         ]);
 
-        Assert.Equal(0, app.Close());
-        Assert.Equal(exact, await repo.ExactStateAsync());
-        Assert.Empty(await repo.BackupRefsAsync());
+        Assert.Equal(0, CloseNoted(app));
+        await AssertStateUnchangedAsync(repo, exact, "at the end");
+        var backups = await repo.BackupRefsAsync();
+        Note($"at the end: backup refs (refs/visualcommit/backup/): {(backups.Count == 0 ? "none" : string.Join(", ", backups.Select(entry => entry.Name)))}");
+        Assert.Empty(backups);
     }
 
     // ---- Part L's steps ----
@@ -443,9 +445,10 @@ public partial class Phase8aRealWindowPass
             app.WaitFor(() => Highlighted() is { } next && next.Name != before, $"Down to move the highlight from \"{before}\"", StepTimeout);
         }
 
-        Note($"\"{label}\" highlighted after {presses} presses of Down");
         var item = Highlighted()!;
-        Assert.True(item.IsEnabled, $"The menu item \"{label}\" is disabled.");
+        var enabled = item.IsEnabled;
+        Note($"\"{label}\" highlighted after {presses} presses of Down, enabled {enabled}");
+        Assert.True(enabled, $"The menu item \"{label}\" is disabled.");
         return item;
     }
 

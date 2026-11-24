@@ -35,7 +35,11 @@
 //   unless it is that element. A launch whose first input is a key asserts the foreground first, with
 //   its own fallback (design 12.3.3, 12.3.4). The one key sent outside the app's window, F4's Enter in
 //   Windows' Open dialog, goes only while that dialog is the foreground window (ChooseFileInDialogGuarded).
-// - Each launch ends with the app closed by its window, exit code 0, unless the method asserts another.
+// - run.txt gets every value a launch asserts (design 12.3.1): each is read once, noted, and that same
+//   value asserted, so that a note never changes what a launch does.
+// - Each launch ends with the app closed by its window, exit code 0, unless the method asserts another:
+//   CloseNoted notes the code and after how long before it is asserted; a scenario's state left as it
+//   was goes by AssertStateUnchangedAsync, which notes it too.
 using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Imaging;
@@ -277,6 +281,64 @@ public partial class Phase8aRealWindowPass(Phase8aRun fixture) : IClassFixture<P
 
     /// <summary>The name the app gives a scenario's copy, its folder's: <c>changes</c>, <c>graph</c>.</summary>
     private static string NameOf(TempRepo repo) => Path.GetFileName(repo.Path);
+
+    // ---- Every method's end (design 12.3.1) ----
+
+    /// <summary>
+    /// Closes the app by its window (<see cref="RealApp.Close"/>) and notes in run.txt the exit code it
+    /// returned and after how long from the close, <c>the app exited with code {code} after {s} s</c>, as
+    /// launch 6 does; returns that code for the caller to assert. A close the app does not answer in time is
+    /// noted with its message before it fails the method.
+    /// </summary>
+    private int CloseNoted(RealApp app)
+    {
+        ArgumentNullException.ThrowIfNull(app);
+        var clock = Stopwatch.StartNew();
+        int code;
+        try
+        {
+            code = app.Close();
+        }
+        catch (TimeoutException ex)
+        {
+            Note(string.Create(CultureInfo.InvariantCulture, $"{ex.Message} ({clock.Elapsed.TotalSeconds:0.0} s after the close)"));
+            throw;
+        }
+
+        Note(string.Create(CultureInfo.InvariantCulture, $"the app exited with code {code} after {clock.Elapsed.TotalSeconds:0.0} s"));
+        return code;
+    }
+
+    /// <summary>
+    /// The scenario copy's exact state (<see cref="TempRepo.ExactStateAsync"/>), read once now, noted in
+    /// run.txt against <paramref name="before"/>, the state read after the start (unchanged, or how many of
+    /// its lines differ and the first that does), then asserted equal to it.
+    /// </summary>
+    private async Task AssertStateUnchangedAsync(TempRepo repo, string before, string when)
+    {
+        ArgumentNullException.ThrowIfNull(repo);
+        var now = await repo.ExactStateAsync();
+        Note($"{when}: the repository's exact state {StateComparison(before, now)}");
+        Assert.Equal(before, now);
+    }
+
+    /// <summary>Two exact states in words for run.txt: unchanged, or their line counts, how many of the common lines differ and the first pair that does.</summary>
+    private static string StateComparison(string before, string now)
+    {
+        if (string.Equals(before, now, StringComparison.Ordinal))
+        {
+            return "as read after the start: unchanged";
+        }
+
+        var old = before.Split('\n');
+        var fresh = now.Split('\n');
+        var changed = old.Zip(fresh).Where(pair => !string.Equals(pair.First, pair.Second, StringComparison.Ordinal)).ToList();
+        var first = changed.Count == 0 ? string.Empty : $"; the first: \"{Clipped(changed[0].First)}\" became \"{Clipped(changed[0].Second)}\"";
+        return string.Create(CultureInfo.InvariantCulture, $"changed since it was read after the start: {old.Length} lines then, {fresh.Length} now, {changed.Count} of the common ones differ{first}");
+    }
+
+    /// <summary>A line of an exact state for run.txt: whole up to 160 characters, else its first 160 and an ellipsis.</summary>
+    private static string Clipped(string line) => line.Length <= 160 ? line : string.Concat(line.AsSpan(0, 160), "…");
 
     // ---- Pictures (design 12.3.1) ----
 
