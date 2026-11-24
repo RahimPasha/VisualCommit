@@ -5926,8 +5926,8 @@ harness `876c197`; the real-window part's three fixes are on its branch and merg
   Tab walks the left panel's rows in the order their controls were made, not the rows' order, once
   rows were inserted: older than the package, and fixed in the second round (below).
 - *speech*. The status bar's live region speaks an operation's start, ssh's notice and its result,
-  and on a dashboard a run's start, Cancel all's text as it was at the click and the result; the
-  text shown and its name keep the percentage (`Controls/StatusText`,
+  and on a dashboard a run's start, ssh's notice, Cancel all's text as it was at the click and the
+  result; the text shown and its name keep the percentage (`Controls/StatusText`,
   `IStatusBarOperation.SpokenText`; D463, 9.3.7). What a switch of tabs speaks, the question ruling
   99 left: the status of the tab now shown when its spoken text differs from the one before, nothing
   when the two are equal, as before the fix. The reader read Avalonia 12.1.3's bridge: a hidden
