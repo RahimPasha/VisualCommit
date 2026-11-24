@@ -551,6 +551,13 @@ public sealed partial class KeyboardPassTests
     /// </summary>
     private static async Task PressByTheKeysAsync(ShellDriver app, Control control, Key key)
     {
+        await FocusByTheKeysAsync(app, control);
+        app.PressKey(key);
+    }
+
+    /// <summary>Gives <paramref name="control"/> the focus as Tab does, with the keyboard's frame.</summary>
+    private static async Task FocusByTheKeysAsync(ShellDriver app, Control control)
+    {
         control.BringIntoView();
         app.Settle();
         var name = $"{AutomationProperties.GetAutomationId(control)} \"{AutomationProperties.GetName(control)}\"";
@@ -565,7 +572,6 @@ public sealed partial class KeyboardPassTests
         Assert.True(control.Focus(NavigationMethod.Tab), $"{name} takes no focus.");
         app.Settle();
         Assert.True(ReferenceEquals(app.FocusedElement, control) && app.FocusVisible, $"{name} is not focused with the keyboard's frame: the focus is on {FocusFact(app)}.");
-        app.PressKey(key);
     }
 
     /// <summary>
