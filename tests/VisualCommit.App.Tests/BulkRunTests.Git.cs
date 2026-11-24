@@ -61,6 +61,9 @@ public partial class BulkRunTests
             Assert.Null(app.Session.Shell.Dialogs.Current);
             Assert.Contains(app.LogLines(), line => line.Contains("Web: Fetch all: started for 6 repositories, 1 skipped", StringComparison.Ordinal));
             Assert.Contains(app.LogLines(), line => line.Contains("Web: Fetch all: Fetched 6 repositories; 1 skipped", StringComparison.Ordinal));
+
+            // The end: no held fetch gave up (disposing the hold releases and never fails).
+            Assert.Empty(hold.GaveUp());
         }
         finally
         {

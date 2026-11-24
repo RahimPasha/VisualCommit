@@ -224,6 +224,9 @@ public sealed partial class Phase6ChecksW
             var since = app.CallsSince(mark);
             Assert.DoesNotContain(since, call => call.CommandText.StartsWith("git fetch", StringComparison.Ordinal));
             AssertOnlyReads(since, "W5's F5");
+
+            // The end: no held fetch gave up (disposing the hold releases and never fails).
+            Assert.Empty(hold.GaveUp());
         }
         finally
         {
@@ -289,6 +292,9 @@ public sealed partial class Phase6ChecksW
             await AssertNoDialogAsync(app);
             await AssertRefsAsync(copy, PartW.W5PartBRefs);
             Assert.Empty(LockFiles(copy));
+
+            // The end: no held fetch gave up (disposing the hold releases and never fails).
+            Assert.Empty(hold.GaveUp());
         }
         finally
         {
