@@ -342,11 +342,16 @@ Wave 4 and the review:
   shows no stage row; Notes, "Wave 2 is built and merged".) An independent review of the code before
   the gate, each finding verified, the confirmed ones fixed with tests; then §12's merge, the lagged
   list and the whole default run. **The review is done (2026-11-23, ruled on the next day; design
-  13.1's ruling 99):** 48 findings, 43 confirmed, five of them major, five refuted. 38 are being
-  fixed in eight packages (run `wf_ccc5f713-fa5`); the lead's own five are recorded, among them
-  D461: the restore order's proof is taken again before the gate. Still open: the fixes' merges,
-  launches 2 and 3 of the real-window part again, the series taken again, the owner's answer on the
-  dimmed texts, §12's merge, the lagged list, the whole default run and CI.
+  13.1's ruling 99):** 48 findings, 43 confirmed, five of them major, five refuted. 38 were fixed in
+  eight packages (run `wf_ccc5f713-fa5`), each read by an independent reader and corrected, and six
+  of them are merged (2026-11-24, `c0bedc6` to `876c197`; design 13.1's ruling 100, D462 to D465);
+  the real-window part's three wait on that part's merge. The lead's own five are recorded, among
+  them D461: the restore order's proof is taken again before the gate. **A second round** fixes six
+  things the first round's builders and readers raised (ruling 100's last paragraph; run
+  `wf_11b1bda1-1ef`), and the docs are brought up to the fixes as built (run `wf_ce28cc05-776`).
+  Still open: CI's run of the six merges, the second round's and the docs' merges, launches 2 and 3
+  of the real-window part again, the series taken again, the owner's answer on the dimmed texts,
+  §12's merge, the lagged list, the whole default run and CI.
 
 Gate:
 
@@ -772,105 +777,127 @@ night on `phase/8a-release-readiness` (Progress, step 1).
 
 Next: the last part of step 12, then wave 3 (steps 13 to 16), in full: the owner said "Continue" on
 2026-11-21 and, asked how far with the week's share read as 70 to 85 % used the day before, answered
-"all of wave 3 now" ("Waiting on the owner"). Step 12 is closed: the lead's check of the 35 new pictures found no fault (Progress, step 12; the
-report, "Wave 2's comparison with wave 1's references"). Wave 3's checks are written, reviewed and committed before any of their UI (D244): parts A (About,
-six checks, nine pictures) and U (screen readers, three checks, six pictures, and the Narrator
-walk-through's 21 steps by hand) are in `docs/test-reports/phase-8a.md`, which now holds 42 checks
-and 85 picture names; §10 has no part (Notes, "Wave 3 is under way"). For the three takeovers of the desktop in wave 3
-(the spike, §10's first run, the "before" series) the owner said on 2026-11-21: start each when it is
-ready, without asking again; §9's Narrator listen needs the owner in person and is asked for at
-its merge.
-**Wave 3 is closed (step 16, 2026-11-23), and the owner said on 2026-11-23, asked for the week's
-share: "All of wave 4 now"** (D241; "Waiting on the owner"). **Wave 4 is the next step** (steps 17
-to 19, with 17b), begun that day at about 08:00. Its order, by design 0.4 and section 12: part G's
-checks and the restore order's design section first; then §11 (the guide) and `restore` built side
-by side in worktrees of their own, reviewed, fixed and merged; then §12 (the real-window part),
-built after §11's merge, each of its 13 methods run alone with the owner told; then the review
-before the gate (step 19) and its fixes, §12's merge last, the lagged list and the whole default
-run. **Part G's checks are written and in the report** (2026-11-23, before §11's build, D244): G1 to
-G3 in four methods with four pictures, no real window; the lead settled its open points 99 to 113 as
-rulings 77 to 85 (design 13.1), and the design's 11.4 to 11.6 say what they changed (Notes, "Wave
-4"). **§11 is built and reviewed** (run `wf_7dddbd2e-deb`, 09:21 to 13:25; worktree
-`D:/Projects/Personal/vc-wt/p8a-guide` on `wip/p8a-guide`, from `124337a`; 18 commits, the last
-`982f5e5`): three builders one after the other (the app's links with part G and 11.6's proof; the
-site's machinery with GuideShots, the workflow and the links' check; the 33 pages), five reviewers,
-nine majors and 20 minors, all fixed but the page's ten-tab row. Its reviewers had read the pages by
-sampling, so **before the merge the lead had every statement of the pages and every picture
-checked** (run `wf_be89944c-5a7`, read only; ruling 94): 1,157 statements, 73 confirmed faults in
-the text, six of them major, 11 texts that do not match their picture, 14 framing defects of
-pictures, no leak. **The fixes are in and §11 is merged** (`57ad86e`; rulings 94 and 95; design
-11.10): 98 confirmed findings applied by run `wf_3220124e-9d8` (15 commits), nine statements more
-and 11 universal claims by run `wf_28644568-d81` (2 commits); the branch's last commit is `bc24568`.
-The merge's checks on `57ad86e` passed: 11.4's classes 81 of 81; Phase6 (133), Phase6Look (19) and
-8a's project (154) whole, none failed; the comparison with wave 3's references by `--expected` shows
-the eight expected pictures changed in their boxes and nothing else but the kinds that vary from run
-to run; the lead's run of GuideShots, 119 of 119, wrote the 84 pictures that were opened on the
-branch, byte for byte; the book builds and the links' check finds nothing. The lead's lines of 11.2
-are in. GuideShots' local root is `C:\demo`. **The restore order's section is the design's section
-14** (drafted, reviewed and corrected by run `wf_e8daca0e-d5c`; the lead's rulings 86 to 90 on its
-18 choices written in and the whole section rechecked against D457 and the code by run
-`wf_d117ae19-e9c`, 17 findings, all applied; Notes, "Wave 4"). 0.4's row and files, 13.1's rulings,
-13.3's row for the proof (about 50 minutes of the rested desktop, about 70 with a trial of two at
-once, about 80 when four stays after it) and CLAUDE.md's docs map are brought up to it. **`restore`
-is proven and merged**, its proof's series taken again by D461 (below) (step 17b; `aedb12f`, the
-bounds `23bea54`; D458, rulings 91 to 93; design 14.10; the report's "The restore order's proof"):
-built and reviewed on `wip/p8a-restore` (run `wf_abcee249-c0e`), proven on the desktop from 13:36 to
-14:52 by the lead's probe and the alternated series, merged, the lagged list at the merge 948 tests
-with none failed, and pushed with its docs (`5e23aba`); CI's run 45286046457 on that push is green
-in all six jobs (the CI section). The push of §11's merge is `f0b4f8a`: CI's run 45306019513 is
-green in all six jobs and the guide workflow's first run, 45306019644, is green, no deploy job run
-and its `guide-site` looked at (the CI section), so **step 17 is done**. **§12 is built and run:
-step 18 is done** (`wip/p8a-realwindow`, 20 commits from `f0b4f8a`, the last `83f3f6b`, in the
-worktree `D:/Projects/Personal/vc-wt/p8a-realwindow`; design 12.10, rulings 96 to 98, D459). Written
-and compiled by run `wf_b0d89b0f-cab` and read for what a real key or click could reach; the lead
-ran each of its 13 methods alone on the desktop, the owner told: 11 of 13 green at 21:15, and, after
-the fixes of runs `wf_1d035720-312` and `wf_44f114fb-844`, 13 of 13 with phase 0's method at 22:28.
-The captures were inspected: no fault of the app. **Step 19 is under way.** The owner, asked again
-for the Narrator listen at about 22:45, chose "Later, at the gate" (D460, amending D455). **The
-review is done** (run `wf_151e85d5-daa`, read only, 22:45 to about midnight; its result
-`D:/Projects/Personal/phase8-work/wave4/review/review-result.json`; design 13.1's ruling 99): the 35
-items the notes kept for it, ten reviewers by area and three across the phase, the findings
-verified: 48 findings, 43 confirmed, five of them major (the keyboard focus lost at a tab change and
-at a fold, the blame's arrows after a click, the status bar's live region told of every progress
-tick), five refuted. **The fixes are being built** (run `wf_ccc5f713-fa5`, script
-`…/workflows/scripts/phase8a-review-fixes-wf_ccc5f713-fa5.js`, started on 2026-11-24 at 00:04; the
-findings by package in `…/wave4/review/fix-packages.json`): 38 findings in eight packages, each
-built with its tests, read by an independent reader and corrected, in six worktrees from `57ebeff`
-(`D:/Projects/Personal/vc-wt/p8a-fix-focus`, `-speech`, `-instance`, `-git`, `-firstrun` and
-`-harness`, on `wip/p8a-fix-<key>`) and, for the real-window part's three, in `p8a-realwindow`. The
-lead's own five are recorded (ruling 99): **D461, the restore order's proof is taken again**,
-because the first series cannot vouch for the run that carries its third condition; the series'
-corrected script; the macOS picture read (Progress, step 6); design 12.6's command; and the dimmed
-texts' contrast, which is the owner's ("Waiting on the owner"). **Next for the lead, in this
-order:** (1) when the fix run ends, read each package's result, diff and pictures, rule, and merge
-the six fix branches one at a time, each with its test classes run, then push them together; (2)
-with no agent at work and the owner told just before, run launches 2 and 3 of the real-window part
+"all of wave 3 now" ("Waiting on the owner"). Step 12 is closed: the lead's check of the 35 new
+pictures found no fault (Progress, step 12; the report, "Wave 2's comparison with wave 1's
+references"). Wave 3's checks are written, reviewed and committed before any of their UI (D244):
+parts A (About, six checks, nine pictures) and U (screen readers, three checks, six pictures, and
+the Narrator walk-through's 21 steps by hand) are in `docs/test-reports/phase-8a.md`, which now
+holds 42 checks and 85 picture names; §10 has no part (Notes, "Wave 3 is under way"). For the three
+takeovers of the desktop in wave 3 (the spike, §10's first run, the "before" series) the owner said
+on 2026-11-21: start each when it is ready, without asking again; §9's Narrator listen needs the
+owner in person and is asked for at its merge. **Wave 3 is closed (step 16, 2026-11-23), and the
+owner said on 2026-11-23, asked for the week's share: "All of wave 4 now"** (D241; "Waiting on the
+owner"). **Wave 4 is the next step** (steps 17 to 19, with 17b), begun that day at about 08:00. Its
+order, by design 0.4 and section 12: part G's checks and the restore order's design section first;
+then §11 (the guide) and `restore` built side by side in worktrees of their own, reviewed, fixed and
+merged; then §12 (the real-window part), built after §11's merge, each of its 13 methods run alone
+with the owner told; then the review before the gate (step 19) and its fixes, §12's merge last, the
+lagged list and the whole default run. **Part G's checks are written and in the report**
+(2026-11-23, before §11's build, D244): G1 to G3 in four methods with four pictures, no real window;
+the lead settled its open points 99 to 113 as rulings 77 to 85 (design 13.1), and the design's 11.4
+to 11.6 say what they changed (Notes, "Wave 4"). **§11 is built and reviewed** (run
+`wf_7dddbd2e-deb`, 09:21 to 13:25; worktree `D:/Projects/Personal/vc-wt/p8a-guide` on
+`wip/p8a-guide`, from `124337a`; 18 commits, the last `982f5e5`): three builders one after the other
+(the app's links with part G and 11.6's proof; the site's machinery with GuideShots, the workflow
+and the links' check; the 33 pages), five reviewers, nine majors and 20 minors, all fixed but the
+page's ten-tab row. Its reviewers had read the pages by sampling, so **before the merge the lead had
+every statement of the pages and every picture checked** (run `wf_be89944c-5a7`, read only; ruling
+94): 1,157 statements, 73 confirmed faults in the text, six of them major, 11 texts that do not
+match their picture, 14 framing defects of pictures, no leak. **The fixes are in and §11 is merged**
+(`57ad86e`; rulings 94 and 95; design 11.10): 98 confirmed findings applied by run `wf_3220124e-9d8`
+(15 commits), nine statements more and 11 universal claims by run `wf_28644568-d81` (2 commits); the
+branch's last commit is `bc24568`. The merge's checks on `57ad86e` passed: 11.4's classes 81 of 81;
+Phase6 (133), Phase6Look (19) and 8a's project (154) whole, none failed; the comparison with wave
+3's references by `--expected` shows the eight expected pictures changed in their boxes and nothing
+else but the kinds that vary from run to run; the lead's run of GuideShots, 119 of 119, wrote the 84
+pictures that were opened on the branch, byte for byte; the book builds and the links' check finds
+nothing. The lead's lines of 11.2 are in. GuideShots' local root is `C:\demo`. **The restore order's
+section is the design's section 14** (drafted, reviewed and corrected by run `wf_e8daca0e-d5c`; the
+lead's rulings 86 to 90 on its 18 choices written in and the whole section rechecked against D457
+and the code by run `wf_d117ae19-e9c`, 17 findings, all applied; Notes, "Wave 4"). 0.4's row and
+files, 13.1's rulings, 13.3's row for the proof (about 50 minutes of the rested desktop, about 70
+with a trial of two at once, about 80 when four stays after it) and CLAUDE.md's docs map are brought
+up to it. **`restore` is proven and merged**, its proof's series taken again by D461 (below) (step
+17b; `aedb12f`, the bounds `23bea54`; D458, rulings 91 to 93; design 14.10; the report's "The
+restore order's proof"): built and reviewed on `wip/p8a-restore` (run `wf_abcee249-c0e`), proven on
+the desktop from 13:36 to 14:52 by the lead's probe and the alternated series, merged, the lagged
+list at the merge 948 tests with none failed, and pushed with its docs (`5e23aba`); CI's run
+45286046457 on that push is green in all six jobs (the CI section). The push of §11's merge is
+`f0b4f8a`: CI's run 45306019513 is green in all six jobs and the guide workflow's first run,
+45306019644, is green, no deploy job run and its `guide-site` looked at (the CI section), so **step
+17 is done**. **§12 is built and run: step 18 is done** (`wip/p8a-realwindow`, 20 commits from
+`f0b4f8a`, the last `83f3f6b`, in the worktree `D:/Projects/Personal/vc-wt/p8a-realwindow`; design
+12.10, rulings 96 to 98, D459). Written and compiled by run `wf_b0d89b0f-cab` and read for what a
+real key or click could reach; the lead ran each of its 13 methods alone on the desktop, the owner
+told: 11 of 13 green at 21:15, and, after the fixes of runs `wf_1d035720-312` and `wf_44f114fb-844`,
+13 of 13 with phase 0's method at 22:28. The captures were inspected: no fault of the app. **Step 19
+is under way.** The owner, asked again for the Narrator listen at about 22:45, chose "Later, at the
+gate" (D460, amending D455). **The review is done** (run `wf_151e85d5-daa`, read only, 22:45 to
+about midnight; its result `D:/Projects/Personal/phase8-work/wave4/review/review-result.json`;
+design 13.1's ruling 99): the 35 items the notes kept for it, ten reviewers by area and three across
+the phase, the findings verified: 48 findings, 43 confirmed, five of them major (the keyboard focus
+lost at a tab change and at a fold, the blame's arrows after a click, the status bar's live region
+told of every progress tick), five refuted. **The fixes are built and six packages are merged** (run
+`wf_ccc5f713-fa5`, 00:04 to 06:58 on 2026-11-24, 22 agents, 7.16M tokens; its result
+`…/wave4/review/fix-result.json`, the picture comparisons under `…/wave4/review/compare/`): all 38
+findings answered, each package built with its tests first, read by an independent reader (33 points
+more, one of them major, in the harness package's own new tests) and corrected. The lead read the
+seven results and merged six branches on 2026-11-24 between 07:05 and 07:34, each with its test
+classes run on the merged tree (after the last: the build with 0 warnings, 554 tests of App.Tests,
+15 of Git.Tests and 144 of phase 8a's, phase 1's check 10, phase 6's W5 and W8, the links' self-test
+of 245 cases): `c0bedc6` (focus), `a60056e` (speech), `67ff55d` (instance), `9e225d1` (git),
+`ce144f4` (firstrun), `876c197` (harness). The six worktrees are removed; their `wip/p8a-fix-<key>`
+branches stay local (D396). The real-window part's three fixes are on `wip/p8a-realwindow`
+(`902288e`), never run. At the git package's merge one of its new facts failed twice on a race with
+the watcher; the guard behind it, older than the phase, is fixed with a test first (`bc467e3`,
+`53b9c77`). U2/U3's step 4 has its wait (`8854838`). **Design 13.1's ruling 100 has what the
+packages asked and the lead's rulings; D462 to D465 the decisions.** The lead's own five are
+recorded (ruling 99): **D461, the restore order's proof is taken again**, because the first series
+cannot vouch for the run that carries its third condition; the series' corrected script; the macOS
+picture read (Progress, step 6); design 12.6's command; and the dimmed texts' contrast, which is the
+owner's ("Waiting on the owner"). **Two runs are under way, started at 08:00 and 08:02 on
+2026-11-24.** (a) The second round, run `wf_11b1bda1-1ef` (script
+`…/workflows/scripts/phase8a-review-fixes-second-round-wf_11b1bda1-1ef.js`; the items in
+`…/wave4/review/after-packages.json`): three packages in worktrees from `e778370`
+(`D:/Projects/Personal/vc-wt/p8a-after-speech`, `-order` and `-frames`, on `wip/p8a-after-<key>`),
+each built with its tests first, read and corrected: the outcome said where the focus lands (D463
+(3)), the blame's caret, the Git program row's note in the lead's words; Tab through a list's rows
+in the rows' order; the Theme options' frame and a link's frame at scalings above 1.25. (b) The
+docs, run `wf_ce28cc05-776`, in the worktree `p8a-docs-fixes` (`wip/p8a-docs-fixes`, from
+`e778370`): three writers in turn on the design, one on the report, one on the architecture page,
+then a checker per file; the writers commit nothing, the lead reads the checkers' findings,
+corrects, commits there and merges. **Next for the lead, in this order:** (1) read CI's run of this
+push and record it: the three tests that can fail only on macOS and Linux (the guard's modes, the
+copied data folder) and the floor's new rows of `PullConfigurationTests` have their first run there;
+(2) when the two runs end, read their results, rule, merge the second round's three branches, each
+with its test classes run, and the docs' branch after its corrections; bring the docs up to the
+second round as well; push; read CI; (3) with no agent at work, the machine quiet and the owner told
+just before: build `p8a-realwindow` in Release and run launches 2 and 3 of the real-window part
 alone again on their fixes (`Check_L_graph_danger_item_and_head_row` and
 `Check_A_and_B_about_and_icon`), then take the restore order's series again as D461 says: the
-worktrees `p8a-restore-base` at `3f67850` and `p8a-restore` on `wip/p8a-restore` made again, each
-Release build at least ten minutes before, `bash
+worktrees `p8a-restore-base` at `3f67850` and `p8a-restore` on `wip/p8a-restore` stand ready, their
+Release builds made at 00:24 and 00:28 on 2026-11-24, `bash
 D:/Projects/Personal/phase8-work/wave4/restore/series2/run_series2.sh 1 10`, about an hour and a
-half, a void pair taken again under its number plus ten, and its outcome recorded by D457 (5)'s
-rule; (3) ask the owner about the dimmed texts before the whole default run, since a change of those
-colours changes earlier pictures; rule what a tab switch speaks after the speech package's fix and
-amend design 9.3.7; add to U2/U3's step 4 the wait for the graph's reload that step 9 has (ruling
-99, S19-27), with its reason in the report; (4) merge §12 last, with CLAUDE.md's rows and notes for
-8a's real-window checks as ruling 99 lists them (S19-34); then the lagged list, the whole default
-run (`bash scripts/heavy-run.sh`), the comparison of its pictures with wave 3's references, the push
-and CI's run; then step 19 is ticked. The package is reviewed with the rest in step 19 and merged
-last, in that step. The three finished worktrees (`p8a-restore`, `p8a-restore-base`, `p8a-guide`)
-are removed; their `wip/` branches stay local (D396). §11's builders got with their briefs: mdBook
-at `D:/Projects/Personal/phase8-work/tools/mdbook-0.5.4/mdbook.exe` and the Linux archive's SHA-256
-for `guide.yml` (Notes, "Wave 4"); the references
-`D:/Projects/Personal/phase8-work/references/wave3/`; rulings 80 (stop and report if the first-run
-link's frame touches its ink), 82 (the facts no check shows) and 83 (the rename, the comments); and
-what part G's open point 103 leaves for it to report. What step 16 ended with: the three packages
-merged, §10 (`86ecb3a`), §8 (`f014b2b`, its fixes after the merge `85e2884`) and §9 (`769f459`); the
-lagged list, the whole default run and the pictures on `85e2884`, whose one fault
-(`a1b-about-link-focus`) is fixed (`fcf8c1e`); the references of the later merges,
-`D:/Projects/Personal/phase8-work/references/wave3/` (1,235 scripted pictures); three "before"
-series, two probes, two panels and **D457** (the bounds `0bfbe92`, two backlog rows, the restore
-order as ruling 76, a change in wave 4); CI's two failures on the link frame's merge fixed
+half, a void pair taken again under its number plus ten, and its outcome recorded by D457 (5)'s rule
+(on 2026-11-24 at 07:00 Adobe's Creative Cloud used a core and a half without pause, so the series
+waited: look at the machine's load first); (4) ask the owner about the dimmed texts before the whole
+default run, since a change of those colours changes earlier pictures; (5) merge §12 last, with
+CLAUDE.md's rows and notes for 8a's real-window checks as ruling 99 lists them (S19-34); then the
+lagged list, the whole default run (`bash scripts/heavy-run.sh`), the comparison of its pictures
+with wave 3's references, the push and CI's run; then step 19 is ticked. The package is reviewed
+with the rest in step 19 and merged last, in that step. The three finished worktrees (`p8a-restore`,
+`p8a-restore-base`, `p8a-guide`) are removed; their `wip/` branches stay local (D396). §11's
+builders got with their briefs: mdBook at
+`D:/Projects/Personal/phase8-work/tools/mdbook-0.5.4/mdbook.exe` and the Linux archive's SHA-256 for
+`guide.yml` (Notes, "Wave 4"); the references `D:/Projects/Personal/phase8-work/references/wave3/`;
+rulings 80 (stop and report if the first-run link's frame touches its ink), 82 (the facts no check
+shows) and 83 (the rename, the comments); and what part G's open point 103 leaves for it to report.
+What step 16 ended with: the three packages merged, §10 (`86ecb3a`), §8 (`f014b2b`, its fixes after
+the merge `85e2884`) and §9 (`769f459`); the lagged list, the whole default run and the pictures on
+`85e2884`, whose one fault (`a1b-about-link-focus`) is fixed (`fcf8c1e`); the references of the
+later merges, `D:/Projects/Personal/phase8-work/references/wave3/` (1,235 scripted pictures); three
+"before" series, two probes, two panels and **D457** (the bounds `0bfbe92`, two backlog rows, the
+restore order as ruling 76, a change in wave 4); CI's two failures on the link frame's merge fixed
 (`70a8fc0`, `809b77f`); and, after a review of the second of those fixes, **the row list's fix,
 merged at `bad98b1`**: CI's run 45133434382 on it is green in all six jobs, the whole default run on
 `c1bc69b`, whose code is the merge's, passed with 8,514 tests and none failed, and each of its 54
@@ -887,9 +914,9 @@ owner told, and the probe), then the review before the gate (step 19) with its l
 hold in their paragraphs "More for step 19's list", in "Timeouts of older tests" and in "Wave 4".
 The owner's Narrator listen: asked a fourth time on 2026-11-23 at the review's start, the owner
 chose "Later, at the gate" (D460); it is no longer asked before the gate, where the walk-through
-takes its place, and step 21 says what a silent Narrator then costs.
-The [phase 7b handoff](handoffs/phase-7b.md), "For the next phase", says what to reuse, what to do
-first and which risks to watch.
+takes its place, and step 21 says what a silent Narrator then costs. The [phase 7b
+handoff](handoffs/phase-7b.md), "For the next phase", says what to reuse, what to do first and which
+risks to watch.
 
 Once a phase is running, this always names the single next thing to do and is kept accurate in
 every commit.
