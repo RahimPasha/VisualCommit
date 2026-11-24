@@ -481,18 +481,13 @@ public partial class Phase8aRealWindowPass(Phase8aRun fixture) : IClassFixture<P
     /// <summary>
     /// Reads a text's ink (<see cref="InkOf"/>) and notes it in run.txt; returns what is wrong with it by
     /// <c>TextInk</c>'s rule: further than <see cref="TextInk.Tolerance"/> from <paramref name="foreground"/>
-    /// in a channel, or within it of <paramref name="replaced"/> in every channel. A null
-    /// <paramref name="area"/> is a text no rectangle holds alone: run.txt says so and the comparison with
-    /// the twin carries its colour (design 12.3.3). A miss is reported, never met by a wider tolerance.
+    /// in a channel, or within it of <paramref name="replaced"/> in every channel. Every text read has its
+    /// rectangle: <see cref="LabelArea"/>, <see cref="BoxTextArea"/> and <see cref="TypedArea"/> always give
+    /// one, and L6's read, whose text element can be missing, fails without one (<c>ReadHeadInk</c>). A miss
+    /// is reported, never met by a wider tolerance.
     /// </summary>
-    private IEnumerable<string> ReadInk(Bitmap capture, double scaling, string what, RectangleF? area, AvaloniaColor foreground, AvaloniaColor background, AvaloniaColor? replaced)
+    private IEnumerable<string> ReadInk(Bitmap capture, double scaling, string what, RectangleF rectangle, AvaloniaColor foreground, AvaloniaColor background, AvaloniaColor? replaced)
     {
-        if (area is not { } rectangle)
-        {
-            Note($"{what}: no rectangle holds the text alone; the comparison with the twin carries its colour.");
-            return [];
-        }
-
         var ink = InkOf(capture, rectangle, scaling, Drawn(foreground), Drawn(background));
         var expected = Drawn(foreground);
         var problems = new List<string>();
@@ -603,7 +598,8 @@ public partial class Phase8aRealWindowPass(Phase8aRun fixture) : IClassFixture<P
     /// The rectangle of <paramref name="text"/> inside <paramref name="scope"/> (a row, a button, a menu
     /// item): the bounds of a UI Automation text element named so, inside the scope or, where UI
     /// Automation lists the scope's texts elsewhere, on screen with its vertical centre inside the scope's
-    /// bounds; null when there is none (the comparison then carries its colour).
+    /// bounds; null when there is none (<see cref="LabelArea"/> then reads in the element's inset bounds, and
+    /// L6's read fails, <c>ReadHeadInk</c>).
     /// </summary>
     private static RectangleF? TextArea(RealApp app, AutomationElement scope, string text)
     {
@@ -811,9 +807,10 @@ public partial class Phase8aRealWindowPass(Phase8aRun fixture) : IClassFixture<P
 
 /// <summary>
 /// The 8a pass's order and picture names (docs/phase-8a-design.md 12.4), and the rules of its steps that
-/// need no window (B1 (a)'s extraction from the built executable, B2's taskbar buttons), with no app and
-/// no window: the class constructs no fixture of the pass and touches nothing of the desktop. It runs in
-/// the whole pass, outside D246's filter, and alone with <c>--filter-class "*Phase8aOrderTests"</c>.
+/// need no window (B1 (a)'s extraction from the built executable, B2's taskbar buttons, L6's missing
+/// rectangle), with no app and no window: the class constructs no fixture of the pass and touches nothing
+/// of the desktop. It runs in the whole pass, outside D246's filter, and alone with
+/// <c>--filter-class "*Phase8aOrderTests"</c>.
 /// </summary>
 public class Phase8aOrderTests
 {
@@ -859,6 +856,20 @@ public class Phase8aOrderTests
         Assert.StartsWith("B2's taskbar button: 2 taskbar buttons named " + B.TaskbarButtonNameStart, failure, StringComparison.Ordinal);
         Assert.Contains("Close every other VisualCommit", failure, StringComparison.Ordinal);
         Assert.Contains($"\"{other.Name}\" at {other.ScreenBounds} on Shell_TrayWnd; \"{launch.Name}\" at {launch.ScreenBounds} on Shell_TrayWnd", failure, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// L6 a to c (design 12.3.3, 12.3.4 launch 2): with no rectangle for <c>main</c>'s name, the read is a
+    /// problem that names the read and the two accents the 3 % comparison cannot tell apart.
+    /// </summary>
+    [Fact]
+    public void L6_without_a_rectangle_for_main_is_a_problem()
+    {
+        var missing = Phase8aRealWindowPass.NoHeadNameArea("main idle (VcAccentBrush)");
+
+        Assert.StartsWith("main idle (VcAccentBrush): UI Automation gives main's name no text element", missing, StringComparison.Ordinal);
+        Assert.Contains("#7C8CFF", missing, StringComparison.Ordinal);
+        Assert.Contains("#8B9AFF", missing, StringComparison.Ordinal);
     }
 
     /// <summary>

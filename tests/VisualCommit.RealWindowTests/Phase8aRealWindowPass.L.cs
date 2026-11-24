@@ -11,6 +11,7 @@ using FlaUI.Core.WindowsAPI;
 using VisualCommit.Testing;
 using Xunit;
 using static VisualCommit.VisualTests.Phase8a.Phase8aExpectations;
+using AvaloniaColor = Avalonia.Media.Color;
 
 namespace VisualCommit.RealWindowTests;
 
@@ -115,6 +116,8 @@ public partial class Phase8aRealWindowPass
     /// <item>L6 c: a real click on the row, the pointer at the neutral point: the selection <c>#2A3150</c>,
     /// the name's ink <c>#8B9AFF</c>, <c>feature/login</c>'s row no longer selected; <c>l6c-head-selected</c>.</item>
     /// </list>
+    /// L6's three inks are read in the rectangle of <c>main</c>'s text element; where UI Automation gives
+    /// none, each read is a problem, asserted after its picture's comparison (<see cref="ReadHeadInk"/>).
     /// The app closed by its window, exit code 0; the repository as it was, no backup made.
     /// </summary>
     [Fact]
@@ -158,7 +161,7 @@ public partial class Phase8aRealWindowPass
         Picture(app, L.L6aHeadIdle, keepPointer: false, capture =>
         [
             .. ReadSpot(capture, app.Scaling, "main's row idle (VcPanelBackgroundBrush)", clear, dark.Panel),
-            .. ReadInk(capture, app.Scaling, "main idle (VcAccentBrush)", name, dark.Accent, dark.Panel, dark.AccentOnRow),
+            .. ReadHeadInk(capture, app.Scaling, "main idle (VcAccentBrush)", name, dark.Accent, dark.Panel, dark.AccentOnRow),
         ]);
 
         // L6 b: the pointer at the row's centre, right of main's name, where no tooltip opens: hovered.
@@ -167,7 +170,7 @@ public partial class Phase8aRealWindowPass
         Picture(app, L.L6bHeadHovered, keepPointer: true, capture =>
         [
             .. ReadSpot(capture, app.Scaling, "main's row hovered (VcHoverBackgroundBrush)", clear, dark.Hover),
-            .. ReadInk(capture, app.Scaling, "main hovered (VcAccentOnRowBrush)", name, dark.AccentOnRow, dark.Hover, dark.Accent),
+            .. ReadHeadInk(capture, app.Scaling, "main hovered (VcAccentOnRowBrush)", name, dark.AccentOnRow, dark.Hover, dark.Accent),
             .. NoToolTip(app, L.L6bHeadHovered),
         ]);
 
@@ -179,7 +182,7 @@ public partial class Phase8aRealWindowPass
         Picture(app, L.L6cHeadSelected, keepPointer: false, capture =>
         [
             .. ReadSpot(capture, app.Scaling, "main's row selected (VcSelectionBrush)", clear, dark.Selection),
-            .. ReadInk(capture, app.Scaling, "main selected (VcAccentOnRowBrush)", name, dark.AccentOnRow, dark.Selection, dark.Accent),
+            .. ReadHeadInk(capture, app.Scaling, "main selected (VcAccentOnRowBrush)", name, dark.AccentOnRow, dark.Selection, dark.Accent),
             .. ReadSpot(capture, app.Scaling, "feature/login's row no longer selected (VcPanelBackgroundBrush)", login, dark.Panel),
         ]);
 
@@ -191,6 +194,31 @@ public partial class Phase8aRealWindowPass
     }
 
     // ---- Part L's steps ----
+
+    /// <summary>
+    /// L6 a to c's read of <c>main</c>'s ink (<see cref="ReadInk"/>) in <paramref name="name"/>, the rectangle
+    /// of its text element (<see cref="TextArea"/>). Where UI Automation gives none, the read is a problem
+    /// (<see cref="NoHeadNameArea"/>), noted, which <see cref="Picture"/> asserts after the comparison, as
+    /// K2's gutter spots are: the comparison cannot carry this colour (design 12.3.3's fallback), since it
+    /// matches colours within 48 a channel (D58) and L6's two accents lie 15 apart at most.
+    /// </summary>
+    private IEnumerable<string> ReadHeadInk(Bitmap capture, double scaling, string what, RectangleF? name, AvaloniaColor foreground, AvaloniaColor background, AvaloniaColor replaced)
+    {
+        if (name is not { } area)
+        {
+            var missing = NoHeadNameArea(what);
+            Note(missing);
+            return [missing];
+        }
+
+        return ReadInk(capture, scaling, what, area, foreground, background, replaced);
+    }
+
+    /// <summary>L6's problem when <c>main</c>'s name has no rectangle (<see cref="ReadHeadInk"/>): the read <paramref name="what"/>, why it was not read and why the comparison cannot stand for it.</summary>
+    internal static string NoHeadNameArea(string what) =>
+        string.Create(
+            CultureInfo.InvariantCulture,
+            $"{what}: UI Automation gives {L.Main}'s name no text element in its row or beside it, so its ink was not read; the comparison with the twin, which matches colours within 48 a channel (D58), cannot tell {Hex(Drawn(L.Dark.Accent))} from {Hex(Drawn(L.Dark.AccentOnRow))}.");
 
     /// <summary>L1's and L2's three boxes: <c>FilterBox</c>, <c>CommitSummary</c>, <c>CommitDescription</c>, with the right padding each box's text area ends at.</summary>
     private static IReadOnlyList<(string Id, string Placeholder, float RightPadding)> PlaceholderBoxes { get; } =
