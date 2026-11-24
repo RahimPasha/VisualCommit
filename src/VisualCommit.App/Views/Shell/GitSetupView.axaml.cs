@@ -12,11 +12,12 @@ namespace VisualCommit.App.Views.Shell;
 /// <summary>
 /// The first-run screen's view. "Check again" is disabled while it searches, which drops the
 /// keyboard focus: when the search ends with the focus on nothing or on the window, the button
-/// takes it again (as by Tab when it had the keyboard outline as it was pressed), or, the screen
-/// gone, the graph area's focus target does. "Choose git.exe…" is disabled while its file dialog
-/// is open and its file is probed: a cancelled pick or a refused file starts no search, so the
-/// button takes the focus back itself once its run has ended, in the same way. The screen hidden
-/// while it holds the focus gives it to the graph area's target too.
+/// takes it again, or, the screen gone, the graph area's focus target does, either as by Tab when
+/// the button that started the search, "Check again" or "Use the Git on the PATH" ("Use the Git it
+/// found"), had the keyboard outline as it was pressed (D462). "Choose git.exe…" is disabled while
+/// its file dialog is open and its file is probed: a cancelled pick or a refused file starts no
+/// search, so the button takes the focus back itself once its run has ended, in the same way. The
+/// screen hidden while it holds the focus gives it to the graph area's target too.
 /// </summary>
 public partial class GitSetupView : UserControl
 {
@@ -26,16 +27,22 @@ public partial class GitSetupView : UserControl
     /// <summary>The screen showed when the running search started: its end may give the focus back here.</summary>
     private bool _shownWhenSearchStarted;
 
-    /// <summary>"Check again" had the keyboard outline as it was pressed: the focus goes back as by Tab.</summary>
+    /// <summary>The button that started the search had the keyboard outline as it was pressed: the focus goes back as by Tab.</summary>
     private bool _pressedWithKeys;
 
     public GitSetupView()
     {
         InitializeComponent();
         DataContextChanged += (_, _) => Watch(DataContext as GitSetupViewModel);
-        GitSetupCheckAgainButton.Click += OnCheckAgainClick;
+        GitSetupCheckAgainButton.Click += (_, _) => _pressedWithKeys = PressedWithKeys(GitSetupCheckAgainButton);
+
+        // Its command drops the setting and always starts a search, whose end reads the flag.
+        GitSetupUsePathButton.Click += (_, _) => _pressedWithKeys = PressedWithKeys(GitSetupUsePathButton);
         GitSetupChooseButton.Click += OnChooseClick;
     }
+
+    /// <summary>Runs before the button's command: whether the press came with the keyboard outline (<c>:focus-visible</c>).</summary>
+    private static bool PressedWithKeys(Button button) => button.IsFocused && button.Classes.Contains(":focus-visible");
 
     /// <summary>
     /// Runs before Choose's command: once the run has ended with the focus lost (a cancelled pick, a
@@ -49,7 +56,7 @@ public partial class GitSetupView : UserControl
             return;
         }
 
-        var withKeys = GitSetupChooseButton.IsFocused && GitSetupChooseButton.Classes.Contains(":focus-visible");
+        var withKeys = PressedWithKeys(GitSetupChooseButton);
         FocusReturn.AfterRun(
             viewModel.ChooseCommand,
             this,
@@ -83,10 +90,6 @@ public partial class GitSetupView : UserControl
         }
     }
 
-    /// <summary>Runs before the button's command: whether the press came with the keyboard outline (<c>:focus-visible</c>).</summary>
-    private void OnCheckAgainClick(object? sender, RoutedEventArgs e) =>
-        _pressedWithKeys = GitSetupCheckAgainButton.IsFocused && GitSetupCheckAgainButton.Classes.Contains(":focus-visible");
-
     private void OnCheckAgainChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName != nameof(IAsyncRelayCommand.IsRunning) || _checkAgain is not { } command)
@@ -113,11 +116,14 @@ public partial class GitSetupView : UserControl
     {
         if (e.PropertyName == nameof(GitSetupViewModel.IsShown) && _viewModel is { IsShown: false } && IsKeyboardFocusWithin)
         {
-            Dispatcher.UIThread.Post(FocusGraphArea, DispatcherPriority.Loaded);
+            Dispatcher.UIThread.Post(() => FocusGraphArea(withKeys: false), DispatcherPriority.Loaded);
         }
     }
 
-    /// <summary>The search ended: with the focus on nothing or the window, "Check again" takes it again, or, the screen gone, the graph area's target.</summary>
+    /// <summary>
+    /// The search ended: with the focus on nothing or the window, "Check again" takes it again, or,
+    /// the screen gone, the graph area's target, as by Tab when <paramref name="withKeys"/>.
+    /// </summary>
     private void GiveFocusBack(bool withKeys)
     {
         var focused = TopLevel.GetTopLevel(this)?.FocusManager?.GetFocusedElement();
@@ -132,9 +138,9 @@ public partial class GitSetupView : UserControl
             return;
         }
 
-        FocusGraphArea();
+        FocusGraphArea(withKeys);
     }
 
-    private void FocusGraphArea() =>
-        this.FindAncestorOfType<CommitGraphView>()?.GraphAreaFocusTarget()?.Focus(NavigationMethod.Unspecified);
+    private void FocusGraphArea(bool withKeys) =>
+        this.FindAncestorOfType<CommitGraphView>()?.GraphAreaFocusTarget()?.Focus(withKeys ? NavigationMethod.Tab : NavigationMethod.Unspecified);
 }
