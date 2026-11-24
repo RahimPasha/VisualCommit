@@ -64,12 +64,13 @@ public sealed partial class KeyboardPassTests
     /// <summary>
     /// Local branches › feature, reached by Tab from its section, the window's peer made: Enter opens
     /// it and its button keeps the focus, with the frame, its row and the name "feature" for a
-    /// screen reader, alpha's row now below it; a click on it closes it again, the focus staying on
-    /// it without the frame. The button's data never changes under it, so its peer is never named by
-    /// its content's type ("Avalonia.Controls.DockPanel").
+    /// screen reader, alpha's row now below it. Then a click on Remotes › origin › feature opens it,
+    /// and its button takes the focus, without the frame, and keeps its row and its name. Neither
+    /// button's data changes under it, so neither peer is named by its content's type
+    /// ("Avalonia.Controls.DockPanel").
     /// </summary>
     [AvaloniaFact]
-    public async Task Enter_and_a_click_on_a_folder_of_the_left_panel_open_and_close_it_and_its_button_keeps_the_focus_its_row_and_its_name()
+    public async Task Enter_on_a_folder_of_the_left_panel_and_a_click_on_another_open_them_and_their_buttons_keep_the_focus_their_rows_and_their_names()
     {
         using var repo = await Scenarios.OperationsAsync();
         using var data = new TempDirectory("data");
@@ -96,16 +97,25 @@ public sealed partial class KeyboardPassTests
         Assert.Same(row, app.RefRowModel(U.LocalBranches, U.Feature));
         Assert.Equal(U.Feature, ControlAutomationPeer.CreatePeerForElement(folder).GetName());
         _ = await app.RefRowAsync(U.LocalBranches, U.Feature, U.Alpha);
+        Assert.True(contexts.Changes.Count == 0, $"The folder's data changed under it: {contexts}.");
 
-        app.Click(folder);
+        // Remotes › origin › feature, closed, clicked: its button takes the focus, without the frame.
+        var remote = (Button)await app.RefRowAsync(U.Remotes, U.Origin, U.Feature);
+        var remoteRow = (RefItemRow)remote.DataContext!;
+        Assert.False(remoteRow.IsOpen, "Remotes › origin › feature starts open.");
+        using var remoteContexts = DataContextRecorder.On(remote);
+
+        app.Click(remote);
         await app.WaitForIdleAsync();
         app.Settle();
 
-        Assert.True(row is { IsOpen: false }, "The click did not close Local branches › feature.");
-        Assert.True(ReferenceEquals(app.FocusedElement, folder), $"After the click on Local branches › feature the focus is on {app.DescribeFocus()}.");
-        Assert.False(app.FocusVisible, "Local branches › feature shows the keyboard frame after a click.");
-        Assert.Same(row, folder.DataContext);
-        Assert.True(contexts.Changes.Count == 0, $"The folder's data changed under it: {contexts}.");
+        Assert.True(remoteRow.IsOpen, "The click did not open Remotes › origin › feature.");
+        Assert.True(ReferenceEquals(app.FocusedElement, remote), $"After the click on Remotes › origin › feature the focus is on {app.DescribeFocus()}.");
+        Assert.False(app.FocusVisible, "Remotes › origin › feature shows the keyboard frame after a click.");
+        Assert.Same(remoteRow, remote.DataContext);
+        Assert.Same(remoteRow, app.RefRowModel(U.Remotes, U.Origin, U.Feature));
+        Assert.Equal(U.Feature, ControlAutomationPeer.CreatePeerForElement(remote).GetName());
+        Assert.True(remoteContexts.Changes.Count == 0, $"The remote folder's data changed under it: {remoteContexts}.");
     }
 
     /// <summary>
