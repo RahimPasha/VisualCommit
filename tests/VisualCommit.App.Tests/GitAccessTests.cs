@@ -125,6 +125,35 @@ public class GitAccessTests
     }
 
     [Fact]
+    public async Task A_search_asked_for_with_another_lookup_while_one_runs_does_not_join_it_but_searches_after_it()
+    {
+        // A git chosen while a search runs (D423): that search was told the old setting.
+        var chosen = (string?)null;
+        var file = Path.Combine(Path.GetTempPath(), "PortableGit", OperatingSystem.IsWindows() ? "git.exe" : "git");
+        var found = new GitDetection(GitAvailability.Available, file, new GitVersion(2, 47, 1), new NoRunner()) { Source = GitSource.Setting };
+        var probe = new QueuedProbe(found);
+        var access = new GitAccess(probe, () => new GitLookup(chosen, null), null, new RecordingLog(), null, null);
+        var held = probe.Hold();
+        var first = access.DetectAsync(TestContext.Current.CancellationToken);
+        var firstDetection = access.Detection;
+
+        chosen = file;
+        var second = access.DetectAsync(TestContext.Current.CancellationToken);
+        var waiting = access.GetRunnerAsync(TestContext.Current.CancellationToken);
+
+        // The second waits for the first before it asks the probe; a runner asked for meanwhile is the second's.
+        Assert.NotSame(firstDetection, access.Detection);
+        Assert.Single(probe.Lookups);
+        held.SetResult(NotFound);
+        Assert.Same(NotFound, await first);
+        Assert.Same(found, await second);
+        Assert.Same(found.Runner, await waiting);
+        Assert.Equal([new GitLookup(null, null), new GitLookup(file, null)], probe.Lookups);
+        Assert.Same(found, await access.Detection);
+        Assert.Same(found, access.Known);
+    }
+
+    [Fact]
     public async Task Each_search_is_told_what_the_lookup_gives_when_it_starts()
     {
         var probe = new QueuedProbe(NotFound);
