@@ -1,4 +1,5 @@
 using Avalonia.Automation;
+using Avalonia.Automation.Peers;
 using Avalonia.Controls;
 using Avalonia.VisualTree;
 using Avalonia.Headless.XUnit;
@@ -84,6 +85,107 @@ public sealed class GitSetupShellTests : Phase8aChecks
             app.Settle();
             Assert.Equal(F.AccentDark, ((ISolidColorBrush)text.Foreground!).Color);
         }
+    }
+
+    /// <summary>
+    /// The texts of the screen that change are polite live regions (D435; design 9.3.9, step 21): a
+    /// new text raises one Name change on its peer, which Windows speaks. "Check again"'s text says
+    /// "Checking…" while its search runs and "Check again" once it ends; the title says the new
+    /// state's title once a search ends on another state, and nothing when it ends on the same one.
+    /// Before, neither had a live setting, and nothing of a search was spoken.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task Check_agains_text_and_the_title_are_polite_live_regions_that_speak_each_change()
+    {
+        using var data = new TempDirectory("phase8a gitsetup");
+        var probe = new FakeGitSetupProbe(FakeGitSetupProbe.Windows(), FakeGitAnswer.Missing, FakeGitAnswer.TooOld(F.WindowsGit));
+        using var app = await StartEmptyAsync(data, gitProbe: probe);
+        await app.WaitForGitSetupAsync(guidance: F.MissingGuidanceWindows);
+        var tooOld = string.Format(System.Globalization.CultureInfo.InvariantCulture, F.TooOldTitleFormat, F.TooOldVersion);
+        var title = (TextBlock)app.GitSetupPart(F.TitleId)!;
+        var button = (Button)app.GitSetupPart(F.CheckAgainId)!;
+        var buttonText = button.GetVisualDescendants().OfType<TextBlock>().Single();
+        var titleNames = NameChanges(title);
+        var buttonNames = NameChanges(buttonText);
+        Assert.Equal(AutomationLiveSetting.Polite, ControlAutomationPeer.CreatePeerForElement(title).GetLiveSetting());
+        Assert.Equal(AutomationLiveSetting.Polite, ControlAutomationPeer.CreatePeerForElement(buttonText).GetLiveSetting());
+        Assert.Equal(F.CheckAgain, ControlAutomationPeer.CreatePeerForElement(buttonText).GetName());
+
+        // A search that ends on another state: "Checking…" while it runs, then the new title.
+        var hold = probe.HoldNext();
+        app.Click(button);
+        await hold.Started.WaitAsync(ShellDriver.DefaultWaitTimeout, TestContext.Current.CancellationToken);
+        app.Settle();
+        Assert.Equal([((object?)F.CheckAgain, (object?)F.Checking)], buttonNames);
+        Assert.Empty(titleNames);
+        hold.Release();
+        await CheckAgainEndedAsync(app, probe, 2, tooOld);
+
+        Assert.Equal([((object?)F.CheckAgain, (object?)F.Checking), (F.Checking, F.CheckAgain)], buttonNames);
+        Assert.Equal([((object?)F.MissingTitle, (object?)tooOld)], titleNames);
+
+        // A search that ends on the same state: its button speaks, the title does not.
+        app.Click(button);
+        await CheckAgainEndedAsync(app, probe, 3, tooOld);
+
+        Assert.Equal(4, buttonNames.Count);
+        Assert.Single(titleNames);
+    }
+
+    /// <summary>
+    /// The error line, which says Choose's "Checking…" and then why the file was refused, is a polite
+    /// live region (D435): each of its texts raises one Name change on its peer. Before, it had no
+    /// live setting, and a refused Choose was silent.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task The_error_line_is_a_polite_live_region_that_speaks_Chooses_checking_and_its_refusal()
+    {
+        using var data = new TempDirectory("phase8a gitsetup");
+        var probe = new FakeGitSetupProbe(FakeGitSetupProbe.Windows(wingetPath: null), FakeGitAnswer.Missing)
+            .AnswerFor(F.Old, FakeGitAnswer.TooOld(F.Old, GitSource.Setting, F.TooOldVersion));
+        using var app = await StartEmptyAsync(data, gitProbe: probe);
+        await app.WaitForGitSetupAsync(guidance: F.MissingGuidanceWindows, choose: F.ChooseGitExe);
+        var error = app.GitSetupView().GetVisualDescendants().OfType<TextBlock>().Single(block => AutomationProperties.GetAutomationId(block) == F.ErrorId);
+        Assert.False(error.IsEffectivelyVisible);
+        var names = NameChanges(error);
+        Assert.Equal(AutomationLiveSetting.Polite, ControlAutomationPeer.CreatePeerForElement(error).GetLiveSetting());
+
+        app.Folders.AnswerFile(F.Old);
+        var hold = probe.HoldNext();
+        app.Click(app.GitSetupPart(F.ChooseId)!);
+        await hold.Started.WaitAsync(ShellDriver.DefaultWaitTimeout, TestContext.Current.CancellationToken);
+        app.Settle();
+        Assert.Equal(F.Checking, app.GitSetupText(F.ErrorId));
+        hold.Release();
+        await app.WaitForAsync(() => app.GitSetupText(F.ErrorId) is { } text && text != F.Checking, "the refusal");
+        app.Settle();
+
+        Assert.Equal([F.Checking, app.GitSetupText(F.ErrorId)], names.Select(change => change.New as string));
+    }
+
+    /// <summary>Records the Name changes the peer of <paramref name="text"/> raises, as the Windows bridge receives them.</summary>
+    private static List<(object? Old, object? New)> NameChanges(TextBlock text)
+    {
+        var names = new List<(object? Old, object? New)>();
+        ControlAutomationPeer.CreatePeerForElement(text).PropertyChanged += (_, change) =>
+        {
+            if (change.Property == AutomationElementIdentifiers.NameProperty)
+            {
+                names.Add((change.OldValue, change.NewValue));
+            }
+        };
+
+        return names;
+    }
+
+    /// <summary>Waits until the <paramref name="lookups"/>th search has ended on the state titled <paramref name="title"/>, "Check again" enabled again.</summary>
+    private static async Task CheckAgainEndedAsync(ShellDriver app, FakeGitSetupProbe probe, int lookups, string title)
+    {
+        await app.WaitForAsync(
+            () => probe.Lookups.Count == lookups && !app.Session.Shell.CheckGitAgainCommand.IsRunning
+                && app.GitSetupText(F.TitleId) == title && app.GitSetupPart(F.CheckAgainId) is { IsEffectivelyEnabled: true },
+            $"Check again to end on \"{title}\"");
+        app.Settle();
     }
 
     /// <summary>Every part of the screen shown lies inside its width: nothing is pushed out of the graph area, where it would be cut off.</summary>
