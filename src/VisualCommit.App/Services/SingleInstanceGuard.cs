@@ -236,6 +236,11 @@ public sealed partial class SingleInstanceGuard : IDisposable
             {
                 if (AskOnce(holder) is { } answer)
                 {
+                    if (answer == ForwardAnswer.Closing)
+                    {
+                        LogClosing(holder.Pid, _options.WaitWhileClosing);
+                    }
+
                     return answer;
                 }
 
@@ -314,12 +319,16 @@ public sealed partial class SingleInstanceGuard : IDisposable
     /// closing instance lets go: while <see cref="AppPaths.InstanceFile"/> names an endpoint other than
     /// the one asked last, that instance is asked instead, one attempt between two tries of the lock,
     /// so that a new holder that ends before it answers leaves the lock to this start at once. Its
-    /// answer counts as the first one's would (a <see cref="ForwardAnswer.Closing"/> is waited for
-    /// within the same time). Logs which.
+    /// answer counts as the first one's would: a <see cref="ForwardAnswer.Closing"/> is waited for
+    /// within the same time, and the log tells it what is left of that time. Logs which.
     /// </summary>
     public HeldResolution WaitToTake()
     {
         var clock = Stopwatch.StartNew();
+
+        // What the last "is closing" line said this start waits: the whole wait for the first
+        // instance, what was left of it for one that answered while this start waited.
+        var waitsFor = _options.WaitWhileClosing;
         string? announced = null;
         var refused = false;
         while (true)
@@ -336,7 +345,7 @@ public sealed partial class SingleInstanceGuard : IDisposable
                 // closing one did close.
                 _log.Warning(refused
                     ? $"VisualCommit holds the data folder {Folder} but did not answer (its endpoint refused the connection)."
-                    : $"The other VisualCommit did not close within {Seconds(_options.WaitWhileClosing)} s.");
+                    : $"The other VisualCommit did not close within {Seconds(waitsFor)} s.");
                 return HeldResolution.NotAnswered;
             }
 
@@ -358,6 +367,8 @@ public sealed partial class SingleInstanceGuard : IDisposable
                     case ForwardAnswer.NotAnswered:
                         return TakeAfterNoAnswer();
                     case ForwardAnswer.Closing:
+                        waitsFor = LeftOfWait(clock.Elapsed);
+                        LogClosing(holder.Pid, waitsFor);
                         continue;
                     case null:
                         refused = true;
@@ -425,6 +436,17 @@ public sealed partial class SingleInstanceGuard : IDisposable
     }
 
     private static string Seconds(TimeSpan span) => span.TotalSeconds.ToString("0.###", CultureInfo.InvariantCulture);
+
+    /// <summary>
+    /// What is left of <see cref="SingleInstanceOptions.WaitWhileClosing"/> after <paramref name="waited"/>,
+    /// in tenths of a second rounded down, so that a line that names it never names more; never less than 0.
+    /// </summary>
+    private TimeSpan LeftOfWait(TimeSpan waited) =>
+        TimeSpan.FromTicks(Math.Max(0L, (long)Math.Floor((_options.WaitWhileClosing - waited).TotalSeconds * 10)) * (TimeSpan.TicksPerSecond / 10));
+
+    /// <summary>The line for an instance that answered <see cref="ForwardAnswer.Closing"/>, with how long this start waits for it.</summary>
+    private void LogClosing(int pid, TimeSpan waitsFor) =>
+        _log.Info($"VisualCommit on the data folder {Folder} (process {pid.ToString(CultureInfo.InvariantCulture)}) is closing; this start waits up to {Seconds(waitsFor)} s for it.");
 
     /// <summary>
     /// After an ask that got no answer: the lock tried again for 250 ms, as the first attempt is,
@@ -848,7 +870,7 @@ public sealed partial class SingleInstanceGuard : IDisposable
         }
     }
 
-    /// <summary>The request and its answer over a connected pipe, logged.</summary>
+    /// <summary>The request and its answer over a connected pipe, logged; a <see cref="ForwardAnswer.Closing"/> is logged by the caller (<see cref="LogClosing"/>).</summary>
     private ForwardAnswer Exchange(NamedPipeClientStream connection, string pid)
     {
         string? line;
@@ -879,7 +901,7 @@ public sealed partial class SingleInstanceGuard : IDisposable
                 _log.Info($"VisualCommit is starting on the data folder {Folder} (process {pid}); this start ends.");
                 return ForwardAnswer.Starting;
             case ForwardAnswer.Closing:
-                _log.Info($"VisualCommit on the data folder {Folder} (process {pid}) is closing; this start waits up to {Seconds(_options.WaitWhileClosing)} s for it.");
+                // Logged by the caller, which knows how long it waits (LogClosing).
                 return ForwardAnswer.Closing;
             default:
                 _log.Warning($"VisualCommit holds the data folder {Folder} but did not answer (a reply this version does not read).");
