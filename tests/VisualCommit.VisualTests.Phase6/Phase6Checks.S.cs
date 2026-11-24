@@ -338,8 +338,8 @@ public sealed partial class Phase6ChecksS : Phase6Checks
     }
 
     /// <summary>
-    /// Keyboard shortcuts (7.6, S14 step 7): <c>These keys are fixed.</c>, then the eleven groups in
-    /// 6.11's order, each heading 12.5 SemiBold, with exactly the report's 50 rows and keys; each row
+    /// Keyboard shortcuts (7.6, S14 step 7): <c>These keys are fixed.</c>, then the twelve groups in
+    /// 6.11's order, each heading 12.5 SemiBold, with exactly the report's 51 rows and keys; each row
     /// at least 22 high, its action at the left and its keys at the right in the code font and the
     /// secondary colour, apart and not cut, named <c>{label}: {key text}</c>; the Extend row's keys
     /// on two lines, every other row one; the Repository group's note under its rows and no other
@@ -406,7 +406,7 @@ public sealed partial class Phase6ChecksS : Phase6Checks
         Rest(app);
     }
 
-    /// <summary>The last group, Dialogs and menus, with its three rows wholly in view (S14 step 7's second picture).</summary>
+    /// <summary>The last group, Help, with its one row wholly in view (S14 step 7's second picture).</summary>
     private static void AssertLastGroupInView(ShellDriver app, Layout layout)
     {
         var section = app.BoundsOf(Named<ScrollViewer>(app, "SectionScroller"));
@@ -414,7 +414,7 @@ public sealed partial class Phase6ChecksS : Phase6Checks
         var last = list.GetVisualDescendants().OfType<TextBlock>().Last(block => AutomationProperties.GetAutomationId(block) == "ShortcutGroup");
         Assert.Equal(PartS.LastGroup, last.Text);
         layout.Check(app.BoundsOf(last).Y >= section.Y - 0.5, "the last group's heading is not in view.");
-        var rows = list.GetVisualDescendants().OfType<Grid>().Where(grid => AutomationProperties.GetAutomationId(grid) == "ShortcutRow").TakeLast(3).ToList();
+        var rows = list.GetVisualDescendants().OfType<Grid>().Where(grid => AutomationProperties.GetAutomationId(grid) == "ShortcutRow").TakeLast(PartS.ShortcutGroups[^1].Rows.Count).ToList();
         Assert.Equal(PartS.ShortcutGroups[^1].Rows.Select(row => row.Action), rows.Select(row => row.Children.OfType<TextBlock>().First().Text));
         foreach (var row in rows)
         {

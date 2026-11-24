@@ -1,0 +1,26 @@
+# The user guide, built by mdBook 0.5.4 (D439) in the guide's workflow (.github/workflows/guide.yml)
+# and served by GitHub Pages at https://rahimpasha.github.io/VisualCommit/, the address the app's
+# links name (AppLinks.GuideBase). Search stays on; the site loads nothing from another host: no
+# analytics, no outside font (ruling 18), which scripts/check-guide-links.py checks on every build.
+
+[book]
+title = "VisualCommit user guide"
+src = "src"
+language = "en"
+
+[output.html]
+site-url = "/VisualCommit/"
+default-theme = "light"
+preferred-dark-theme = "navy"
+git-repository-url = "https://github.com/RahimPasha/VisualCommit"
+# At the book's root, not in theme/: mdBook reads theme/ as a theme of its own.
+additional-css = ["guide.css"]
+
+[output.html.playground]
+runnable = false
+
+# No print page: mdBook's print.html rewrites a raw image's src for the site's root but leaves its
+# srcset as the page wrote it, so a picture of a page in troubleshooting/ or reference/ would load
+# ../pictures/ from the root, outside the site (scripts/check-guide-links.py finds it).
+[output.html.print]
+enable = false

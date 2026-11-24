@@ -5,6 +5,11 @@ obj/
 # Visual test screenshots and other local output (see docs/plan.md, "Visual test gate")
 artifacts/
 
+# The user guide's built site and its pictures, which the guide's workflow makes on every build
+# and never commits (D439)
+docs/guide/book/
+docs/guide/src/pictures/
+
 # Test results
 TestResults/
 *.trx

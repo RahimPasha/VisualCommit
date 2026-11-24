@@ -44,6 +44,9 @@ public sealed record ShortcutRow(string Action, string Keys);
 /// </summary>
 public static class AppShortcuts
 {
+    /// <summary>The settings list's Help group's note on macOS, where F1 is a function key only with Fn unless the system is set otherwise.</summary>
+    public const string HelpNoteOnMac = "On a Mac keyboard F1 needs Fn unless \"Use F1, F2, etc. keys as standard function keys\" is on.";
+
     /// <summary>Every command's keys, in 6.1's order: the router's (tunnel and bubble) and the views' own.</summary>
     public static IReadOnlyList<ShortcutBinding> Bindings { get; } =
     [
@@ -85,6 +88,7 @@ public static class AppShortcuts
         new(AppCommand.FilterRefs, [new(E, Command | Shift)], KeyPass.Tunnel),
         new(AppCommand.NextRegion, [new(F6)], KeyPass.Tunnel),
         new(AppCommand.PreviousRegion, [new(F6, Shift)], KeyPass.Tunnel),
+        new(AppCommand.OpenUserGuide, [new(F1)], KeyPass.Tunnel),
 
         // Drawn and listed only (6.1's second table, 6.7's menus, 6.8's tooltips).
         new(AppCommand.ContextMenu, [new(F10, Shift), new(Menu)], KeyPass.View),
@@ -317,6 +321,12 @@ public static class AppShortcuts
             FromKeys("Confirm from a box of several lines", new Shortcut(Enter, Command)),
             FromKeys("Cancel or close", new Shortcut(Escape)),
         ]),
+
+        // The last group (D417), so that the list's top keeps its rows; no settings row links to the guide.
+        new(
+            "Help",
+            [FromCommands(AppCommands.OpenUserGuideText, AppCommand.OpenUserGuide)],
+            platform => platform == CommandKey.Cmd ? HelpNoteOnMac : null),
     ];
 
     /// <summary>One row of the settings list: its action, its keys on a platform and the catalogue's commands it lists.</summary>

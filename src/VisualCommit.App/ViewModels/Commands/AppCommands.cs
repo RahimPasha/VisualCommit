@@ -1,3 +1,4 @@
+using VisualCommit.App.Services;
 using VisualCommit.App.ViewModels.Menus;
 using VisualCommit.App.ViewModels.Operations;
 using VisualCommit.App.ViewModels.Panels;
@@ -46,6 +47,12 @@ public sealed partial class AppCommands
 
     /// <summary>The palette's query when Mod+Shift+D finds no dashboard open (6.5, KD16).</summary>
     public const string WorkspaceQuery = "workspace";
+
+    /// <summary>"Open the user guide" (D417): the palette's command, whose key is F1, and its row in the shortcuts list.</summary>
+    public const string OpenUserGuideText = "Open the user guide";
+
+    /// <summary>The Info line of "Open the user guide" in a session that has no launcher to open the guide with: nothing opens.</summary>
+    public const string OpenUserGuideWithoutLauncher = "Open the user guide: there is no launcher.";
 
     private readonly MainWindowViewModel _shell;
 
@@ -343,6 +350,10 @@ public sealed partial class AppCommands
                 // On every kind of tab, enabled, keyless (D417): the settings screen on About.
                 return Always(OperationTexts.AboutTexts.PaletteCommand, () => shell.OpenSettingsCommand.Execute(SettingsSection.About));
 
+            case AppCommand.OpenUserGuide:
+                // On every kind of tab, enabled (D417): the guide's start page in the browser.
+                return Always(OpenUserGuideText, () => Start(OpenUserGuideAsync(), OpenUserGuideText));
+
             default:
                 // The keys only drawn and listed: their views take them (6.4).
                 return NotListed(command.ToString());
@@ -367,6 +378,22 @@ public sealed partial class AppCommands
     }
 
     private static Resolved Always(string label, Action run) => new(new(true, true, label, null, null), run);
+
+    /// <summary>
+    /// Opens the user guide's start page through the session's launcher; without one it opens
+    /// nothing and says so at Info. A launcher that fails, even before it returns, fails the task,
+    /// which <see cref="Start"/> logs.
+    /// </summary>
+    private async Task OpenUserGuideAsync()
+    {
+        if (_shell.Services.Launcher is not { } launcher)
+        {
+            _shell.Services.Log.Info(OpenUserGuideWithoutLauncher);
+            return;
+        }
+
+        await launcher.OpenUrlAsync(AppLinks.Guide(GuidePage.Start));
+    }
 
     /// <summary>
     /// <c>Clone from {name}…</c> of <paramref name="provider"/> (D299, D354; docs/phase-7b-design.md

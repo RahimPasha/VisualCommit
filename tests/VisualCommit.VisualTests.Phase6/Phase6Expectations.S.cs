@@ -802,7 +802,7 @@ public static partial class Phase6Expectations
 
         public const string ExtendSelectionKeys = "Shift+Up, Shift+Down, Shift+PageUp, Shift+PageDown, Shift+Home, Shift+End";
 
-        /// <summary>The list's eleven groups in 6.11's order, each with its 50 rows' actions and keys as Windows, Linux and the headless platform write them (literals, 6.12).</summary>
+        /// <summary>The list's twelve groups in 6.11's order, Help last (ruling 62), each with its 51 rows' actions and keys as Windows, Linux and the headless platform write them (literals, 6.12).</summary>
         public static IReadOnlyList<(string Group, IReadOnlyList<(string Action, string Keys)> Rows)> ShortcutGroups { get; } =
         [
             ("App",
@@ -888,12 +888,16 @@ public static partial class Phase6Expectations
                 ("Confirm from a box of several lines", "Ctrl+Enter"),
                 ("Cancel or close", "Esc"),
             ]),
+            ("Help",
+            [
+                ("Open the user guide", "F1"),
+            ]),
         ];
 
         /// <summary>The group whose note shows under its rows, and the last group, wholly in view at the end (S14 step 7).</summary>
         public const string NotedGroup = "Repository";
 
-        public const string LastGroup = "Dialogs and menus";
+        public const string LastGroup = "Help";
 
         // ---- Operations, results and dialogs (8.3, 4.8, 8.9, 9.15, 14.1 to 14.4) ----
 

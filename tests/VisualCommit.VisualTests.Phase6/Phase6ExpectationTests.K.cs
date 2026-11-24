@@ -315,7 +315,7 @@ public sealed class Phase6ExpectationTestsK
         Assert.Equal((84, 112, 336, 392, 392), (PartK.CardHeight(1), PartK.CardHeight(2), PartK.CardHeight(10), PartK.CardHeight(12), PartK.CardHeight(33)));
         Assert.Equal((157, 185, 465), (PartK.RowCentreY(0), PartK.RowCentreY(1), PartK.RowCentreY(11)));
         Assert.Equal(PartK.WheelRow, PartK.FirstRowInViewAtEnd + (int)((PartK.WheelPoint.Y - PartK.ListTop) / PartK.RowHeight));
-        Assert.Equal([11, 22, 33], PartK.PageDownRows);
+        Assert.Equal([11, 22, 33, 34], PartK.PageDownRows);
         Assert.Equal(PartK.OpsCommandCount - 1, PartK.PageDownRows[^1]);
         Assert.Equal(PartK.OpsCommandCount - 1, PartK.FirstRowInViewAtEnd + PartK.RowsInView - 1);
         Assert.All(PartK.OpsCommands.Concat(PartK.DashboardCommands).Concat(PartK.WebAppCommands), entry => Assert.True(entry.Key is null || !entry.Key.Contains("Cmd", StringComparison.Ordinal)));

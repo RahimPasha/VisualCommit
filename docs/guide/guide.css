@@ -1,0 +1,20 @@
+/* The user guide's own styles, added after mdBook's (book.toml's additional-css). */
+
+/* Room for the pictures, which show the app at its own size (D440). */
+:root {
+    --content-max-width: 1000px;
+}
+
+/* Each picture is two images, light first, each with srcset "<file> 2x" (D440): a page shows the
+   one of its theme's kind. mdBook names the theme by a class on <html>: light and rust are
+   light, coal, navy and ayu dark. */
+html.light img[src$="-dark.png"],
+html.rust img[src$="-dark.png"] {
+    display: none;
+}
+
+html.coal img[src$="-light.png"],
+html.navy img[src$="-light.png"],
+html.ayu img[src$="-light.png"] {
+    display: none;
+}

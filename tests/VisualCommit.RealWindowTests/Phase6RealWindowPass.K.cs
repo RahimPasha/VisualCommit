@@ -20,7 +20,7 @@ public partial class Phase6RealWindowPass
     /// <summary>
     /// Check K10, method 1, steps 1 to 6, with the real mouse and keyboard on "ops": "Main work"
     /// clicked; a real Ctrl+Shift+P over the graph, the commands with their keys and the first
-    /// highlighted (<c>k10a-palette-commands</c>), PageDown three times and the wrapping arrows, the
+    /// highlighted (<c>k10a-palette-commands</c>), PageDown four times and the wrapping arrows, the
     /// wheel's notch over the list; <c>zzz</c> typed key by key matching nothing, Tab staying in the box,
     /// Ctrl+A and <c>delete main</c> (<c>k10b-palette-delete-main</c>), Enter on and a click on the disabled
     /// <c>Delete main…</c> doing nothing, Ctrl+T declining; a second Ctrl+Shift+P, <c>check out
@@ -70,7 +70,7 @@ public partial class Phase6RealWindowPass
         AssertOneLogLine(app, mark, "] " + PartK.PaletteOpened(PartK.Ops));
         Compare(app, "k10a-palette-commands");
 
-        // PageDown three times: rows 11, 22 and 33, each whole in view; Down wraps to 0, Up back to 33.
+        // PageDown four times: rows 11, 22, 33 and 34, each whole in view; Down wraps to 0, Up back to 34.
         foreach (var row in PartK.PageDownRows)
         {
             app.PressKeys(VirtualKeyShort.NEXT);

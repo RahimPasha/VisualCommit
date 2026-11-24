@@ -94,7 +94,7 @@ public sealed partial class Phase6ChecksK : Phase6Checks
         AssertPaletteLines(app, mark, PartK.PaletteOpened(PartK.Ops));
         AssertNoWrite(app, sequence, operations, "Opening the palette");
 
-        // PageDown three times: rows 11, 22 and 33, each whole in view; Down wraps to 0, Up back to 33.
+        // PageDown four times: rows 11, 22, 33 and 34, each whole in view; Down wraps to 0, Up back to 34.
         foreach (var expected in PartK.PageDownRows)
         {
             app.PressKey(Key.PageDown);

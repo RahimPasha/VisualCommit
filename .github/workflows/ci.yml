@@ -99,17 +99,19 @@ jobs:
 
       # The real-window pass and the live command against real GitHub are outside the solution,
       # and neither runs here (D337): the pass takes over the mouse, the live command acts on the
-      # owner's account with a token CI never has. Building them keeps them from going stale
-      # unnoticed. It runs also after a failed Test or keychain step, as the keychain steps do, so
-      # that one failing test does not hide a compile break here. Bash, which GitHub runs with -e,
-      # so that a failure of the first build fails the step (PowerShell's step would go by the last
-      # command's exit code alone).
+      # owner's account with a token CI never has. Nor does the user guide's pictures project,
+      # which the guide's own workflow runs (guide.yml, D439). Building them keeps them from going
+      # stale unnoticed. It runs also after a failed Test or keychain step, as the keychain steps
+      # do, so that one failing test does not hide a compile break here. Bash, which GitHub runs
+      # with -e, so that a failure of the first build fails the step (PowerShell's step would go by
+      # the last command's exit code alone).
       - name: Build the opt-in projects
         if: ${{ !cancelled() && steps.build.outcome == 'success' && runner.os == 'Windows' }}
         shell: bash
         run: |
           dotnet build tests/VisualCommit.RealWindowTests --configuration Release
           dotnet build tests/VisualCommit.LiveHostingTests --configuration Release
+          dotnet build tests/VisualCommit.GuideShots --configuration Release
 
       - name: Upload screenshots
         if: always()
