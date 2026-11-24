@@ -325,11 +325,14 @@ public class BlameViewTests
     }
 
     /// <summary>
-    /// The caret put on a picked run's first line moves no text (phase 5's and 8a's blame pictures
-    /// stay as they were), though AvaloniaEdit scrolls toward a caret it is given: with the text
+    /// The caret put on a picked run moves no text (phase 5's and 8a's blame pictures stay as they
+    /// were), though AvaloniaEdit scrolls toward a caret it is given, and the next arrow moves it one
+    /// line from a line the user sees (docs/phase-8a-design.md 13.1, ruling 100): with the text
     /// scrolled across and down until line 46, run 1's first, is the last line in view, a click on
-    /// run 0's line 40, whose first line is far above the view, and one on line 46 leave the text
-    /// where it was; the caret is on line 1, then on line 46.
+    /// run 0's line 40, whose first line is far above the view, puts the caret on the first of run
+    /// 0's lines that is wholly in view, not on line 1, and the next Down takes it one line down with
+    /// the text where it was and run 0 still picked (on line 1, that Down scrolled the text up to
+    /// line 2 and back across); a click on line 46 puts it on line 46, the text still where it was.
     /// </summary>
     [AvaloniaFact]
     public async Task A_click_in_the_gutter_moves_no_text_however_far_its_runs_first_line_lies()
@@ -360,11 +363,21 @@ public class BlameViewTests
         Assert.Equal(46, text.LineAt(text.TextView.TranslatePoint(new Point(0, text.TextView.Bounds.Height - 2), text)!.Value.Y));
         Assert.NotNull(text.LineAt(text.TextView.TranslatePoint(new Point(0, text.TextView.GetVisualTopByDocumentLine(40) - text.VerticalOffset + 4), text)!.Value.Y));
 
+        var firstInView = Enumerable.Range(1, 46).First(line => text.TextView.GetVisualTopByDocumentLine(line) >= text.VerticalOffset - 0.5);
+        Assert.InRange(firstInView, 2, 40);
+
         host.Click(gutter, GutterPoint(text, gutter, 40));
         DiffHost.Settle();
 
         Assert.Equal(0, page.SelectedRun?.Index);
-        Assert.Equal(1, text.TextArea.Caret.Line);
+        Assert.Equal(firstInView, text.TextArea.Caret.Line);
+        Assert.Equal(scrolled, (text.HorizontalOffset, text.VerticalOffset));
+
+        host.PressKey(Avalonia.Input.Key.Down);
+        DiffHost.Settle();
+
+        Assert.Equal(firstInView + 1, text.TextArea.Caret.Line);
+        Assert.Equal(0, page.SelectedRun?.Index);
         Assert.Equal(scrolled, (text.HorizontalOffset, text.VerticalOffset));
 
         host.Click(gutter, GutterPoint(text, gutter, 46));
@@ -373,6 +386,13 @@ public class BlameViewTests
         Assert.Equal(1, page.SelectedRun?.Index);
         Assert.Equal(46, text.TextArea.Caret.Line);
         Assert.Equal(scrolled, (text.HorizontalOffset, text.VerticalOffset));
+
+        // From a run whose first line is in view, one Up picks the run above.
+        host.PressKey(Avalonia.Input.Key.Up);
+        DiffHost.Settle();
+
+        Assert.Equal(45, text.TextArea.Caret.Line);
+        Assert.Equal(0, page.SelectedRun?.Index);
     }
 
     /// <summary>The point 20 right of the gutter's left edge, 4 below the top of line <paramref name="line"/> as the text draws it now.</summary>
