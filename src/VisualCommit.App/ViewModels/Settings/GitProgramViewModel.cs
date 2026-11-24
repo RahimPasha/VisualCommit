@@ -67,7 +67,11 @@ public sealed partial class GitProgramViewModel : ObservableObject
     /// <summary><c>GitProgramPath</c>: the pending choice, else the git in use, else <c>None found</c>.</summary>
     public string PathText => Choice ?? InUsePath ?? GitSetupTexts.NoneFound;
 
-    /// <summary><c>GitProgramNote</c>: where the shown git came from, then, while the choice differs from the git in use, when it applies.</summary>
+    /// <summary>
+    /// <c>GitProgramNote</c>: where the shown git came from, then, while the choice differs from the
+    /// git in use, when it applies; for a chosen git in use that works, its choice dropped, that the
+    /// next start uses the Git on the PATH.
+    /// </summary>
     public string NoteText
     {
         get
@@ -90,6 +94,12 @@ public sealed partial class GitProgramViewModel : ObservableObject
             {
                 // The gone choice dropped and no other git found: none is in use.
                 note = GitSetupTexts.NoGitFoundNote;
+            }
+            else if (ChoiceInUse is not null && GitWorks)
+            {
+                // The chosen git in use dropped: the row still shows it, so the note says what
+                // the next start uses instead (D423).
+                return GitSetupTexts.SourceNote(_inUse, windows) + GitSetupTexts.NextStartPathSuffix;
             }
             else
             {
