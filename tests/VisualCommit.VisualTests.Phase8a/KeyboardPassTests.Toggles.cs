@@ -50,6 +50,7 @@ public sealed partial class KeyboardPassTests
             await app.WaitForIdleAsync();
             app.Settle();
 
+            Assert.True(contexts.Changes.Count == 0, $"After {key} the header's data changed under it: {contexts}.");
             var shown = (RefSectionRow)app.Session.Shell.ActiveTab.LeftPanel.Rows[0];
             Assert.True(shown.IsOpen == open, $"{key} left Local branches {(shown.IsOpen ? "open" : "closed")}.");
             Assert.True(FocusFact(app) == LeftSectionFact, $"After {key} on Local branches the focus is on {FocusFact(app)}.");
@@ -57,8 +58,6 @@ public sealed partial class KeyboardPassTests
             Assert.Same(section, shown);
             Assert.Same(section, header.DataContext);
         }
-
-        Assert.True(contexts.Changes.Count == 0, $"The header's data changed under it: {contexts}.");
     }
 
     /// <summary>
@@ -90,6 +89,7 @@ public sealed partial class KeyboardPassTests
         await app.WaitForIdleAsync();
         app.Settle();
 
+        Assert.True(contexts.Changes.Count == 0, $"The folder's data changed under it: {contexts}.");
         Assert.True(app.RefRowModel(U.LocalBranches, U.Feature) is RefItemRow { IsOpen: true }, "Enter did not open Local branches › feature.");
         Assert.True(ReferenceEquals(app.FocusedElement, folder), $"After Enter on Local branches › feature the focus is on {app.DescribeFocus()}.");
         Assert.True(app.FocusVisible, "Local branches › feature shows no keyboard frame after Enter.");
@@ -97,7 +97,6 @@ public sealed partial class KeyboardPassTests
         Assert.Same(row, app.RefRowModel(U.LocalBranches, U.Feature));
         Assert.Equal(U.Feature, ControlAutomationPeer.CreatePeerForElement(folder).GetName());
         _ = await app.RefRowAsync(U.LocalBranches, U.Feature, U.Alpha);
-        Assert.True(contexts.Changes.Count == 0, $"The folder's data changed under it: {contexts}.");
 
         // Remotes › origin › feature, closed, clicked: its button takes the focus, without the frame.
         var remote = (Button)await app.RefRowAsync(U.Remotes, U.Origin, U.Feature);
@@ -109,13 +108,13 @@ public sealed partial class KeyboardPassTests
         await app.WaitForIdleAsync();
         app.Settle();
 
+        Assert.True(remoteContexts.Changes.Count == 0, $"The remote folder's data changed under it: {remoteContexts}.");
         Assert.True(remoteRow.IsOpen, "The click did not open Remotes › origin › feature.");
         Assert.True(ReferenceEquals(app.FocusedElement, remote), $"After the click on Remotes › origin › feature the focus is on {app.DescribeFocus()}.");
         Assert.False(app.FocusVisible, "Remotes › origin › feature shows the keyboard frame after a click.");
         Assert.Same(remoteRow, remote.DataContext);
         Assert.Same(remoteRow, app.RefRowModel(U.Remotes, U.Origin, U.Feature));
         Assert.Equal(U.Feature, ControlAutomationPeer.CreatePeerForElement(remote).GetName());
-        Assert.True(remoteContexts.Changes.Count == 0, $"The remote folder's data changed under it: {remoteContexts}.");
     }
 
     /// <summary>
