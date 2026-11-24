@@ -376,6 +376,7 @@ public sealed partial class OperationStatusViewModel : ObservableObject, IStatus
     private void Show(string text, OperationStatusTone tone, string? toolTip, bool running, int? percent, string? compactText = null, OperationOffer? offer = null, string? spokenText = null)
     {
         spokenText ??= text;
+
         // A row's compact text (2.6): the text as built, without git's stage and never ssh's
         // notice; empty for "Ready". "Waiting for auto-fetch…" has no tooltip of its own there.
         var ready = compactText is null && string.Equals(text, ReadyText, StringComparison.Ordinal);
