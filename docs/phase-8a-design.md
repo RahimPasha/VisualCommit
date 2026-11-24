@@ -6721,6 +6721,54 @@ built, read and corrected as the others): the Git program row's Browse described
 times, and where the keyboard focus goes when "Use the Git on the PATH" or "Use the Git it found",
 pressed by the keys, hides itself with the choice it drops.
 
+**The third round as built, ruling 101 corrected in two sentences, and a fourth round (the lead,
+2026-11-24).** 102. Run `wf_fa279534-fed` (10:26 to 11:37 on 2026-11-24, 12 agents, 3.32M tokens)
+built the third round's package and brought the docs up to the second round, each part read
+independently and corrected. Merged at 11:38: the docs `ba4570e`, the package `c9c3279`. The result
+is `D:/Projects/Personal/phase8-work/wave4/review/third-result.json`.
+
+- *after-browse*, as built. `GitProgramViewModel.BrowseHelpText` is the row's status while it has
+  one and else its path and its note, joined by a full stop and a space (`C:\Program
+  Files\Git\cmd\git.exe. Found on the PATH.`), raised with `StatusText` and with `Choice`; Browse's
+  help text is bound to it, so a Browse that passes is told when the focus comes back (D463 (3) as
+  amended). "Use the Git on the PATH" on the settings row, pressed by the keys, hid itself and left
+  the focus on nothing: the focus now goes to Browse, with the frame
+  (`FocusReturn.AfterKeyboardPressThatHides`, a return for a button that its own command hides; D462
+  (2) as amended). The reader found two more of the kind in the same views: the Accounts section's
+  netrc note's Dismiss, whose focus now goes to the Accounts section's button, and the first-run
+  screen's "Use the Git on the PATH", after whose search Check again got the focus without the frame
+  and now gets it with the frame when the button was pressed with it. The facts answer Browse's
+  probe of a chosen file with a made-up git (`FakeGitAnswer.AvailableAt`), so their set-up no longer
+  depends on the probe's ten seconds.
+- The lead's rulings on what came back. Whether a press was by the keys is told by the pressed
+  control's look at its Click (focused, with `:focus-visible`), everywhere in the app; Avalonia
+  keeps that look on a focused button that is then clicked, so such a click counts as it looks:
+  accepted, the frame was showing already. The fixer met it in `f4a-found-again`: giving the graph
+  area's target the frame after the first-run screen's search made a clicked Check again, still
+  framed from the step before, frame the graph; that part was withdrawn and the picture is the same
+  file. So after a search that finds git and closes the first-run screen the graph area's target
+  gets the focus without the frame, also after a key press, and Check again gets it without the
+  frame after a Choose that passes: accepted as they are, a Backlog row. The netrc note's target,
+  the Accounts section's button: accepted.
+- Ruling 101 corrected in two sentences. "So that the next Up or Down scrolls nothing" said too
+  much: the pick itself scrolls nothing, and the next Up or Down does not scroll the text across; as
+  in any editor it scrolls by a line when the caret leaves the view (Up from the line at the view's
+  top, Down from the last line in view), which no test holds. And "K8's count of Tabs from the
+  filter to the splitter" named the wrong walk: K8's two walks start in the right panel and cross
+  the details' file list alone, and the walk from the filter to the left splitter is
+  `KeyboardPassTests`' own, which records no count.
+- The references (the report's writer asked): step 19's whole default run is compared with wave 3's
+  references first; when that comparison holds, its pictures are the references for the gate, as at
+  each wave's close (D419).
+
+**The fourth round** (`wip/p8a-after-hide`, from `c9c3279`, run `wf_17596548-fdb`, started at
+11:40). The third round's fixer saw by reading that the stage panel's restore bar's Dismiss seems to
+hide its bar with itself too, and had not swept the app. One sweep closes the class before the gate:
+two independent readers list every control that its own press hides, removes or disables, one from
+the views and one from the commands; a builder settles each by a fact that presses it by the keys,
+with a fix where the focus is lost and a guard where it is kept; a reader checks the fixes and makes
+a third sweep.
+
 ### 13.2 What the integration settled
 
 Beyond moving the packages' contracts into section 1: the broker's `gitVersion` goes at §3's merge,

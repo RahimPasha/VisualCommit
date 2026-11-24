@@ -351,10 +351,12 @@ Wave 4 and the review:
   `39c632f` and `db7fbce`; ruling 101, D466), and the docs are brought up to the first round as
   built (`05e3b3e`). CI's run of the six merges failed off Windows on one test, the guard's modes
   test at its first run anywhere; corrected (`e3002ac`, D464 (4)), and the run on it is green in all
-  six jobs. **A third round**, one package, and the docs for the second round are under way (run
-  `wf_fa279534-fed`). Still open: their merges and CI, launches 2 and 3 of the real-window part
-  again, the series taken again, the owner's answer on the dimmed texts, §12's merge, the lagged
-  list, the whole default run and CI.
+  six jobs. **A third round** (one package, `c9c3279`; ruling 102) and the docs for the second round
+  (`ba4570e`) are merged too, and CI's run on the second round is green in all six jobs. **A fourth
+  round** sweeps the whole app for controls that hide or disable themselves under the keyboard's
+  focus (run `wf_17596548-fdb`). Still open: its merge, the docs for the third and fourth rounds and
+  CI, launches 2 and 3 of the real-window part again, the series taken again, the owner's answer on
+  the dimmed texts, §12's merge, the lagged list, the whole default run and CI.
 
 Gate:
 
@@ -915,24 +917,33 @@ passages against the code, 26 faults and 13 passages still old applied by a fixe
 at `05e3b3e`). **CI:** run 45421164866 on the six merges passed on Windows and failed in the five
 other jobs on one test, the guard's modes test at its first run anywhere; the lead corrected the
 test's claim about a missing folder above the data folder (`e3002ac`; D464 (4)), and run 45432651867
-on it is green in all six jobs (the CI section). **One run is under way, started at 10:26 on
-2026-11-24** (`wf_fa279534-fed`, script
-`…/workflows/scripts/phase8a-third-round-and-docs-wf_fa279534-fed.js`): (a) a third round, one
-package in the worktree `D:/Projects/Personal/vc-wt/p8a-after-browse` (`wip/p8a-after-browse`, from
-`59a955c`), built with its tests first, read and corrected: the Git program row's Browse described
-by the row at all times (ruling 101), and where the keyboard focus goes when "Use the Git on the
-PATH" hides itself; (b) the docs brought up to the second round as built, in the worktree
-`p8a-docs-after` (`wip/p8a-docs-after`, from `59a955c`), a writer, a checker and a fixer per file;
-they commit nothing, the lead reads the result, commits there and merges. **Next for the lead, in
-this order:** (1) read CI's run of the second round's push and record it: the 30 scaled cases of
-`LinkFocusFrameTests` have their first run on macOS and Linux there (ruling 101); (2) when the run
-ends, read its results, rule, merge the third round's branch with its test classes run, commit the
-docs in their worktree and merge them, and bring the docs up to the third round; push; read CI; (3)
-with no agent at work and the owner told just before: build `p8a-realwindow` in Release and run
-launches 2 and 3 of the real-window part alone again on their fixes
-(`Check_L_graph_danger_item_and_head_row` and `Check_A_and_B_about_and_icon`), then take the restore
-order's series again as D461 says: the worktrees `p8a-restore-base` at `3f67850` and `p8a-restore`
-on `wip/p8a-restore` stand ready, their Release builds made at 00:24 and 00:28 on 2026-11-24, `bash
+on it is green in all six jobs (the CI section). **The third round and the docs for the second round
+are merged** (run `wf_fa279534-fed`, 10:26 to 11:37 on 2026-11-24, 12 agents, 3.32M tokens; its
+result `…/wave4/review/third-result.json`): the docs at `ba4570e`, the package at `c9c3279`, merged
+at 11:38 and its classes run on the merged tree; ruling 102 has what was built, the lead's rulings
+and two sentences of ruling 101 corrected; D462 (2) and D463 (3) are amended. The two worktrees are
+removed; `wip/p8a-after-browse` and `wip/p8a-docs-after` stay local (D396). CI's run 45452648787 on
+the second round is green in all six jobs, the scaled link cases at their first run on macOS and
+Linux among them (the CI section). **One run is under way, started at 11:40 on 2026-11-24**
+(`wf_17596548-fdb`, script
+`…/workflows/scripts/phase8a-fourth-round-self-hiding-wf_17596548-fdb.js`): the fourth round, in the
+worktree `D:/Projects/Personal/vc-wt/p8a-after-hide` (`wip/p8a-after-hide`, from `c9c3279`): two
+independent read-only sweeps of the whole app for controls that their own press hides, removes or
+disables, one from the views and one from the commands; a builder who settles each by a fact pressed
+by the keys and fixes every lost focus; a reader who checks the fixes and makes a third sweep; a
+fixer (ruling 102's last paragraph). **Next for the lead, in this order:** (1) read CI's run of the
+third round's push and record it; (2) when the fourth round ends, read its result, rule, and merge
+its branch with its test classes run; then one docs pass for the third and fourth rounds (the
+design, the report, the architecture page), which also settles what the second round's docs writers
+left to the lead (`third-result.json`, each file's `written.forTheLead` and `applied.left`: 6.3.9's
+"a file's diff (T, Enter)", the palette named twice in 6.3.4, the report's bullet on step 21 that
+cites `OutcomeAtFocusTests` beside a title the test does not hold, the architecture page's sentence
+on Choose's and Browse's focus after a run); push; read CI; (3) with no agent at work and the owner
+told just before: build `p8a-realwindow` in Release and run launches 2 and 3 of the real-window part
+alone again on their fixes (`Check_L_graph_danger_item_and_head_row` and
+`Check_A_and_B_about_and_icon`), then take the restore order's series again as D461 says: the
+worktrees `p8a-restore-base` at `3f67850` and `p8a-restore` on `wip/p8a-restore` stand ready, their
+Release builds made at 00:24 and 00:28 on 2026-11-24, `bash
 D:/Projects/Personal/phase8-work/wave4/restore/series2/run_series2.sh 1 10`, about an hour and a
 half, a void pair taken again under its number plus ten, and its outcome recorded by D457 (5)'s
 rule. The machine's state for it: on 2026-11-24 Adobe's Desktop Service was found to have used a
