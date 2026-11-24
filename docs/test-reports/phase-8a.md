@@ -590,7 +590,8 @@ folder line masked.
   its text; the window's `AutomationProperties.Name` is the heading and its `AutomationProperties.HelpText`
   the body, one space and the platform's sentence (4.3.4; the lead's ruling of 2026-11-20). While a try
   runs, "Try again" reads `Trying…` and is disabled; an unanswered try shows the status and enables
-  "Try again", which keeps the focus.
+  "Try again", which gets the focus back, described by the status: its `AutomationProperties.HelpText`
+  is the view model's `StatusLine`, empty before an unanswered try (D463 (3)).
 - **Colours** (tokens the round keeps; 1.5's rule that new views set no colour of their own):
   background `#1A1D24` dark, `#F5F6F8` light; the heading, body and sentence `#E4E7EC` dark, `#1B1F27`
   light; the folder line (`VcTextSecondaryBrush`) `#9BA3B0` dark, `#5C6572` light; the status
@@ -3424,9 +3425,13 @@ the start line sets, so that the dates heard are 9.3.5's (open point 85). Expect
 21. Tab to "Check again", Enter: no "Checking…" is read while the search runs (the button is disabled
     and without the focus then, and its text is no live region; if Narrator names the window as the
     focus leaves the button, note it); when the search ends the focus is given back, and Narrator reads
-    "Check again, button" and, as the button's description, the title of the state the search ended
-    on, here "VisualCommit needs Git" (5.3; open point 86; D463 (3); step 19's second round). Note what
-    is heard.
+    "Check again, button" and, as its description, the title of the state the search ended on, here
+    "VisualCommit needs Git" (5.3; open point 86; D463 (3): the button's help text is the screen's
+    title at all times, so the Tab to it may already be heard with it; `OutcomeAtFocusTests` holds the
+    focus event described by the title of the state a search ended on, there `Git 2.29.0 is too old`).
+    Note what is heard, and, if no description follows "button", how Narrator's setting "Hear advanced
+    detail, like help text, on buttons and other controls" stood: Narrator reads a help text as what
+    its settings call advanced detail, and whether that setting is on by default was not checked.
 
     21a. Shift+Tab to "Choose git.exe…" (the button before "Check again"), Enter, and in Windows' Open
     dialog choose `C:\Windows\System32\whoami.exe`, a program every Windows has, which answers
@@ -3435,16 +3440,23 @@ the start line sets, so that the dates heard are 9.3.5's (open point 85). Expect
     report its version. Git said: {first line}` (`GitSetupTexts.ChooseNoVersionFormat`, `{first line}`
     the first line whoami printed), nothing is written into `settings.json`, the focus comes back to
     "Choose git.exe…", and Narrator reads "Choose git.exe…, button" with the refusal as its description
-    (D463 (3); step 19's second round). Note what is heard.
+    (its help text, the error line's text; D463 (3); `OutcomeAtFocusTests` holds the focus event with a
+    refusal as its description). Note what is heard, as in step 21.
 
 The single-instance notice is not in the walk-through. After an unanswered try its Try again gets the
-focus back, and with step 19's second round it is described by the status, `It still did not answer.`
-(D463 (3)). An unanswered try needs a process that holds the data folder's `instance.lock` and answers
-nothing, as part I's launch 5 does in its test process (the file opened with `FileShare.None`, no
-`instance.json`); the walk-through stages none. Until the second round adds the assertion of that
-description, `InstanceNoticeLiveRegionTests` alone holds what a reader is told there: the status a
-polite live region that a client reaches only once a try went unanswered, and the focus back on Try
-again.
+focus back, described by the status, `It still did not answer.` (its help text, the notice's
+`StatusLine`, none before an unanswered try; D463 (3)). An unanswered try needs a process that holds the
+data folder's `instance.lock` and answers nothing, as part I's launch 5 does in its test process (the
+file opened with `FileShare.None`, no `instance.json`); the walk-through stages none. Two classes hold
+what a reader is told there: `InstanceNoticeLiveRegionTests` the status, a polite live region that a
+client reaches only once a try went unanswered, and the focus back on Try again; and
+`OutcomeAtFocusTests` the focus event on Try again with the status as its description, as it holds
+Choose's, Check again's and the settings row's Browse's, each event read as Windows' bridge takes it
+(`ClientWalk.RecordFocus`) and each button's name its own. Browse is described by the row's status, its
+refusal or `Checking…`, and by nothing after a Browse that passes (ruling 101: by the row's path and
+note when it has no status, step 19's third round). Until step 19's second round (`ff510ad`, merged at
+`950ca7d`) none of these buttons had a description, and `InstanceNoticeLiveRegionTests` alone held what
+a reader is told at the notice.
 
 Silence where a row's name is expected (step 3's rows, step 5's Home and End) means that the live
 region does not reach Narrator (9.9 item 1): a finding that reopens the route, by a decision and a
@@ -4121,15 +4133,15 @@ has no part (design 0.1, 10.5). Where a row names a page of the guide, the page 
 | A broken `~/.gitconfig` shows its own message (plan.md 767, from phase 6's design 8.5) | F6 (the fake), F6b (real git, also in CI's floor job on 2.34.1); real window F6 (the stand-in), F6b (real git) | `GitLocatorTests`: real git with `[user` in `GIT_CONFIG_GLOBAL` gives `ConfigFault(file, 1)`, on every CI job |
 | OpenSSH older than 8.4 ignores `SSH_ASKPASS_REQUIRE` (plan.md 766, risk 15; ruling 7 as ruling 100 amends it, D424) | none: a log line, nothing on screen | `AskPassBrokerHelperTests` (the Info line once per session, at the first Ask or Deny scope, `AskPassBroker.AskPassRequireLineFor` the running system's: on Windows `AskPassRequireLineWindows`, `Git and ssh get SSH_ASKPASS_REQUIRE=force, so that ssh asks through VisualCommit; OpenSSH older than 8.4 ignores it, and on Windows no terminal shows its question: cancel the operation if it waits.`, on macOS and Linux `AskPassRequireLineUnix`, ruling 7's words, `Git and ssh get SSH_ASKPASS_REQUIRE=force, so that ssh asks through VisualCommit; OpenSSH older than 8.4 ignores it and asks in the terminal VisualCommit was started from, if there is one.`; `Each_system_has_its_own_words_and_only_macOS_and_Linux_name_a_terminal`); the guide's `troubleshooting/sign-in-and-ssh.md`, with its section "An old OpenSSH does not ask through VisualCommit", a bullet for Linux and macOS (answer in the terminal VisualCommit was started from, if there is one, or cancel) and one for Windows (no terminal shows the question: cancel if it waits) (11.3.2). Until step 19's fix (2026-11-24, the review's security-privacy-1 and guide-2) the line and the page gave ruling 7's sentence on every system; ruling 100 amends ruling 7, because the app starts every git without a console window, so that on Windows ssh never reaches the terminal the app was started from |
 | The netrc note (plan.md 773, risk 35; ruling 8, D424) | F14 | `AccountsNetrcNoteTests`; the guide's `accounts.md` and `troubleshooting/sign-in-and-ssh.md` (ruling 8; 11.3.2) |
-| Keyboard gaps (R7; plan.md 759, 784 and "Done when" 786: every main action reached by keyboard): a hunk and chosen lines from the diff, a blame run and its menu, "Cancel {title}" in the palette, the stage rows' buttons on keyboard focus; Tab out of every read-only text view; a panel resized by the keys (design 0.1, 6.1, 6.3.9) | K1, K2, K3, K4, K8, G1 (F1 and the shortcuts list's `Help`, D417); real window K1, K2 | `KeyboardPassTests` (among them `Tab_and_Enter_on_Discard_hunk_confirmed_leave_the_focus_in_the_text`, `A_keyboard_Stage_held_while_the_user_moves_to_the_summary_leaves_the_focus_there`, `A_keyboard_Stage_held_while_the_user_goes_to_another_tab_leaves_that_tabs_lists_alone` `A_rows_Discard_by_the_keys_cancelled_in_its_question_gives_the_focus_to_the_rows_own_button_with_the_frame` and, for the activity log's splitter, `Up_on_the_activity_logs_splitter_reached_by_Tab_heightens_the_log_by_10_and_keeps_it`; the tests of where a change of the active tab leaves the focus (since step 19's fix the window gives a focus that the switch took away to the same panel's target in the tab now shown, else to the graph area's target, and to nothing while that tab still opens, D462 (1); until then a stage row's focus was left on nothing): `Ctrl_Tab_from_a_focused_stage_row_gives_the_focus_to_the_other_tabs_first_row_with_the_frame` and `Ctrl_Tab_from_a_stage_rows_Stage_reached_by_Tab_gives_the_focus_to_the_other_tabs_first_row_with_the_frame`, renamed and rewritten by step 19 (they were `…_leaves_the_focus_on_nothing_and_F6_then_starts_at_the_left_panel`), the graph's and the summary's two as they were, and the ten facts of `KeyboardPassTests.TabSwitch.cs`; the focus kept or given back after a cancelled question, a row's menu and Amend in `KeyboardPassTests.FocusReturns.cs` (D462 (2)), and after a toggled section or folder and an eye or solo button that hides itself in `KeyboardPassTests.Toggles.cs` (D462 (3)); `DiffTextViewTests`, `ConflictPanesTests`, `BlameViewTests` (`An_arrow_with_Cmd_or_Option_picks_the_carets_run` among them), `WorkingChangesTests` (`Tab_walks_every_row_of_a_list_longer_than_its_view_and_Shift_Tab_walks_back` among them), `StatusBarTests` (6.4's fail-first tests); `RegionKeysTests`, `CommandPaletteViewTests`, `PaletteEntriesTests`, `AppShortcutsTests` passing alone (6.8 item 1); phase 2's `Check_17` and phase 5's `Check_A4_real_keys` alone in the real window at §6's merge (6.8 item 5); the inventory of main actions (design 6.3.9) in the report, from §6's merge report, with its rows "Inline or side by side", proven by K1 (its scripted-only step 11: Tab and Shift+Tab to `SideBySideDiffButton`, Enter), and "Amend", proven by K7 (disabled while committing) and `KeyboardPassTests` (focused by Tab, the focus given back), as the lead settled open point 40, and since step 19's fix the user's path, the palette's Commit, by `Amend_focused_when_a_commit_starts_from_the_palette_gets_the_focus_back` (the focus given back without the frame, D104; D462 (2)); the guide's `keyboard-and-screen-readers.md` with each item of 6.3.10 (ruling 53; 1.17's "For the guide") |
+| Keyboard gaps (R7; plan.md 759, 784 and "Done when" 786: every main action reached by keyboard): a hunk and chosen lines from the diff, a blame run and its menu, "Cancel {title}" in the palette, the stage rows' buttons on keyboard focus; Tab out of every read-only text view; a panel resized by the keys (design 0.1, 6.1, 6.3.9) | K1, K2, K3, K4, K8, G1 (F1 and the shortcuts list's `Help`, D417); real window K1, K2 | `KeyboardPassTests` (among them `Tab_and_Enter_on_Discard_hunk_confirmed_leave_the_focus_in_the_text`, `A_keyboard_Stage_held_while_the_user_moves_to_the_summary_leaves_the_focus_there`, `A_keyboard_Stage_held_while_the_user_goes_to_another_tab_leaves_that_tabs_lists_alone` `A_rows_Discard_by_the_keys_cancelled_in_its_question_gives_the_focus_to_the_rows_own_button_with_the_frame` and, for the activity log's splitter, `Up_on_the_activity_logs_splitter_reached_by_Tab_heightens_the_log_by_10_and_keeps_it`; the tests of where a change of the active tab leaves the focus (since step 19's fix the window gives a focus that the switch took away to the same panel's target in the tab now shown, else to the graph area's target, and to nothing while that tab still opens, D462 (1); until then a stage row's focus was left on nothing): `Ctrl_Tab_from_a_focused_stage_row_gives_the_focus_to_the_other_tabs_first_row_with_the_frame` and `Ctrl_Tab_from_a_stage_rows_Stage_reached_by_Tab_gives_the_focus_to_the_other_tabs_first_row_with_the_frame`, renamed and rewritten by step 19 (they were `…_leaves_the_focus_on_nothing_and_F6_then_starts_at_the_left_panel`), the graph's and the summary's two as they were, and the ten facts of `KeyboardPassTests.TabSwitch.cs`; the focus kept or given back after a cancelled question, a row's menu and Amend in `KeyboardPassTests.FocusReturns.cs` (D462 (2)), and after a toggled section or folder and an eye or solo button that hides itself in `KeyboardPassTests.Toggles.cs` (D462 (3)); `DiffTextViewTests`, `ConflictPanesTests`, `BlameViewTests` (`An_arrow_with_Cmd_or_Option_picks_the_carets_run` among them), `WorkingChangesTests` (`Tab_walks_every_row_of_a_list_longer_than_its_view_and_Shift_Tab_walks_back` among them), `StatusBarTests` (6.4's fail-first tests); since step 19's second round the Tab order of the lists whose rows hold stops, in the rows' order after rows were inserted or the list scrolled, in `KeyboardPassTests.RowOrder.cs` (the left panel's list, the commit details' and the comparison's file trees, the unstaged list, the step from the unstaged list straight into the staged one, and as guards the activity log's and the interactive rebase's lists, one stop each; `RowOrderStackPanel`, D466); `RegionKeysTests`, `CommandPaletteViewTests`, `PaletteEntriesTests`, `AppShortcutsTests` passing alone (6.8 item 1); phase 2's `Check_17` and phase 5's `Check_A4_real_keys` alone in the real window at §6's merge (6.8 item 5); the inventory of main actions (design 6.3.9) in the report, from §6's merge report, with its rows "Inline or side by side", proven by K1 (its scripted-only step 11: Tab and Shift+Tab to `SideBySideDiffButton`, Enter), and "Amend", proven by K7 (disabled while committing) and `KeyboardPassTests` (focused by Tab, the focus given back), as the lead settled open point 40, and since step 19's fix the user's path, the palette's Commit, by `Amend_focused_when_a_commit_starts_from_the_palette_gets_the_focus_back` (the focus given back without the frame, D104; D462 (2)); the guide's `keyboard-and-screen-readers.md` with each item of 6.3.10 (ruling 53; 1.17's "For the guide") |
 | Focus after "Choose" (plan.md 771; phase 7a's design 17 item 5) | K5 | `KeyboardPassTests` (after Choose, reached by Home and Enter in the list, and after Esc in the browser; `Enter_in_the_repository_browsers_list_with_no_row_selected_chooses_nothing`; D454's Enter in the other dialogs' lists: `Enter_on_a_selected_row_of_a_pick_list_confirms_it_as_its_button_does`, `Enter_on_a_choice_dialogs_checked_option_confirms_it_as_its_button_does`, `Enter_on_the_push_dialogs_checked_remote_pushes_as_its_button_does`; the create form's Pick, ruling 51) |
 | The loading diff (plan.md 772; phase 7a's design 17 item 11) | K6 | `DiffTextViewTests` (`FocusBody(() => false)`), `KeyboardPassTests` (a held read, an `Empty` body turning to `Text`, a diff opened by Enter still taking the focus) |
 | The commit boxes (plan.md 774; D392) | K7 | `WorkingChangesTests` (a held `CommitAsync`, `CanToggleAmend`), `KeyboardPassTests` (Amend focused by Tab gets the focus back; `Amend_focused_by_Tab_leaves_the_focus_the_user_moved_while_the_commit_ran`; since step 19's fix `Amend_focused_when_a_commit_starts_from_the_palette_gets_the_focus_back`, the user's path, the two before starting the commit from the code: D462 (2)) |
 | Icons and branding (R5, D407; plan.md 764): the icon's SVG, the tool that makes the `.ico`, the `.icns` and the PNG files, the window's and the executable's icon; with plan.md 782's visual check, the icon in the window and the taskbar | B1, B2; real window B1 (a) to (c) and B2 (the executable's icon, the window's two icons, the title bar dark and light, the taskbar button) | `IconFilesTests` (items 1 to 8: the masters' rules, the manifest's hashes, the `.ico`, the `.iconset`, `png/`, `Assets/Icon`, the `.icns` (item 7, D447) and `iconutil` both ways (item 8, in CI's macOS job, whose log shows it passed, not skipped)); `WindowIconTests` (the main window's and the notice window's `Icon`, `AppIcon`'s three URIs); `Phase8aExpectationTests.B`; the files: the masters in `assets/brand/`, the generated files, `tools/VisualCommit.IconBuilder` (built in CI's six jobs; a second run of it leaves `git status` clean, 7.8 item 2); the owner's choice recorded in `docs/brand/icon/round-1/` and `round-2/` (D447); the look-alike check by eye, with the checks by hand |
 | The README's "Name" note names the icon (D412; plan.md 764) | none | The README's "Name" note, design 7.3's text, written by the lead at §7's merge: proven by the file (design 0.1). No check of part B proves it; it stands here because it lands at §7's merge |
 | Third-party notices, complete for what the app ships and reachable from the app (plan.md 762; R6; D431, D433, D434; design 0.1, 8.1, 8.3.4) | A5 (the notices file and the vendors' files in the app's text dialog); A4 (the license) | `ThirdPartyNoticesTests` (`Every_shipped_package_is_named_with_its_version`, `Every_shipped_file_is_named`, `Every_named_package_ships`, `Every_grammar_and_theme_is_listed`, `Every_license_named_has_its_text`, `The_app_embeds_the_texts_word_for_word`, `The_identity_matches_LICENSE`, `The_notices_files_only_addresses_are_its_copyright_lines`), red on the base first and green in CI's six jobs (8.8; the macOS and Linux natives proven only in CI's macOS and Linux jobs, 8.9 item 5); `TextDocumentDialogViewModelTests`, `DocumentTextViewTests` (the text's keys, part A's "Shown by no check": `The_copy_key_copies_a_selection_and_nothing_without_one`, `The_select_all_key_selects_the_whole_text_and_leaves_the_view_where_it_is`, `Keys_that_would_move_extend_or_use_the_hidden_caret_or_type_do_nothing`, `Cut_paste_undo_and_redo_change_nothing_and_leave_the_view_where_it_is`, `Enter_with_or_without_modifiers_leaves_the_view_where_it_is_and_plain_Enter_goes_on_unhandled`, `Another_editor_still_takes_its_keys_line_breaks_typing_deleting_and_moving_its_caret`, `A_wheel_up_after_End_leaves_the_end_though_the_lines_it_brings_in_wrap` among them); `AboutSectionTests` (the notices' switch shows Avalonia's file; `Enter_in_the_licenses_text_closes_the_dialog_as_Close_does_and_gives_the_focus_back`); the files `THIRD-PARTY-NOTICES.md` and `notices/` (the vendors' files byte for byte as the vendors ship them, `notices/** -text` in `.gitattributes`: two with CRLF, two with LF; 8.2, 8.8); `ci.yml`'s `paths`, which take the notices and `LICENSE` as build inputs (D433; unverified until a push changes only the notices, 8.9 item 6) |
-| The About screen (plan.md 763 and 776; R6, D398, D409; with plan.md 782's visual check "The About screen") | A1 to A6, G3 (About's guide link); real window A1 (with a 1920×1080 capture where it fits) and A4 | `AboutSettingsViewModelTests` (the texts, the dialogs, the links' addresses, no launcher, a throwing launcher; `The_texts_are_read_off_the_callers_thread_and_a_second_press_meanwhile_opens_nothing_more`, `A_screen_closed_while_the_texts_are_read_shows_no_dialog`); `AboutSectionTests` (`Enter_in_the_licenses_text_closes_the_dialog_as_Close_does_and_gives_the_focus_back` among them); `LinkFocusFrameTests` (App.Tests, 12 cases: a link focused by the keyboard shows its whole text and its underline inside the frame, not under it, in About, dark and light, and in GitLab's sign-in dialog, `An_About_link_focused_by_Tab_shows_its_text_and_underline_inside_the_frame` and `A_sign_in_link_focused_by_Shift_Tab_shows_its_text_and_underline_inside_the_frame`; the frame moves nothing and a link draws outside its bounds only while focused, `The_frame_moves_nothing_and_a_link_draws_outside_its_bounds_only_while_focused`; the frame takes no pointer, `A_pointer_on_the_frame_reaches_what_lies_under_it_not_the_link`; a link focused by a click is underlined without the frame, `An_About_link_focused_by_a_click_is_underlined_without_the_frame` and `A_sign_in_link_focused_by_a_click_is_underlined_without_the_frame`); `AboutEntryTests` (the palette on a welcome, a repository and a dashboard tab; the macOS menu's one item `About VisualCommit`, no `Avalonia`, its `Command` with and without a dialog open); `SettingsDialogViewTests` (Down from Accounts reaches About, Down stays); `PaletteEntriesTests`, `CommandPaletteViewTests` and phase 6's K10 (the entry after `Follow the system's theme`); `AppVersionInfoTests` (WP0) and `The_identity_matches_LICENSE`; `Phase8aExpectationTests.A`; §9's sweep over About (part U); About in macOS's application menu, 8b's Mac checklist (8.9 item 2) |
-| An accessible name on every control and the graph's selected row exposed to UI Automation, with one Narrator walk-through by hand (R7, D411, D49 as D435 amends it, D450; plan.md 759's "an accessible name on every control; the graph's selected row exposed to UI Automation (D49); and one walk-through with Windows Narrator by hand", 770's icon buttons without a name, 784's visual check "the accessible names read through UI Automation in the real window", and "Done when" 786's "every control has an accessible name"; design 0.1) | U1, U2, U3; real window U1 and U3 (launch 13); by hand: the Narrator walk-through | `AccessibleNameSweepTests` (14 states; on the code before §9's names 12 of the first 13 failed, the notice's had nothing to find, and About's came at the merge: U2); `AutomationSweepTests`; `GraphRowSpeechTests`; `CommitGraphControlAutomationTests` (no peer without a client, one row peer for 100,000 rows, one Name change per move, bounds, the request's words, the same bytes after ten moves back); `CommitGraphControlTests.The_graph_is_a_ui_automation_list_with_its_name`; `StatusBarTests.The_operation_text_is_a_polite_live_region` (the status bar's live region, ruling 36) and, since step 19's fix, `StatusBarTests.The_operation_texts_live_region_speaks_the_start_and_the_result_not_the_progress` (two Name changes for twenty progress values, D463 (1)); `Phase8aExpectationTests.U`; the spike's events in §9's merge notes (9.3.1); 9.6's grep (only `AutomationProperties.*` and `xmlns` lines in the `.axaml` hunks; no `Render`, `AffectsRender`, `InvalidateVisual`, measure or arrange in the graph's diff; no `IEmbeddedRootProvider`, `[PrivateApi]` or window peer in `src/` without a decision); the guide's `keyboard-and-screen-readers.md` (ruling 39, D411; 11.3.2); to the Backlog at the close, an item status on the left panel's rows (ruling 36) and the hunk bars' repeated names (13.4 item 15) |
+| The About screen (plan.md 763 and 776; R6, D398, D409; with plan.md 782's visual check "The About screen") | A1 to A6, G3 (About's guide link); real window A1 (with a 1920×1080 capture where it fits) and A4 | `AboutSettingsViewModelTests` (the texts, the dialogs, the links' addresses, no launcher, a throwing launcher; `The_texts_are_read_off_the_callers_thread_and_a_second_press_meanwhile_opens_nothing_more`, `A_screen_closed_while_the_texts_are_read_shows_no_dialog`); `AboutSectionTests` (`Enter_in_the_licenses_text_closes_the_dialog_as_Close_does_and_gives_the_focus_back` among them); `LinkFocusFrameTests` (App.Tests, 42 cases, every `VcLinkButton` of the app: a link focused by the keyboard shows its whole text and its underline inside the frame, not under it, in About, dark and light, and in GitLab's sign-in dialog, `An_About_link_focused_by_Tab_shows_its_text_and_underline_inside_the_frame` and `A_sign_in_link_focused_by_Shift_Tab_shows_its_text_and_underline_inside_the_frame`; since step 19's second round the same at the display scalings 1 to 2 in steps of 0.25, dark, for About's two links, GitLab's two and GitHub's and Azure DevOps' token link, 10 cases each, `An_About_link_keeps_its_frame_clear_of_its_text_at_every_scaling`, `A_sign_in_link_keeps_its_frame_clear_of_its_text_at_every_scaling` and `A_GitHub_or_Azure_DevOps_token_link_keeps_its_frame_clear_of_its_text_at_every_scaling` (S19-18); the frame moves nothing and a link draws outside its bounds only while focused, `The_frame_moves_nothing_and_a_link_draws_outside_its_bounds_only_while_focused`; the frame takes no pointer, `A_pointer_on_the_frame_reaches_what_lies_under_it_not_the_link` (these two in About and in GitLab's, GitHub's and Azure DevOps' sign-in dialogs); a link focused by a click is underlined without the frame, `An_About_link_focused_by_a_click_is_underlined_without_the_frame` and `A_sign_in_link_focused_by_a_click_is_underlined_without_the_frame`); `LinkFrameTests` (App.Tests, 10 cases: `LinkFrame`'s rule, by which A1's step 9, G3 and `LinkFocusFrameTests` read a link's frame, on made pictures, at a scaling of 1 and, since step 19's second round, above it); `AboutEntryTests` (the palette on a welcome, a repository and a dashboard tab; the macOS menu's one item `About VisualCommit`, no `Avalonia`, its `Command` with and without a dialog open); `SettingsDialogViewTests` (Down from Accounts reaches About, Down stays); `PaletteEntriesTests`, `CommandPaletteViewTests` and phase 6's K10 (the entry after `Follow the system's theme`); `AppVersionInfoTests` (WP0) and `The_identity_matches_LICENSE`; `Phase8aExpectationTests.A`; §9's sweep over About (part U); About in macOS's application menu, 8b's Mac checklist (8.9 item 2) |
+| An accessible name on every control and the graph's selected row exposed to UI Automation, with one Narrator walk-through by hand (R7, D411, D49 as D435 amends it, D450; plan.md 759's "an accessible name on every control; the graph's selected row exposed to UI Automation (D49); and one walk-through with Windows Narrator by hand", 770's icon buttons without a name, 784's visual check "the accessible names read through UI Automation in the real window", and "Done when" 786's "every control has an accessible name"; design 0.1) | U1, U2, U3; real window U1 and U3 (launch 13); by hand: the Narrator walk-through | `AccessibleNameSweepTests` (14 states; on the code before §9's names 12 of the first 13 failed, the notice's had nothing to find, and About's came at the merge: U2); `AutomationSweepTests`; `GraphRowSpeechTests`; `CommitGraphControlAutomationTests` (no peer without a client, one row peer for 100,000 rows, one Name change per move, bounds, the request's words, the same bytes after ten moves back); `CommitGraphControlTests.The_graph_is_a_ui_automation_list_with_its_name`; `StatusBarTests.The_operation_text_is_a_polite_live_region` (the status bar's live region, ruling 36) and, since step 19's fix, `StatusBarTests.The_operation_texts_live_region_speaks_the_start_and_the_result_not_the_progress` (two Name changes for twenty progress values, D463 (1)), and since step 19's second round `OutcomeAtFocusTests` (the notice's Try again after an unanswered try, the first-run screen's Choose after a refusal and its Check again after a search, the settings row's Browse after a refusal: each gets the focus back with its own name and the outcome as its help text, the focus event read as Windows' bridge takes it, D463 (3)); `Phase8aExpectationTests.U`; the spike's events in §9's merge notes (9.3.1); 9.6's grep (only `AutomationProperties.*` and `xmlns` lines in the `.axaml` hunks; no `Render`, `AffectsRender`, `InvalidateVisual`, measure or arrange in the graph's diff; no `IEmbeddedRootProvider`, `[PrivateApi]` or window peer in `src/` without a decision); the guide's `keyboard-and-screen-readers.md` (ruling 39, D411; 11.3.2); to the Backlog at the close, an item status on the left panel's rows (ruling 36) and the hunk bars' repeated names (13.4 item 15) |
 | User guide (D408; plan.md's Delivers item "Markdown pages in the repository, a site on GitHub Pages built by a workflow, pictures in both themes from the walk-through's harness, and the app's links to it", and "Done when"'s "the user guide exist[s]"; D417, D434, D439 to D441, D451; design 0.1, 11.1) | G1, G2, G3 (the app's links: the palette's row and F1, the shortcuts list's `Help`, the first-run links, About's link); by hand: the guide's site from the `guide-site` artifact, and after the merge the live site and the environment's branch rule | The files: `docs/guide/book.toml`, `docs/guide/guide.css`, `docs/guide/src/SUMMARY.md` and its 33 pages in 11.3.2's order, each saying its row, those of rulings 7, 8, 19, 39, 46, 50, 53 and D411 among them (11.8 item 1, read by the lead at §11's merge), in American spelling (D434); `.github/workflows/guide.yml` (its run green after the merge's push, its step "App's links" included, no deploy job off `master`, `guide-site` looked at, 11.8 item 4) with mdBook 0.5.4 pinned by its Linux archive's SHA-256 `3f28de05dafca9d0f2eab99c662116b0e37b89b1d96a08f8f430b9eeae958cd7`, the digest GitHub shows for release `v0.5.4`, downloaded and checked on 2026-11-23 (13.4 item 20); `scripts/check-guide-links.py` with its `--self-test` (D441, D451); `tests/VisualCommit.GuideShots` (built by CI's Windows job; `GuideCatalogueTests`, `LeakGuardTests`; the lead's run on the laptop through `scripts/heavy-run.sh`, `LeakGuard` silent and every picture looked at, 11.8 item 3); App.Tests' `AppLinksTests` (each `GuidePage`'s page under `docs/guide/src`, linked from `SUMMARY.md`, its anchor once) and `GuideShortcutsPageTests` (the shortcuts page's tables made from `AppShortcuts.Groups`), also run by the guide's workflow (D451); `AppShortcutsTests` (F1 bound, routed on Ctrl and Cmd; `Help` with its note on a Mac), `SettingsDialogViewTests`, `PaletteEntriesTests`, `CommandPaletteViewTests`, phase 6's part S and K10 (the earlier tests 11.4 changes); `Phase8aExpectationTests.G`; `compare-pictures.py` at §11's merge showing only 11.6's changes (11.8 item 3) |
 | Performance pass (plan.md's Delivers list; D436 to D438, D457; design 0.1, 10.5) | none: §10 has no part (design 0.5, 10.5) | This report's section "The performance series" and its table (design 10.3.6's step 5); `PerformanceSeriesTests` (RealWindowTests, no window: the median of odd and even counts, the range, the bound's rounding, `ParseRuns`, the summary line); App.Tests' `StartupTimelineTests` (the start-up lines), `RepositoryViewModelTests` and `RepositoryViewModelFilterTests` (the reload's and the heap's log lines) and `RepositoryOperationsPullTests` (a Pull's git calls held to their budgets), design 10.4's classes; Q1 in phase 1's real-window pass (`Phase1RealWindowPass.Checks_8_and_9_the_100k_commit_repo_and_Q1`; D50, D436); ruling 76's restore order, merged at `aedb12f`: App.Tests' `RestoreOrderTests`, `RepositoryFirstPageTests`, `RestoreOrderShellTests` and `SettingsEntryTests`, and the proof by its alternated series and the lead's probe ("The restore order's proof"; D457, D458; the series taken again by D461); the guide's `troubleshooting/large-repositories.md`, with the report's numbers as indications (10.3.6 step 5; 1.17, "At wave 3's close") |
 
@@ -4900,21 +4912,32 @@ so A1's capture at that size is not run there (run.txt says so).
   screenreaders-3; design 13.1's ruling 100, D463 (3)). No "Checking…" is expected while the search
   runs, where it was (the window, if Narrator names it as the focus leaves the button, is noted); once
   the search ends, "Check again, button" with the focus given back, described by the title of the
-  state the search ended on, "VisualCommit needs Git" (step 19's second round). Reason: "Checking…" is
-  the text of a button that is disabled and without the focus while the search runs, and that text is
-  no live region (ruling 99's "nothing else"), so it was never spoken; and the title, the live region
-  that names the outcome, reaches only a reader that has already read the screen (in D455's cold case
-  it does not), and here its text does not change at all, so the outcome is said where the focus
-  lands, as a form's field is described by its error. No check and no picture changes.
+  state the search ended on, "VisualCommit needs Git" (built in step 19's second round, `ff510ad`,
+  merged at `950ca7d`; `OutcomeAtFocusTests`). Reason: "Checking…" is the text of a button that is
+  disabled and without the focus while the search runs, and that text is no live region (ruling 99's
+  "nothing else"), so it was never spoken; and the title, the live region that names the outcome,
+  reaches only a reader that has already read the screen (in D455's cold case it does not), and here
+  its text does not change at all, so the outcome is said where the focus lands, as a form's field is
+  described by its error. No check and no picture changes.
 - **The Narrator walk-through, step 21a, new** (2026-11-24; the review before the gate, screenreaders-3
   and its reader's speech-r1; design 13.1's ruling 100, D463 (3)). Choose refused (a program that is no
-  git, `whoami.exe`), the focus back on "Choose git.exe…" and the refusal as its description (step 19's
-  second round). Reason: since step 19's first round Choose gets the focus back after a refused file
-  (`a76b4ce`), and D463 (3) describes it by the error line there; what a reader then says is the gate's
-  listen (D460), and no step reached a refused Choose before. The notice's Try again, described by its
-  status in the same way, gets no step: an unanswered try needs a process that holds the data folder's
-  `instance.lock` and answers nothing, as part I's launch 5 does in its test process, and the
-  walk-through stages none (the note after the walk-through's steps). No check and no picture changes.
+  git, `whoami.exe`), the focus back on "Choose git.exe…" and the refusal as its description (built in
+  step 19's second round, `ff510ad`). Reason: since step 19's first round Choose gets the focus back
+  after a refused file (`a76b4ce`), and D463 (3) describes it by the error line there; what a reader
+  then says is the gate's listen (D460), and no step reached a refused Choose before. The notice's Try
+  again, described by its status in the same way, gets no step: an unanswered try needs a process that
+  holds the data folder's `instance.lock` and answers nothing, as part I's launch 5 does in its test
+  process, and the walk-through stages none (the note after the walk-through's steps). No check and no
+  picture changes.
+- **Part I's conventions, the notice** (2026-11-24; the review before the gate, screenreaders-3; design
+  13.1's rulings 100 and 101, D463 (3); `ff510ad`, merged at `950ca7d`). "Try again" gets the focus back
+  after an unanswered try, described by the status (its `AutomationProperties.HelpText`, the view
+  model's `StatusLine`, empty before an unanswered try), where the conventions said that it keeps the
+  focus and named no help text of a button. Reason: its disabling while a try runs can take the focus,
+  which the window gives back (`InstanceNoticeWindow`), and step 19's second round describes each button
+  that gets the focus back after an outcome by that outcome; `OutcomeAtFocusTests` and
+  `InstanceNoticeLiveRegionTests` hold it (the note after the Narrator walk-through's steps). No check
+  and no picture changes.
 - **The conventions' ink in a capture, and L6 a to c in the real window (launch 2)** (2026-11-24; the
   review before the gate, realwindow-4; design 13.1's rulings 99 and 100; `c80689d` and `902288e` on
   `wip/p8a-realwindow`). Every text read has its rectangle, and for L6 a to c a missing rectangle for
@@ -4945,7 +4968,7 @@ so A1's capture at that size is not run there (run.txt says so).
   default, so a count over every taskbar would fail with no other VisualCommit running (reasoned, not
   measured: the laptop has one display). No scripted check and no picture changes.
 - **Earlier tests whose assertions step 19's fixes changed, and one earlier picture** (2026-11-24; the
-  review before the gate; design 13.1's ruling 100, D462 to D465). Each keeps its point.
+  review before the gate; design 13.1's rulings 100 and 101, D462 to D465). Each keeps its point.
   `GraphReviewFixTests.Opening_a_folder_inserts_its_rows_without_resetting_the_list` holds one Add of
   the folder's 40 rows and the same folder object, open, where it held one Remove and 41 Adds: a
   toggled folder keeps its row (D462 (3), focus-r4); the list is still never reset.
@@ -4955,11 +4978,12 @@ so A1's capture at that size is not run there (run.txt says so).
   `AskPassBrokerHelperTests.The_line_about_ssh_comes_once_per_session_at_its_first_ask_or_deny_scope`
   expects the line of the running system, `AskPassRequireLineWindows` on Windows, where it expected
   ruling 7's line everywhere (security-privacy-1; ruling 100 amends ruling 7).
-  `GitProgramViewModelTests.Use_the_git_on_the_path_drops_the_choice_and_shows_the_git_in_use` expects
-  the note after the dropped choice that is in use, `Chosen here. VisualCommit uses the Git on the PATH
-  from its next start.` as built, where it expected `Chosen here. VisualCommit uses it from its next
-  start.` (firstrun-3); with step 19's second round it holds the lead's words, `Chosen here.
-  VisualCommit looks for Git again at its next start.` (`GitSetupTexts.NextStartLooksAgainSuffix`).
+  `GitProgramViewModelTests.Use_the_git_on_the_path_drops_the_choice_and_shows_the_git_in_use` expects,
+  as the note after the dropped choice that is in use, since step 19's second round the lead's words,
+  `Chosen here. VisualCommit looks for Git again at its next start.`
+  (`GitSetupTexts.NextStartLooksAgainSuffix`; ruling 100), where it expected `Chosen here. VisualCommit
+  uses it from its next start.` (firstrun-3) and, in step 19's first round, the builder's, `Chosen here.
+  VisualCommit uses the Git on the PATH from its next start.`
   `SingleInstanceGuardTests.A_closing_holder_is_waited_for_and_the_waiter_takes_the_folder_and_serves`
   (design 4.5's test 4) expects `WaitToTake` to give `HeldResolution.Taken`, where it gave true
   (D464 (1)). 8a's own `KeyboardPassTests` facts of Ctrl+Tab from a stage row's own button and from its
@@ -4969,7 +4993,38 @@ so A1's capture at that size is not run there (run.txt says so).
   neutral point before `10b` and `10c` and asserts that no tooltip is open (`9998f68`, tests-ci-3), and
   phase 1's report records it in check 10's notes. The comparison with wave 3's references will show
   `10b-second-tab` changed once, as their file holds the tooltip (`9f967c94…`); its written expected
-  result does not change.
+  result does not change. Step 19's second round (ruling 101; merged at `950ca7d` and `db7fbce`)
+  changed these, each keeping its point.
+  `BlameViewTests.A_click_in_the_gutter_moves_no_text_however_far_its_runs_first_line_lies`, the first
+  round's own test, expects the caret on the first line of the picked run that is in view, the line
+  drawn at the view's top (24 there), where it expected the run's first line, line 1; it now also holds
+  that the next Down moves the caret one line with the text where it was, and that one Up from line 46
+  picks the run above (`75e1e1c`). `GitProgramViewModelTests`' two tests of the dropped choice expect
+  the lead's words, and the first round's, `…_says_what_the_next_start_uses_also_on_reopening`, is
+  renamed `A_dropped_choice_that_is_the_git_in_use_says_that_the_next_start_looks_again_also_on_reopening`
+  (`a8710bf`). `LinkFocusFrameTests`' `FrameReach` is (4, 4), where it was (4, 3), in
+  `The_frame_moves_nothing_and_a_link_draws_outside_its_bounds_only_while_focused`,
+  `A_pointer_on_the_frame_reaches_what_lies_under_it_not_the_link` and the ring of the cases of a click;
+  and `LinkFrameTests`' seven earlier cases draw their made frame 4 px out above and below, where 3,
+  their outcomes and messages as before (`cae6838`, `b2b880d`).
+  `RadioFocusFrameTests.A_settings_radios_frame_takes_no_pointer_and_moves_nothing` asserts that the
+  Theme options draw exactly their frame's box, whole, as every other option, with the section at its
+  top (offset 0), where it let them draw inside the box, the section's scroller cutting off the frame's
+  4 px above them (`17b4884`; the fix, `9a04ebb`, lets the scroller's clip reach 4 px higher while the
+  section is at its top). And `Phase8aExpectationTests.F`'s lists of Choose's texts and of the settings
+  row's texts hold the two new texts, `ChooseNoAnswer` and `NextStartLooksAgainSuffix` (`a8710bf`).
+- **A1, after step 9, and G3, after step 3: the pictures `a1b-about-link-focus` and
+  `g3a-about-guide-link`** (2026-11-24; the review before the gate, S19-18; design 13.1's rulings 100
+  and 101; `c12749c`, merged at `db7fbce`). Neither expected result changes: each asks for a whole frame
+  on four sides outside the text and names no pixel. The two pictures change in the frame's rows alone:
+  since `c12749c` the frame lies 4 px outside the link on every side, where it lay 4 left and right and
+  3 above and below, so its lines move a row outward above and below, in `a1b` the rows 371, 373,
+  374, 391, 392 and 394 of the columns 477 to 713 and in `g3a` the rows 405, 407, 408, 425, 426 and 428
+  of the columns 477 to 605 (the link frame's account under "Wave 3's comparison with wave 2's
+  references"). Reason: at display scalings of 1.5 and 1.75 the frame 3 px above and below lay on the
+  text, its inner line on the text's first and last rows at 1.5 and touching them at 1.75 (S19-18;
+  open point 95). No check changes; the two pictures change, and no other scripted picture shows a
+  link's frame.
 
 ### Wave 1's comparison with phase 7b's references (2026-11-20)
 
@@ -5212,6 +5267,27 @@ round them. Beside it only 7a's `a09b-git-refused` differs, 2 pixels one level a
 anti-aliasing wave 2's comparison already lists for it. The other eight pictures of part A, the other
 23 of 7a's part A and the 29 of 7b's, the sign-in dialogs among them, are the same files.
 
+**Changed by step 19's second round (2026-11-24; S19-18; design 13.1's rulings 100 and 101; `cae6838`,
+`b2b880d`, `c12749c` and `e742475`, merged at `db7fbce`).** What the account above says of the frame's
+reach held until then. At 150 % and 175 % the frame 3 px above and below lay on the text (at 100 %,
+125 % and 200 % it was clear): there the 3 px rounded to 4 and 5 device pixels and the two lines to
+3 + 2 and 4 + 2, which laid the inner line on the line box's first and last rows, the last holding the
+descenders and the underline, on the text at 150 % and touching it at 175 % (open point 95).
+`Border#FocusFrame`'s `Margin` is now -4: the frame's outer line lies 4 px outside the link's bounds on
+every side, which leaves at least a device row of the background between the inner line and the line
+box at every scaling from 100 % to 200 % (one at 100, 150 and 175 %, two at 125 and 200 %).
+`LinkFocusFrameTests` renders every `VcLinkButton` of the app at the scalings 1 to 2 in steps of 0.25,
+dark, in three theories of 10 cases (About's two links, GitLab's two, and GitHub's and Azure DevOps'
+token link), and its facts of the frame that moves nothing and takes no pointer cover GitHub's and
+Azure DevOps' token link too: 42 cases, with `FrameReach` (4, 4). On the old frame the scaled cases
+failed at 150 % and 175 % for every link. `LinkFrame` reads pictures drawn at a scaling above 1, the
+text's box given in their device pixels (`Problems`' `scale`), where the underline may take
+`UnderlineRowsAt(scale)` rows, 2 at 1 and 3 from 1.25 to 2 (at 2 About's underline lies across three
+rows); `LinkFrameTests` has 10 cases on made pictures, three of them new for the scaling. `a1b` and
+`g3a` change in the frame's rows alone ("Changed in this report after its first commit"), and the frame
+of GitLab's legacy token link now reaches the token link's line box (open point 96). At the merge the
+scaled cases had run on Windows alone: CI's macOS and Linux jobs are their first run there.
+
 What the inspectors noted beside the checks, none of it a fault: the settings form's left lies 1 px
 right of this report's 336 and 480 (746 and 890 at 1920×1080), within its 2 px, as phase 7a's Accounts
 picture `a05a-signed-in` shows too; `u3a` equals phase 4's `c10e-resolver-open` pixel for pixel; in
@@ -5224,7 +5300,10 @@ phase 6's `k12a`.
 **The references** of the later merges are this run's 1,235 scripted pictures,
 `D:/Projects/Personal/phase8-work/references/wave3/` (their hashes in `wave3-pictures.sha256` beside
 it), with `a1b-about-link-focus` there the fix's picture (SHA-256 `ad85f645…`; the list beside them
-corrected).
+corrected). Since step 19's second round (`c12749c`) `a1b` differs from that picture in the frame's rows
+alone, and `g3a`, which wave 3's references lack, from part G's earlier pictures in the same way; step
+19's whole default run is compared with these references, and whether its scripted pictures, once that
+comparison passes, are the new references is for the lead to say.
 
 **The lagged list** (design 0.4, `VISUALCOMMIT_WATCHER_LAG_MS=1500`, on `85e2884`'s code, 20:54 to
 22:18, each command's time with the lock and its build): `Phase2Checks` 25 of 25 (227 s); the fifteen
@@ -6107,7 +6186,11 @@ another; §12's builder follows the report's steps.
     (merged in `e463392`): 18 Tabs (`Phase8aExpectations.K.TabsToCalculator`; the row and id each Tab
     reaches in `CalculatorWalk`). The walk reaches the rows below the list's view because
     `WorkingChangesView` walks the lists in their rows' order (design 6.3.4; `55b8d3a`); Avalonia's own
-    order stopped at the rows the list had made.
+    order stopped at the rows the list had made. Since step 19's second round (`7c8ecde`, merged at
+    `39c632f`; D466) that walk is `RowOrderStackPanel`'s, the items panel the two stage lists share
+    with the left panel's list and the commit details' and the comparison's file lists, which answers
+    Avalonia's Tab navigation itself, in place of `WorkingChangesView`'s tunnel `KeyDown`; the 18 Tabs
+    are as they were.
 31. **K1's chosen lines.** 6.5 and 12.3.4 write "F6, Down, Shift+Down twice, Shift+F10" after the
     Shift+Tab to `Discard file`. F6 from the toolbar goes to the next region, the right panel, and the
     graph area gives back its last focused element, the toolbar's button (D213; `KeyRegionNavigator`), so
@@ -6804,9 +6887,9 @@ Still open, each with the reading this report takes and who settles it; a point 
     **Changed by step 19 (2026-11-24; ruling 100, D463):** step 21 expects no "Checking…": the button
     is disabled and without the focus while the search runs and its text is no live region, so it was
     never spoken; once the search ends, "Check again, button" with the focus given back, described by
-    the title of the state the search ended on (step 19's second round). Step 14 listens for the start
-    and the result only, and step 21a, Choose refused, is added ("Changed in this report after its
-    first commit").
+    the title of the state the search ended on (built in step 19's second round, `ff510ad`;
+    `OutcomeAtFocusTests`). Step 14 listens for the start and the result only, and step 21a, Choose
+    refused, is added ("Changed in this report after its first commit").
 87. **Launch 13's details 12.3.4 leaves.** The click on the working-changes row before the double-click
     on `notes.txt` (the stage panel shows only then); `WindowLayout.RowHeight` ± 1 read in
     `GraphRowsBounds()`'s units (the window's, not the capture's pixels at 200 %); the run.txt line and
@@ -6888,9 +6971,29 @@ verifiers, 98 by the performance pass.
     one: the headless pictures are at 100 %, and the real window runs at the owner's 200 %, where the
     frame's 4, 3, 2 and 1 px are whole pixels. At 150 % the 1 px inner line could round into the line
     box, as Fluent's own frame would.
+    **Settled by step 19's second round (`c12749c`, merged at `db7fbce`; S19-18; rulings 100 and
+    101):** it did: at 150 % the inner line lay on the text's first and last rows, the descenders'
+    lowest among them, and at 175 % it touched them, the 3 px above and below rounding to 4 and 5
+    device pixels and the two lines to 3 + 2 and 4 + 2. The frame now lies 4 px outside the link
+    on every side, which leaves one device row of the background between the inner line and the line
+    box at 100, 150 and 175 % and two at 125 and 200 %. `LinkFocusFrameTests` renders every
+    `VcLinkButton` of the app (About's two links, GitLab's two, and GitHub's and Azure DevOps' token
+    link) at the scalings 1 to 2 in steps of 0.25, read by `LinkFrame` in the pictures' device pixels:
+    30 cases, which failed on the old frame at 150 % and 175 % for every link and pass on the new one.
+    In the real window at the owner's 200 % the frame lies 8 device pixels out (reasoned, not measured:
+    no real-window pass has run on `c12749c`).
 96. **The frame under GitLab's legacy token link.** With the legacy link focused, the frame's top lies
     1 px from the token link's line box, the two links lying 4 apart; it is clear of the ink. No check
     takes a picture of it.
+    **As built since step 19's second round (`c12749c`, merged at `db7fbce`), and accepted by ruling
+    101:** with the frame 4 px out on every side, the legacy link's frame reaches the token link's line
+    box, the frames of the two links each meeting the other's line box edge to edge. Its top outer line
+    lies one device row of the background from the token link's descenders at 100, 125, 175 and 200 %
+    and touches them at 150 %, where the frame 3 px out had left two or three rows. The legacy link's
+    own text is clear of its frame at every scaling from 1 to 2, and the frame meets no other
+    control's bounds, the token link's line box only edge to edge (`LinkFocusFrameTests`). Clearing
+    the token link's descenders would take the two links 6 apart, which moves the lower half of phase
+    7b's sign-in dialog and its pictures; a Backlog row at the close (ruling 101).
 97. **`VcRadioButton`'s frame** (`Theme/Dialogs.axaml`) is built round its content, so it probably
     takes clicks just outside the radio button while it has the keyboard's focus, as `VcLinkButton`'s
     did in the link frame's first round. Not checked; for the review before the gate (status.md's step
@@ -6901,6 +7004,18 @@ verifiers, 98 by the performance pass.
     `RadioFocusFrameTests` (App.Tests) holds it: the Reset dialog's and the settings screen's options'
     frames take no pointer and move nothing, the Reset dialog's cover no other control, and a click on
     the frame of the focused hard option leaves Mixed checked.
+    **As built since step 19's second round (`9a04ebb`, merged at `db7fbce`), and accepted by ruling
+    101:** while a settings section is at its top (its offset 0) its scroller's clip reaches 4 px
+    higher, so the Theme options, General's first row, draw their frame whole; scrolled, the section is
+    clipped as before (`SettingsDialogView`; `RadioFocusFrameTests` holds the whole frame at the offset
+    0, `SettingsDialogViewTests.A_scrolled_section_shows_none_of_its_rows_above_its_top` the scrolled
+    case). Two limits stand, each a Backlog row at the close. At a scaling of 1 Dark's frame lies under
+    two faint ink pixels of the Theme note's "follows", and at other scalings Dark's and System's
+    frames touch the note's ink or keep one row from it; clearing it takes the note 2 px lower, which
+    moves the rest of General in every picture of it. And a radio button's frame is cut by the scroller
+    when Tab brings the button to the edge of a scrolled section: 6 px of the frame's bottom at the
+    minimum window in the repository scope with "Other" shown; with the default content no framed
+    control reaches an edge, and the fix changes where a section scrolls.
 98. **Q1 and the launcher.** The real-window pass measures Q1 with git itself on the PATH (Git Bash's
     `ucrt64\bin\git.exe`), not through `cmd\git.exe`, the launcher an installed user's PATH finds
     (D457; "The performance series"): for the review before the gate (status.md's step 19).
