@@ -59,6 +59,13 @@ namespace VisualCommit.App.Tests;
 /// the runs where the fact says so, and that the press is a click.
 /// </para>
 /// <para>
+/// A branch created below the view changes the number of rows: the section's header, far above the
+/// view, shows its new count itself, and the list is told of the new row alone, so every row stays,
+/// the rows in view with their places and their controls, and the press is a click. Before, the
+/// header ended the rows the list kept at its start, and the rows from it down to the new one were
+/// removed and inserted, or reset the list above 64 rows.
+/// </para>
+/// <para>
 /// Not asserted here, because the estimate does worse there, as it did before phase 8a: a rename
 /// far above the view deep in the list (b01 at the bottom of 60 branches: the offset 1226 for 1356),
 /// after which the panel makes five controls in view again, and the press on one of them loses its

@@ -25,10 +25,11 @@ public sealed class ParentLink
 
 /// <summary>
 /// One row of a file list (a commit's changed files, or the stage panel's lists): a file, or in
-/// the tree view also a folder. The list is rebuilt whole when it switches between flat and tree
-/// or a folder opens or closes.
+/// the tree view also a folder. The list is rebuilt whole when it switches between flat and tree;
+/// a folder that opens or closes keeps its row, which shows its opening itself
+/// (<see cref="IUpdatableRow{T}"/>).
 /// </summary>
-public sealed partial class ChangedFileRow : ObservableObject
+public sealed partial class ChangedFileRow : ObservableObject, IUpdatableRow<ChangedFileRow>
 {
     /// <summary>Where the first column starts in a row at depth 0, in logical pixels.</summary>
     public const double FirstIndent = 12;
@@ -90,7 +91,8 @@ public sealed partial class ChangedFileRow : ObservableObject
     public bool IsUnchanged { get; private init; }
 
     /// <summary>A folder whose content is shown below it.</summary>
-    public bool IsOpen { get; private init; }
+    [ObservableProperty]
+    public partial bool IsOpen { get; private set; }
 
     /// <summary>Opens or closes a folder of the tree; does nothing for a file.</summary>
     public IRelayCommand ToggleCommand { get; }
@@ -160,4 +162,14 @@ public sealed partial class ChangedFileRow : ObservableObject
     public bool ShowsSameAs(ChangedFileRow other) =>
         other.Key == Key && other.Name == Name && other.Depth == Depth && other.File == File && other.Folder == Folder
         && other.IsUnchanged == IsUnchanged && other.IsOpen == IsOpen && other.IsSelected == IsSelected;
+
+    /// <summary>
+    /// The same file or folder at the same level, selected as this one: only a folder's opening may
+    /// differ. A row is only ever compared with a row of its own list, whose folders toggle there.
+    /// </summary>
+    public bool CanUpdateTo(ChangedFileRow rebuilt) =>
+        rebuilt.Key == Key && rebuilt.Name == Name && rebuilt.Depth == Depth && rebuilt.File == File && rebuilt.Folder == Folder
+        && rebuilt.IsUnchanged == IsUnchanged && rebuilt.IsSelected == IsSelected;
+
+    public void UpdateTo(ChangedFileRow rebuilt) => IsOpen = rebuilt.IsOpen;
 }

@@ -20,7 +20,9 @@ namespace VisualCommit.App.Tests;
 /// last. Each run is told of on its own: a row between two runs that shows the same, or that changes
 /// itself, stays the object it was, and only the rows told of count toward the reset. A rebuild that
 /// changes the number of rows keeps the rows before and after the part that changed, for either
-/// form.
+/// form, those that can change themselves among them, which do; when it only inserts rows, or only
+/// removes them (a folder opened or closed, a branch created or deleted), the view is told of them in
+/// one change, however many, and nothing is reset.
 /// </summary>
 public class RowCollectionTests
 {
