@@ -71,8 +71,8 @@ public sealed class Phase8aOrder : ITestCaseOrderer
     /// <summary>The methods in their order.</summary>
     public static IReadOnlyList<string> Methods { get; } =
     [
-        "Check_L_changes_placeholders_and_danger_button",
-        "Check_L_graph_danger_item_and_head_row",
+        nameof(Phase8aRealWindowPass.Check_L_changes_placeholders_and_danger_button),
+        nameof(Phase8aRealWindowPass.Check_L_graph_danger_item_and_head_row),
         "Check_A_and_B_about_and_icon",
         "Check_I1_second_start_hands_over",
         "Check_I2_notice_and_exit_code_2",
