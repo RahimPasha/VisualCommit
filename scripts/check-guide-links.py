@@ -65,6 +65,8 @@ ANOTHER_HOST = "{what} loads from another host"
 PROTOCOL_RELATIVE = "{what} loads through a protocol-relative address"
 ROOT_PATH = "a path from the server's root, which the site does not hold"
 BASE_ELSEWHERE = "a base on another host"
+DATA_DOCUMENT = "{what} loads a data: document, script or style sheet, whose content the check does not read"
+PLAYGROUND = "mdBook's playground script fetches from play.rust-lang.org for this element"
 
 
 def srcset_urls(value):
@@ -456,6 +458,33 @@ _LOADING_ELEMENTS = (
     ("style element url()", "<style> url()", "<style>.a {{ background: url(\"{url}\"); }}</style>"),
     ("style element @import", "<style> @import", '<style>@import "{url}";</style>'),
     ("style element @import url()", "<style> @import url()", "<style>@import url({url});</style>"),
+    # Inline SVG: an image, a script and a use load by href or xlink:href.
+    ("svg image href", "<image href>", '<svg xmlns="http://www.w3.org/2000/svg"><image href="{url}"/></svg>'),
+    ("svg image xlink:href", "<image xlink:href>", '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"><image xlink:href="{url}"/></svg>'),
+    ("svg script href", "<script href>", '<svg xmlns="http://www.w3.org/2000/svg"><script href="{url}"></script></svg>'),
+    ("svg use href", "<use href>", '<svg xmlns="http://www.w3.org/2000/svg"><use href="{url}"/></svg>'),
+    # The background attribute, an image button, a link's image set and a link's ping.
+    ("table background", "<table background>", '<table background="{url}"><tr><td>x</td></tr></table>'),
+    ("input image", "<input src>", '<input type="image" src="{url}" alt="x">'),
+    ("link imagesrcset", "<link imagesrcset>", '<link rel="preload" as="image" href="ok.png" imagesrcset="{url} 2x">'),
+    ("a ping", "<a ping>", '<a href="other.html" ping="{url}">p</a>'),
+    # A link loads whatever its rel, unless every rel names a page to go to.
+    ("link prefetch", "<link href>", '<link rel="prefetch" href="{url}">'),
+    ("link preconnect", "<link href>", '<link rel="preconnect" href="{url}">'),
+    ("link dns-prefetch", "<link href>", '<link rel="dns-prefetch" href="{url}">'),
+    ("link prerender", "<link href>", '<link rel="prerender" href="{url}">'),
+    ("link apple-touch-icon", "<link href>", '<link rel="apple-touch-icon" href="{url}">'),
+    ("link mask-icon", "<link href>", '<link rel="mask-icon" href="{url}">'),
+    ("link search", "<link href>", '<link rel="search" type="application/opensearchdescription+xml" href="{url}">'),
+    ("link alternate stylesheet", "<link href>", '<link rel="alternate stylesheet" href="{url}">'),
+    ("link without a rel", "<link href>", '<link href="{url}">'),
+    # A refresh goes to its address by itself; a frame's srcdoc is a page of its own.
+    ("meta refresh", "<meta refresh>", '<meta http-equiv="refresh" content="0; url={url}">'),
+    ("iframe srcdoc", "<iframe srcdoc> <img src>", '<iframe srcdoc="<img src=&quot;{url}&quot; alt=&quot;x&quot;>"></iframe>'),
+    # CSS: an image set's strings, and url( written with an escape.
+    ("style element image-set()", "<style> image-set()", '<style>.a {{ background-image: image-set("{url}" 1x); }}</style>'),
+    ("style attribute -webkit-image-set()", "<div style> image-set()", "<div style=\"background-image: -webkit-image-set('{url}' 1x)\"></div>"),
+    ("style element escaped url()", "<style> url()", "<style>.a {{ background: \\75 rl({url}); }}</style>"),
 )
 
 # (the case, what a finding names, the style sheet).
@@ -466,6 +495,23 @@ _CSS_FORMS = (
     ("@import ''", "@import", "@import '{url}';"),
     ('@import ""', "@import", '@import "{url}";'),
     ("@import url()", "@import url()", "@import url({url});"),
+    ("image-set()", "image-set()", 'a {{ background-image: image-set("{url}" 1x); }}'),
+    ("-webkit-image-set()", "image-set()", "a {{ background-image: -webkit-image-set('{url}' 1x); }}"),
+    ("escaped url()", "url()", "a {{ background: \\75 rl({url}); }}"),
+    ("escaped URL( in capitals", "url()", "a {{ background: \\55 RL('{url}'); }}"),
+    ("escaped @import", "@import", '@\\69mport "{url}";'),
+)
+
+# (the case, what a finding names, the page's body; {url} a data: URL): a data: URL whose content
+# would be a document, a script or a style sheet, which could load from another host itself.
+_DATA_DOCUMENTS = (
+    ("iframe", "<iframe src>", '<iframe src="{url}"></iframe>'),
+    ("object", "<object data>", '<object data="{url}"></object>'),
+    ("embed", "<embed src>", '<embed src="{url}">'),
+    ("script", "<script src>", '<script src="{url}"></script>'),
+    ("link stylesheet", "<link href>", '<link rel="stylesheet" href="{url}">'),
+    ("meta refresh", "<meta refresh>", '<meta http-equiv="refresh" content="0; url={url}">'),
+    ("style element @import", "<style> @import", '<style>@import "{url}";</style>'),
 )
 
 
@@ -516,6 +562,28 @@ def _cases():
     case("css path from the server's root", {"index.html": _page(), "css/a.css": "a { background: url(/ok.png); }"}, ROOT_PATH)
     case("css data: URL", {"index.html": _page(), "css/a.css": "a { content: url('data:image/svg+xml,<svg xmlns=\"http://www.w3.org/2000/svg\">\\\n</svg>'); }"}, None)
     case("css comment", {"index.html": _page(), "css/a.css": "/* url(https://example.com/x.css) */ a { color: red; }"}, None)
+    case("css url() with an escaped colon", {"index.html": _page(), "css/a.css": 'a { background: url("https\\3a //cdn.example.com/x"); }'}, ANOTHER_HOST.format(what="url()"))
+    case("css image-set() of a data: image", {"index.html": _page(), "css/a.css": 'a { background-image: image-set("data:image/png;base64,AAA=" 1x); }'}, None)
+    # A data: document, script or style sheet fails; a data: image or icon passes.
+    for name, what, template in _DATA_DOCUMENTS:
+        case("data: {}".format(name), {"index.html": _page(template.format(url="data:text/html;base64,PHA+eDwvcD4="))}, DATA_DOCUMENT.format(what=what))
+    case("css @import of a data: style sheet", {"index.html": _page(), "css/a.css": '@import "data:text/css,a{}";'}, DATA_DOCUMENT.format(what="@import"))
+    case("data: icon", {"index.html": _page("", '<link rel="icon" href="data:,">')}, None)
+    # Addresses to go to, not to load, pass outside the site; inline SVG's namespaces are no addresses.
+    case("link canonical to an outside page", {"index.html": _page("", '<link rel="canonical" href="https://example.com/page">')}, None)
+    case("links license and alternate to outside pages", {"index.html": _page("", '<link rel="license" href="https://example.com/license"><link rel="alternate" type="application/rss+xml" href="https://example.com/feed">')}, None)
+    case("form action and formaction to outside pages", {"index.html": _page('<form action="https://example.com/search"><button formaction="//example.com/other">go</button></form>')}, None)
+    case("cite and longdesc to outside pages", {"index.html": _page('<blockquote cite="https://example.com/q">q</blockquote><img src="ok.png" longdesc="https://example.com/d" alt="x">')}, None)
+    case("inline svg with its namespaces and a link", {"index.html": _page('<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"><a xlink:href="https://example.com/page"><path d="M0 0"/></a></svg>')}, None)
+    case("form action to no file", {"index.html": _page('<form action="missing.html"></form>')}, NO_SUCH_FILE)
+    case("cite to no file", {"index.html": _page('<q cite="missing.html">q</q>')}, NO_SUCH_FILE)
+    case("ping to no file", {"index.html": _page('<a href="other.html" ping="missing.html">p</a>')}, NO_SUCH_FILE)
+    case("svg use of no id", {"index.html": _page('<svg><use href="#nope"/></svg>')}, NO_SUCH_ID.format(target="index.html"))
+    case("meta refresh to no file", {"index.html": _page("", '<meta http-equiv="refresh" content="5; URL=\'missing.html\'">')}, NO_SUCH_FILE)
+    # mdBook's playground: its script fetches from play.rust-lang.org for every such element.
+    case("mdBook's playground", {"index.html": _page('<pre class="playground"><code class="language-rust">fn main() {}</code></pre>')}, PLAYGROUND)
+    case("a runnable rust block", {"index.html": _page('<pre><code class="language-rust mdbook-runnable">fn main() {}</code></pre>')}, PLAYGROUND)
+    case("a rust block that does not run", {"index.html": _page('<pre><code class="language-rust">fn main() {}</code></pre><div class="playgrounds">x</div>')}, None)
     return cases
 
 
