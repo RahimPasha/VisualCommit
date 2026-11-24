@@ -7,20 +7,30 @@ Usage, with the standard library alone (run it with ``python3 -I``):
     python3 -I scripts/check-guide-links.py <site folder>
     python3 -I scripts/check-guide-links.py --self-test
 
-Over each ``.html`` file under the folder:
-  * every relative ``href``, ``src`` and ``srcset`` entry (and a media element's ``poster``, an
-    object's ``data``) resolves to a file of the site, and every ``#fragment`` to an ``id`` (or an
+Over each ``.html`` file under the folder, the addresses of every element's ``href``,
+``xlink:href``, ``src``, ``srcset``, ``imagesrcset``, ``poster``, ``data``, ``background``,
+``ping``, ``action``, ``formaction``, ``cite`` and ``longdesc``, of a ``meta`` refresh's content,
+and of every ``url(...)``, ``@import`` and ``image-set(...)`` string in a ``style`` attribute or
+element (an ``iframe``'s ``srcdoc`` is read as a page of its own):
+  * every relative one resolves to a file of the site, and every ``#fragment`` to an ``id`` (or an
     anchor's ``name``) in its target; a fragment alone names the page itself;
-  * nothing that loads names another host or a protocol-relative address: ``script``, ``img``
-    (its ``src`` and each ``srcset`` entry), ``iframe``, ``source``, ``video`` (with its
-    ``poster``), ``audio``, ``track``, ``object``, ``embed``, a ``link`` whose ``rel`` is
-    ``stylesheet``, ``icon``, ``preload``, ``modulepreload`` or ``manifest``, and every ``url(...)``
-    and ``@import`` in an inline ``style`` attribute or a ``style`` element.
-Over each ``.css`` file under the folder: every ``url(...)`` and ``@import`` resolves to a file of
-the site; a ``data:`` URL passes.
+  * nothing that loads names another host or a protocol-relative address. Every address loads
+    except the ones a user goes to: an ``a``'s or ``area``'s ``href`` (an SVG ``a``'s
+    ``xlink:href`` too), a ``form``'s ``action`` and a button's ``formaction``, a quotation's
+    ``cite``, an image's ``longdesc``, and a ``link``'s ``href`` whose every ``rel`` is
+    ``alternate``, ``author``, ``canonical``, ``help``, ``license``, ``next`` or ``prev``;
+  * a ``data:`` URL passes, except where it would be a document, a script or a style sheet, which
+    could load from another host itself: an ``iframe``'s, ``frame``'s, ``embed``'s or ``script``'s
+    ``src``, an ``object``'s ``data``, a ``link`` to a style sheet, module or manifest, a refresh,
+    an ``@import``;
+  * no element has the class ``playground`` or ``mdbook-runnable``, for which mdBook's script
+    fetches from play.rust-lang.org.
+Over each ``.css`` file under the folder: every ``url(...)``, ``@import`` and ``image-set(...)``
+string resolves to a file of the site; a ``data:`` URL passes, except in an ``@import``. CSS is
+read with its escapes decoded, so that ``\\75 rl(`` is ``url(``.
 
-Links to outside pages pass. A ``<base href>`` that is a path from the server's root (mdBook's
-404 page has ``/VisualCommit/``, from book.toml's site-url) stands for the site's own root.
+A ``<base href>`` that is a path from the server's root (mdBook's 404 page has ``/VisualCommit/``,
+from book.toml's site-url) stands for the site's own root.
 
 Findings print as ``<file>: <url>: <reason>``. Exit code 0 when the site is clean, 1 with
 findings, 2 for a usage error. ``--self-test`` checks one good and one bad case per rule, and one
@@ -37,24 +47,34 @@ import sys
 import tempfile
 import urllib.parse
 
-# What each element loads, by attribute (D441, D451).
-LOADING_ATTRIBUTES = {
-    "script": ("src",),
-    "img": ("src", "srcset"),
-    "iframe": ("src",),
-    "source": ("src", "srcset"),
-    "video": ("src", "poster"),
-    "audio": ("src",),
-    "track": ("src",),
-    "object": ("data",),
-    "embed": ("src",),
+# The attributes that hold addresses, on any element (D441, D451): each relative one must
+# resolve, and each that loads must not name another host. srcset and imagesrcset hold image
+# candidates, ping a list of addresses. xmlns and xmlns:* are names, never addresses.
+LINK_ATTRIBUTES = ("href", "xlink:href", "src", "srcset", "imagesrcset", "poster", "data", "background",
+                   "ping", "action", "formaction", "cite", "longdesc")
+
+# The addresses a user goes to rather than ones the page loads, by element and attribute: an
+# anchor's, a form's target, a quotation's source, an image's long description. Every other
+# address loads, whatever its element (an SVG image, use or script by href, an image button).
+NAVIGATION = {
+    ("a", "href"), ("a", "xlink:href"), ("area", "href"),
+    ("form", "action"), ("button", "formaction"), ("input", "formaction"),
+    ("blockquote", "cite"), ("q", "cite"), ("del", "cite"), ("ins", "cite"),
+    ("img", "longdesc"), ("iframe", "longdesc"),
 }
 
-# A link loads its href when its rel holds one of these.
-LOADING_RELS = frozenset({"stylesheet", "icon", "preload", "modulepreload", "manifest"})
+# A link goes to its href, and loads nothing, only when it has a rel and every rel is one of
+# these; any other rel, a stylesheet among them, loads it (prefetch, preconnect, an icon, an
+# OpenSearch description, which a browser may fetch by itself).
+NAVIGATION_RELS = frozenset({"alternate", "author", "canonical", "help", "license", "next", "prev"})
 
-# The attributes whose relative addresses must resolve, on any element.
-LINK_ATTRIBUTES = ("href", "src", "srcset", "poster", "data")
+# Where a data: URL holds a document, a script or a style sheet, which could load from another
+# host itself and whose content the check does not read. A data: image, font or medium passes.
+DATA_DOCUMENTS = {("iframe", "src"), ("frame", "src"), ("object", "data"), ("embed", "src"), ("script", "src")}
+DATA_DOCUMENT_RELS = frozenset({"stylesheet", "modulepreload", "manifest"})
+
+# Class tokens for which mdBook's book.js fetches from play.rust-lang.org (a runnable Rust block).
+PLAYGROUND_CLASSES = frozenset({"playground", "mdbook-runnable"})
 
 SCHEME = re.compile(r"^[A-Za-z][A-Za-z0-9+.-]*:")
 
@@ -101,25 +121,55 @@ def srcset_urls(value):
     return urls
 
 
+_HEX_DIGITS = "0123456789abcdefABCDEF"
+
+
+def _read_escape(text, i):
+    """A CSS escape whose backslash is text[i] and is not before a line break: the character it
+    stands for and the index after it. Up to six hex digits, and one white space after them, name
+    a code point (0, a surrogate or one past U+10FFFF is U+FFFD); any other character is itself."""
+    n = len(text)
+    j = i + 1
+    if j >= n:
+        return "�", n
+    if text[j] not in _HEX_DIGITS:
+        return text[j], j + 1
+    end = j
+    while end < n and end - j < 6 and text[end] in _HEX_DIGITS:
+        end += 1
+    code = int(text[j:end], 16)
+    if text.startswith("\r\n", end):
+        end += 2
+    elif end < n and text[end] in " \t\n\r\f":
+        end += 1
+    if code == 0 or 0xD800 <= code <= 0xDFFF or code > 0x10FFFF:
+        return "�", end
+    return chr(code), end
+
+
+def _is_escape(text, i):
+    return text[i] == "\\" and i + 1 < len(text) and text[i + 1] not in "\n\r\f"
+
+
 def _read_string(text, i):
-    """A CSS string starting at text[i] (a quote): its value and the index after it. A backslash
-    before a line break continues the string; a backslash before any other character is that
-    character."""
+    """A CSS string starting at text[i] (a quote): its value, escapes decoded, and the index after
+    it. A backslash before a line break continues the string."""
     quote = text[i]
     i += 1
     value = []
     n = len(text)
     while i < n:
         character = text[i]
-        if character == "\\" and i + 1 < n:
-            following = text[i + 1]
-            if following == "\r" and text.startswith("\r\n", i + 1):
+        if character == "\\":
+            if i + 1 >= n:
+                i += 1
+            elif text.startswith("\r\n", i + 1):
                 i += 3
-            elif following in "\n\r\f":
+            elif text[i + 1] in "\n\r\f":
                 i += 2
             else:
-                value.append(following)
-                i += 2
+                decoded, i = _read_escape(text, i)
+                value.append(decoded)
             continue
         if character == quote:
             return "".join(value), i + 1
@@ -134,8 +184,29 @@ def _skip_space(text, i):
     return i
 
 
+def _is_name_character(text, i):
+    character = text[i]
+    return character.isalnum() or character in "-_" or ord(character) >= 0x80 or _is_escape(text, i)
+
+
+def _read_name(text, i):
+    """The run of name characters at text[i] (an identifier, or a number with its unit), escapes
+    decoded, and the index after it."""
+    name = []
+    n = len(text)
+    while i < n and _is_name_character(text, i):
+        if text[i] == "\\":
+            decoded, i = _read_escape(text, i)
+            name.append(decoded)
+        else:
+            name.append(text[i])
+            i += 1
+    return "".join(name), i
+
+
 def _read_url(text, i):
-    """The address of a url( whose parenthesis ends before text[i], and the index after its ')'."""
+    """The address of a url( whose parenthesis ends before text[i], escapes decoded, and the index
+    after its ')'."""
     i = _skip_space(text, i)
     if i < len(text) and text[i] in "\"'":
         url, i = _read_string(text, i)
@@ -143,16 +214,29 @@ def _read_url(text, i):
         if i < len(text) and text[i] == ")":
             i += 1
         return url, i
-    start = i
-    while i < len(text) and text[i] != ")":
-        i += 2 if text[i] == "\\" else 1
-    return text[start:i].strip(), min(i + 1, len(text))
+    url = []
+    n = len(text)
+    while i < n and text[i] != ")":
+        if _is_escape(text, i):
+            decoded, i = _read_escape(text, i)
+            url.append(decoded)
+        else:
+            url.append(text[i])
+            i += 1
+    return "".join(url).strip(), min(i + 1, n)
+
+
+_IMAGE_SETS = ("image-set", "-webkit-image-set")
 
 
 def css_references(text):
     """Every address a style sheet loads, as (form, address): 'url()', '@import' with a string,
-    and '@import url()'. Comments and strings outside url( are skipped."""
+    '@import url()', and each string inside 'image-set()' or '-webkit-image-set()'. Names are read
+    as CSS reads them, escapes decoded, so that '\\75 rl(' is url( too; comments and other strings
+    are skipped."""
     references = []
+    # The functions open around the reader: a name for one whose strings are image sets, else None.
+    functions = []
     i, n = 0, len(text)
     while i < n:
         if text.startswith("/*", i):
@@ -161,37 +245,69 @@ def css_references(text):
             continue
         character = text[i]
         if character in "\"'":
-            _, i = _read_string(text, i)
+            value, i = _read_string(text, i)
+            if any(function is not None for function in functions):
+                references.append(("image-set()", value))
             continue
-        if text[i:i + 4].lower() == "url(" and (i == 0 or not (text[i - 1].isalnum() or text[i - 1] in "-_")):
-            url, i = _read_url(text, i + 4)
-            references.append(("url()", url))
-            continue
-        if text[i:i + 7].lower() == "@import":
-            j = _skip_space(text, i + 7)
+        if character == "@" and i + 1 < n and _is_name_character(text, i + 1):
+            keyword, i = _read_name(text, i + 1)
+            if keyword.lower() != "import":
+                continue
+            j = _skip_space(text, i)
             if j < n and text[j] in "\"'":
                 url, i = _read_string(text, j)
                 references.append(("@import", url))
                 continue
-            if text[j:j + 4].lower() == "url(":
-                url, i = _read_url(text, j + 4)
-                references.append(("@import url()", url))
-                continue
+            if j < n and _is_name_character(text, j):
+                name, k = _read_name(text, j)
+                if name.lower() == "url" and k < n and text[k] == "(":
+                    url, i = _read_url(text, k + 1)
+                    references.append(("@import url()", url))
+                    continue
             i = j
             continue
+        if _is_name_character(text, i):
+            name, i = _read_name(text, i)
+            if i < n and text[i] == "(":
+                lower = name.lower()
+                if lower == "url":
+                    url, i = _read_url(text, i + 1)
+                    references.append(("url()", url))
+                    continue
+                functions.append(lower if lower in _IMAGE_SETS else None)
+                i += 1
+            continue
+        if character == "(":
+            functions.append(None)
+        elif character == ")" and functions:
+            functions.pop()
         i += 1
     return references
 
 
+def refresh_url(content):
+    """The address of a meta refresh's content (``5; url=page.html``), as HTML reads it, or ''."""
+    match = re.match(r"\s*[0-9.]*\s*[;,]?\s*(?:url\s*=\s*)?(.*)$", content, re.IGNORECASE | re.DOTALL)
+    url = match.group(1).strip() if match else ""
+    if url[:1] in ("'", '"'):
+        end = url.find(url[0], 1)
+        url = url[1:] if end < 0 else url[1:end]
+    return url.strip()
+
+
 class _Page(html.parser.HTMLParser):
-    """One HTML page as the check reads it: its ids, its base and every address it names."""
+    """One HTML page as the check reads it: its ids, its base, every address it names and its
+    elements for mdBook's playground."""
 
     def __init__(self):
         super().__init__(convert_charrefs=True)
         self.ids = set()
         self.base = None
-        # (what, address, loads): what is "<element attribute>", loads whether the address loads.
+        # (what, address, loads, document): what is "<element attribute>", loads whether the
+        # address loads, document whether a data: URL there is a document, script or style sheet.
         self.addresses = []
+        # (what, class token) of each element mdBook's playground script fetches for.
+        self.playgrounds = []
         self._style_depth = 0
         self._style_text = []
 
@@ -214,21 +330,42 @@ class _Page(html.parser.HTMLParser):
         if tag == "base" and "href" in values and self.base is None:
             self.base = values["href"]
             return
-        loading = set(LOADING_ATTRIBUTES.get(tag, ()))
-        if tag == "link":
-            rels = set(values.get("rel", "").lower().split())
-            if rels & LOADING_RELS:
-                loading.add("href")
+        rels = set(values.get("rel", "").lower().split()) if tag == "link" else set()
         for attribute in LINK_ATTRIBUTES:
             if attribute not in values:
                 continue
             what = "<{} {}>".format(tag, attribute)
-            urls = srcset_urls(values[attribute]) if attribute == "srcset" else [values[attribute].strip()]
+            value = values[attribute]
+            if attribute in ("srcset", "imagesrcset"):
+                urls = srcset_urls(value)
+            elif attribute == "ping":
+                urls = value.split()
+            else:
+                urls = [value.strip()]
+            if tag == "link" and attribute == "href":
+                loads = not rels or not rels <= NAVIGATION_RELS
+                document = bool(rels & DATA_DOCUMENT_RELS)
+            else:
+                loads = (tag, attribute) not in NAVIGATION
+                document = (tag, attribute) in DATA_DOCUMENTS
             for url in urls:
-                self.addresses.append((what, url, attribute in loading))
+                self.addresses.append((what, url, loads, document))
+        if tag == "meta" and values.get("http-equiv", "").strip().lower() == "refresh":
+            self.addresses.append(("<meta refresh>", refresh_url(values.get("content", "")), True, True))
+        if "srcdoc" in values:
+            # A frame's srcdoc is a page of its own, whose relative addresses resolve as this one's.
+            inner = _Page()
+            inner.feed(values["srcdoc"])
+            inner.close()
+            prefix = "<{} srcdoc> ".format(tag)
+            self.addresses.extend((prefix + what, url, loads, document) for what, url, loads, document in inner.addresses)
+            self.playgrounds.extend((prefix + what, token) for what, token in inner.playgrounds)
+        for token in values.get("class", "").split():
+            if token in PLAYGROUND_CLASSES:
+                self.playgrounds.append(("<{} class>".format(tag), token))
         if "style" in values:
             for form, url in css_references(values["style"]):
-                self.addresses.append(("<{} style> {}".format(tag, form), url, True))
+                self.addresses.append(("<{} style> {}".format(tag, form), url, True, form.startswith("@import")))
         if tag == "style":
             self._style_depth += 1
             self._style_text = []
@@ -240,7 +377,7 @@ class _Page(html.parser.HTMLParser):
     def _end_style(self):
         self._style_depth = 0
         for form, url in css_references("".join(self._style_text)):
-            self.addresses.append(("<style> " + form, url, True))
+            self.addresses.append(("<style> " + form, url, True, form.startswith("@import")))
         self._style_text = []
 
     def handle_data(self, data):
@@ -323,7 +460,9 @@ class Checker:
                 folder = self.root
             else:
                 folder = os.path.normpath(os.path.join(folder, urllib.parse.unquote(base)))
-        for what, url, loads in parser.addresses:
+        for what, token in parser.playgrounds:
+            self._find(page, '{}="{}"'.format(what, token), PLAYGROUND)
+        for what, url, loads, document in parser.addresses:
             if url == "":
                 continue
             if url.startswith("//"):
@@ -331,8 +470,12 @@ class Checker:
                     self._find(page, url, PROTOCOL_RELATIVE.format(what=what))
                 continue
             if SCHEME.match(url):
-                if loads and not url.lower().startswith("data:"):
+                if not loads:
+                    continue
+                if not url.lower().startswith("data:"):
                     self._find(page, url, ANOTHER_HOST.format(what=what))
+                elif document:
+                    self._find(page, url, DATA_DOCUMENT.format(what=what))
                 continue
             if url.startswith("#"):
                 self._resolve(page, url, folder, parser.ids)
@@ -352,7 +495,11 @@ class Checker:
             text = handle.read()
         folder = os.path.dirname(sheet)
         for form, url in css_references(text):
-            if url == "" or url.lower().startswith("data:") or url.startswith("#"):
+            if url == "" or url.startswith("#"):
+                continue
+            if url.lower().startswith("data:"):
+                if form.startswith("@import"):
+                    self._find(sheet, url, DATA_DOCUMENT.format(what=form))
                 continue
             if url.startswith("//"):
                 self._find(sheet, url, PROTOCOL_RELATIVE.format(what=form))
