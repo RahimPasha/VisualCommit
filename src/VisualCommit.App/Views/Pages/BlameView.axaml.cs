@@ -233,7 +233,8 @@ public partial class BlameView : UserControl
 
     /// <summary>
     /// A run's menu (BD8, BD9): a right-click on the gutter or the text picks the run, with the caret
-    /// on its first line, then opens it at the pointer; the Menu key or Shift+F10 at the top of the
+    /// on its first line (one on the text inside its selection leaves the selection and the caret as
+    /// they were), then opens it at the pointer; the Menu key or Shift+F10 at the top of the
     /// text, for the picked run, or the caret's while none is picked (a page just opened has run 0's).
     /// </summary>
     private void OnContextRequested(object? sender, ContextRequestedEventArgs e)
@@ -265,7 +266,9 @@ public partial class BlameView : UserControl
             return;
         }
 
-        if (openedBy == MenuOpenedBy.Pointer)
+        // A right-click on the text inside its selection leaves the selection and the caret as they
+        // were, as editors do: the run's menu has no copy of its own, and the selection stays to copy.
+        if (openedBy == MenuOpenedBy.Pointer && !IsInsideSelection(e))
         {
             PutCaretOn(run);
         }
@@ -273,6 +276,19 @@ public partial class BlameView : UserControl
         viewModel.Pick(run);
         layer.Open(viewModel.MenuFor(run), position, openedBy);
         e.Handled = true;
+    }
+
+    /// <summary>The pointer of <paramref name="e"/> lies on the text, inside its selection.</summary>
+    private bool IsInsideSelection(ContextRequestedEventArgs e)
+    {
+        var area = BlameText.TextArea;
+        var view = area.TextView;
+        return !area.Selection.IsEmpty
+            && BlameText.Document is { } document
+            && e.TryGetPosition(view, out var onText)
+            && new Rect(view.Bounds.Size).Contains(onText)
+            && view.GetPosition(onText + view.ScrollOffset) is { } at
+            && area.Selection.Contains(document.GetOffset(at.Location));
     }
 
     /// <summary>Esc (11.1): the page closes, unless a diff covers it or a text box has the focus.</summary>
