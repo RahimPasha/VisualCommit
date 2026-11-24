@@ -46,6 +46,11 @@ public sealed class SingleInstanceGuardTests
     /// <summary>The caller that asks as the notice's "Try again" does (<see cref="InstanceNoticeViewModel.RetryOn"/>).</summary>
     private const string TryAgain = "Try again";
 
+    /// <summary>Every bit that lets a user other than the owner read, write or enter.</summary>
+    private const UnixFileMode GroupOrOther =
+        UnixFileMode.GroupRead | UnixFileMode.GroupWrite | UnixFileMode.GroupExecute
+        | UnixFileMode.OtherRead | UnixFileMode.OtherWrite | UnixFileMode.OtherExecute;
+
     [Fact]
     public void A_second_guard_on_a_taken_folder_is_held_and_one_on_another_folder_takes_it()
     {
@@ -503,6 +508,47 @@ public sealed class SingleInstanceGuardTests
     }
 
     [Fact]
+    public void On_macOS_and_Linux_the_lock_file_and_the_folders_the_guard_makes_are_the_users_alone()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "Windows has no Unix file modes; CI's macOS and Linux jobs run this.");
+        using var root = new TempDirectory("guard");
+        var parent = root.Combine("parent");
+        var paths = new AppPaths(Path.Combine(parent, "data folder"));
+
+        using var guard = SingleInstanceGuard.TryTake(paths, new RecordingLog(), Patient);
+
+        // Another user who could open the lock file could hold its lock, and every start of the
+        // owner's would then find the folder held. The umask can only take bits away.
+        Assert.Equal(GuardOutcome.Taken, guard.Outcome);
+        Assert.Equal(UnixFileMode.None, UnixMode(paths.InstanceLockFile) & GroupOrOther);
+        foreach (var folder in new[] { parent, paths.DataDirectory })
+        {
+            Assert.Equal(UnixFileMode.None, UnixMode(folder) & GroupOrOther);
+        }
+    }
+
+    [Fact]
+    public void On_macOS_and_Linux_a_lock_file_and_a_data_folder_that_exist_keep_their_modes()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "Windows has no Unix file modes; CI's macOS and Linux jobs run this.");
+        using var root = new TempDirectory("guard");
+        var paths = DataFolder(root);
+        Directory.CreateDirectory(paths.DataDirectory);
+        File.WriteAllText(paths.InstanceLockFile, string.Empty);
+        const UnixFileMode Readable = UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.GroupRead | UnixFileMode.OtherRead;
+        const UnixFileMode Listable = Readable | UnixFileMode.UserExecute | UnixFileMode.GroupExecute | UnixFileMode.OtherExecute;
+        SetUnixMode(paths.DataDirectory, Listable);
+        SetUnixMode(paths.InstanceLockFile, Readable);
+
+        using var guard = SingleInstanceGuard.TryTake(paths, new RecordingLog(), Patient);
+
+        // The guard narrows only what it makes itself.
+        Assert.Equal(GuardOutcome.Taken, guard.Outcome);
+        Assert.Equal(Listable, UnixMode(paths.DataDirectory));
+        Assert.Equal(Readable, UnixMode(paths.InstanceLockFile));
+    }
+
+    [Fact]
     public void A_data_folder_under_a_file_is_unavailable_with_a_warning_and_nothing_thrown()
     {
         using var root = new TempDirectory("guard");
@@ -680,6 +726,19 @@ public sealed class SingleInstanceGuardTests
         },
         _ => throw new ArgumentOutOfRangeException(nameof(caller), caller, "No such caller."),
     };
+
+    private static UnixFileMode UnixMode(string path) =>
+        OperatingSystem.IsWindows() ? throw new PlatformNotSupportedException("Windows has no Unix file modes.") : File.GetUnixFileMode(path);
+
+    private static void SetUnixMode(string path, UnixFileMode mode)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            throw new PlatformNotSupportedException("Windows has no Unix file modes.");
+        }
+
+        File.SetUnixFileMode(path, mode);
+    }
 
     /// <summary>An endpoint of the guard's form with nothing at it.</summary>
     private static string FreeEndpoint()
