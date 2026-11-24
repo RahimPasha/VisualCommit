@@ -14,6 +14,8 @@ using VisualCommit.App.Views.Dialogs;
 using VisualCommit.Core.Hosting;
 using VisualCommit.Core.Operations;
 using VisualCommit.Core.Settings;
+using VisualCommit.Hosting;
+using VisualCommit.Hosting.AzureDevOps;
 using VisualCommit.Testing;
 using VisualCommit.Testing.Headless;
 using Xunit;
@@ -23,16 +25,23 @@ namespace VisualCommit.App.Tests;
 /// <summary>
 /// <c>VcLinkButton</c>'s keyboard frame (<c>Theme/Controls.axaml</c>; phase 8a's A1 step 9, design
 /// 8.3.1): a link focused by the keyboard shows its whole text, its underline and Fluent's frame
-/// around them, not over them, in About (dark and light) and in the sign-in dialog (GitLab's, with
-/// both its links, 4 apart); the frame moves nothing, a link not focused draws nothing outside its
-/// bounds, and the frame takes no pointer: a hover or a click on it is none on the link; and the
-/// frame is the keyboard's alone: a link focused by a click is underlined without it; and the
-/// frame keeps clear of the text at every display scaling from 1 to 2 in steps of 0.25. The
-/// headless app, its pictures read with <see cref="LinkFrame"/>;
+/// around them, not over them, in About (dark and light) and in the sign-in dialogs (GitLab's, with
+/// both its links, 4 apart, and GitHub's and Azure DevOps', with their one); the frame moves
+/// nothing, meets no other control, a link not focused draws nothing outside its bounds, and the
+/// frame takes no pointer: a hover or a click on it is none on the link; and the frame is the
+/// keyboard's alone: a link focused by a click is underlined without it; and the frame keeps clear
+/// of the text at every display scaling from 1 to 2 in steps of 0.25. Those are all the app's
+/// <c>VcLinkButton</c>s. The headless app, its pictures read with <see cref="LinkFrame"/>;
 /// <see cref="TestPictures"/> saves them when asked.
 /// </summary>
 public class LinkFocusFrameTests
 {
+    /// <summary>A made-up organization for Azure DevOps' box, which enables its token link.</summary>
+    private const string Organization = "Fernhill-Labs";
+
+    /// <summary>The providers whose sign-in dialog has one link, <c>SignInTokenLink</c>.</summary>
+    private static readonly HostingProvider[] OneLinkProviders = [HostingProvider.GitHub, HostingProvider.AzureDevOps];
+
     /// <summary>
     /// How far the frame reaches outside the link's bounds on each side: 1 of air, Fluent's 1 and 2.
     /// Above and below, where the line box keeps the text and its underline 2 and 1 px clear at a
@@ -50,6 +59,24 @@ public class LinkFocusFrameTests
 
     /// <summary>GitLab's sign-in links, each with the Shift+Tabs from the token box that focus it, at each of <see cref="Scalings"/>.</summary>
     public static TheoryData<string, int, double> SignInLinksScaled => Scaled(("SignInLegacyTokenLink", 1), ("SignInTokenLink", 2));
+
+    /// <summary>GitHub's and Azure DevOps' token link at each of <see cref="Scalings"/>.</summary>
+    public static TheoryData<HostingProvider, double> TokenLinksScaled
+    {
+        get
+        {
+            var data = new TheoryData<HostingProvider, double>();
+            foreach (var provider in OneLinkProviders)
+            {
+                foreach (var scale in Scalings)
+                {
+                    data.Add(provider, scale);
+                }
+            }
+
+            return data;
+        }
+    }
 
     /// <summary>
     /// About's links focused by Tab at every scaling from 1 to 2 in steps of 0.25, dark (the card's
@@ -93,6 +120,23 @@ public class LinkFocusFrameTests
         await WaitForFocusAsync(app, id);
         TestPictures.Save(app, Text($"link-frame-{id}-{scale:0.00}"));
         AssertFramed(app, unfocused, app.Capture(), Link(app, id), id, scale);
+    }
+
+    /// <summary>
+    /// GitHub's and Azure DevOps' token link, their dialogs' one link (the help 6 above it, the next
+    /// label 12 below), focused by Shift+Tab at the same scalings, as About's.
+    /// </summary>
+    [AvaloniaTheory]
+    [MemberData(nameof(TokenLinksScaled))]
+    public async Task A_GitHub_or_Azure_DevOps_token_link_keeps_its_frame_clear_of_its_text_at_every_scaling(HostingProvider provider, double scale)
+    {
+        using var data = new TempDirectory("data");
+        using var app = await StartOnSignInAsync(data, provider, scale);
+        var unfocused = app.Capture();
+
+        await ShiftTabToTokenLinkAsync(app, provider);
+        TestPictures.Save(app, Text($"link-frame-{provider}-SignInTokenLink-{scale:0.00}"));
+        AssertFramed(app, unfocused, app.Capture(), Link(app, "SignInTokenLink"), Text($"{provider}'s SignInTokenLink"), scale);
     }
 
     [AvaloniaTheory]
@@ -185,6 +229,24 @@ public class LinkFocusFrameTests
                 AssertClearOfNeighbours(app, card, Link(app, id));
             }
         }
+
+        foreach (var provider in OneLinkProviders)
+        {
+            using var app = await StartOnSignInAsync(data, provider);
+            var what = Text($"{provider}'s SignInTokenLink");
+            app.PressKey(Key.Tab);
+            await WaitForFocusAsync(app, "CancelButton");
+            var card = app.TopDialogView!.GetVisualDescendants().OfType<Border>().Single(border => border.Name == "SignInCard");
+            var places = Places(app, card);
+            AssertDrawsInside(app, Link(app, "SignInTokenLink"), (0, 0), what + " without the focus");
+
+            app.PressKey(Key.Tab, RawInputModifiers.Shift);
+            await WaitForFocusAsync(app, "SignInToken");
+            await ShiftTabToTokenLinkAsync(app, provider);
+            Assert.Equal(places, Places(app, card));
+            AssertDrawsInside(app, Link(app, "SignInTokenLink"), FrameReach, what + " focused");
+            AssertClearOfNeighbours(app, card, Link(app, "SignInTokenLink"));
+        }
     }
 
     /// <summary>
@@ -227,6 +289,27 @@ public class LinkFocusFrameTests
             }
 
             AssertPointerOnFramePressesNothing(app, Link(app, "SignInLegacyTokenLink"), "SignInLegacyTokenLink");
+        }
+
+        // GitHub's and Azure DevOps' token link, on a session that has the provider: a click on the
+        // link itself asks for its page, so a click on the frame that pressed it would be seen.
+        foreach (var provider in OneLinkProviders)
+        {
+            using var app = await StartOnSignInAsync(data, provider);
+            var what = Text($"{provider}'s SignInTokenLink");
+            var link = Link(app, "SignInTokenLink");
+            var unfocused = HitsOnRing(app, link);
+            await ShiftTabToTokenLinkAsync(app, provider);
+            AssertRingHitsAsWithoutFocus(app, link, unfocused, what);
+            AssertPointerOnFramePressesNothing(app, link, "SignInTokenLink");
+
+            var requests = app.Launcher.Requests.Count;
+            app.Click(link);
+            await app.WaitForAsync(() => app.Launcher.Requests.Count > requests, $"the page of {what} asked for");
+            var page = Assert.Single(app.Launcher.Requests.Skip(requests)).FullPath;
+            var expected = provider == HostingProvider.AzureDevOps ? $"https://dev.azure.com/{Organization}/" : "https://github.com/";
+            Assert.True(page.StartsWith(expected, StringComparison.Ordinal), $"A click on {what} asked for {page}, not a page under {expected}.");
+            app.MoveToNeutral();
         }
     }
 
@@ -301,9 +384,9 @@ public class LinkFocusFrameTests
     /// <paramref name="scale"/> before the pointer first moves (set later, the scaling re-reads the
     /// pointer's last place in the new scaling's pixels and hovers what lies there).
     /// </summary>
-    private static ShellDriver StartScaled(TempDirectory data, double scale)
+    private static ShellDriver StartScaled(TempDirectory data, double scale, HostingOptions? hosting = null)
     {
-        var app = ShellDriver.Start(data.Path);
+        var app = ShellDriver.Start(data.Path, hosting: hosting);
         if (scale != 1)
         {
             app.Window.SetRenderScaling(scale);
@@ -359,6 +442,56 @@ public class LinkFocusFrameTests
             app.Dispose();
             throw;
         }
+    }
+
+    /// <summary>
+    /// "Add GitHub account" or "Add Azure DevOps account" over the empty tab, dark, on the app's own
+    /// hosting session with that provider on at its service's addresses and every request refused
+    /// before it is sent (<see cref="HostingOptions.Off"/>'s handlers), so that the token link asks
+    /// for its page as in the app; Azure DevOps' with <see cref="Organization"/> in its box, which
+    /// enables the link. The focus in the token box, the pointer at rest.
+    /// </summary>
+    private static async Task<ShellDriver> StartOnSignInAsync(TempDirectory data, HostingProvider provider, double scale = 1)
+    {
+        var hosting = provider switch
+        {
+            HostingProvider.GitHub => HostingOptions.Off with { GitHub = GitHubEndpoints.GitHubCom },
+            HostingProvider.AzureDevOps => HostingOptions.Off with { AzureDevOps = AzureDevOpsEndpoints.Service },
+            _ => throw new ArgumentOutOfRangeException(nameof(provider), provider, "GitLab's dialog, with its two links, has StartOnGitLabSignInAsync."),
+        };
+        var app = StartScaled(data, scale, hosting);
+        try
+        {
+            await app.WaitUntilReadyAsync();
+            var dialog = new SignInDialogViewModel(app.Session.Services.Hosting, provider, app.Launcher, app.Session.Log, provider == HostingProvider.AzureDevOps ? Organization : null);
+            _ = app.Session.Services.DialogHost.ShowAsync(dialog);
+            await dialog.Opened;
+            await app.WaitForAsync(() => app.TopDialogView is SignInDialogView && app.FocusedAutomationId() == "SignInToken", "the sign-in dialog with the focus in its token box");
+            Assert.True(dialog.CanOpenTokenPage, $"{provider}'s token link is disabled.");
+            Assert.True(Link(app, "SignInTokenLink").IsEffectivelyEnabled, $"{provider}'s SignInTokenLink is disabled.");
+            Assert.False(Link(app, "SignInLegacyTokenLink").IsEffectivelyVisible, $"{provider}'s dialog shows GitLab's legacy link.");
+            app.MoveToNeutral();
+            app.Settle();
+            return app;
+        }
+        catch
+        {
+            app.Dispose();
+            throw;
+        }
+    }
+
+    /// <summary>Shift+Tab from the token box to <c>SignInTokenLink</c>: past Azure DevOps' organization box, straight on GitHub's.</summary>
+    private static async Task ShiftTabToTokenLinkAsync(ShellDriver app, HostingProvider provider)
+    {
+        if (provider == HostingProvider.AzureDevOps)
+        {
+            app.PressKey(Key.Tab, RawInputModifiers.Shift);
+            await WaitForFocusAsync(app, "SignInOrganization");
+        }
+
+        app.PressKey(Key.Tab, RawInputModifiers.Shift);
+        await WaitForFocusAsync(app, "SignInTokenLink");
     }
 
     private static Task WaitForFocusAsync(ShellDriver app, string id) =>
