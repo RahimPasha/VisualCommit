@@ -85,6 +85,9 @@ public sealed record SettingsScreenServices(
 
     /// <summary>The window's clipboard; null without one.</summary>
     public IClipboardService? Clipboard { get; init; }
+
+    /// <summary>Reads About's embedded texts by their resources' names; null reads the app's (<see cref="EmbeddedTexts.Read"/>).</summary>
+    public Func<string, string>? ReadText { get; init; }
 }
 
 /// <summary>
@@ -143,6 +146,7 @@ public sealed partial class SettingsDialogViewModel : DialogViewModel<bool>
             services.Launcher,
             services.Clipboard,
             services.Log,
+            readText: services.ReadText,
             lifetime: _lifetime.Token);
         General.PropertyChanged += OnSectionChanged;
         Git.Global.PropertyChanged += OnSectionChanged;

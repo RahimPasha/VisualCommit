@@ -590,6 +590,82 @@ public class SettingsDialogViewModelTests
         Assert.Equal("an-editor-of-the-future", screen.Settings.Current.Editor?.Id);
     }
 
+    [Fact]
+    public async Task Show_license_pressed_while_save_writes_opens_no_dialog_that_outlives_the_screen()
+    {
+        // The text dialog would stack over the screen, and Save's close would leave it alone over
+        // the window (D104; docs/phase-8a-design.md 8.3.1).
+        var screen = new Screen();
+        var writing = new TaskCompletionSource();
+        screen.Git.WriteHold = writing.Task;
+        var dialog = await screen.OpenAsync(SettingsSection.About);
+        dialog.Git.Global.UserName = "Ann";
+
+        var saving = dialog.ConfirmCommand.ExecuteAsync(null);
+        var until = DateTime.UtcNow.AddSeconds(30);
+        while (!dialog.IsWriting)
+        {
+            Assert.True(DateTime.UtcNow < until, "Save's global write did not start.");
+            await Task.Delay(5, TestContext.Current.CancellationToken);
+        }
+
+        await dialog.About.ShowLicenseCommand.ExecuteAsync(null);
+        writing.SetResult();
+        await saving;
+
+        Assert.True(dialog.IsClosed);
+        Assert.Empty(screen.Dialogs.Open);
+    }
+
+    [Fact]
+    public async Task Texts_still_read_when_save_closes_the_screen_show_no_dialog()
+    {
+        var screen = new Screen();
+        using var reading = new ManualResetEventSlim();
+        screen.ReadText = _ =>
+        {
+            Assert.True(reading.Wait(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken), "The read was never let go.");
+            return "MIT License\n";
+        };
+        var dialog = await screen.OpenAsync(SettingsSection.About);
+
+        var showing = dialog.About.ShowLicenseCommand.ExecuteAsync(null);
+        await dialog.ConfirmCommand.ExecuteAsync(null);
+        Assert.True(dialog.IsClosed);
+        reading.Set();
+        await showing;
+
+        Assert.Empty(screen.Dialogs.Open);
+    }
+
+    [Fact]
+    public async Task A_save_that_closes_the_screen_ends_the_git_program_rows_probe_that_still_runs()
+    {
+        var file = Path.Combine(Path.GetTempPath(), "PortableGit", OperatingSystem.IsWindows() ? "git.exe" : "git");
+        var probing = new TaskCompletionSource<CancellationToken>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var screen = new Screen
+        {
+            ProbeGit = async (_, token) =>
+            {
+                probing.TrySetResult(token);
+                await Task.Delay(Timeout.InfiniteTimeSpan, token);
+                throw new InvalidOperationException("The probe ended without its token.");
+            },
+        };
+        screen.Folders.AnswerFile(file);
+        var dialog = await screen.OpenAsync(SettingsSection.Git);
+
+        var browsing = dialog.GitProgram.BrowseCommand.ExecuteAsync(null);
+        var token = await probing.Task.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+        await dialog.ConfirmCommand.ExecuteAsync(null);
+
+        Assert.True(dialog.IsClosed);
+        Assert.True(token.IsCancellationRequested, "The row's probe outlives the screen that Save closed.");
+        await browsing.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+        Assert.Null(dialog.GitProgram.Choice);
+        Assert.Null(screen.Settings.Current.GitExecutable);
+    }
+
     /// <summary>The screen's services over fakes, and a way to open it and answer its dialogs.</summary>
     private sealed class Screen
     {
@@ -615,6 +691,12 @@ public class SettingsDialogViewModelTests
 
         /// <summary>What the machine has installed, as the screen asks for it: the harnesses' fixed catalogues unless the test gives others.</summary>
         public ToolCatalogues Tools { get; set; } = ToolCatalogues.Fixed;
+
+        /// <summary>The Git program row's probe of a chosen file; null: Browse finds no git.</summary>
+        public Func<string, CancellationToken, Task<GitDetection>>? ProbeGit { get; set; }
+
+        /// <summary>About's read of an embedded text; null reads the app's.</summary>
+        public Func<string, string>? ReadText { get; set; }
 
         public Screen(AppSettings? settings = null)
         {
@@ -643,6 +725,8 @@ public class SettingsDialogViewModelTests
                     Disk = Disk,
                     Platform = Platform,
                     FileExists = _ => false,
+                    ProbeGit = ProbeGit,
+                    ReadText = ReadText,
                 },
                 section);
             _ = Dialogs.ShowAsync(dialog);
