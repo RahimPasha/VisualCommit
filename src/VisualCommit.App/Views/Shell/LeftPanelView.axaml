@@ -110,9 +110,10 @@
             </ScrollViewer>
           </ControlTemplate>
         </ItemsControl.Template>
+        <!-- Tab and Shift+Tab go through the rows in their order, also rows inserted or not made yet. -->
         <ItemsControl.ItemsPanel>
           <ItemsPanelTemplate>
-            <VirtualizingStackPanel />
+            <kr:RowOrderStackPanel />
           </ItemsPanelTemplate>
         </ItemsControl.ItemsPanel>
         <ItemsControl.DataTemplates>
