@@ -29,7 +29,7 @@ namespace VisualCommit.VisualTests.Phase8a;
 /// graph, a row's Discard cancelled, the browser's switch of providers, the splitters by the
 /// arrows, and Tab out of the read-only texts. No pictures: part K's checks take those.
 /// </summary>
-public sealed class KeyboardPassTests
+public sealed partial class KeyboardPassTests
 {
     private static CancellationToken Cancelled => TestContext.Current.CancellationToken;
 
@@ -636,28 +636,30 @@ public sealed class KeyboardPassTests
     /// <summary>
     /// Ctrl+Tab from a stage row's own button, focused by F6, to another tab whose stage panel shows,
     /// nothing running: the panel is shared by the tabs, and its list drops the first tab's rows, the
-    /// focused button with them, so the focus is on nothing; the first F6 then starts at the first
-    /// region, the left panel's first section, with the keyboard's frame.
+    /// focused button with them; the focus goes to the stage panel's target in the tab now shown, its
+    /// first row's own button (README.md's, the second tab's), with the keyboard's frame the first
+    /// tab's row had. The first F6 then goes past the right panel, the last region shown, round to the
+    /// left panel's first section.
     /// </summary>
     [AvaloniaFact]
-    public async Task Ctrl_Tab_from_a_focused_stage_row_leaves_the_focus_on_nothing_and_F6_then_starts_at_the_left_panel()
+    public async Task Ctrl_Tab_from_a_focused_stage_row_gives_the_focus_to_the_other_tabs_first_row_with_the_frame()
     {
         var facts = await CtrlTabFromAsync(FocusReadmesRowAsync);
 
         Assert.Equal(ReadmesRowFact, facts.Placed);
         Assert.False(facts.PlacedStillInWindow, "README.md's row's own button is still in the window after Ctrl+Tab.");
-        Assert.Equal(NothingFact, facts.AfterSwitch);
+        Assert.Equal(ReadmesRowFact, facts.AfterSwitch);
         Assert.Equal(LeftSectionFact, facts.AfterF6);
     }
 
     /// <summary>
     /// Ctrl+Tab from a stage row's Stage, reached by Tab from the row, nothing running: as from the
-    /// row's own button, the button leaves the window with the first tab's rows and the focus is on
-    /// nothing, and the first F6 starts at the left panel's first section. A running Stage is not
-    /// what leaves the focus on nothing.
+    /// row's own button, the button leaves the window with the first tab's rows, and the focus goes
+    /// to the second tab's first row's own button, with the frame; the first F6 then goes round to
+    /// the left panel's first section. A running Stage is not involved.
     /// </summary>
     [AvaloniaFact]
-    public async Task Ctrl_Tab_from_a_stage_rows_Stage_reached_by_Tab_leaves_the_focus_on_nothing_and_F6_then_starts_at_the_left_panel()
+    public async Task Ctrl_Tab_from_a_stage_rows_Stage_reached_by_Tab_gives_the_focus_to_the_other_tabs_first_row_with_the_frame()
     {
         var facts = await CtrlTabFromAsync(async app =>
         {
@@ -667,7 +669,7 @@ public sealed class KeyboardPassTests
 
         Assert.Equal(ReadmesStageFact, facts.Placed);
         Assert.False(facts.PlacedStillInWindow, "README.md's Stage is still in the window after Ctrl+Tab.");
-        Assert.Equal(NothingFact, facts.AfterSwitch);
+        Assert.Equal(ReadmesRowFact, facts.AfterSwitch);
         Assert.Equal(LeftSectionFact, facts.AfterF6);
     }
 
@@ -796,11 +798,20 @@ public sealed class KeyboardPassTests
     /// <summary>Where the focus was put, whether that element is still in the window and has the focus after Ctrl+Tab, and the focus after Ctrl+Tab and after the first F6.</summary>
     private sealed record TabSwitchFacts(string Placed, bool PlacedStillInWindow, bool SameAfterSwitch, string AfterSwitch, string AfterF6);
 
+    /// <summary>What a tab of <see cref="CtrlTabFromAsync"/> shows: its stage panel, or HEAD's commit, "Add calculator", in the details.</summary>
+    private enum TabShows
+    {
+        StagePanel,
+        Commit,
+    }
+
     /// <summary>
-    /// Two tabs on "changes", each showing its stage panel, nothing running, the first active;
-    /// <paramref name="place"/> puts the focus somewhere in it; then Ctrl+Tab to the second, and F6.
+    /// Two tabs on "changes", nothing running, the first active, each showing what
+    /// <paramref name="firstShows"/> and <paramref name="secondShows"/> say (the stage panel when not
+    /// given); <paramref name="place"/> puts the focus somewhere in the first; then Ctrl+Tab to the
+    /// second, and F6.
     /// </summary>
-    private static async Task<TabSwitchFacts> CtrlTabFromAsync(Func<ShellDriver, Task> place)
+    private static async Task<TabSwitchFacts> CtrlTabFromAsync(Func<ShellDriver, Task> place, TabShows firstShows = TabShows.StagePanel, TabShows secondShows = TabShows.StagePanel)
     {
         using var first = await Scenarios.ChangesAsync();
         using var second = await Scenarios.ChangesAsync();
@@ -810,14 +821,14 @@ public sealed class KeyboardPassTests
         await app.WaitForWatchersQuietAsync();
         app.MoveToNeutral();
 
-        // The second tab's stage panel, then the first tab's, where the focus is put.
-        await ShowStagePanelAsync(app);
+        // The second tab's state, then the first tab's, where the focus is put.
+        await ShowAsync(app, secondShows);
         var other = Repository(app);
         app.PressCtrlTab();
         await app.WaitForAsync(() => app.Session.Shell.ActiveTab.Repository is { } shown && !ReferenceEquals(shown, other), "the first tab");
         await app.WaitForRepositoryAsync();
         await app.WaitForWatchersQuietAsync();
-        await ShowStagePanelAsync(app);
+        await ShowAsync(app, firstShows);
         await place(app);
         app.Settle();
         var placed = app.FocusedElement as Visual;
@@ -825,8 +836,8 @@ public sealed class KeyboardPassTests
 
         app.PressCtrlTab();
         await app.WaitForAsync(
-            () => ReferenceEquals(app.Session.Shell.ActiveTab.Repository, other) && app.StageRows("UnstagedFileList").Count > 0,
-            "the second tab's stage panel");
+            () => ReferenceEquals(app.Session.Shell.ActiveTab.Repository, other) && Shows(app, secondShows),
+            secondShows == TabShows.StagePanel ? "the second tab's stage panel" : "the second tab's commit");
         await app.WaitForIdleAsync();
         app.Settle();
         var stillInWindow = placed?.IsAttachedToVisualTree() == true;
@@ -837,6 +848,29 @@ public sealed class KeyboardPassTests
         app.Settle();
         return new TabSwitchFacts(placedFact, stillInWindow, same, afterSwitch, FocusFact(app));
     }
+
+    /// <summary>The active tab shows <paramref name="shows"/>: its working-changes row clicked, or its first commit row, HEAD's, with its changed files; the app idle and the pointer at rest.</summary>
+    private static async Task ShowAsync(ShellDriver app, TabShows shows)
+    {
+        if (shows == TabShows.StagePanel)
+        {
+            await ShowStagePanelAsync(app);
+            return;
+        }
+
+        app.Click(app.GraphRowPoint(0));
+        app.WaitForCommitDetails();
+        await app.WaitForAsync(() => Shows(app, TabShows.Commit), "HEAD's changed files");
+        await app.WaitForIdleAsync();
+        app.MoveToNeutral();
+    }
+
+    /// <summary>Whether the window shows <paramref name="shows"/>: rows in the stage panel's unstaged list, or the details' changed files.</summary>
+    private static bool Shows(ShellDriver app, TabShows shows) =>
+        shows == TabShows.StagePanel
+            ? app.StageRows("UnstagedFileList").Count > 0
+            : app.Session.Shell.ActiveTab.ShowsDetailsPanel
+                && app.Window.GetVisualDescendants().OfType<Button>().Any(button => AutomationProperties.GetAutomationId(button) == "ChangedFile" && button.IsEffectivelyVisible);
 
     /// <summary>G9: in the browser of two signed-in providers, Enter on the switch's other provider keeps the focus there, and Tab goes on to the filter.</summary>
     [AvaloniaFact]
