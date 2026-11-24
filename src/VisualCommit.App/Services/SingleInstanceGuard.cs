@@ -41,6 +41,19 @@ public enum ForwardAnswer
     NotAnswered,
 }
 
+/// <summary>How a second start's request ended (<see cref="SingleInstanceGuard.ResolveHeld"/>).</summary>
+public enum HeldResolution
+{
+    /// <summary>The lock came free: this process holds the data folder now and starts there.</summary>
+    Taken,
+
+    /// <summary>The instance that holds the data folder answered that it came to the front or is starting: this start ends.</summary>
+    HandedOver,
+
+    /// <summary>Another process still holds the lock and gave no such answer.</summary>
+    NotAnswered,
+}
+
 /// <summary>What the desktop app shows at its start.</summary>
 public enum AppStartMode
 {
@@ -136,7 +149,7 @@ public sealed partial class SingleInstanceGuard : IDisposable
         _options = options;
     }
 
-    /// <summary>What the first attempt found; <see cref="GuardOutcome.Held"/> turns <see cref="GuardOutcome.Taken"/> after a successful <see cref="TryTakeNow"/> or <see cref="WaitToTake"/>.</summary>
+    /// <summary>What the first attempt found; <see cref="GuardOutcome.Held"/> turns <see cref="GuardOutcome.Taken"/> after a successful <see cref="TryTakeNow"/> or <see cref="ResolveHeld"/>.</summary>
     public GuardOutcome Outcome { get; private set; }
 
     /// <summary>This guard's own endpoint while it is <see cref="GuardOutcome.Taken"/>; null otherwise.</summary>
@@ -281,10 +294,25 @@ public sealed partial class SingleInstanceGuard : IDisposable
     }
 
     /// <summary>
-    /// After a <see cref="ForwardAnswer.Closing"/>: <see cref="TryTakeNow"/> every 250 ms until it
-    /// succeeds or <see cref="SingleInstanceOptions.WaitWhileClosing"/> has passed. Logs which.
+    /// A <see cref="GuardOutcome.Held"/> start's whole request, which <c>Program.Main</c> and the
+    /// notice's "Try again" both make: <see cref="AskToComeForward"/>, whose
+    /// <see cref="ForwardAnswer.Activated"/> or <see cref="ForwardAnswer.Starting"/> hands over and
+    /// whose <see cref="ForwardAnswer.Closing"/> is waited for (<see cref="WaitToTake"/>).
     /// </summary>
-    public bool WaitToTake()
+    /// <exception cref="InvalidOperationException">The guard is not <see cref="GuardOutcome.Held"/>.</exception>
+    public HeldResolution ResolveHeld() => AskToComeForward() switch
+    {
+        ForwardAnswer.Activated or ForwardAnswer.Starting => HeldResolution.HandedOver,
+        ForwardAnswer.Closing => WaitToTake(),
+        _ => HeldResolution.NotAnswered,
+    };
+
+    /// <summary>
+    /// After a <see cref="ForwardAnswer.Closing"/>: <see cref="TryTakeNow"/> every 250 ms until it
+    /// succeeds (<see cref="HeldResolution.Taken"/>) or <see cref="SingleInstanceOptions.WaitWhileClosing"/>
+    /// has passed (<see cref="HeldResolution.NotAnswered"/>). Logs which.
+    /// </summary>
+    public HeldResolution WaitToTake()
     {
         var clock = Stopwatch.StartNew();
         while (true)
@@ -292,13 +320,13 @@ public sealed partial class SingleInstanceGuard : IDisposable
             if (TryTakeNow())
             {
                 _log.Info("The other VisualCommit closed; this start goes on.");
-                return true;
+                return HeldResolution.Taken;
             }
 
             if (clock.Elapsed >= _options.WaitWhileClosing)
             {
                 _log.Warning($"The other VisualCommit did not close within {Seconds(_options.WaitWhileClosing)} s.");
-                return false;
+                return HeldResolution.NotAnswered;
             }
 
             Thread.Sleep(TakePause);

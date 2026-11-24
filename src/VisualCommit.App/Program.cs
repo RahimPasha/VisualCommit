@@ -32,14 +32,11 @@ internal static class Program
         var mode = AppStartMode.Normal;
         if (guard.Outcome == GuardOutcome.Held)
         {
-            switch (guard.AskToComeForward())
+            switch (guard.ResolveHeld())
             {
-                case ForwardAnswer.Activated or ForwardAnswer.Starting:
+                case HeldResolution.HandedOver:
                     return 0;
-                case ForwardAnswer.Closing:
-                    mode = guard.WaitToTake() ? AppStartMode.Normal : AppStartMode.NotAnswered;
-                    break;
-                default:
+                case HeldResolution.NotAnswered:
                     mode = AppStartMode.NotAnswered;
                     break;
             }

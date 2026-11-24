@@ -153,7 +153,7 @@ public sealed class SingleInstanceGuardTests
                     holder.Dispose();
                 },
                 TestContext.Current.CancellationToken);
-            Assert.True(second.WaitToTake());
+            Assert.Equal(HeldResolution.Taken, second.WaitToTake());
             await disposal;
 
             Assert.Equal(GuardOutcome.Taken, second.Outcome);
