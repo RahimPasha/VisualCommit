@@ -217,6 +217,48 @@ public class GitSetupViewModelTests
         Assert.Equal(["C:/Users/demo/.gitconfig"], lab.Launcher.Revealed);
     }
 
+    public static TheoryData<string> LateAnswers => ["Show the file", "Install the Command Line Tools", "Download", "Other ways to install Git", "the guide's page", "Copy"];
+
+    /// <summary>
+    /// The real launcher shows a file and starts a program off the UI thread, and opens an address
+    /// through the window's launcher; the clipboard can be held by another program. A command that
+    /// waits for them stays enabled while it runs: a disabled button loses the keyboard focus
+    /// (docs/phase-8a-design.md 5.3, 8.3.1).
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(LateAnswers))]
+    public async Task A_button_whose_launch_or_copy_answers_late_stays_enabled_while_it_runs(string button)
+    {
+        var mac = button is "Install the Command Line Tools" or "Other ways to install Git" or "Copy";
+        using var lab = new Lab(guidance: mac ? new GitGuidance(GuidancePlatform.MacOS, null, null) : null);
+        await lab.Screen.ShowAsync(
+            button == "Show the file"
+                ? new GitDetection(GitAvailability.Broken, WindowsGit, null, null) { ErrorText = "fatal: bad config line 1 in file C:/Users/demo/.gitconfig", ExitCode = 128, ConfigFault = new("C:/Users/demo/.gitconfig", 1) }
+                : Missing with { CommandLineToolsMissing = mac },
+            null);
+        var held = new TaskCompletionSource();
+        lab.Launcher.Hold = held.Task;
+        lab.Clipboard.Hold = held.Task;
+        IAsyncRelayCommand command = button switch
+        {
+            "Show the file" => lab.Screen.ShowFileCommand,
+            "Install the Command Line Tools" => lab.Screen.CommandLineToolsCommand,
+            "Download" => lab.Screen.DownloadCommand,
+            "Other ways to install Git" => lab.Screen.MoreLinkCommand,
+            "the guide's page" => lab.Screen.GuideLinkCommand,
+            _ => lab.Screen.CopyCommand,
+        };
+
+        var running = command.ExecuteAsync(null);
+
+        Assert.False(running.IsCompleted, $"{button} did not wait for its answer.");
+        Assert.True(command.CanExecute(null), $"{button} is disabled while its answer is held.");
+        held.SetResult();
+        await running;
+        Assert.True(command.CanExecute(null));
+        Assert.Equal(1, lab.Launcher.Requests.Count + lab.Clipboard.Texts.Count);
+    }
+
     [Fact]
     public async Task Choose_refuses_a_too_old_git_and_leaves_the_settings_then_writes_one_that_works_and_checks_again()
     {
