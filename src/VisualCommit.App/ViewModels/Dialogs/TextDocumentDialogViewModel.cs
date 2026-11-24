@@ -100,8 +100,11 @@ public sealed partial class TextDocumentDialogViewModel : DialogViewModel<bool>
         Shown = part;
     }
 
-    /// <summary>"Copy all": the shown text whole on the clipboard; the dialog stays open.</summary>
-    [RelayCommand]
+    /// <summary>
+    /// "Copy all": the shown text whole on the clipboard; the dialog stays open. The button stays
+    /// enabled while another program holds the clipboard: disabled, it would lose the keyboard focus.
+    /// </summary>
+    [RelayCommand(AllowConcurrentExecutions = true)]
     private async Task CopyAll()
     {
         if (_clipboard is null)

@@ -87,8 +87,12 @@ public sealed partial class ErrorDialogViewModel : DialogViewModel<bool>
 
     protected override bool CancelledResult => false;
 
-    /// <summary>"Copy output": puts exactly <see cref="Output"/> on the clipboard. The dialog stays open.</summary>
-    [RelayCommand]
+    /// <summary>
+    /// "Copy output": puts exactly <see cref="Output"/> on the clipboard. The dialog stays open. The
+    /// button stays enabled while another program holds the clipboard: disabled, it would lose the
+    /// keyboard focus.
+    /// </summary>
+    [RelayCommand(AllowConcurrentExecutions = true)]
     private async Task CopyOutput()
     {
         if (Output is null || _clipboard is null)
