@@ -23,8 +23,9 @@ namespace VisualCommit.VisualTests.Phase8a;
 /// the chosen file is probed, get the focus back when the pick is cancelled or the file refused;
 /// the row's "Use the Git on the PATH", which hides itself with the choice it drops, gives the
 /// focus to Browse when it was pressed by the keys (13.1, ruling 101), and the first-run screen's
-/// twin leaves it where its search put it. The launcher, the clipboard, the file dialog and the
-/// search are the harness's fakes, held until the test lets them answer.
+/// twin, pressed by the keys, gives it with the frame where its search puts it. The launcher, the
+/// clipboard, the file dialog and the search are the harness's fakes, held until the test lets
+/// them answer.
 /// </summary>
 public sealed class FirstRunFocusTests : Phase8aChecks
 {
@@ -212,19 +213,20 @@ public sealed class FirstRunFocusTests : Phase8aChecks
     }
 
     /// <summary>
-    /// A guard: the first-run screen's twin, "Use the Git on the PATH" on a chosen git that is too old,
-    /// pressed by Enter with the keyboard's frame, is disabled while its search runs and gone once it
-    /// has ended (the setting removed, no state offers it), and the search's end has already placed
-    /// the focus: on "Check again" while the screen still shows, described by the title of the state
-    /// the search ended on (D463 (3)), else, the screen gone, on the graph area's target, the welcome
-    /// page's Open. The search is held, as a real one, which runs git, never answers within the key
-    /// press. Neither has the keyboard's frame: the search's end gives it to Check again only when
-    /// Check again itself was pressed with it, which this guard leaves open.
+    /// The first-run screen's twin, "Use the Git on the PATH" on a chosen git that is too old, pressed
+    /// by Enter with the keyboard's frame, is disabled while its search runs and gone once it has ended
+    /// (the setting removed, no state offers it), and the search's end places the focus, with the
+    /// keyboard's frame, since the pressed button had it (D462): on "Check again" while the screen
+    /// still shows, described by the title of the state the search ended on (D463 (3)), else, the
+    /// screen gone, on the graph area's target, the welcome page's Open. The search is held, as a real
+    /// one, which runs git, never answers within the key press. Before this the focus came to either
+    /// place without the frame, which the search's end gave to Check again only when Check again
+    /// itself had been pressed with it.
     /// </summary>
     [AvaloniaTheory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task The_first_run_screens_drop_button_pressed_by_Enter_leaves_the_focus_where_the_search_put_it(bool found)
+    public async Task The_first_run_screens_drop_button_pressed_by_Enter_gives_the_focus_where_the_search_puts_it_with_the_frame(bool found)
     {
         using var data = new TempDirectory("phase8a focus");
         new JsonSettingsStore(Path.Combine(data.Path, "settings.json")).Update(settings => settings with { GitExecutable = F.Chosen });
@@ -253,11 +255,13 @@ public sealed class FirstRunFocusTests : Phase8aChecks
         {
             var target = app.Window.GetVisualDescendants().OfType<CommitGraphView>().Single(view => view.IsEffectivelyVisible).GraphAreaFocusTarget();
             Assert.True(target is not null && ReferenceEquals(app.FocusedElement, target), $"With the screen gone the focus is on {app.DescribeFocus()}, not the graph area's target.");
+            Assert.True(app.FocusVisible, "With the screen gone the graph area's target has the focus without the keyboard's frame.");
         }
         else
         {
             Assert.Null(app.GitSetupPart(F.UsePathId));
             Assert.True(app.FocusedAutomationId() == F.CheckAgainId, $"With the screen on Missing the focus is on {app.DescribeFocus()}, not {F.CheckAgainId}.");
+            Assert.True(app.FocusVisible, $"With the screen on Missing {F.CheckAgainId} has the focus without the keyboard's frame.");
             Assert.Equal(new FocusEvent(F.CheckAgainId, F.CheckAgain, F.MissingTitle), focus.Last);
         }
     }
