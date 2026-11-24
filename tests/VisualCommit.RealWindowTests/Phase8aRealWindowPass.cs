@@ -884,6 +884,9 @@ public class Phase8aOrderTests
         var (none, noFailure) = Phase8aRealWindowPass.SelectTaskbarButton([copy], display);
         Assert.Null(none);
         Assert.Null(noFailure);
+        var notRun = Phase8aRealWindowPass.NoTaskbarButtonOnDisplay(display);
+        Assert.StartsWith("B2's taskbar button: Not run (taskbar buttons named " + B.TaskbarButtonNameStart, notRun, StringComparison.Ordinal);
+        Assert.Contains($"none on the display that holds the app's window, at {display}", notRun, StringComparison.Ordinal);
 
         var (taken, two) = Phase8aRealWindowPass.SelectTaskbarButton([other, copy, launch], display);
         Assert.Null(taken);

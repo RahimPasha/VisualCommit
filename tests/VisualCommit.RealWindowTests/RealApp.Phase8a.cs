@@ -331,29 +331,45 @@ public sealed partial class RealApp
     /// The taskbar's buttons whose UI Automation names start with <paramref name="nameStart"/>, looked for
     /// from UI Automation's desktop root (the taskbars, <c>Shell_TrayWnd</c> and on another monitor
     /// <c>Shell_SecondaryTrayWnd</c>, and their buttons) every 100 ms for at most
-    /// <paramref name="limit"/>, until a look finds one: every such button of that look, with its name, its
-    /// bounds on the screen and its taskbar, or none when none came. A button does not say whose process it
-    /// is: Windows groups the buttons by the executable's path, so each other running VisualCommit has a
-    /// button of its own, with the same name.
+    /// <paramref name="limit"/>, until a look finds one on <paramref name="display"/>
+    /// (<see cref="TaskbarEntry.LiesOn"/>): every such button of that look, on every taskbar, with its name,
+    /// its bounds on the screen and its taskbar; at the limit, the last look's, which are then on other
+    /// displays, or none. A button does not say whose process it is: Windows groups the buttons by the
+    /// executable's path, so each other running VisualCommit has a button of its own, with the same name,
+    /// and with more than one display one app can have a button on each display's taskbar.
     /// </summary>
-    public IReadOnlyList<TaskbarEntry> TaskbarButtons(string nameStart, TimeSpan limit)
+    public IReadOnlyList<TaskbarEntry> TaskbarButtons(string nameStart, TimeSpan limit, Rectangle display)
     {
         ArgumentException.ThrowIfNullOrEmpty(nameStart);
         var clock = Stopwatch.StartNew();
         while (true)
         {
             var found = FindTaskbarButtons(nameStart);
-            if (found.Count > 0)
+            if (found.Exists(entry => entry.LiesOn(display)) || clock.Elapsed >= limit)
             {
                 return found;
             }
 
-            if (clock.Elapsed >= limit)
+            Thread.Sleep(PollInterval);
+        }
+    }
+
+    /// <summary>
+    /// The display that holds the window, in real pixels of the virtual screen, its taskbar included:
+    /// <c>MonitorFromWindow</c>'s display (the nearest when the window lies on none) and
+    /// <c>GetMonitorInfo</c>'s <c>rcMonitor</c> of it.
+    /// </summary>
+    public Rectangle DisplayBounds
+    {
+        get
+        {
+            var info = new NativeMethods.MonitorInfo { Size = Marshal.SizeOf<NativeMethods.MonitorInfo>() };
+            if (!NativeMethods.GetMonitorInfoW(NativeMethods.MonitorFromWindow(Handle, NativeMethods.MonitorDefaultToNearest), ref info))
             {
-                return [];
+                throw new InvalidOperationException("Windows gave no display for the app's window (MonitorFromWindow, GetMonitorInfo).");
             }
 
-            Thread.Sleep(PollInterval);
+            return Rectangle.FromLTRB(info.Monitor.Left, info.Monitor.Top, info.Monitor.Right, info.Monitor.Bottom);
         }
     }
 
@@ -563,7 +579,12 @@ public sealed partial class RealApp
     }
 
     /// <summary>A button of the taskbar: its UI Automation name, its bounds on the screen, in real pixels, and the class of the taskbar it lies on (<c>Shell_TrayWnd</c>, or <c>Shell_SecondaryTrayWnd</c> on another display).</summary>
-    public sealed record TaskbarEntry(string Name, Rectangle ScreenBounds, string Taskbar);
+    public sealed record TaskbarEntry(string Name, Rectangle ScreenBounds, string Taskbar)
+    {
+        /// <summary>Whether the button's centre lies inside <paramref name="display"/> (real pixels, <see cref="DisplayBounds"/>): the button is on that display's taskbar.</summary>
+        public bool LiesOn(Rectangle display) =>
+            display.Contains(ScreenBounds.X + (ScreenBounds.Width / 2), ScreenBounds.Y + (ScreenBounds.Height / 2));
+    }
 
     /// <summary>
     /// The window's icons (<see cref="WindowIcons"/>): <c>ICON_SMALL</c>'s and <c>ICON_BIG</c>'s images

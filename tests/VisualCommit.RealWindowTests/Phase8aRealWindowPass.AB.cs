@@ -29,11 +29,12 @@ public partial class Phase8aRealWindowPass
     private const string NoCommitMessage = "The built VisualCommit.dll's ProductVersion is \"{0}\", which names no commit, so About shows \"{1}\" without the short commit (design 1.6): the lead rules (design 12.3.4 launch 3).";
 
     /// <summary>
-    /// B2's taskbar step's failure when more than one taskbar button is named for VisualCommit
-    /// (<see cref="MoreThanOneTaskbarButton"/>); {0} how many, {1} each one's name, bounds and taskbar. One
-    /// found is captured; none found stays run.txt's "Not run" line (<c>B.TaskbarButtonNotRun</c>).
+    /// B2's taskbar step's failure when more than one taskbar button named for VisualCommit lies on the
+    /// display that holds the app's window (<see cref="SelectTaskbarButton"/>, <see cref="MoreThanOneTaskbarButton"/>);
+    /// {0} how many, {1} each one's name, bounds and taskbar. One there is captured; none found stays
+    /// run.txt's "Not run" line (<c>B.TaskbarButtonNotRun</c>), and none there <see cref="NoTaskbarButtonOnDisplay"/>'s.
     /// </summary>
-    private const string MoreThanOneTaskbarButtonMessage = "B2's taskbar button: {0} taskbar buttons named VisualCommit were found, so none was captured: another VisualCommit is running (or is pinned to the taskbar), and its button cannot be told from this launch's. Close every other VisualCommit, or unpin it, and run the launch again. The buttons: {1}.";
+    private const string MoreThanOneTaskbarButtonMessage = "B2's taskbar button: {0} taskbar buttons named VisualCommit lie on the display that holds the app's window, so none was captured: another VisualCommit is running (or is pinned to the taskbar), and its button cannot be told from this launch's. Close every other VisualCommit, or unpin it, and run the launch again. The buttons: {1}.";
 
     /// <summary>A spot of the left panel clear of every text and control at 1100×700 on the welcome page, where <c>Phase0RealWindowPass</c> reads the panel's colour: B2's wait for the light theme drawn.</summary>
     private static readonly PointF LeftPanelClear = new(130, 700 - 66);
@@ -63,10 +64,10 @@ public partial class Phase8aRealWindowPass
     /// focus in its text; <c>a4a-license</c>; a real Esc: the dialog closed, the focus back on the button.
     /// A real Esc: the settings screen closed.</item>
     /// <item>B2: a real click on <c>ThemeSwitch</c>; the light theme drawn; <c>b2-title-bar-light-with-frame</c>,
-    /// <c>b2-title-bar-icon-light</c>; the taskbar's button named <c>VisualCommit…</c> within 10 s,
-    /// <c>b2-taskbar-button</c> and <c>b2-taskbar-button-enlarged</c>, or run.txt's "Not run" line when
-    /// none shows; more than one such button: none captured, each noted, and the method fails at its end
-    /// saying to close the other VisualCommit.</item>
+    /// <c>b2-title-bar-icon-light</c>; the taskbar's button named <c>VisualCommit…</c> on the display that
+    /// holds the window within 10 s, <c>b2-taskbar-button</c> and <c>b2-taskbar-button-enlarged</c>, or a
+    /// "Not run" line in run.txt when none shows there; more than one such button there: none captured,
+    /// each noted, and the method fails at its end saying to close the other VisualCommit.</item>
     /// </list>
     /// The app closed by its window, exit code 0.
     /// </summary>
@@ -503,23 +504,28 @@ public partial class Phase8aRealWindowPass
     /// <summary>
     /// B2's taskbar button (the report's open point 51): the taskbar's buttons whose UI Automation names
     /// start with <see cref="Phase8aExpectations.B.TaskbarButtonNameStart"/>, looked for from the desktop
-    /// root for <see cref="Phase8aExpectations.B.TaskbarButtonLimit"/> until one shows
-    /// (<see cref="RealApp.TaskbarButtons"/>), the pointer at the neutral point inside the window (no preview
-    /// or tooltip of the taskbar opens); each one found in run.txt with its name, bounds and taskbar. One
-    /// found: its bounds asserted not empty, captured from the screen by its bounds as
-    /// <c>b2-taskbar-button</c> and four times enlarged as <c>b2-taskbar-button-enlarged</c>. None found:
-    /// run.txt's "Not run" line, and the method goes on. More than one: none is captured, and the problem
-    /// (<see cref="MoreThanOneTaskbarButton"/>), noted, fails the method at its end. Returns what is wrong.
+    /// root for <see cref="Phase8aExpectations.B.TaskbarButtonLimit"/> until one shows on the display that
+    /// holds the app's window (<see cref="RealApp.DisplayBounds"/>, <see cref="RealApp.TaskbarButtons"/>), the
+    /// pointer at the neutral point inside the window (no preview or tooltip of the taskbar opens); that
+    /// display and each button found in run.txt, with its name, bounds, taskbar and whether it lies on that
+    /// display. Only those on it count (<see cref="SelectTaskbarButton"/>). One there: its bounds asserted not
+    /// empty, captured from the screen by its bounds as <c>b2-taskbar-button</c> and four times enlarged as
+    /// <c>b2-taskbar-button-enlarged</c>. None found: run.txt's "Not run" line, and the method goes on; found,
+    /// but none there: <see cref="NoTaskbarButtonOnDisplay"/>'s "Not run" line, the same. More than one there:
+    /// none is captured, and the problem (<see cref="MoreThanOneTaskbarButton"/>), noted, fails the method at
+    /// its end. Returns what is wrong.
     /// </summary>
     private List<string> TaskbarButtonPictures(RealApp app)
     {
         app.MoveToNeutral();
+        var display = app.DisplayBounds;
+        Note(string.Create(CultureInfo.InvariantCulture, $"B2's taskbar button: the display that holds the app's window at {display} (screen pixels)"));
         var clock = Stopwatch.StartNew();
-        var found = app.TaskbarButtons(B.TaskbarButtonNameStart, B.TaskbarButtonLimit);
+        var found = app.TaskbarButtons(B.TaskbarButtonNameStart, B.TaskbarButtonLimit, display);
         var after = clock.Elapsed;
         foreach (var each in found)
         {
-            Note(string.Create(CultureInfo.InvariantCulture, $"B2's taskbar button: \"{each.Name}\" at {each.ScreenBounds} (screen pixels) on {each.Taskbar}, found after {after.TotalSeconds:0.0} s"));
+            Note(string.Create(CultureInfo.InvariantCulture, $"B2's taskbar button: \"{each.Name}\" at {each.ScreenBounds} (screen pixels) on {each.Taskbar}, {(each.LiesOn(display) ? "on" : "not on")} the window's display, found after {after.TotalSeconds:0.0} s"));
         }
 
         if (found.Count == 0)
@@ -528,13 +534,19 @@ public partial class Phase8aRealWindowPass
             return [];
         }
 
-        if (MoreThanOneTaskbarButton(found) is { } failure)
+        var (button, failure) = SelectTaskbarButton(found, display);
+        if (failure is not null)
         {
             Note(failure);
             return [failure];
         }
 
-        var button = found[0];
+        if (button is null)
+        {
+            Note(NoTaskbarButtonOnDisplay(display));
+            return [];
+        }
+
         Assert.True(button.ScreenBounds is { Width: > 0, Height: > 0 }, $"The taskbar's button \"{button.Name}\" has empty bounds: {button.ScreenBounds}.");
         using var shot = RealApp.CaptureScreen(button.ScreenBounds);
         Run.Save(shot, B.B2TaskbarButton);
@@ -544,11 +556,11 @@ public partial class Phase8aRealWindowPass
     }
 
     /// <summary>
-    /// B2's taskbar step's failure for the buttons <see cref="RealApp.TaskbarButtons"/> found, or null for
-    /// none or one. Windows gives each executable's path a button of its own, named for its app whichever
-    /// build it is, and a button does not say whose process it is: of two or more, any could be another
-    /// VisualCommit's (a build elsewhere, the owner's own copy) or one pinned to the taskbar, whose icon
-    /// the pictures would then show. So none is taken, and the message names each and says to close the other.
+    /// B2's taskbar step's failure for the buttons on the window's display (<see cref="SelectTaskbarButton"/>),
+    /// or null for none or one. Windows gives each executable's path a button of its own, named for its app
+    /// whichever build it is, and a button does not say whose process it is: of two or more, any could be
+    /// another VisualCommit's (a build elsewhere, the owner's own copy) or one pinned to the taskbar, whose
+    /// icon the pictures would then show. So none is taken, and the message names each and says to close the other.
     /// </summary>
     internal static string? MoreThanOneTaskbarButton(IReadOnlyList<RealApp.TaskbarEntry> found)
     {
@@ -563,17 +575,32 @@ public partial class Phase8aRealWindowPass
     }
 
     /// <summary>
-    /// B2's choice among the buttons <see cref="RealApp.TaskbarButtons"/> found, for the display at
-    /// <paramref name="display"/> that holds the app's window: the one button to capture, or the failure
-    /// (<see cref="MoreThanOneTaskbarButton"/>), or neither when none was found. As
-    /// <see cref="TaskbarButtonPictures"/> takes them today, the display aside.
+    /// B2's choice among the buttons <see cref="RealApp.TaskbarButtons"/> found: only those on
+    /// <paramref name="display"/>, the display that holds the app's window (<see cref="RealApp.TaskbarEntry.LiesOn"/>),
+    /// count. Windows can show one app's button on every display's taskbar (its multi-display setting, "All
+    /// taskbars" by default), so this launch's one window may have a button on each; and in each of that
+    /// setting's three modes another VisualCommit's button shows on the window's display whenever it could be
+    /// taken for this one's. One there: that button, to capture. None there: neither, and the step is not
+    /// run (<see cref="NoTaskbarButtonOnDisplay"/>). More: no button, and the failure
+    /// <see cref="MoreThanOneTaskbarButton"/> gives for those.
     /// </summary>
     internal static (RealApp.TaskbarEntry? Button, string? Failure) SelectTaskbarButton(IReadOnlyList<RealApp.TaskbarEntry> found, Rectangle display)
     {
         ArgumentNullException.ThrowIfNull(found);
-        _ = display;
-        return found.Count == 1 ? (found[0], null) : (null, MoreThanOneTaskbarButton(found));
+        List<RealApp.TaskbarEntry> here = [.. found.Where(each => each.LiesOn(display))];
+        return here.Count == 1 ? (here[0], null) : (null, MoreThanOneTaskbarButton(here));
     }
+
+    /// <summary>
+    /// run.txt's line when buttons named for VisualCommit were found within
+    /// <see cref="Phase8aExpectations.B.TaskbarButtonLimit"/>, but none on <paramref name="display"/>, the
+    /// display that holds the app's window (each found is noted before it): B2's taskbar step is not run,
+    /// as when none is found (<see cref="Phase8aExpectations.B.TaskbarButtonNotRun"/>).
+    /// </summary>
+    internal static string NoTaskbarButtonOnDisplay(Rectangle display) =>
+        string.Create(
+            CultureInfo.InvariantCulture,
+            $"B2's taskbar button: Not run (taskbar buttons named {B.TaskbarButtonNameStart} were found within {B.TaskbarButtonLimit.TotalSeconds:0} s, but none on the display that holds the app's window, at {display} (screen pixels); each is noted above).");
 
     /// <summary><paramref name="crop"/> of <paramref name="source"/>, <paramref name="factor"/> times as wide and high, each pixel a block of the same colour (nearest-neighbour).</summary>
     private static Bitmap Enlarged(Bitmap source, Rectangle crop, int factor)
