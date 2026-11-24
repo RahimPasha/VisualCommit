@@ -10,9 +10,9 @@ using Xunit;
 namespace VisualCommit.VisualTests.Phase8a;
 
 /// <summary>
-/// Where the focus goes when the active tab changes while it lies in a region of the window and the
-/// switch leaves it on nothing (the lead's ruling of step 19's round, which replaced the stage
-/// panel's own fix of 2026-11-20): to that same region's target in the tab now shown, the region
+/// Where the focus goes when the active tab changes while it lies in a region of the window
+/// (docs/phase-6-design.md 6.6) and the switch leaves it on nothing, which docs/phase-8a-design.md
+/// 1.17 recorded for a stage row: to that same region's target in the tab now shown, the region
 /// being the panel that held the focus (the left panel, the graph area, the commit's details, the
 /// stage panel); to the graph area's target when the tab now shown does not show that panel; with
 /// the keyboard's frame when the element that had the focus had it. A focus that the switch leaves
