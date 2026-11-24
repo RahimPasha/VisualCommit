@@ -609,18 +609,17 @@ public sealed partial class RealApp
     /// <summary>
     /// One event from <c>GraphRows</c>' subtree: its kind (<see cref="SelectedRowEvents.NameChanged"/> or
     /// <see cref="SelectedRowEvents.LiveRegionChanged"/>), its sender's automation id (<see cref="NotReadable"/>
-    /// where neither the event's cache nor a read of the sender now gave it, null where the sender gives none),
-    /// and when it came, from the recording's start.
+    /// where no read of the sender, outside the handlers, gave it, null where the sender gives none), and when
+    /// it came, from the recording's start.
     /// </summary>
     public sealed record RowEvent(string Kind, string? AutomationId, TimeSpan At);
 
     /// <summary>
     /// The graph row's events while recording (<see cref="RecordSelectedRowEvents"/>). The handlers
     /// queue the kind, the sender and the time only. <see cref="Events"/>, outside any handler, reads
-    /// each sender's id once and keeps it, and never throws: from the cache that came with the event,
-    /// else, on any failure of that read, from UI Automation now, else <see cref="NotReadable"/>, which
-    /// later calls try again, <see cref="IdReadAttempts"/> reads in all. Disposing it removes both
-    /// handlers.
+    /// each sender's id from UI Automation at that moment, keeps it once read, and never throws: a read
+    /// that fails leaves <see cref="NotReadable"/>, which later calls try again,
+    /// <see cref="IdReadAttempts"/> reads in all. Disposing it removes both handlers.
     /// </summary>
     public sealed class SelectedRowEvents : IDisposable
     {
@@ -641,34 +640,29 @@ public sealed partial class RealApp
         private readonly List<Received> _received = [];
         private readonly Lock _gate = new();
         private readonly Stopwatch _clock = Stopwatch.StartNew();
-        private readonly CacheRequest _cache;
         private readonly PropertyChangedEventHandlerBase _names;
         private readonly AutomationEventHandlerBase _live;
 
         internal SelectedRowEvents(UIA3Automation automation, AutomationElement rows)
         {
-            // The handlers are registered under the cache request, for a FlaUI that hands it to UI
-            // Automation; FlaUI 5.0.0 does not (TryReadId), and no read relies on it.
-            _cache = new CacheRequest { TreeScope = TreeScope.Element };
-            _cache.Add(automation.PropertyLibrary.Element.AutomationId);
-            using (_cache.Activate())
+            // No cache request: FlaUI 5.0.0 passes none to UI Automation when it registers an event
+            // handler, so a sender comes with no property cached, and a cached read of its id fails every
+            // time. The id is read now, outside the handlers (TryReadId).
+            _names = rows.RegisterPropertyChangedEvent(
+                TreeScope.Subtree,
+                (sender, _, _) => _queue.Enqueue((NameChanged, sender, _clock.Elapsed)),
+                automation.PropertyLibrary.Element.Name);
+            try
             {
-                _names = rows.RegisterPropertyChangedEvent(
+                _live = rows.RegisterAutomationEvent(
+                    automation.EventLibrary.Element.LiveRegionChangedEvent,
                     TreeScope.Subtree,
-                    (sender, _, _) => _queue.Enqueue((NameChanged, sender, _clock.Elapsed)),
-                    automation.PropertyLibrary.Element.Name);
-                try
-                {
-                    _live = rows.RegisterAutomationEvent(
-                        automation.EventLibrary.Element.LiveRegionChangedEvent,
-                        TreeScope.Subtree,
-                        (sender, _) => _queue.Enqueue((LiveRegionChanged, sender, _clock.Elapsed)));
-                }
-                catch
-                {
-                    _names.Dispose();
-                    throw;
-                }
+                    (sender, _) => _queue.Enqueue((LiveRegionChanged, sender, _clock.Elapsed)));
+            }
+            catch
+            {
+                _names.Dispose();
+                throw;
             }
         }
 
@@ -705,27 +699,13 @@ public sealed partial class RealApp
         }
 
         /// <summary>
-        /// A sender's automation id, read outside the handlers, never throwing: from the event's cache; on any
-        /// failure of that read (<see cref="IsReadFailure"/>), from UI Automation now; when that fails too,
-        /// false with <see cref="NotReadable"/>. FlaUI 5.0.0 registers both handlers without handing UI
-        /// Automation a cache request (it passes none), so a sender comes without this cache and the cached
-        /// read fails with an <see cref="ArgumentException"/>; the read now is then the one that answers.
+        /// A sender's automation id, read from UI Automation now, outside the handlers, never throwing: false
+        /// with <see cref="NotReadable"/> when the read fails (<see cref="IsReadFailure"/>). No cache is read:
+        /// FlaUI 5.0.0 registers both handlers without handing UI Automation a cache request (it passes
+        /// none), so a sender comes with no property cached and a cached read would fail every time.
         /// </summary>
-        private bool TryReadId(AutomationElement sender, out string? id)
+        private static bool TryReadId(AutomationElement sender, out string? id)
         {
-            try
-            {
-                using (_cache.Activate())
-                {
-                    id = sender.Properties.AutomationId.ValueOrDefault;
-                    return true;
-                }
-            }
-            catch (Exception ex) when (IsReadFailure(ex))
-            {
-                // Not in the event's cache: read now, outside the handler.
-            }
-
             try
             {
                 id = sender.Properties.AutomationId.ValueOrDefault;
