@@ -215,10 +215,61 @@ public sealed partial class RealApp
     /// </summary>
     public void ClickTitleBar()
     {
+        Mouse.Click(TitleBarMiddle());
+        WaitUntilIdle();
+    }
+
+    /// <summary>
+    /// Puts the real pointer on the point <see cref="ClickTitleBar"/> clicks, in one jump and with no
+    /// click: on the window, off its client area, so that no control under it is hovered and no tooltip
+    /// of the client area opens. For a window that is no main window, such as the notice, where the
+    /// client area's neutral point lies outside it.
+    /// </summary>
+    public void SetPointerOnTitleBar()
+    {
+        Mouse.Position = TitleBarMiddle();
+        WaitUntilIdle();
+    }
+
+    /// <summary>
+    /// The height of the window's top edge with its title bar, in screen pixels: from the window's top
+    /// as <c>GetWindowRect</c> gives it to the client area's top (<c>ClientToScreen</c>). A capture
+    /// of the window with its frame (<see cref="CaptureWindow"/>) holds the title bar in these rows.
+    /// </summary>
+    public int TitleBarHeight
+    {
+        get
+        {
+            NativeMethods.GetWindowRect(Handle, out var window);
+            return ClientOriginOnScreen().Y - window.Top;
+        }
+    }
+
+    /// <summary>The app's process id, which its <c>instance.json</c> and its log's lines name.</summary>
+    public int ProcessId => _process.Id;
+
+    /// <summary>
+    /// Whether the process <paramref name="processId"/> has a top-level window on the desktop now, as UI
+    /// Automation lists them: one look, for a check that a start showed no window while it ran.
+    /// </summary>
+    public bool HasWindowOfProcess(int processId)
+    {
+        try
+        {
+            return _automation.GetDesktop().FindAllChildren(condition => condition.ByProcessId(processId)).Length > 0;
+        }
+        catch (Exception ex) when (ex is COMException or FlaUI.Core.Exceptions.ElementNotAvailableException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>The screen point in the middle of the title bar: half the window's width across, half the title bar's height down.</summary>
+    private Point TitleBarMiddle()
+    {
         NativeMethods.GetWindowRect(Handle, out var window);
         var client = ClientOriginOnScreen();
-        Mouse.Click(new Point(window.Left + (window.Width / 2), (window.Top + client.Y) / 2));
-        WaitUntilIdle();
+        return new Point(window.Left + (window.Width / 2), (window.Top + client.Y) / 2);
     }
 
     /// <summary>
