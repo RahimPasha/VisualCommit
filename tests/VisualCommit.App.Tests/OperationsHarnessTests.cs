@@ -17,6 +17,9 @@ public class OperationsHarnessTests
 {
     private static readonly TimeSpan Short = TimeSpan.FromSeconds(1);
 
+    /// <summary>How long a test waits for a note due after <see cref="Short"/>: its watch is a thread of its own, not the pool's.</summary>
+    private static readonly TimeSpan NoteWait = TimeSpan.FromSeconds(30);
+
     [Fact]
     public async Task A_first_read_that_stalls_fails_by_name_at_the_step_limit()
     {
@@ -82,6 +85,41 @@ public class OperationsHarnessTests
         await app.WaitForIdleAsync();
     }
 
+    /// <summary>
+    /// An await the harness does not hold to a limit (an operation the test runs through
+    /// <see cref="OperationsHarness.Operations"/>) still gets named before the hang watchdog stops
+    /// the process: a harness still open at its note's time writes one line with the test, the
+    /// repository, the queue's operation and the git calls since the open.
+    /// </summary>
+    [Fact]
+    public async Task A_harness_still_open_at_its_note_names_the_test_and_the_operation_the_queue_runs()
+    {
+        using var repo = await Scenarios.OperationsAsync();
+        using var app = await OperationsHarness.OpenAsync(repo);
+        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var running = app.Repository.Queue.RunAsync(new GitOperation("Held step", "Holding…", OperationKind.Local, RefreshScope.None, async _ =>
+        {
+            await gate.Task;
+            return OperationReport.Done("Held step done");
+        }));
+        var notes = new FirstLine();
+        try
+        {
+            _ = app.StartStallNote(Short, notes);
+            var note = await notes.Written.Task.WaitAsync(NoteWait, TestContext.Current.CancellationToken);
+            Assert.StartsWith($"OperationsHarness: {TestContext.Current.Test!.TestDisplayName} has run ", note, StringComparison.Ordinal);
+            Assert.Contains($" s counted with its harness on {repo.Path} still open: the queue runs \"Held step\", 0 waiting; ", note, StringComparison.Ordinal);
+            Assert.Contains(" since the open", note, StringComparison.Ordinal);
+        }
+        finally
+        {
+            gate.TrySetResult();
+        }
+
+        await running;
+        await app.WaitForIdleAsync();
+    }
+
     [Fact]
     public void A_step_is_given_what_the_hang_watchdog_leaves_the_test_less_the_margin()
     {
@@ -90,6 +128,14 @@ public class OperationsHarnessTests
         var limit = OperationsHarness.StepLimit();
         Assert.InRange(limit, left.Value - OperationsHarness.WatchdogMargin - TimeSpan.FromSeconds(5), left.Value - OperationsHarness.WatchdogMargin);
         Assert.True(left.Value <= HangWatchdogAttribute.TestLimit);
+    }
+
+    /// <summary>A writer that keeps the first line written to it.</summary>
+    private sealed class FirstLine : StringWriter
+    {
+        public TaskCompletionSource<string> Written { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public override void WriteLine(string? value) => Written.TrySetResult(value ?? string.Empty);
     }
 
     /// <summary>The real repository, except that its status reads wait until the gate opens.</summary>

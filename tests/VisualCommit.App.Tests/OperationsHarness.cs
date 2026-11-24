@@ -287,6 +287,12 @@ internal sealed class OperationsHarness : IDisposable
         return limit > LeastStepLimit ? limit : LeastStepLimit;
     }
 
+    /// <summary>
+    /// Writes the stall note to <paramref name="to"/> once <paramref name="after"/> has passed with
+    /// the harness still open (the harness's own tests). Completes when the note's watch has ended.
+    /// </summary>
+    internal Task StartStallNote(TimeSpan after, TextWriter to) => Task.CompletedTask;
+
     public void Dispose()
     {
         Dialogs.Dispose();
