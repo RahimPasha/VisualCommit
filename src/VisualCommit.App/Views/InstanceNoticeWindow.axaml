@@ -46,11 +46,14 @@
                  Classes="dialogText"
                  Text="{Binding IfNoWindow}"
                  AutomationProperties.AutomationId="InstanceNoticeIfNoWindow" />
+      <!-- A polite live region (D435) whose text comes with the first unanswered try, so that a
+           screen reader speaks it. -->
       <TextBlock Name="InstanceNoticeStatus"
                  Classes="dialogWarning"
-                 Text="{Binding Status}"
+                 Text="{Binding StatusLine}"
                  IsVisible="{Binding ShowsStatus}"
-                 AutomationProperties.AutomationId="InstanceNoticeStatus" />
+                 AutomationProperties.AutomationId="InstanceNoticeStatus"
+                 AutomationProperties.LiveSetting="Polite" />
       <StackPanel Classes="dialogButtons">
         <Button Name="InstanceNoticeClose"
                 Theme="{StaticResource VcActionButton}"

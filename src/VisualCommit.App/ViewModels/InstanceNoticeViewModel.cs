@@ -76,10 +76,17 @@ public sealed partial class InstanceNoticeViewModel : ObservableObject
 
     public string Status => InstanceNoticeTexts.StillNoAnswer;
 
+    /// <summary>
+    /// The status line's text: <see cref="Status"/> once a try went unanswered, empty before, so
+    /// that the line's text changes as it shows and a screen reader is told of it (D435).
+    /// </summary>
+    public string StatusLine => ShowsStatus ? Status : string.Empty;
+
     public string CloseText => InstanceNoticeTexts.Close;
 
     /// <summary>The status shows after a try that the other instance did not answer either.</summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(StatusLine))]
     public partial bool ShowsStatus { get; private set; }
 
     /// <summary>A try runs: "Try again" reads "Trying…" and is disabled.</summary>

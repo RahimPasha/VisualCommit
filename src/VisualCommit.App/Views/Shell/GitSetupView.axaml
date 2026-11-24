@@ -19,12 +19,16 @@
        body. Tokens only. -->
   <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
     <StackPanel Margin="24" MaxWidth="520" VerticalAlignment="Center" Spacing="8">
+      <!-- The title, the error line and Check again's text are polite live regions (D435): a
+           search that ends on another state, Choose's "Checking…" and its refusal, and a search
+           that runs are spoken. -->
       <TextBlock Name="GitSetupTitle"
                  Text="{Binding Title}"
                  FontSize="16" FontWeight="SemiBold"
                  TextWrapping="Wrap" TextAlignment="Center"
                  HorizontalAlignment="Center"
-                 AutomationProperties.AutomationId="GitSetupTitle" />
+                 AutomationProperties.AutomationId="GitSetupTitle"
+                 AutomationProperties.LiveSetting="Polite" />
       <TextBlock Name="GitSetupBody"
                  Classes="secondary"
                  Text="{Binding Body}"
@@ -145,10 +149,11 @@
         <Button Name="GitSetupCheckAgainButton"
                 Theme="{StaticResource VcActionButton}"
                 kr:KeyRegion.IsMain="True"
-                Content="{Binding CheckAgainText}"
                 Command="{Binding CheckAgainCommand}"
                 AutomationProperties.AutomationId="GitSetupCheckAgainButton"
-                AutomationProperties.Name="{Binding CheckAgainText}" />
+                AutomationProperties.Name="{Binding CheckAgainText}">
+          <TextBlock Text="{Binding CheckAgainText}" AutomationProperties.LiveSetting="Polite" />
+        </Button>
         <Button Name="GitSetupContinueButton"
                 Theme="{StaticResource VcActionButton}"
                 kr:KeyRegion.IsMain="True"
@@ -166,7 +171,8 @@
                        IsVisible="{Binding ShowsError}"
                        TextWrapping="Wrap" TextAlignment="Center"
                        HorizontalAlignment="Center"
-                       AutomationProperties.AutomationId="GitSetupError" />
+                       AutomationProperties.AutomationId="GitSetupError"
+                       AutomationProperties.LiveSetting="Polite" />
 
       <!-- The links: git-scm.com's other ways (macOS, Linux), then the user guide's page; they wrap on a narrow window. -->
       <WrapPanel Name="GitSetupLinks" HorizontalAlignment="Center" ItemsAlignment="Center" ItemSpacing="8" LineSpacing="4">

@@ -124,8 +124,13 @@ public sealed class GitSetupShellTests : Phase8aChecks
         Assert.Equal([((object?)F.CheckAgain, (object?)F.Checking), (F.Checking, F.CheckAgain)], buttonNames);
         Assert.Equal([((object?)F.MissingTitle, (object?)tooOld)], titleNames);
 
-        // A search that ends on the same state: its button speaks, the title does not.
+        // A search that ends on the same state: its button speaks, the title does not. (Held, as a
+        // real search lasts: the fake's answer comes at once, and a search that ends before its
+        // command has started never says "Checking…".)
+        hold = probe.HoldNext();
         app.Click(button);
+        await hold.Started.WaitAsync(ShellDriver.DefaultWaitTimeout, TestContext.Current.CancellationToken);
+        hold.Release();
         await CheckAgainEndedAsync(app, probe, 3, tooOld);
 
         Assert.Equal(4, buttonNames.Count);
