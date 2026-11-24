@@ -128,6 +128,15 @@ public sealed partial class GitRepository
     /// a number is a boolean, and so is <c>m</c>, which Git 2.36 reads as the number 0 with the
     /// unit "mega" before it would read it as <c>merges</c> (git pull then merges).
     /// </summary>
+    /// <remarks>
+    /// <c>--type=bool --get</c> converts the key's value in every scope before it prints the last,
+    /// so a value in another scope that is no boolean (a global <c>pull.ff = only</c>) fails it,
+    /// although git pull reads the last value alone. When it fails and <paramref name="value"/>
+    /// can be a boolean, git is asked again for the entries whose value is
+    /// <paramref name="value"/> (<c>--fixed-value</c>, in git since 2.30, D420): the last of them
+    /// is the one in effect, and an empty value still tells a bare key (true) from <c>key =</c>
+    /// (false). A value that is no boolean on its own is not asked about twice.
+    /// </remarks>
     private async Task<bool?> ReadPullBoolAsync(string key, string value, CancellationToken cancellationToken)
     {
         switch (value.ToLowerInvariant())
@@ -139,7 +148,18 @@ public sealed partial class GitRepository
         }
 
         var result = await _runner.RunAsync(Read("config", "--type=bool", "--get", key), cancellationToken).ConfigureAwait(false);
-        return result.Succeeded ? result.StandardOutput.Trim() == "true" : null;
+        if (result.Succeeded)
+        {
+            return result.StandardOutput.Trim() == "true";
+        }
+
+        if (!GitBoolean.TryParse(value, bare: false, out _) && !GitBoolean.IsUnitLetterAlone(value))
+        {
+            return null;
+        }
+
+        var inEffect = await _runner.RunAsync(Read("config", "--type=bool", "--fixed-value", "--get", key, value), cancellationToken).ConfigureAwait(false);
+        return inEffect.Succeeded ? inEffect.StandardOutput.Trim() == "true" : null;
     }
 
     /// <summary>The keys of <see cref="ReadPullConfigurationAsync"/>, kept out of the partial class so that their names cannot meet another package's.</summary>
