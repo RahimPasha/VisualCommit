@@ -897,17 +897,36 @@ public class Phase8aOrderTests
     }
 
     /// <summary>
-    /// L6 a to c (design 12.3.3, 12.3.4 launch 2): with no rectangle for <c>main</c>'s name, the read is a
-    /// problem that names the read and the two accents the 3 % comparison cannot tell apart.
+    /// L6 a to c (design 12.3.3, 12.3.4 launch 2), by the rule launch 2 reads with (<c>HeadInk</c>): with no
+    /// rectangle for <c>main</c>'s name, nothing is read and the read is one problem, noted, that names the
+    /// read and the two accents the 3 % comparison cannot tell apart; with one, the read is the ink rule's
+    /// for that rectangle, and nothing else is noted.
     /// </summary>
     [Fact]
     public void L6_without_a_rectangle_for_main_is_a_problem()
     {
-        var missing = Phase8aRealWindowPass.NoHeadNameArea("main idle (VcAccentBrush)");
+        const string what = "main idle (VcAccentBrush)";
+        List<RectangleF> read = [];
+        List<string> noted = [];
+        IEnumerable<string> InkRule(RectangleF area)
+        {
+            read.Add(area);
+            return ["the ink rule's answer"];
+        }
 
+        var missing = Assert.Single(Phase8aRealWindowPass.HeadInk(null, what, InkRule, noted.Add));
+        Assert.Equal(Phase8aRealWindowPass.NoHeadNameArea(what), missing);
+        Assert.Equal(missing, Assert.Single(noted));
+        Assert.Empty(read);
         Assert.StartsWith("main idle (VcAccentBrush): UI Automation gives main's name no text element", missing, StringComparison.Ordinal);
         Assert.Contains("#7C8CFF", missing, StringComparison.Ordinal);
         Assert.Contains("#8B9AFF", missing, StringComparison.Ordinal);
+
+        noted.Clear();
+        var name = new RectangleF(42, 269, 156, 15.5f);
+        Assert.Equal("the ink rule's answer", Assert.Single(Phase8aRealWindowPass.HeadInk(name, what, InkRule, noted.Add)));
+        Assert.Equal(name, Assert.Single(read));
+        Assert.Empty(noted);
     }
 
     /// <summary>

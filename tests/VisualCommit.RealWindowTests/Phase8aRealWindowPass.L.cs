@@ -197,21 +197,31 @@ public partial class Phase8aRealWindowPass
 
     /// <summary>
     /// L6 a to c's read of <c>main</c>'s ink (<see cref="ReadInk"/>) in <paramref name="name"/>, the rectangle
-    /// of its text element (<see cref="TextArea"/>). Where UI Automation gives none, the read is a problem
-    /// (<see cref="NoHeadNameArea"/>), noted, which <see cref="Picture"/> asserts after the comparison, as
-    /// K2's gutter spots are: the comparison cannot carry this colour (design 12.3.3's fallback), since it
-    /// matches colours within 48 a channel (D58) and L6's two accents lie 15 apart at most.
+    /// of its text element (<see cref="TextArea"/>), by <see cref="HeadInk"/>'s rule: where UI Automation
+    /// gives none, the read is a problem, noted, which <see cref="Picture"/> asserts after the comparison.
     /// </summary>
-    private IEnumerable<string> ReadHeadInk(Bitmap capture, double scaling, string what, RectangleF? name, AvaloniaColor foreground, AvaloniaColor background, AvaloniaColor replaced)
+    private IEnumerable<string> ReadHeadInk(Bitmap capture, double scaling, string what, RectangleF? name, AvaloniaColor foreground, AvaloniaColor background, AvaloniaColor replaced) =>
+        HeadInk(name, what, area => ReadInk(capture, scaling, what, area, foreground, background, replaced), Note);
+
+    /// <summary>
+    /// L6's rule for a read of <c>main</c>'s ink: with <paramref name="name"/>, what <paramref name="read"/>,
+    /// the ink rule, gives for that rectangle; without, nothing is read and the read is one problem
+    /// (<see cref="NoHeadNameArea"/>), handed to <paramref name="note"/> too, as K2's gutter spots are: the
+    /// comparison cannot carry this colour (design 12.3.3's fallback), since it matches colours within 48 a
+    /// channel (D58) and L6's two accents lie 15 apart at most.
+    /// </summary>
+    internal static IEnumerable<string> HeadInk(RectangleF? name, string what, Func<RectangleF, IEnumerable<string>> read, Action<string> note)
     {
+        ArgumentNullException.ThrowIfNull(read);
+        ArgumentNullException.ThrowIfNull(note);
         if (name is not { } area)
         {
             var missing = NoHeadNameArea(what);
-            Note(missing);
+            note(missing);
             return [missing];
         }
 
-        return ReadInk(capture, scaling, what, area, foreground, background, replaced);
+        return read(area);
     }
 
     /// <summary>L6's problem when <c>main</c>'s name has no rectangle (<see cref="ReadHeadInk"/>): the read <paramref name="what"/>, why it was not read and why the comparison cannot stand for it.</summary>
