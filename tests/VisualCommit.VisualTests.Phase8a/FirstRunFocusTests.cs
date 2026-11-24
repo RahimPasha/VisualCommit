@@ -308,12 +308,14 @@ public sealed class FirstRunFocusTests : Phase8aChecks
     /// <summary>
     /// The settings screen's Git section on an empty tab whose git, at <see cref="F.WindowsGit"/>, came
     /// from <paramref name="source"/>, with <see cref="F.Chosen"/> taken by Browse as the row's
-    /// choice, so that the row's drop button shows, in view.
+    /// choice, so that the row's drop button shows, in view. Browse's probe of the chosen file is
+    /// answered made up, without running git, so that the app's 10 s limit on it is never what a
+    /// busy machine meets here.
     /// </summary>
     private static async Task<ShellDriver> StartWithAChoiceOnTheRowAsync(TempDirectory data, GitSource source)
     {
         var probe = new FakeGitSetupProbe(FakeGitSetupProbe.Windows(), FakeGitAnswer.RealAt(F.WindowsGit, source))
-            .AnswerFor(F.Chosen, FakeGitAnswer.RealAt(F.Chosen, GitSource.Setting));
+            .AnswerFor(F.Chosen, FakeGitAnswer.AvailableAt(F.Chosen));
         var app = await StartEmptyAsync(data, gitProbe: probe);
         try
         {

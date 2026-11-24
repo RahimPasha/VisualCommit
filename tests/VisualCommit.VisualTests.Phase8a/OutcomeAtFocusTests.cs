@@ -136,7 +136,7 @@ public sealed class OutcomeAtFocusTests : Phase8aChecks
         using var data = new TempDirectory("phase8a outcome");
         var probe = new FakeGitSetupProbe(FakeGitSetupProbe.Windows(), FakeGitAnswer.RealAt(F.WindowsGit, GitSource.Path))
             .AnswerFor(F.Old, FakeGitAnswer.TooOld(F.Old, GitSource.Setting, F.TooOldVersion))
-            .AnswerFor(F.Chosen, FakeGitAnswer.RealAt(F.Chosen, GitSource.Setting));
+            .AnswerFor(F.Chosen, FakeGitAnswer.AvailableAt(F.Chosen));
         using var app = await StartEmptyAsync(data, gitProbe: probe);
         var dialog = await app.OpenSettingsAsync(SettingsOpening.Key);
         app.ChooseSection(SettingsSection.Git);
@@ -166,10 +166,17 @@ public sealed class OutcomeAtFocusTests : Phase8aChecks
         Assert.Equal(new FocusEvent(F.ProgramBrowseId, F.Browse, refusal), focus.Last);
         Assert.Equal((F.Browse, refusal), NameAndHelpText(app.Window, F.ProgramBrowseId));
 
-        // A second Browse by Enter, a file that passes: the focus comes back with that file and its note.
+        // A second Browse by Enter, a file that passes: the focus comes back with that file and its
+        // note. The probe's made-up answer is held, as a real probe, which runs the file, never
+        // answers within the key press: Browse is disabled meanwhile and the focus leaves it.
         app.Folders.AnswerFile(F.Chosen);
         var refused = focus.Events.Count;
+        hold = probe.HoldNext();
         app.PressKey(Key.Enter);
+        await hold.Started.WaitAsync(ShellDriver.DefaultWaitTimeout, TestContext.Current.CancellationToken);
+        app.Settle();
+        Assert.Equal((F.Browse, F.Checking), NameAndHelpText(app.Window, F.ProgramBrowseId));
+        hold.Release();
         await app.WaitForAsync(
             () => !dialog.GitProgram.BrowseCommand.IsRunning && dialog.GitProgram.Choice == F.Chosen && app.FocusedAutomationId() == F.ProgramBrowseId && focus.Events.Count > refused,
             "the chosen file, with the focus back on Browse");
