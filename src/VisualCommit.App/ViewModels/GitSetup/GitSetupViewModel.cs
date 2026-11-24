@@ -224,21 +224,24 @@ public sealed partial class GitSetupViewModel : ObservableObject
     /// <summary>The command of "Install the Command Line Tools": macOS asks the user itself, so the app asks nothing first.</summary>
     public static LaunchCommand CommandLineToolsLaunch { get; } = new("/usr/bin/xcode-select", ["--install"]);
 
-    [RelayCommand]
+    // The launches and Copy keep their buttons enabled while they run: the launcher starts a
+    // program off the UI thread and the clipboard can be held by another program, and a button
+    // disabled meanwhile would lose the keyboard focus. A second press starts the same thing again.
+    [RelayCommand(AllowConcurrentExecutions = true)]
     private Task CommandLineToolsAsync() => StartAsync(CommandLineToolsLaunch, "xcode-select");
 
-    [RelayCommand]
+    [RelayCommand(AllowConcurrentExecutions = true)]
     private Task DownloadAsync() => OpenAsync(GitSetupTexts.DownloadForWindows);
 
-    [RelayCommand]
+    [RelayCommand(AllowConcurrentExecutions = true)]
     private Task MoreLinkAsync() =>
         OpenAsync(_guidance?.Platform == GuidancePlatform.MacOS ? GitSetupTexts.InstallOnMacOS : GitSetupTexts.InstallOnLinux);
 
-    [RelayCommand]
+    [RelayCommand(AllowConcurrentExecutions = true)]
     private Task GuideLinkAsync() => Content is { } content ? OpenAsync(AppLinks.Guide(content.Page)) : Task.CompletedTask;
 
     /// <summary>Shows the file git could not read, in the file manager.</summary>
-    [RelayCommand]
+    [RelayCommand(AllowConcurrentExecutions = true)]
     private async Task ShowFileAsync()
     {
         if (_git?.ConfigFault is not { } fault || _services.Launcher is not { } launcher)
@@ -257,7 +260,7 @@ public sealed partial class GitSetupViewModel : ObservableObject
     }
 
     /// <summary>Copy: the command shown, to the clipboard.</summary>
-    [RelayCommand]
+    [RelayCommand(AllowConcurrentExecutions = true)]
     private async Task CopyAsync()
     {
         if (Command is { } command && _services.Clipboard is { } clipboard)
