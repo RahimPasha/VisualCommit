@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
 using Avalonia.Styling;
+using Avalonia.VisualTree;
 using VisualCommit.App.Services;
 using VisualCommit.App.ViewModels;
 using VisualCommit.Core.Git;
@@ -67,18 +68,28 @@ public partial class Phase1Checks
         Assert.Equal("No repository", app.Find<TextBlock>("CurrentBranch").Text);
         AssertNoClippedText(app);
 
+        // The pointer leaves the new tab before the picture, so that the tab's tooltip, which opens
+        // after a delay of real time, is in no picture (phase 1's report, check 10).
         app.Click(app.Find<Button>("AddRepoButton"));
+        app.MoveToNeutral();
         app.Capture().Save(Phase, "10b-second-tab");
+        AssertNoToolTipOpen(app);
         var shell = app.Session.Shell;
         Assert.Equal(["New tab", "New tab"], Tabs(app));
         Assert.Same(shell.Tabs[1], shell.ActiveTab);
         Assert.All(CloseButtons(app), button => Assert.True(button.IsEffectivelyVisible));
 
         app.Click(CloseButtons(app)[1]);
+        app.MoveToNeutral();
         app.Capture().Save(Phase, "10c-second-tab-closed");
+        AssertNoToolTipOpen(app);
         Assert.Equal(["New tab"], Tabs(app));
         Assert.False(app.Find<Button>("CloseTabButton").IsEffectivelyVisible);
     }
+
+    /// <summary>No control of the window has its tooltip open: a picture shows none.</summary>
+    private static void AssertNoToolTipOpen(ShellDriver app) =>
+        Assert.DoesNotContain(app.Window.GetVisualDescendants().OfType<Control>(), control => ToolTip.GetIsOpen(control));
 
     [AvaloniaFact]
     public async Task Check_11_open_a_repository()
