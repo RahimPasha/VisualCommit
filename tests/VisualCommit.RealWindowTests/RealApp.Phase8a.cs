@@ -22,8 +22,9 @@ namespace VisualCommit.RealWindowTests;
 /// this project's output and the variables that point the app at it; a second start beside a running
 /// app; the window's state on the desktop (minimised, visible, the foreground window) read and set
 /// through Win32; the window's icons and a capture of any part of the screen, the taskbar's button
-/// among them; another top-level window of the app's process; and the graph row's events recorded
-/// for a screen reader's route; Windows' Open dialog confirmed only while it is the foreground window.
+/// among them; another top-level window of the app's process; the graph row's events recorded for a
+/// screen reader's route, and reads through UI Automation that never throw (<see cref="ReadOr{T}"/>);
+/// Windows' Open dialog confirmed only while it is the foreground window.
 /// Every wait is on a condition with a limit, never on a fixed time, and no call into the app's process
 /// waits without one. Nothing here changes a setting of the desktop (D224).
 /// </summary>
@@ -31,6 +32,12 @@ public sealed partial class RealApp
 {
     /// <summary>The automation id of the notice a start shows when the app on its data folder does not answer.</summary>
     public const string InstanceNoticeId = "InstanceNotice";
+
+    /// <summary>
+    /// What a read through UI Automation gives in place of a value it could not read (<see cref="ReadOr{T}"/>): the
+    /// element went, UI Automation refused or timed out, or a property was asked of a cache that does not hold it.
+    /// </summary>
+    public const string NotReadable = "(not readable)";
 
     /// <summary>How long a message sent to the app's window (<c>WM_GETICON</c>) may take to be answered before it counts as unanswered.</summary>
     private const uint MessageAnswerMilliseconds = 5000;
@@ -160,6 +167,34 @@ public sealed partial class RealApp
         catch (Exception ex) when (ex is COMException or FlaUI.Core.Exceptions.FlaUIException)
         {
             return null;
+        }
+    }
+
+    /// <summary>
+    /// Whether <paramref name="exception"/> is how a read through UI Automation fails: an
+    /// <see cref="ArgumentException"/> (E_INVALIDARG, a cached read of a property the element's cache does not
+    /// hold), a <see cref="COMException"/>, a <see cref="TimeoutException"/> (UI Automation's own time-out,
+    /// 0x80131505), an <see cref="InvalidOperationException"/>, or a FlaUI exception (an element no longer
+    /// available, a property or a pattern not supported or not cached).
+    /// </summary>
+    public static bool IsReadFailure(Exception exception) =>
+        exception is ArgumentException or COMException or TimeoutException or InvalidOperationException or FlaUI.Core.Exceptions.FlaUIException;
+
+    /// <summary>
+    /// A read through UI Automation that never throws: what <paramref name="read"/> gives, or
+    /// <paramref name="unreadable"/> when it fails as <see cref="IsReadFailure"/> says. For a read whose failure
+    /// should be noted and judged, not end the method before it judges.
+    /// </summary>
+    public static T ReadOr<T>(Func<T> read, T unreadable)
+    {
+        ArgumentNullException.ThrowIfNull(read);
+        try
+        {
+            return read();
+        }
+        catch (Exception ex) when (IsReadFailure(ex))
+        {
+            return unreadable;
         }
     }
 
@@ -436,8 +471,9 @@ public sealed partial class RealApp
     /// <c>Name</c> property changes and <c>LiveRegionChanged</c> events on <c>GraphRows</c>' subtree,
     /// each queued with its kind, its sender and its time and nothing else done in the handler (no UI
     /// Automation call there). The senders' ids are read when <see cref="SelectedRowEvents.Events"/>
-    /// is asked, from the cache the handlers were registered with. Read the graph's first child
-    /// before (D455): cold, a move raises no event from the row. Dispose it to stop recording.
+    /// is asked, outside the handlers, and never throw (<see cref="SelectedRowEvents"/> says how). Read
+    /// the graph's first child before (D455): cold, a move raises no event from the row. Dispose it to
+    /// stop recording.
     /// </summary>
     public SelectedRowEvents RecordSelectedRowEvents() => new(_automation, Find("GraphRows"));
 
@@ -570,14 +606,21 @@ public sealed partial class RealApp
         }
     }
 
-    /// <summary>One event from <c>GraphRows</c>' subtree: its kind (<see cref="SelectedRowEvents.NameChanged"/> or <see cref="SelectedRowEvents.LiveRegionChanged"/>), its sender's automation id (null where it could not be read), and when it came, from the recording's start.</summary>
+    /// <summary>
+    /// One event from <c>GraphRows</c>' subtree: its kind (<see cref="SelectedRowEvents.NameChanged"/> or
+    /// <see cref="SelectedRowEvents.LiveRegionChanged"/>), its sender's automation id (<see cref="NotReadable"/>
+    /// where neither the event's cache nor a read of the sender now gave it, null where the sender gives none),
+    /// and when it came, from the recording's start.
+    /// </summary>
     public sealed record RowEvent(string Kind, string? AutomationId, TimeSpan At);
 
     /// <summary>
     /// The graph row's events while recording (<see cref="RecordSelectedRowEvents"/>). The handlers
-    /// queue the kind, the sender and the time only; <see cref="Events"/> reads each sender's id
-    /// afterwards, from the cache that came with the event, else by asking UI Automation, outside any
-    /// handler. Disposing it removes both handlers.
+    /// queue the kind, the sender and the time only. <see cref="Events"/>, outside any handler, reads
+    /// each sender's id once and keeps it, and never throws: from the cache that came with the event,
+    /// else, on any failure of that read, from UI Automation now, else <see cref="NotReadable"/>, which
+    /// later calls try again, <see cref="IdReadAttempts"/> reads in all. Disposing it removes both
+    /// handlers.
     /// </summary>
     public sealed class SelectedRowEvents : IDisposable
     {
@@ -587,7 +630,16 @@ public sealed partial class RealApp
         /// <summary>The kind of a <c>LiveRegionChanged</c> event.</summary>
         public const string LiveRegionChanged = "LiveRegionChanged";
 
+        /// <summary>
+        /// How many calls of <see cref="Events"/> read a sender's id that could not be read before
+        /// <see cref="NotReadable"/> stands for it: a sender that was busy may answer the next call, one that
+        /// went answers none, and each failed read costs a call into the app.
+        /// </summary>
+        private const int IdReadAttempts = 3;
+
         private readonly ConcurrentQueue<(string Kind, AutomationElement Sender, TimeSpan At)> _queue = new();
+        private readonly List<Received> _received = [];
+        private readonly Lock _gate = new();
         private readonly Stopwatch _clock = Stopwatch.StartNew();
         private readonly CacheRequest _cache;
         private readonly PropertyChangedEventHandlerBase _names;
@@ -595,6 +647,8 @@ public sealed partial class RealApp
 
         internal SelectedRowEvents(UIA3Automation automation, AutomationElement rows)
         {
+            // The handlers are registered under the cache request, for a FlaUI that hands it to UI
+            // Automation; FlaUI 5.0.0 does not (TryReadId), and no read relies on it.
             _cache = new CacheRequest { TreeScope = TreeScope.Element };
             _cache.Add(automation.PropertyLibrary.Element.AutomationId);
             using (_cache.Activate())
@@ -621,8 +675,28 @@ public sealed partial class RealApp
         /// <summary>How long the recording has run: a mark to compare the events' times with.</summary>
         public TimeSpan Now => _clock.Elapsed;
 
-        /// <summary>Every event so far, in the order they came, each sender's id read now, outside the handlers.</summary>
-        public IReadOnlyList<RowEvent> Events() => [.. _queue.Select(entry => new RowEvent(entry.Kind, IdOf(entry.Sender), entry.At))];
+        /// <summary>
+        /// Every event so far, in the order they came, outside the handlers: the events queued since the last
+        /// call taken in, the ids not read yet read (<see cref="TryReadId"/>), and none of it throws.
+        /// </summary>
+        public IReadOnlyList<RowEvent> Events()
+        {
+            lock (_gate)
+            {
+                while (_queue.TryDequeue(out var queued))
+                {
+                    _received.Add(new Received(queued.Kind, queued.Sender, queued.At));
+                }
+
+                foreach (var received in _received.Where(item => !item.Settled))
+                {
+                    var read = TryReadId(received.Sender, out var id);
+                    received.Took(read, id);
+                }
+
+                return [.. _received.Select(item => new RowEvent(item.Kind, item.Id, item.At))];
+            }
+        }
 
         public void Dispose()
         {
@@ -630,28 +704,63 @@ public sealed partial class RealApp
             _names.Dispose();
         }
 
-        /// <summary>A sender's automation id: from the event's cache, else from UI Automation; null when neither answers.</summary>
-        private string? IdOf(AutomationElement sender)
+        /// <summary>
+        /// A sender's automation id, read outside the handlers, never throwing: from the event's cache; on any
+        /// failure of that read (<see cref="IsReadFailure"/>), from UI Automation now; when that fails too,
+        /// false with <see cref="NotReadable"/>. FlaUI 5.0.0 registers both handlers without handing UI
+        /// Automation a cache request (it passes none), so a sender comes without this cache and the cached
+        /// read fails with an <see cref="ArgumentException"/>; the read now is then the one that answers.
+        /// </summary>
+        private bool TryReadId(AutomationElement sender, out string? id)
         {
             try
             {
                 using (_cache.Activate())
                 {
-                    return sender.Properties.AutomationId.ValueOrDefault;
+                    id = sender.Properties.AutomationId.ValueOrDefault;
+                    return true;
                 }
             }
-            catch (Exception ex) when (ex is COMException or InvalidOperationException or FlaUI.Core.Exceptions.FlaUIException)
+            catch (Exception ex) when (IsReadFailure(ex))
             {
-                // Not in the cache: asked outside the handler.
+                // Not in the event's cache: read now, outside the handler.
             }
 
             try
             {
-                return sender.Properties.AutomationId.ValueOrDefault;
+                id = sender.Properties.AutomationId.ValueOrDefault;
+                return true;
             }
-            catch (Exception ex) when (ex is COMException or InvalidOperationException or FlaUI.Core.Exceptions.FlaUIException)
+            catch (Exception ex) when (IsReadFailure(ex))
             {
-                return null;
+                id = NotReadable;
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// One event taken from the queue, with its sender's id as read so far: settled once read, or once
+        /// <see cref="IdReadAttempts"/> reads have failed, when <see cref="NotReadable"/> stands.
+        /// </summary>
+        private sealed class Received(string kind, AutomationElement sender, TimeSpan at)
+        {
+            private int _attempts;
+
+            public string Kind { get; } = kind;
+
+            public AutomationElement Sender { get; } = sender;
+
+            public TimeSpan At { get; } = at;
+
+            public string? Id { get; private set; } = NotReadable;
+
+            public bool Settled { get; private set; }
+
+            /// <summary>Takes one read's result: the id when <paramref name="read"/>, else one failed attempt more.</summary>
+            public void Took(bool read, string? id)
+            {
+                Id = id;
+                Settled = read || ++_attempts >= IdReadAttempts;
             }
         }
     }

@@ -76,12 +76,13 @@ public partial class Phase8aRealWindowPass
         app.ClickAt(ours.X, ours.Y);
         app.WaitForFocusOn(U.GraphRowsId, StepTimeout);
         app.WaitFor(() => app.NamesOnScreen("DetailsSubject").Contains(U.OursEdits.Subject), $"the details of \"{U.OursEdits.Subject}\"", StepTimeout);
-        var first = ShownOne(app, U.GraphRowsId).FindFirstChild()
-            ?? throw new XunitException($"{U.GraphRowsId} has no child after a click on \"{U.OursEdits.Subject}\".");
+        var graphRows = ShownOne(app, U.GraphRowsId);
+        var first = RealApp.ReadOr<AutomationElement?>(() => graphRows.FindFirstChild(), null)
+            ?? throw new XunitException($"{U.GraphRowsId} has no child that UI Automation gives after a click on \"{U.OursEdits.Subject}\".");
         Note($"the graph's first child, read before the recording (D455): {Describe(first)}");
-        Assert.Equal(U.SelectedRowId, first.Properties.AutomationId.ValueOrDefault);
+        Assert.Equal(U.SelectedRowId, ReadText(() => first.Properties.AutomationId.ValueOrDefault));
         WaitForRowName(app, first, U.OursEdits.Name, "after the click");
-        Assert.Equal(U.OursEdits.Hint, RealApp.HelpTextOf(first));
+        Assert.Equal(U.OursEdits.Hint, ReadText(() => RealApp.HelpTextOf(first)));
 
         using (var events = app.RecordSelectedRowEvents())
         {
@@ -203,44 +204,58 @@ public partial class Phase8aRealWindowPass
     /// <c>U.EventWait</c>, its help text the move's hint, its control type ListItem; <c>GraphRows</c>'
     /// Selection pattern that one element; its height a display row's ±1 inside <c>GraphRowsBounds()</c>;
     /// UI Automation's focused element <c>GraphRows</c>, never the row (ruling 35). Noted in run.txt, then
-    /// asserted.
+    /// asserted. Every read of the row and the selection is a current one and never throws
+    /// (<see cref="RealApp.ReadOr{T}"/>): a read that fails is noted as <see cref="RealApp.NotReadable"/> and
+    /// fails its assertion by name, so the method still judges the rest.
     /// </summary>
     private void AssertExposedRow(RealApp app, U.Move move)
     {
         var rows = ShownOne(app, U.GraphRowsId);
-        var row = rows.FindFirstChild() ?? throw new XunitException($"{move.Key}: {U.GraphRowsId} has no child.");
+        var row = RealApp.ReadOr<AutomationElement?>(() => rows.FindFirstChild(), null)
+            ?? throw new XunitException($"{move.Key}: {U.GraphRowsId} has no child that UI Automation gives.");
         WaitForRowName(app, row, move.Row.Name, move.Key);
-        var id = row.Properties.AutomationId.ValueOrDefault;
-        var help = RealApp.HelpTextOf(row);
-        var type = row.Properties.ControlType.ValueOrDefault;
-        var selection = rows.Patterns.Selection.PatternOrDefault?.Selection.ValueOrDefault ?? [];
-        var selected = selection.Select(element => element.Properties.AutomationId.ValueOrDefault ?? "(no id)").ToList();
-        var bounds = app.BoundsOf(row);
+        var id = ReadText(() => row.Properties.AutomationId.ValueOrDefault);
+        var help = ReadText(() => RealApp.HelpTextOf(row));
+        var type = ReadText(() => row.Properties.ControlType.ValueOrDefault.ToString());
+        var selection = RealApp.ReadOr<AutomationElement[]?>(() => rows.Patterns.Selection.PatternOrDefault?.Selection.ValueOrDefault ?? [], null);
+        List<string?> selected = selection is null
+            ? [RealApp.NotReadable]
+            : [.. selection.Select(element => ReadText(() => element.Properties.AutomationId.ValueOrDefault ?? "(no id)"))];
+        var bounds = RealApp.ReadOr<RectangleF?>(() => app.BoundsOf(row), null);
         var graph = app.GraphRowsBounds();
         var focus = app.FocusedId();
         Note(string.Create(
             CultureInfo.InvariantCulture,
-            $"{move.Key}: the exposed row {Describe(row)}, help text \"{help}\"; {U.GraphRowsId}' selection [{string.Join(", ", selected)}]; its bounds {bounds} in the graph's {graph}, display row {move.Row.DisplayRow}'s centre at y {app.GraphRowCentreY(move.Row.DisplayRow):0.#}; the focus on {focus ?? "nothing"}"));
+            $"{move.Key}: the exposed row {Describe(row)}, help text \"{help}\"; {U.GraphRowsId}' selection [{string.Join(", ", selected)}]; its bounds {bounds?.ToString() ?? RealApp.NotReadable} in the graph's {graph}, display row {move.Row.DisplayRow}'s centre at y {app.GraphRowCentreY(move.Row.DisplayRow):0.#}; the focus on {focus ?? "nothing"}"));
 
         Assert.Equal(U.SelectedRowId, id);
         Assert.Equal(move.Hint, help);
-        Assert.Equal(ControlType.ListItem, type);
+        Assert.Equal(ControlType.ListItem.ToString(), type);
         Assert.Equal([U.SelectedRowId], selected);
+        if (bounds is not { } exposed)
+        {
+            throw new XunitException($"{move.Key}: the exposed row's bounds could not be read through UI Automation.");
+        }
+
         Assert.True(
-            Math.Abs(bounds.Height - WindowLayout.RowHeight) <= RowHeightTolerance,
-            string.Create(CultureInfo.InvariantCulture, $"{move.Key}: the exposed row is {bounds.Height:0.##} high, not {WindowLayout.RowHeight} ± {RowHeightTolerance}."));
+            Math.Abs(exposed.Height - WindowLayout.RowHeight) <= RowHeightTolerance,
+            string.Create(CultureInfo.InvariantCulture, $"{move.Key}: the exposed row is {exposed.Height:0.##} high, not {WindowLayout.RowHeight} ± {RowHeightTolerance}."));
         var inside = RectangleF.Inflate(graph, 0.5f, 0.5f);
-        Assert.True(inside.Contains(bounds), $"{move.Key}: the exposed row at {bounds} does not lie inside {U.GraphRowsId} at {graph}.");
+        Assert.True(inside.Contains(exposed), $"{move.Key}: the exposed row at {exposed} does not lie inside {U.GraphRowsId} at {graph}.");
         Assert.True(focus == U.GraphRowsId, $"{move.Key}: UI Automation's focused element is {focus ?? "nothing"}, not {U.GraphRowsId} (ruling 35: never the row).");
     }
 
-    /// <summary>Waits, at most <c>U.EventWait</c>, until <paramref name="row"/>'s name is <paramref name="expected"/>; a timeout quotes the name read.</summary>
+    /// <summary>
+    /// Waits, at most <c>U.EventWait</c>, until <paramref name="row"/>'s name is <paramref name="expected"/>; a
+    /// read that fails (<see cref="RealApp.ReadOr{T}"/>) counts as not yet and the wait looks again; a timeout
+    /// quotes the name read last.
+    /// </summary>
     private static void WaitForRowName(RealApp app, AutomationElement row, string expected, string when)
     {
         var seen = string.Empty;
         try
         {
-            app.WaitFor(() => (seen = row.Properties.Name.ValueOrDefault ?? string.Empty) == expected, $"{when}: {U.SelectedRowId} named \"{expected}\"", U.EventWait);
+            app.WaitFor(() => (seen = ReadText(() => row.Properties.Name.ValueOrDefault) ?? string.Empty) == expected, $"{when}: {U.SelectedRowId} named \"{expected}\"", U.EventWait);
         }
         catch (TimeoutException ex)
         {
@@ -267,23 +282,27 @@ public partial class Phase8aRealWindowPass
             ? "none"
             : string.Join("; ", events.Select(item => string.Create(CultureInfo.InvariantCulture, $"{item.Kind} from {item.AutomationId ?? "(no id)"} at +{(item.At - mark).TotalMilliseconds:0} ms")));
 
-    /// <summary>An element in words for run.txt: its id, control type, class and name.</summary>
+    /// <summary>An element in words for run.txt: its id, control type, class and name, each <see cref="RealApp.NotReadable"/> where its read fails.</summary>
     private static string Describe(AutomationElement element) =>
         string.Create(
             CultureInfo.InvariantCulture,
-            $"{element.Properties.AutomationId.ValueOrDefault ?? "(no id)"} ({element.Properties.ControlType.ValueOrDefault}, class {element.Properties.ClassName.ValueOrDefault ?? "none"}) \"{element.Properties.Name.ValueOrDefault}\"");
+            $"{ReadText(() => element.Properties.AutomationId.ValueOrDefault) ?? "(no id)"} ({ReadText(() => element.Properties.ControlType.ValueOrDefault.ToString())}, class {ReadText(() => element.Properties.ClassName.ValueOrDefault) ?? "none"}) \"{ReadText(() => element.Properties.Name.ValueOrDefault)}\"");
+
+    /// <summary>A text read through UI Automation that never throws (<see cref="RealApp.ReadOr{T}"/>): <see cref="RealApp.NotReadable"/> when the read fails.</summary>
+    private static string? ReadText(Func<string?> read) => RealApp.ReadOr(read, RealApp.NotReadable);
 
     /// <summary>
     /// The one control <paramref name="id"/> on screen, read through UI Automation: its name and its
     /// <c>AcceleratorKey</c> noted in run.txt beside U3's table's; returns a problem when the name is not
-    /// the table's (the key is noted, as the report asks, not asserted).
+    /// the table's (the key is noted, as the report asks, not asserted). A read that fails gives
+    /// <see cref="RealApp.NotReadable"/>, and so a problem, never an exception.
     /// </summary>
     private IEnumerable<string> ReadFixedName(RealApp app, string id)
     {
         var expected = U.FixedNames.Single(named => named.Id == id);
         var control = ShownOne(app, id);
-        var name = control.Name;
-        var key = RealApp.AcceleratorKeyOf(control);
+        var name = ReadText(() => control.Name);
+        var key = ReadText(() => RealApp.AcceleratorKeyOf(control));
         Note($"{id}: name \"{name}\", AcceleratorKey \"{key}\" (U3's table: \"{expected.Name}\", key {Quoted(expected.Key)})");
         return name == expected.Name ? [] : [$"{id} is named \"{name}\", not \"{expected.Name}\"."];
     }
@@ -295,8 +314,8 @@ public partial class Phase8aRealWindowPass
     /// </summary>
     private IEnumerable<string> ReadRowName(RealApp app, AutomationElement button, U.RowNamed expected)
     {
-        var name = button.Name;
-        var key = RealApp.AcceleratorKeyOf(button);
+        var name = ReadText(() => button.Name);
+        var key = ReadText(() => RealApp.AcceleratorKeyOf(button));
         Note($"{expected.Row}'s {expected.Id} in {expected.List}: name \"{name}\", AcceleratorKey \"{key}\" (U3's table: \"{expected.Name}\", no key)");
         return name == expected.Name ? [] : [$"{expected.Row}'s {expected.Id} in {expected.List} is named \"{name}\", not \"{expected.Name}\"."];
     }
