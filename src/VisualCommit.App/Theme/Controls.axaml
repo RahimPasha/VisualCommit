@@ -150,11 +150,14 @@
          The keyboard focus (:focus-visible) is a frame round the text in the colours of the
          theme's frame (2 px, and 1 px inside it), drawn outside the button's bounds: the theme's
          own frame lay on the bounds, which are the text's line box, and covered the first and
-         last letters and the underline (phase 8a's A1, a1b). The text's ink reaches the line
-         box's left and right, so the frame keeps 1 px clear of it there; the line box itself
-         keeps the letters 2 px clear of the frame above and the underline 1 px below. So
-         FocusFrame reaches 4 px outside the bounds left and right and 3 above and below; the
-         button does not clip, and neither may what holds it (GitLab's two links lie 4 apart).
+         last letters and the underline. FocusFrame reaches 4 px outside the bounds on every
+         side, so that its inner line keeps at least a device pixel of the background outside the
+         line box at every display scaling from 100 % to 200 %: the text's ink reaches the line
+         box's left and right, and at 150 % and 175 % its descenders and underline reach the
+         box's last row, where 3 px above and below rounded to 4 and 5 device pixels and the two
+         lines to 3 + 2 and 4 + 2, which laid the inner line on the text. The button does not
+         clip, and neither may what holds it (GitLab's two links lie 4 apart, so the frame of
+         one reaches the other's line box and stops there).
          FocusFrame is laid over the content, not round it: the panel takes the content's size,
          and the frame's negative margin gives back its borders, so nothing moves. It is only
          drawn, never hit (IsHitTestVisible False): a pointer on it reaches what lies under it,
@@ -175,7 +178,7 @@
                               Padding="{TemplateBinding Padding}"
                               Content="{TemplateBinding Content}"
                               ContentTemplate="{TemplateBinding ContentTemplate}" />
-            <Border Name="FocusFrame" Margin="-4,-3" BorderThickness="2" IsHitTestVisible="False">
+            <Border Name="FocusFrame" Margin="-4" BorderThickness="2" IsHitTestVisible="False">
               <Border Name="FocusFrameInner" BorderThickness="1" />
             </Border>
           </Panel>

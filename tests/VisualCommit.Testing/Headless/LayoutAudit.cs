@@ -75,15 +75,20 @@ public static class LayoutAudit
             var area = AreaInWindow(text, window);
             var shown = area;
             var visible = area.Intersect(windowArea);
-            foreach (var ancestor in text.GetVisualAncestors().OfType<Control>().Where(a => a.ClipToBounds))
+            foreach (var ancestor in text.GetVisualAncestors().OfType<Control>())
             {
-                if (allowScrolledOutOfView && ancestor is Avalonia.Controls.Presenters.ScrollContentPresenter or ScrollViewer or ItemsControl)
+                if (ClipInWindow(ancestor, window) is not { } clip)
                 {
-                    shown = shown.Intersect(AreaInWindow(ancestor, window));
                     continue;
                 }
 
-                visible = visible.Intersect(AreaInWindow(ancestor, window));
+                if (allowScrolledOutOfView && ancestor is Avalonia.Controls.Presenters.ScrollContentPresenter or ScrollViewer or ItemsControl)
+                {
+                    shown = shown.Intersect(clip);
+                    continue;
+                }
+
+                visible = visible.Intersect(clip);
             }
 
             visible = visible.Intersect(shown);
@@ -115,5 +120,24 @@ public static class LayoutAudit
     {
         var topLeft = visual.TranslatePoint(default, window) ?? default;
         return new Rect(topLeft, visual.Bounds.Size);
+    }
+
+    /// <summary>
+    /// Where <paramref name="control"/> lets its descendants be drawn, in the window: its bounds when
+    /// it clips to them (<c>ClipToBounds</c>), its clip geometry's bounds when it has one
+    /// (<c>Clip</c>, which may reach outside the bounds), the two together when both; null when it
+    /// clips nothing.
+    /// </summary>
+    private static Rect? ClipInWindow(Control control, TopLevel window)
+    {
+        Rect? clip = control.ClipToBounds ? AreaInWindow(control, window) : null;
+        if (control.Clip is { } geometry)
+        {
+            var topLeft = control.TranslatePoint(default, window) ?? default;
+            var bounds = geometry.Bounds.Translate(topLeft);
+            clip = clip is { } area ? area.Intersect(bounds) : bounds;
+        }
+
+        return clip;
     }
 }

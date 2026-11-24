@@ -12,7 +12,8 @@ namespace VisualCommit.Testing;
 /// underline). The rule, inside the text's box (its <c>TextBlock</c>'s bounds, whole pixels):
 /// <list type="bullet">
 /// <item>the focus changes no row of the box but those of the underline: at most
-/// <see cref="UnderlineRows"/> rows, next to each other, in the box's lower half;</item>
+/// <see cref="UnderlineRowsAt"/> rows at the pictures' display scaling (<see cref="UnderlineRows"/> at
+/// 1), next to each other, in the box's lower half;</item>
 /// <item>in those rows every pixel either stays as it was or moves toward the link's colour in each
 /// channel (an underline drawn in the link's colour over the text), so no ink of a letter is
 /// covered by anything else;</item>
@@ -30,16 +31,22 @@ namespace VisualCommit.Testing;
 /// </summary>
 public static class LinkFrame
 {
-    /// <summary>The most rows the underline may take (a line of about one pixel, antialiased over two).</summary>
+    /// <summary>The most rows the underline may take at a display scaling of 1 (a line of about one pixel, antialiased over two).</summary>
     public const int UnderlineRows = 2;
 
-    /// <summary>How far outside the text's box the frame's outer line is looked for.</summary>
+    /// <summary>
+    /// How far outside the text's box the frame's outer line is looked for, in the pictures' device
+    /// pixels. <c>VcLinkButton</c>'s outer line lies 2 to 4 px outside the link's bounds, which are its
+    /// text's box: its nearest whole row lies 3 device pixels out at a display scaling of 1 and 5 at 2,
+    /// and within this reach up to a scaling of 3.5.
+    /// </summary>
     public const int Reach = 8;
 
     /// <summary>
     /// The least of a pixel of the link's colour a column's underline rows hold: the app's underline
-    /// (Inter's, under 12 to 13 px text) is thinner than a pixel and lies across two rows, about 0.85
-    /// of a pixel in all, in either theme.
+    /// (Inter's, under 12 to 13 px text) is thinner than a pixel at a display scaling of 1 and lies
+    /// across two rows, about 0.85 of a pixel in all, in either theme; at a greater scaling it holds
+    /// more.
     /// </summary>
     public const double MinUnderline = 0.5;
 
@@ -47,20 +54,36 @@ public static class LinkFrame
     private const double ShareTolerance = 0.12;
 
     /// <summary>
+    /// The most rows the underline may take in pictures drawn at the display scaling
+    /// <paramref name="scale"/>: the line, about one pixel thick at 1, is about
+    /// <paramref name="scale"/> device pixels thick there and lies across a row more than the whole
+    /// pixels it reaches into; <see cref="UnderlineRows"/> at 1, 3 from 1.25 to 2 (at 2 About's links'
+    /// underline lies across three rows, about 0.5, 1 and 0.25 of a pixel).
+    /// </summary>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="scale"/> is less than 1.</exception>
+    public static int UnderlineRowsAt(double scale)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(scale, 1);
+        return UnderlineRows - 1 + (int)Math.Ceiling(scale);
+    }
+
+    /// <summary>
     /// What is wrong with the focused link's look; empty when the frame lies outside the text, the
     /// text's ink is all there and the underline shows under it.
     /// </summary>
     /// <param name="unfocused">The window with the link neither focused nor hovered.</param>
     /// <param name="focused">The same window with the link focused by the keyboard (<c>:focus-visible</c>), not hovered.</param>
-    /// <param name="text">The link's text's bounds in window pixels (its <c>TextBlock</c>).</param>
+    /// <param name="text">The link's text's bounds (its <c>TextBlock</c>'s) in the pictures' device pixels: its bounds in the window times <paramref name="scale"/>, the window's pixels at a scaling of 1.</param>
     /// <param name="link">The link's text colour.</param>
     /// <param name="background">The colour behind the link.</param>
     /// <param name="frame">The frame's outer line's colour (Fluent's <c>SystemControlFocusVisualPrimaryBrush</c>).</param>
     /// <param name="what">The link's name, for the messages.</param>
-    public static IReadOnlyList<string> Problems(Screenshot unfocused, Screenshot focused, Rect text, Color link, Color background, Color frame, string what)
+    /// <param name="scale">The display scaling the two pictures were drawn at, whose device pixels <paramref name="text"/> is given in; 1 or more.</param>
+    public static IReadOnlyList<string> Problems(Screenshot unfocused, Screenshot focused, Rect text, Color link, Color background, Color frame, string what, double scale = 1)
     {
         ArgumentNullException.ThrowIfNull(unfocused);
         ArgumentNullException.ThrowIfNull(focused);
+        var underlineRows = UnderlineRowsAt(scale);
         var problems = new List<string>();
         if (unfocused.Width != focused.Width || unfocused.Height != focused.Height)
         {
@@ -110,14 +133,14 @@ public static class LinkFrame
         }
 
         var middle = top + ((bottom - top) / 2);
-        if (changed.Count > UnderlineRows || (changed.Count > 1 && changed[^1] - changed[0] != changed.Count - 1) || changed.Any(y => y < middle))
+        if (changed.Count > underlineRows || (changed.Count > 1 && changed[^1] - changed[0] != changed.Count - 1) || changed.Any(y => y < middle))
         {
             var within = Box(changes.Min(c => c.X), changes.Min(c => c.Y), changes.Max(c => c.X) + 1, changes.Max(c => c.Y) + 1);
-            problems.Add(Text($"The focus changes {changes.Count} pixels of {what}'s text box {Box(left, top, right, bottom)} in the rows {string.Join(", ", changed)} (within {within}), where only an underline of at most {UnderlineRows} rows in the box's lower half may change it: something is drawn over the text."));
+            problems.Add(Text($"The focus changes {changes.Count} pixels of {what}'s text box {Box(left, top, right, bottom)} in the rows {string.Join(", ", changed)} (within {within}), where only an underline of at most {underlineRows} rows in the box's lower half may change it: something is drawn over the text."));
         }
 
         // In the underline's rows, every pixel stays or moves toward the link's colour.
-        var covered = changes.Where(c => changed.Count <= UnderlineRows && !TowardLink(unfocused.PixelAt(c.X, c.Y), focused.PixelAt(c.X, c.Y), link)).ToList();
+        var covered = changes.Where(c => changed.Count <= underlineRows && !TowardLink(unfocused.PixelAt(c.X, c.Y), focused.PixelAt(c.X, c.Y), link)).ToList();
         if (covered.Count > 0)
         {
             var (x, y) = covered[0];
@@ -126,13 +149,13 @@ public static class LinkFrame
 
         // The underline across the text's ink: in every column whose underline rows lay on the
         // background without the focus, those rows hold the link's colour over it, together at
-        // least MinUnderline of a pixel (the line is thinner than a pixel and antialiased over two),
-        // but where a piece of the line ends (PieceEnd).
+        // least MinUnderline of a pixel (at a scaling of 1 the line is thinner than a pixel and
+        // antialiased over two), but where a piece of the line ends (PieceEnd).
         if (changed.Count == 0)
         {
             problems.Add(Text($"{what} shows no underline in its box {Box(left, top, right, bottom)}: the focus changes none of its pixels."));
         }
-        else if (changed.Count <= UnderlineRows)
+        else if (changed.Count <= underlineRows)
         {
             var width = inkRight - inkLeft + 1;
             var clear = Enumerable.Range(inkLeft, width).Where(x => changed.All(y => unfocused.PixelAt(x, y) == background)).ToHashSet();
