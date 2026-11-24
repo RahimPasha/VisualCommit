@@ -196,6 +196,79 @@ public class PullConfigurationTests
         Assert.Equal((PullFastForwardSetting.Always, PullRebaseSetting.Rebase), (read.FastForward, read.Rebase));
     }
 
+    /// <summary>
+    /// A global value that is no boolean under a repository's value that is one (8.9): the
+    /// global file's text, the repository's lines appended to its own configuration, and what Pull
+    /// reads. <c>git config --type=bool --get</c> converts the key's value in every scope and fails on
+    /// the global one; git pull reads the last value alone and accepts it.
+    /// </summary>
+    public static TheoryData<string, string, PullFastForwardSetting, PullRebaseSetting, string> AcrossScopes => new()
+    {
+        { "[pull]\n\tff = only\n", "[pull]\n\tff = 1\n", PullFastForwardSetting.Always, PullRebaseSetting.None, "pull.rebase" },
+        { "[pull]\n\tff = only\n", "[pull]\n\tff = 0\n", PullFastForwardSetting.Never, PullRebaseSetting.None, "pull.rebase" },
+        { "[pull]\n\tff = only\n", "[pull]\n\tff\n", PullFastForwardSetting.Always, PullRebaseSetting.None, "pull.rebase" },
+        { "[pull]\n\tff = only\n", "[pull]\n\tff =\n", PullFastForwardSetting.Never, PullRebaseSetting.None, "pull.rebase" },
+        { "[pull]\n\tff = only\n", "[pull]\n\tff = 0x10\n", PullFastForwardSetting.Always, PullRebaseSetting.None, "pull.rebase" },
+        { "[pull]\n\trebase = merges\n", "[pull]\n\trebase = 0\n", PullFastForwardSetting.Unset, PullRebaseSetting.None, "pull.rebase" },
+        { "[pull]\n\trebase = merges\n", "[pull]\n\trebase = 1\n", PullFastForwardSetting.Unset, PullRebaseSetting.Rebase, "pull.rebase" },
+        { "[pull]\n\trebase = interactive\n", "[pull]\n\trebase\n", PullFastForwardSetting.Unset, PullRebaseSetting.Rebase, "pull.rebase" },
+        { "[pull]\n\trebase = merges\n", "[pull]\n\trebase =\n", PullFastForwardSetting.Unset, PullRebaseSetting.None, "pull.rebase" },
+        { "[branch \"main\"]\n\trebase = merges\n", "[branch \"main\"]\n\trebase = 0\n", PullFastForwardSetting.Unset, PullRebaseSetting.None, "branch.main.rebase" },
+        { "[pull]\n\tff = only\n\trebase = merges\n", "[pull]\n\tff = 1\n\trebase = 1\n", PullFastForwardSetting.Always, PullRebaseSetting.Rebase, "pull.rebase" },
+
+        // The other way round: the repository's value is no boolean and wins, as before.
+        { "[pull]\n\tff = 1\n", "[pull]\n\tff = only\n", PullFastForwardSetting.Only, PullRebaseSetting.None, "pull.rebase" },
+        { "[pull]\n\trebase = 1\n", "[pull]\n\trebase = merges\n", PullFastForwardSetting.Unset, PullRebaseSetting.Merges, "pull.rebase" },
+    };
+
+    [Theory]
+    [MemberData(nameof(AcrossScopes))]
+    public async Task The_value_in_effect_is_read_alone_whatever_another_scope_holds(
+        string global,
+        string local,
+        PullFastForwardSetting fastForward,
+        PullRebaseSetting rebase,
+        string rebaseKey)
+    {
+        using var lab = new ConfigLab();
+        lab.WriteGlobal(global);
+        using var repo = await RepositoryWithAsync("none");
+        await File.AppendAllTextAsync(Path.Combine(repo.Path, ".git", "config"), local, TestCancelled);
+        var repository = await lab.OpenAsync(repo);
+
+        var read = await repository.ReadPullConfigurationAsync("main", TestCancelled);
+        var fastForwardOnly = await repository.ReadPullFastForwardSettingAsync(TestCancelled);
+
+        Assert.Equal((fastForward, rebase, rebaseKey, (string?)null), (read.FastForward, read.Rebase, read.RebaseKey, read.Problem));
+        Assert.Equal((fastForward, (string?)null), (fastForwardOnly.FastForward, fastForwardOnly.Problem));
+
+        // git pull with the same settings, here without a remote: it accepts them and ends at "There
+        // is no tracking information" (exit 1), never at its refusal (128), on every git. The
+        // refusal's words differ by version ("Invalid value for pull.ff: …" on 2.34, "invalid value
+        // for 'pull.ff'" since 2.36), so they are looked for in either case.
+        var pull = await lab.Runner.RunAsync(new GitCommand("pull") { WorkingDirectory = repo.Path }, TestCancelled);
+        Assert.True(pull.ExitCode == 1, $"git pull exited {pull.ExitCode}: {pull.StandardError}");
+        Assert.DoesNotContain("invalid value", pull.StandardError, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task The_first_read_stays_and_only_its_failure_asks_again_for_the_value_in_effect()
+    {
+        // A value that is no boolean on its own is refused by the first read and asked no more; one
+        // that can be a boolean is asked again, with the entries of the value in effect alone.
+        using var lab = new ConfigLab();
+        lab.WriteGlobal("[pull]\n\tff = only\n");
+        using var repo = await RepositoryWithAsync("pull.ff=1");
+        var repository = await lab.OpenAsync(repo);
+        var mark = lab.Calls.Snapshot().Count;
+
+        await repository.ReadPullFastForwardSettingAsync(TestCancelled);
+
+        Assert.Equal(
+            [("git config --get pull.ff", 0), ("git config --type=bool --get pull.ff", 128), ("git config --type=bool --fixed-value --get pull.ff 1", 0)],
+            lab.Calls.Snapshot().Skip(mark).Select(call => (call.CommandText, call.ExitCode)));
+    }
+
     [Fact]
     public void A_configuration_without_a_problem_has_nothing_to_report()
     {

@@ -54,12 +54,20 @@ public class AskPassBrokerHelperTests
         Assert.Null(prompts.CheckHelper());
     }
 
+    /// <summary>The line on macOS and Linux, where ssh shares the terminal VisualCommit was started from.</summary>
+    private const string UnixLine =
+        "Git and ssh get SSH_ASKPASS_REQUIRE=force, so that ssh asks through VisualCommit; OpenSSH older than 8.4 ignores it and asks in the terminal VisualCommit was started from, if there is one.";
+
+    /// <summary>The line on Windows, where VisualCommit is a window program and starts git without a console a terminal shows.</summary>
+    private const string WindowsLine =
+        "Git and ssh get SSH_ASKPASS_REQUIRE=force, so that ssh asks through VisualCommit; OpenSSH older than 8.4 ignores it, and on Windows no terminal shows its question: cancel the operation if it waits.";
+
     [Fact]
     public void The_line_about_ssh_comes_once_per_session_at_its_first_ask_or_deny_scope()
     {
         var log = new ListLog();
         using var broker = new AskPassBroker(new RecordingPromptHandler(), log);
-        var line = (LogLevel.Info, "Git and ssh get SSH_ASKPASS_REQUIRE=force, so that ssh asks through VisualCommit; OpenSSH older than 8.4 ignores it and asks in the terminal VisualCommit was started from, if there is one.");
+        var line = (LogLevel.Info, OperatingSystem.IsWindows() ? WindowsLine : UnixLine);
 
         using (broker.Begin("Commit", "repo", PromptMode.None))
         {
@@ -68,7 +76,7 @@ public class AskPassBrokerHelperTests
 
         using (broker.Begin("Fetch origin", "repo", PromptMode.Deny))
         {
-            Assert.Single(log.Entries, entry => entry == line);
+            Assert.Equal(line, Assert.Single(log.Entries, entry => entry.Message.StartsWith("Git and ssh get SSH_ASKPASS_REQUIRE=force", StringComparison.Ordinal)));
         }
 
         using (broker.Begin("Push", "repo", PromptMode.Ask))
@@ -77,6 +85,14 @@ public class AskPassBrokerHelperTests
             Assert.Single(log.Entries, entry => entry == line);
         }
 
-        Assert.Equal(AskPassBroker.AskPassRequireLine, line.Item2);
+        Assert.Equal(AskPassBroker.AskPassRequireLineFor(OperatingSystem.IsWindows()), line.Item2);
+    }
+
+    [Fact]
+    public void Each_system_has_its_own_words_and_only_macOS_and_Linux_name_a_terminal()
+    {
+        Assert.Equal(WindowsLine, AskPassBroker.AskPassRequireLineFor(windows: true));
+        Assert.Equal(UnixLine, AskPassBroker.AskPassRequireLineFor(windows: false));
+        Assert.DoesNotContain("the terminal VisualCommit was started from", AskPassBroker.AskPassRequireLineFor(windows: true), StringComparison.Ordinal);
     }
 }

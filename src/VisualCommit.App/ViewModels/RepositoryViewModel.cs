@@ -1824,9 +1824,17 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
         ApplyHosting(refs);
     }
 
+    /// <summary>
+    /// Shows a reloaded history in place of the one shown, keeping the selected commit and, while
+    /// the graph is scrolled, the commit at the top of the view at the top: commits that come or go
+    /// above it move the offset by as many rows, its part of a row kept. At the top, when that
+    /// commit is no longer in the graph, or when the working-changes row is at the top, the offset
+    /// stays.
+    /// </summary>
     private void SwapGraph(CommitGraphData data)
     {
         var selected = _selectedSha;
+        var anchor = TopRowAnchor();
         _restoringSelection = true;
         try
         {
@@ -1836,6 +1844,11 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
         finally
         {
             _restoringSelection = false;
+        }
+
+        if (anchor is { } top && data.IndexOf(top.Sha) is var index && index >= 0 && index != top.Index)
+        {
+            ScrollOffset = Math.Max(0, top.Offset + ((index - top.Index) * GraphRowHeight));
         }
 
         if (SelectedIndex < 0 && selected is not null)
@@ -1852,6 +1865,26 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
         }
 
         OnGraphSwapped(data);
+    }
+
+    /// <summary>
+    /// The commit drawn at the top of the view, its row and the offset, while the graph is
+    /// scrolled away from the top; null at the top, or while the working-changes row is the top
+    /// row (D60), whose place no reload changes. The graph control draws its rows at the offset
+    /// rounded to a whole pixel, so the row and the top are taken at that offset; the offset kept
+    /// is the unrounded one.
+    /// </summary>
+    private (string Sha, int Index, double Offset)? TopRowAnchor()
+    {
+        var offset = ScrollOffset;
+        var drawn = Math.Round(offset);
+        if (!(drawn > 0))
+        {
+            return null;
+        }
+
+        var index = (int)Math.Floor(drawn / GraphRowHeight) - (HasWorkingChanges ? 1 : 0);
+        return index >= 0 && index < Graph.Count ? (Graph.CommitAt(index).Sha, index, offset) : null;
     }
 
     private void ApplyPendingSelection(CommitGraphData data)

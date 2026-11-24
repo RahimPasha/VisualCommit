@@ -38,4 +38,6 @@ This site is built with mdBook (Mozilla Public License 2.0). Its fonts are Open 
 Apache License 2.0 ([its license](../fonts/OPEN-SANS-LICENSE.txt)), and Source Code Pro, under the
 SIL Open Font License 1.1 ([its license](../fonts/SOURCE-CODE-PRO-LICENSE.txt)); its icons are
 from Font Awesome Free 6.2.0, whose icons are under the Creative Commons Attribution 4.0 license.
+Its code is colored by highlight.js, under the BSD 3-Clause License, and its copy buttons and
+search use clipboard.js, elasticlunr and mark.js, under the MIT License.
 The site loads nothing from another site, and it has no analytics.

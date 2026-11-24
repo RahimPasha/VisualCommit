@@ -26,13 +26,17 @@ organization you signed in to) and you signed in to that service in VisualCommit
 If the first-run screen says that part of VisualCommit is missing, these dialogs cannot come: see
 [The sign-in helper is missing](git.md#helper-missing).
 
-## SSH asks in a terminal instead
+## An old OpenSSH does not ask through VisualCommit
 
-An OpenSSH older than 8.4 ignores VisualCommit's sign-in dialog and asks in the terminal
-VisualCommit was started from. RHEL 8 ships 8.0, and the OpenSSH built into Windows can be older
-where you chose it.
+An OpenSSH older than 8.4 ignores VisualCommit's sign-in dialog. RHEL 8 ships 8.0, and the
+OpenSSH built into Windows can be older where you chose it.
 
-If you started VisualCommit from a terminal, answer there, or cancel the operation in VisualCommit.
+- On Linux and macOS it asks in the terminal VisualCommit was started from, if there is one: answer
+  there, or cancel the operation in VisualCommit.
+- On Windows no terminal shows its question, not even the one you started VisualCommit from:
+  VisualCommit runs git without a console window. If the operation waits, cancel it in
+  VisualCommit.
+
 To avoid it, update OpenSSH, load your key into an SSH agent before you start VisualCommit, or use
 the remote's HTTPS address. `ssh -V` in a terminal prints the version of the ssh that terminal
 finds, which may not be the one git runs: on Windows, Git for Windows brings its own unless you

@@ -1071,7 +1071,8 @@ wave adds to it. What wave 2 tells §12's launches is in 12.3.5.
   `VisualCommit looks for Git again when you save.` (the lead's ruling). The netrc question is one
   of `SettingsDialogViewModel.Loaded`'s reads, not asked again that session once the note is
   dismissed. `MainWindowViewModel.HomeHasNetrc(variable, directoryExists, fileExists, windows)` is
-  public static, for the tests. The ssh line is the constant `AskPassBroker.AskPassRequireLine`.
+  public static, for the tests. The ssh line is `AskPassBroker.AskPassRequireLineFor(OperatingSystem.IsWindows())`:
+  the constant `AskPassRequireLineWindows` on Windows, `AskPassRequireLineUnix` elsewhere.
 - **First run: names (§9).** Each button's and link's automation name is its text, bound where the
   text changes, so `GitSetupCheckAgainButton`'s reads `Checking…` during a search. `GitStatus`'s
   help text is `GitStatusToolTip`, none without a path; `GitSetupButton` sits left of `GitStatus`.

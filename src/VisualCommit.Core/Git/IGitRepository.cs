@@ -661,7 +661,9 @@ public interface IGitRepository
     /// A boolean or <c>only</c> fills <see cref="PullConfiguration.FastForward"/> (the rebase
     /// setting none, no value); a value git refuses fills <see cref="PullConfiguration.Problem"/>
     /// with <c>pull.ff</c> as its key. A read: <c>git config --get pull.ff</c>, and
-    /// <c>git config --type=bool --get pull.ff</c> for an uncommon value.
+    /// <c>git config --type=bool --get pull.ff</c> for an uncommon value; when that fails on another
+    /// scope's value, <c>git config --type=bool --fixed-value --get pull.ff &lt;value&gt;</c> for a value
+    /// that can be a boolean.
     /// </summary>
     Task<PullConfiguration> ReadPullFastForwardSettingAsync(CancellationToken cancellationToken = default);
 

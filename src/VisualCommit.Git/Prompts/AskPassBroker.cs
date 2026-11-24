@@ -160,11 +160,22 @@ public sealed class AskPassBroker : IGitPromptBroker, IDisposable
     }
 
     /// <summary>
-    /// The Info line of the session's first Ask or Deny scope: every such scope sets
-    /// <c>SSH_ASKPASS_REQUIRE=force</c>, which an OpenSSH older than 8.4 ignores.
+    /// The Info line of the session's first Ask or Deny scope on macOS and Linux: every such scope
+    /// sets <c>SSH_ASKPASS_REQUIRE=force</c>, which an OpenSSH older than 8.4 ignores (D424).
     /// </summary>
-    public const string AskPassRequireLine =
+    public const string AskPassRequireLineUnix =
         "Git and ssh get SSH_ASKPASS_REQUIRE=force, so that ssh asks through VisualCommit; OpenSSH older than 8.4 ignores it and asks in the terminal VisualCommit was started from, if there is one.";
+
+    /// <summary>
+    /// The same line on Windows, where the app is a window program and starts every git without a
+    /// console window (<see cref="GitRunner"/>): ssh inherits git's hidden console, never the
+    /// terminal the app was started from.
+    /// </summary>
+    public const string AskPassRequireLineWindows =
+        "Git and ssh get SSH_ASKPASS_REQUIRE=force, so that ssh asks through VisualCommit; OpenSSH older than 8.4 ignores it, and on Windows no terminal shows its question: cancel the operation if it waits.";
+
+    /// <summary>The line for Windows (<paramref name="windows"/>) or for macOS and Linux.</summary>
+    public static string AskPassRequireLineFor(bool windows) => windows ? AskPassRequireLineWindows : AskPassRequireLineUnix;
 
     /// <summary>The helper's full path, as the variables of every <c>Ask</c> and <c>Deny</c> scope name it.</summary>
     public string HelperPath { get; }
@@ -239,7 +250,7 @@ public sealed class AskPassBroker : IGitPromptBroker, IDisposable
         // ssh is never asked for its version: the line says once per session what an old OpenSSH does.
         if (mode is PromptMode.Ask or PromptMode.Deny && Interlocked.Exchange(ref _askPassRequireLogged, 1) == 0)
         {
-            _log.Info(AskPassRequireLine);
+            _log.Info(AskPassRequireLineFor(OperatingSystem.IsWindows()));
         }
 
         var scope = new Scope(this, id, title, repositoryName, mode, EnvironmentFor(id, mode, used), group, used);
