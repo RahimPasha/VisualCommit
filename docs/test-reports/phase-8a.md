@@ -3123,9 +3123,10 @@ Steps, method 3:
    show. Read their names (U3). Click `CompareClose`; wait until the comparison has closed (open point
    82).
 4. Right-click `Local branches › feature › alpha`; click `Hide feature/alpha`; wait until the graph has
-   no row "Alpha one" or "Alpha two" and `alpha`'s row under Local branches shows `RefHiddenToggle`.
-   Click `Remotes › origin › feature` (the folder opens); wait until its `alpha` row shows
-   `RefHiddenToggle` (open point 80).
+   no row "Alpha one" or "Alpha two" and `alpha`'s row under Local branches shows `RefHiddenToggle`, and
+   until the graph has been read again for the hide (`WaitForGraphReloadAsync`, as in step 9). Click
+   `Remotes › origin › feature` (the folder opens); wait until its `alpha` row shows `RefHiddenToggle`
+   (open point 80).
 5. Press Ctrl+J; wait until the activity log shows (`ActivityLogClose` shown).
 6. Click display row 0, the working-changes row (`ShellDriver.WorkingRowPoint()`); wait for the stage
    panel and its lists. Click the unstaged list's row of README.md; wait until its diff shows
@@ -4792,6 +4793,13 @@ so A1's capture at that size is not run there (run.txt says so).
   2026-11-21 and fixed at §8's and §9's merges, but written only into those open points and this
   report's texts, so each check asserted something no expected result named, which could then have been
   changed with no reason recorded. No check and no picture changes.
+- **U2 and U3, method 3, step 4** (2026-11-24; the review before the gate, S19-27; design 13.1's rulings
+  99 and 100). The step also waits until the graph has been read again for the hide
+  (`WaitForGraphReloadAsync`), as step 9 does for the solo since `996b9fc`. Reason: a hide's reload runs
+  outside the operations queue (phase 5's design 8.2), the step waited for the branch's rows and the
+  graph's subjects but not for that reload's end, and the steps after it press rows of panels that
+  refresh with it; step 9 had the same gap before CI's failure of 2026-11-22 showed it. No expected
+  result changes, and part U's six pictures are the same files as before.
 
 ### Wave 1's comparison with phase 7b's references (2026-11-20)
 

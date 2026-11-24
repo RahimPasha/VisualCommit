@@ -243,6 +243,10 @@ public sealed class Phase8aChecksU : Phase8aChecks
         await app.WaitForAsync(
             () => app.RefRowMarks(U.LocalBranches, U.Feature, U.Alpha).ShowsHiddenToggle && !GraphSubjects(repository).Contains("Alpha one") && !GraphSubjects(repository).Contains("Alpha two"),
             "feature/alpha hidden and out of the graph");
+
+        // A hide is no operation of the queue either (step 9's note): its graph reloads through a
+        // refresh, and the steps that follow press rows of panels that refresh with it.
+        await app.WaitForGraphReloadAsync();
         app.Click(await app.RefRowAsync(U.Remotes, U.Origin, U.Feature));
         await app.WaitForAsync(() => app.RefRowMarks(U.Remotes, U.Origin, U.Feature, U.Alpha).ShowsHiddenToggle, "origin/feature/alpha's eye");
 
