@@ -1827,8 +1827,9 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
     /// <summary>
     /// Shows a reloaded history in place of the one shown, keeping the selected commit and, while
     /// the graph is scrolled, the commit at the top of the view at the top: commits that come or go
-    /// above it move the offset by as many rows, its part of a row kept. When that commit is no
-    /// longer in the graph, or the working-changes row is at the top, the offset stays.
+    /// above it move the offset by as many rows, its part of a row kept. At the top, when that
+    /// commit is no longer in the graph, or when the working-changes row is at the top, the offset
+    /// stays.
     /// </summary>
     private void SwapGraph(CommitGraphData data)
     {
@@ -1869,17 +1870,20 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
     /// <summary>
     /// The commit drawn at the top of the view, its row and the offset, while the graph is
     /// scrolled away from the top; null at the top, or while the working-changes row is the top
-    /// row (D60), whose place no reload changes.
+    /// row (D60), whose place no reload changes. The graph control draws its rows at the offset
+    /// rounded to a whole pixel, so the row and the top are taken at that offset; the offset kept
+    /// is the unrounded one.
     /// </summary>
     private (string Sha, int Index, double Offset)? TopRowAnchor()
     {
         var offset = ScrollOffset;
-        if (!(offset > 0))
+        var drawn = Math.Round(offset);
+        if (!(drawn > 0))
         {
             return null;
         }
 
-        var index = (int)Math.Floor(offset / GraphRowHeight) - (HasWorkingChanges ? 1 : 0);
+        var index = (int)Math.Floor(drawn / GraphRowHeight) - (HasWorkingChanges ? 1 : 0);
         return index >= 0 && index < Graph.Count ? (Graph.CommitAt(index).Sha, index, offset) : null;
     }
 

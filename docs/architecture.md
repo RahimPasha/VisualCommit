@@ -918,8 +918,10 @@ to a real parent from there and is solid. Lanes, colours and nodes are as before
   switches tabs.
 - A reload that swaps the graph (`SwapGraph`: an outside commit, a fetch, a filter) keeps the
   commit at the top of a scrolled view at the top: the view model moves `ScrollOffset` by as many
-  rows as came or went above it, its part of a row kept. At offset 0, while the working-changes
-  row is the top row, or when that commit is no longer in the graph, the offset stays.
+  rows as came or went above it, its part of a row kept. That commit is the row the control draws
+  at the top, at the offset rounded to a whole pixel, as `FirstVisibleRow` takes it. At the top
+  (an offset that rounds to 0), while the working-changes row is the top row, or when that commit
+  is no longer in the graph, the offset stays.
 - UI Automation sees the graph as one element (`GraphRows`, "Commit graph"); rows are not
   exposed yet (D49).
 - `RowsDrawn` and `FrameDrawn` (the time `Render` took) feed the Q1 measurements.
