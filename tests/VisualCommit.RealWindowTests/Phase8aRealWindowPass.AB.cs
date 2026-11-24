@@ -278,10 +278,10 @@ public partial class Phase8aRealWindowPass
 
     /// <summary>
     /// The size B1 (a) asks the executable's icon at: one of the <c>.ico</c>'s frames, so that Windows hands
-    /// back that frame whatever the display's scaling. Asked at none, Windows gives <c>SM_CXICON</c> for the
-    /// test host's DPI, 32 scaled by it, which at 175 % is 56, a size the <c>.ico</c> lacks and a frame
-    /// Windows scaled (design 12.3.5). 64 is <c>SM_CXICON</c> at the laptop's 200 %: the frame the first
-    /// runs compared.
+    /// back that frame whatever the display's scaling. With no size asked (<c>Icon.ExtractAssociatedIcon</c>)
+    /// Windows gives the icon at <c>SM_CXICON</c> for the test host's DPI, 32 scaled by it: at 175 % that is
+    /// 56, none of the <c>.ico</c>'s sizes (design 12.3.5 lists them), so the icon handed back is a frame
+    /// Windows scaled. 64 is <c>SM_CXICON</c> at the laptop's 200 %: the frame the first runs compared.
     /// </summary>
     internal const int ExecutableIconSize = 64;
 
