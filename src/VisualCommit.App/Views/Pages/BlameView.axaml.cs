@@ -20,8 +20,8 @@ namespace VisualCommit.App.Views.Pages;
 /// fills the text and the gutter from the view model, keeps the gutter's width by the page's
 /// (130, or 200 from a page 700 wide), turns a click on a run, in the gutter or on its text, into
 /// picking it and a double-click into "Show in graph", picks the caret's run after an arrow key as
-/// a click would (a run picked in the gutter or by a right-click takes the caret to its first line,
-/// so that the arrows go on from it), opens a run's menu (a right-click picks the run first, BD9),
+/// a click would (a run picked in the gutter or by a right-click takes the caret to the first of
+/// its lines in view, so that the arrows go on from it), opens a run's menu (a right-click picks the run first, BD9),
 /// gives the text the keyboard focus when the page opens (BD10), and closes the page on Esc
 /// (<see cref="EscapeOrder.Page"/>) unless a diff covers it or a text box has the focus.
 /// </summary>
@@ -281,8 +281,8 @@ public partial class BlameView : UserControl
 
     /// <summary>
     /// A run's menu (BD8, BD9): a right-click on the gutter or the text picks the run, with the caret
-    /// on its first line (one on the text inside its selection leaves the selection and the caret as
-    /// they were), then opens it at the pointer; the Menu key or Shift+F10 at the top of the
+    /// on the first of its lines in view (one on the text inside its selection leaves the selection
+    /// and the caret as they were), then opens it at the pointer; the Menu key or Shift+F10 at the top of the
     /// text, for the picked run, or the caret's while none is picked (a page just opened has run 0's).
     /// </summary>
     private void OnContextRequested(object? sender, ContextRequestedEventArgs e)
