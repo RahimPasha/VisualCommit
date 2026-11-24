@@ -390,7 +390,7 @@ public class BlameViewTests
     /// A run whose first line shows only in part at the view's top (docs/phase-8a-design.md 13.1,
     /// ruling 100): that line is in view, so a click on the run's line 50 in the gutter puts the caret
     /// on line 46, the run's first, with the text where it was; the next Down takes it to line 47 and
-    /// scrolls nothing; and after the same click, one Up picks the run above.
+    /// scrolls nothing; and after a click on its line 52, one Up picks the run above.
     /// </summary>
     [AvaloniaFact]
     public async Task A_click_on_a_run_whose_first_line_shows_in_part_at_the_top_puts_the_caret_there_and_one_Up_picks_the_run_above()
@@ -424,8 +424,10 @@ public class BlameViewTests
         Assert.Equal(1, page.SelectedRun?.Index);
         Assert.Equal(scrolled, (text.HorizontalOffset, text.VerticalOffset));
 
-        host.Click(gutter, GutterPoint(text, gutter, 50));
+        // Line 52, not 50 again: two presses at one spot within the double-tap time are a double-click.
+        host.Click(gutter, GutterPoint(text, gutter, 52));
         DiffHost.Settle();
+        Assert.Equal(46, text.TextArea.Caret.Line);
         host.PressKey(Avalonia.Input.Key.Up);
         DiffHost.Settle();
 
