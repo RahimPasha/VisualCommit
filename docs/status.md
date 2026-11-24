@@ -814,12 +814,21 @@ design 12.10, rulings 96 to 98, D459). Written and compiled by run `wf_b0d89b0f-
 what a real key or click could reach; the lead ran each of its 13 methods alone on the desktop, the
 owner told: 11 of 13 green at 21:15, and, after the fixes of runs `wf_1d035720-312` and
 `wf_44f114fb-844`, 13 of 13 with phase 0's method at 22:28. The captures were inspected: no fault of
-the app. **Next is step 19:** first the owner is asked again for the Narrator listen (D455; "Waiting
-on the owner"); then the independent review of the code before the gate, whose list the Notes hold
-("More for step 19's list", "Timeouts of older tests", "Wave 4" and every "For step 19's list"),
-each finding verified and the confirmed ones fixed with tests; then §12's merge with the lead's
-CLAUDE.md rows, the lagged list and the whole default run. The package is reviewed with the rest in
-step 19 and merged last, in that step. The three finished worktrees (`p8a-restore`,
+the app. **Step 19 is under way.** The owner, asked again for the Narrator listen at 22:50, chose
+"Later, at the gate" (D460, amending D455): the review judges the screen readers' code as built, and
+the gate's walk-through is the first time Narrator is heard. **The review runs** since 22:45 (run
+`wf_151e85d5-daa`, script `…/workflows/scripts/phase8a-review-before-the-gate-wf_151e85d5-daa.js`,
+read only): first every item the notes kept for it is compiled into one list; then ten reviewers by
+area (colours, the floor, the single instance, the first run, the keyboard, the icon and About,
+screen readers, performance with the restore order and the row list, the guide's machinery, the
+real-window part in its worktree) and three across the phase (security and privacy; concurrency and
+lifetime; the tests and CI); a verifier for each major and one per reviewer for its minors; and a
+last reader for the changed source files nobody read. **Next for the lead, when it ends:** read its
+result; rule on each confirmed finding and each "for the lead" item of the list; give the confirmed
+ones to fixers, each fix with its test, in worktrees; merge them; then the independent review of the
+code before the gate is done when, with the fixes in, §12 is merged with the lead's CLAUDE.md rows
+and the lagged list and the whole default run have passed on that commit. The package is reviewed
+with the rest in step 19 and merged last, in that step. The three finished worktrees (`p8a-restore`,
 `p8a-restore-base`, `p8a-guide`) are removed; their `wip/` branches stay local (D396). §11's
 builders got with their briefs: mdBook at
 `D:/Projects/Personal/phase8-work/tools/mdbook-0.5.4/mdbook.exe` and the Linux archive's SHA-256 for
@@ -846,8 +855,9 @@ order's package (ruling 76: a design section written from D457 (5), the build wi
 a review, the alternated series of M2 and M3, about half an hour of the rested desktop with the
 owner told, and the probe), then the review before the gate (step 19) with its list, which the Notes
 hold in their paragraphs "More for step 19's list", in "Timeouts of older tests" and in "Wave 4".
-The owner's Narrator listen: asked a third time on 2026-11-23, the owner chose "Later, before the
-review"; the lead asks again before step 19's review, which needs the answer.
+The owner's Narrator listen: asked a fourth time on 2026-11-23 at the review's start, the owner
+chose "Later, at the gate" (D460); it is no longer asked before the gate, where the walk-through
+takes its place, and step 21 says what a silent Narrator then costs.
 The [phase 7b handoff](handoffs/phase-7b.md), "For the next phase", says what to reuse, what to do
 first and which risks to watch.
 
@@ -1973,7 +1983,7 @@ every commit.
     2026-11-21 after the spike; the owner answered "not now". Asked again at §9's merge that
     evening, in the lead's message, without stopping the work for the answer: the listen can come at
     any time before the review of step 19 and is best not taken beside a test run. If Narrator is
-    silent, a new decision names the route before that review (D455).
+    silent, a new decision names the route before that review (D455). **Asked a fourth time on 2026-11-23, at the start of step 19's review: the owner chose "Later, at the gate" (D460).** The listen is taken with the gate's walk-through; if Narrator is silent there, the route's new decision and its fix come after the gate's first round, and the passes run again.
   - **To look over**: the lead's 75 rulings (design 13.1) and the design's decisions D416 to D452,
     above all those that amend a ruling (D420, D424, D425, D434) and those the review made (D447 to
     D452; design 13.5). None of them is the owner's own, so the owner can overturn any. (D453, on
