@@ -94,6 +94,9 @@ public sealed class BulkRun
     private readonly SynchronizationContext? _ui;
     private bool _started;
 
+    /// <summary>The run's text as Cancel all left it: what a screen reader is told until the run ends.</summary>
+    private string? _cancellingText;
+
     /// <param name="kind">Fetch all or Pull all.</param>
     /// <param name="workspace">The workspace's name, for the log.</param>
     /// <param name="rows">The dashboard's rows, in their order.</param>
@@ -166,6 +169,16 @@ public sealed class BulkRun
         !IsRunning ? ResultText
         : IsCancelling ? OperationTexts.BulkCancelling(RunningRows)
         : OperationTexts.BulkRunning(Kind, ActedOn, Done);
+
+    /// <summary>
+    /// <see cref="Text"/> as a screen reader is told of it (D435): the running text without its count
+    /// of rows done, Cancel all's text as it was when clicked, and the result; never a step of the
+    /// run's progress, so that the status bar's live region does not speak each row that ends.
+    /// </summary>
+    public string SpokenText =>
+        !IsRunning ? ResultText
+        : IsCancelling ? _cancellingText ?? Text
+        : OperationTexts.BulkRunning(Kind, ActedOn, 0);
 
     /// <summary>The text's tone: danger when a row failed, else warning when one stopped (at the end); secondary otherwise.</summary>
     public OperationStatusTone Tone =>
@@ -267,6 +280,7 @@ public sealed class BulkRun
         }
 
         IsCancelling = true;
+        _cancellingText ??= OperationTexts.BulkCancelling(RunningRows);
         StopStarting();
         if (IsRunning)
         {

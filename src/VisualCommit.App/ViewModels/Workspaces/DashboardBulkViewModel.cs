@@ -53,6 +53,9 @@ public sealed partial class DashboardBulkViewModel : ObservableObject, IStatusBa
     /// <summary>The status bar's text: ssh's notice while one shows, else <see cref="RunText"/>, or "Ready" before the first run.</summary>
     public string Text => _notices.Text ?? RunText ?? OperationStatusViewModel.ReadyText;
 
+    /// <summary><see cref="Text"/> as a screen reader is told of it (D435): the run's text without its count of rows done (<see cref="BulkRun.SpokenText"/>).</summary>
+    public string SpokenText => _notices.Text ?? Current?.SpokenText ?? OperationStatusViewModel.ReadyText;
+
     public OperationStatusTone Tone => _notices.Text is not null ? OperationStatusTone.Secondary : RunTone;
 
     public string? ToolTip => _notices.Text ?? RunText;
@@ -202,7 +205,7 @@ public sealed partial class DashboardBulkViewModel : ObservableObject, IStatusBa
     /// <summary>What a run's change can change.</summary>
     private static readonly string[] RunProperties =
     [
-        nameof(Current), nameof(RunText), nameof(RunTone), nameof(Text), nameof(Tone), nameof(ToolTip), nameof(IsRunning),
+        nameof(Current), nameof(RunText), nameof(RunTone), nameof(Text), nameof(SpokenText), nameof(Tone), nameof(ToolTip), nameof(IsRunning),
         nameof(Percent), nameof(CanCancel), nameof(CancelToolTip), nameof(Waiting), nameof(WaitingText), nameof(HasWaiting),
     ];
 
@@ -211,6 +214,7 @@ public sealed partial class DashboardBulkViewModel : ObservableObject, IStatusBa
         if (e.PropertyName is null or nameof(PromptNotices.Text))
         {
             OnPropertyChanged(nameof(Text));
+            OnPropertyChanged(nameof(SpokenText));
             OnPropertyChanged(nameof(Tone));
             OnPropertyChanged(nameof(ToolTip));
         }
