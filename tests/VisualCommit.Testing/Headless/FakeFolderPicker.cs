@@ -9,7 +9,7 @@ namespace VisualCommit.Testing.Headless;
 /// Since phase 6 it answers the file dialog too (docs/phase-6-design.md 12.5, "Choose the editor's
 /// program") from a queue of its own (<see cref="AnswerFile"/>). While <see cref="FileHold"/> is set,
 /// the file dialog answers only when that task ends, as the native dialog, open until the user
-/// picks or cancels, does.
+/// picks or cancels, does; <see cref="FolderHold"/> holds the folder dialog so.
 /// </summary>
 public sealed class FakeFolderPicker : IFolderPicker
 {
@@ -26,6 +26,9 @@ public sealed class FakeFolderPicker : IFolderPicker
 
     /// <summary>While set, the file dialog takes its answer from the queue when it is asked and gives it when this task ends; null answers at once.</summary>
     public Task? FileHold { get; set; }
+
+    /// <summary>While set, the folder dialog takes its answer from the queue when it is asked and gives it when this task ends; null answers at once.</summary>
+    public Task? FolderHold { get; set; }
 
     /// <summary>Queues the folder the next dialog "chooses"; null makes it a cancelled dialog.</summary>
     public FakeFolderPicker Answer(string? folder)
@@ -44,7 +47,8 @@ public sealed class FakeFolderPicker : IFolderPicker
     public Task<string?> PickFolderAsync(string title, CancellationToken cancellationToken = default)
     {
         _titles.Add(title);
-        return Task.FromResult(_answers.Count > 0 ? _answers.Dequeue() : null);
+        var answer = _answers.Count > 0 ? _answers.Dequeue() : null;
+        return FolderHold is { } hold ? AfterHoldAsync(hold, answer) : Task.FromResult(answer);
     }
 
     public Task<string?> PickFileAsync(string title, CancellationToken cancellationToken = default)
@@ -52,11 +56,11 @@ public sealed class FakeFolderPicker : IFolderPicker
         _fileTitles.Add(title);
         var answer = _fileAnswers.Count > 0 ? _fileAnswers.Dequeue() : null;
         return FileHold is { } hold ? AfterHoldAsync(hold, answer) : Task.FromResult(answer);
+    }
 
-        static async Task<string?> AfterHoldAsync(Task hold, string? answer)
-        {
-            await hold.ConfigureAwait(false);
-            return answer;
-        }
+    private static async Task<string?> AfterHoldAsync(Task hold, string? answer)
+    {
+        await hold.ConfigureAwait(false);
+        return answer;
     }
 }
