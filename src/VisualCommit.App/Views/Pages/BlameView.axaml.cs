@@ -238,20 +238,11 @@ public partial class BlameView : UserControl
     }
 
     /// <summary>
-    /// The first line wholly in view: the top line, or the one below it when the top line's top lies
-    /// above the view by more than half a pixel; 1 before the text is laid out.
+    /// The first line in view: the one drawn at the view's top, also when part of it lies above, so
+    /// that one Up from a run whose first line shows picks the run above; 1 before the text is laid out.
     /// </summary>
-    private static int FirstLineInView(TextView view)
-    {
-        if (!view.VisualLinesValid || view.GetDocumentLineByVisualTop(view.ScrollOffset.Y) is not { } top)
-        {
-            return 1;
-        }
-
-        return view.GetVisualTopByDocumentLine(top.LineNumber) < view.ScrollOffset.Y - 0.5 && top.NextLine is { } next
-            ? next.LineNumber
-            : top.LineNumber;
-    }
+    private static int FirstLineInView(TextView view) =>
+        view.VisualLinesValid && view.GetDocumentLineByVisualTop(view.ScrollOffset.Y) is { } top ? top.LineNumber : 1;
 
     /// <summary>
     /// Where the caret stands on <paramref name="line"/> at the view's left edge: column 1 while the
