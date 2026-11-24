@@ -263,22 +263,26 @@ public partial class WorkingChangesView : UserControl
     }
 
     /// <summary>
-    /// A commit starts while Amend shows the keyboard's frame: Amend, disabled while the commit runs
+    /// A commit starts while Amend has the focus: Amend, disabled while the commit runs
     /// (<see cref="WorkingChangesViewModel.CanToggleAmend"/>), gets the focus back once it ends,
-    /// unless the user has moved the focus meanwhile or the panel shows another tab's. Seen as the
-    /// commit starts, before Amend is disabled: the panel's state says so first.
+    /// with the keyboard's frame if it had it, unless the user has moved the focus meanwhile or the
+    /// panel shows another tab's. The user reaches this by the palette's commit: the commit button,
+    /// clicked or pressed by the keys, has the focus itself, and Mod+Enter commits from the
+    /// message's boxes alone; after the palette's close D104 has given Amend the focus back without
+    /// the frame. Seen as the commit starts, before Amend is disabled: the panel's state says so
+    /// first.
     /// </summary>
     private void OnViewModelChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName == nameof(WorkingChangesViewModel.IsCommitting) && _viewModel is { IsCommitting: true } viewModel
-            && AmendCheckBox.IsFocused && AmendCheckBox.Classes.Contains(FocusVisibleClass))
+            && AmendCheckBox.IsFocused)
         {
             var armed = DataContext;
             FocusReturn.AfterRun(
                 viewModel.CommitCommand,
                 AmendCheckBox,
                 () => ReferenceEquals(DataContext, armed) ? AmendCheckBox : null,
-                NavigationMethod.Tab,
+                AmendCheckBox.Classes.Contains(FocusVisibleClass) ? NavigationMethod.Tab : NavigationMethod.Unspecified,
                 FocusReturn.LostFrom(TopLevel.GetTopLevel(this), AmendCheckBox, static () => false));
         }
     }
