@@ -214,6 +214,49 @@ public sealed class KeyboardPassTests
     }
 
     /// <summary>
+    /// A right-click on the blame's text inside a selection picks the run under it and opens its
+    /// menu, and leaves the selection and the caret as they were, as editors do: the run's menu has
+    /// no copy of its own, and after Esc the selection is still there to copy. A right-click on the
+    /// text outside the selection takes the caret to the picked run's first line, the selection gone,
+    /// as one in the gutter does (6.3.2). Before, a right-click inside the selection cleared it too.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task A_right_click_on_the_text_inside_a_selection_keeps_the_selection_and_one_outside_it_takes_the_caret_to_the_run()
+    {
+        using var repo = await Scenarios.HistoryAsync();
+        using var data = new TempDirectory("data");
+        using var app = await OpenAsync(data, repo.Path);
+        await OpenReaderBlameAsync(app);
+        var blame = (BlameViewModel)Repository(app).Page!;
+        var text = (VisualCommit.App.Controls.Blame.BlameTextEditor)app.FindByAutomationId("BlameText");
+        var document = text.Document!;
+        var runs = app.BlameSnapshot().Runs;
+        var selected = (Start: 0, End: document.GetLineByNumber(2).EndOffset);
+        text.Select(selected.Start, selected.End - selected.Start);
+        var caret = text.TextArea.Caret.Offset;
+
+        app.RightClick(app.BlameTextPoint(1, 2));
+        await app.WaitForAsync(() => app.IsMenuOpen, "the run's menu");
+
+        Assert.Equal(runs.Single(run => run.FirstLine <= 1 && run.LastLine >= 1).Index, blame.SelectedRun?.Index);
+        app.PressKey(Key.Escape);
+        await app.WaitForAsync(() => !app.IsMenuOpen && app.FocusedAutomationId() == "BlameText", $"the menu to close and the focus to come back to the text (it is on {app.DescribeFocus()})");
+
+        Assert.Equal(selected, (text.SelectionStart, text.SelectionStart + text.SelectionLength));
+        Assert.Equal(caret, text.TextArea.Caret.Offset);
+
+        var outside = runs.First(run => run.FirstLine > 2 && document.GetText(document.GetLineByNumber(run.FirstLine)).Length >= 2);
+        app.RightClick(app.BlameTextPoint(outside.FirstLine, 2));
+        await app.WaitForAsync(() => app.IsMenuOpen, "the run's menu");
+
+        Assert.Equal(outside.Index, blame.SelectedRun?.Index);
+        Assert.True(text.TextArea.Selection.IsEmpty);
+        Assert.Equal(outside.FirstLine, text.TextArea.Caret.Line);
+        app.PressKey(Key.Escape);
+        await app.WaitForAsync(() => !app.IsMenuOpen, "the menu to close");
+    }
+
+    /// <summary>
     /// F5-A: after Choose and after Esc in the repository browser, "From GitHub…" has the focus
     /// back, without the keyboard's frame (6.3.5); the browser disabled it while it ran. The row is
     /// chosen by Enter in the list, as 6.3.9's route and K5 have it.
