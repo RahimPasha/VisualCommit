@@ -58,6 +58,44 @@ public class OperationStatusViewModelTests
         Assert.Equal(("Push main failed", OperationStatusTone.Danger), (status.Text, status.Tone));
     });
 
+    /// <summary>
+    /// What a screen reader is told (D435; docs/phase-8a-design.md 9.3.7): the running text without
+    /// git's stage and percentage, ssh's notice while it shows, then the result; "Ready" before.
+    /// The status bar's live region speaks each new spoken text, not each new text.
+    /// </summary>
+    [Fact]
+    public Task A_screen_reader_is_told_the_running_text_without_its_progress_sshs_notice_and_the_result() => WithoutContext(async () =>
+    {
+        var notices = new PromptNotices();
+        using var queue = NewQueue();
+        using var status = new OperationStatusViewModel(queue, notices);
+        Assert.Equal(OperationStatusViewModel.ReadyText, status.SpokenText);
+        const string Presence = "Confirm user presence for key ED25519-SK SHA256:skokdAxs76eWz";
+        var progressed = new TaskCompletionSource();
+        var finish = new TaskCompletionSource();
+
+        var fetch = queue.RunAsync(new GitOperation("Fetch", "Fetching from origin…", OperationKind.Network, RefreshScope.None, async context =>
+        {
+            context.Progress.Report(new OperationProgress("Receiving objects", 45, "Receiving objects:  45% (9/20)"));
+            progressed.SetResult();
+            await finish.Task;
+            return OperationReport.Done("Fetched from origin");
+        }));
+        await progressed.Task.WaitAsync(Patience, TestCancelled);
+        await WaitForAsync(() => status.Percent == 45);
+
+        Assert.Equal(("Fetching from origin… Receiving objects 45%", "Fetching from origin…"), (status.Text, status.SpokenText));
+        using (notices.Show(Presence))
+        {
+            Assert.Equal((Presence, Presence), (status.Text, status.SpokenText));
+        }
+
+        Assert.Equal("Fetching from origin…", status.SpokenText);
+        finish.SetResult();
+        await fetch.WaitAsync(Patience, TestCancelled);
+        Assert.Equal(("Fetched from origin", "Fetched from origin"), (status.Text, status.SpokenText));
+    });
+
     [Fact]
     public Task Cancel_says_it_stops_the_merge_tool_too_while_the_merge_tool_runs() => WithoutContext(async () =>
     {

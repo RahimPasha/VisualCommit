@@ -111,4 +111,57 @@ public class DashboardBulkViewModelTests
         notice.Dispose();
         Assert.Equal("Fetched 1 repository", status.Text);
     }
+
+    /// <summary>
+    /// What a screen reader is told of a run (D435; docs/phase-8a-design.md 9.3.7): its start, Cancel
+    /// all's text as it was when clicked, and its result, never the count of rows done nor the rows
+    /// Cancel all still waits for; ssh's notice while it shows. The status bar's live region raises a
+    /// Name change for each new <see cref="IStatusBarOperation.SpokenText"/>, and none for the same one.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task A_screen_reader_is_told_of_a_runs_start_its_Cancel_all_and_its_result_not_of_its_progress()
+    {
+        using var provider = new BulkProvider();
+        var gates = new Dictionary<string, TaskCompletionSource>();
+        foreach (var name in new[] { "a", "b", "c", "d", "e", "f" })
+        {
+            provider.Add(name).FetchGate = gates[name] = new TaskCompletionSource();
+        }
+
+        using var host = await BulkHost.StartAsync(provider, ["a", "b", "c", "d", "e", "f"]);
+        IStatusBarOperation status = host.Bulk;
+        Assert.Equal("Ready", status.SpokenText);
+        var spoken = new List<string>();
+        status.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(IStatusBarOperation.SpokenText) && (spoken.Count == 0 || spoken[^1] != status.SpokenText))
+            {
+                spoken.Add(status.SpokenText);
+            }
+        };
+
+        var run = host.Bulk.FetchAllAsync();
+        await WaitUntilAsync(() => provider.FetchesNow == 4, "four fetches");
+        gates["a"].SetResult();
+        await provider["e"].FetchWaiting.Task.WaitAsync(Patience);
+        await SettleAsync();
+        Assert.Equal(("Fetching 6 repositories… 1 done", "Fetching 6 repositories…"), (status.Text, status.SpokenText));
+
+        using (host.Services.DialogHost.Notices.Show("Confirm user presence for key ED25519-SK SHA256:abc"))
+        {
+            Assert.Equal("Confirm user presence for key ED25519-SK SHA256:abc", status.SpokenText);
+        }
+
+        status.CancelCommand.Execute(null);
+        var cancelling = status.Text;
+        Assert.StartsWith("Cancelling: waiting for ", cancelling, StringComparison.Ordinal);
+        Assert.Equal(cancelling, status.SpokenText);
+        await run.WaitAsync(Patience);
+        await SettleAsync();
+
+        Assert.Equal(("Fetched 1 repository; 5 cancelled", "Fetched 1 repository; 5 cancelled"), (status.Text, status.SpokenText));
+        Assert.Equal(
+            ["Fetching 6 repositories…", "Confirm user presence for key ED25519-SK SHA256:abc", "Fetching 6 repositories…", cancelling, "Fetched 1 repository; 5 cancelled"],
+            spoken);
+    }
 }

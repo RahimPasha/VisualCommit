@@ -70,17 +70,21 @@
                 AutomationProperties.AutomationId="StatusWorkspaceIcon" />
         <TextBlock Name="CurrentBranch" Text="{Binding ActiveTab.BranchText}" FontSize="11.5" VerticalAlignment="Center"
                    AutomationProperties.AutomationId="CurrentBranch" />
-        <TextBlock Name="OperationStatus"
-                   Text="{Binding ActiveTab.OperationStatus.Text}"
-                   Classes.warning="{Binding ActiveTab.OperationStatus.Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static ops:OperationStatusTone.Warning}}"
-                   Classes.danger="{Binding ActiveTab.OperationStatus.Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static ops:OperationStatusTone.Danger}}"
-                   ToolTip.Tip="{Binding ActiveTab.OperationStatus.ToolTip}"
-                   FontSize="11.5"
-                   MaxWidth="520"
-                   TextTrimming="CharacterEllipsis"
-                   Margin="16,0,0,0" VerticalAlignment="Center"
-                   AutomationProperties.AutomationId="OperationStatus"
-                   AutomationProperties.LiveSetting="Polite" />
+        <!-- A polite live region (D435) that speaks an operation's start and its result, not each
+             step of git's progress, which it shows: its Name changes follow SpokenText, bound after
+             Text. Styled and named as a plain TextBlock. -->
+        <c:StatusText Name="OperationStatus"
+                      Text="{Binding ActiveTab.OperationStatus.Text}"
+                      SpokenText="{Binding ActiveTab.OperationStatus.SpokenText}"
+                      Classes.warning="{Binding ActiveTab.OperationStatus.Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static ops:OperationStatusTone.Warning}}"
+                      Classes.danger="{Binding ActiveTab.OperationStatus.Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static ops:OperationStatusTone.Danger}}"
+                      ToolTip.Tip="{Binding ActiveTab.OperationStatus.ToolTip}"
+                      FontSize="11.5"
+                      MaxWidth="520"
+                      TextTrimming="CharacterEllipsis"
+                      Margin="16,0,0,0" VerticalAlignment="Center"
+                      AutomationProperties.AutomationId="OperationStatus"
+                      AutomationProperties.LiveSetting="Polite" />
         <!-- The offer beside a success (D317, docs/phase-7a-design.md 12.2): hidden, it takes no room. -->
         <Button Name="OperationOfferButton" Theme="{StaticResource VcFlatButton}"
                 IsVisible="{Binding ActiveTab.OperationStatus.HasOffer}"

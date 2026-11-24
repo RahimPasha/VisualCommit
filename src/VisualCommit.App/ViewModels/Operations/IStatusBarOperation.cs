@@ -15,6 +15,13 @@ public interface IStatusBarOperation : INotifyPropertyChanged
     /// <summary>The text: "Ready", the running text with its progress, or the last result.</summary>
     string Text { get; }
 
+    /// <summary>
+    /// What a screen reader is told of <see cref="Text"/> (D435): the text without its progress, so
+    /// that the status bar's live region speaks an operation's start and its result, not each step
+    /// of its progress. Raised after <see cref="Text"/>.
+    /// </summary>
+    string SpokenText { get; }
+
     /// <summary>The text's colour.</summary>
     OperationStatusTone Tone { get; }
 

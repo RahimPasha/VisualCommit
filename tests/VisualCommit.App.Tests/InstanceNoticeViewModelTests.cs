@@ -64,11 +64,17 @@ public sealed class InstanceNoticeViewModelTests
         Assert.False(notice.TryAgainCommand.CanExecute(null));
         Assert.True(notice.CloseCommand.CanExecute(null));
         Assert.False(notice.ShowsStatus);
+        Assert.Equal(string.Empty, notice.StatusLine);
+        var changed = new List<string?>();
+        notice.PropertyChanged += (_, e) => changed.Add(e.PropertyName);
 
         held.Answer(NoticeRetry.NoAnswer);
         await run;
 
+        // The status line's text comes with it, in the same step.
         Assert.True(notice.ShowsStatus);
+        Assert.Equal("It still did not answer.", notice.StatusLine);
+        Assert.Contains(nameof(InstanceNoticeViewModel.StatusLine), changed);
         Assert.False(notice.IsTrying);
         Assert.Equal("Try again", notice.TryAgainText);
         Assert.True(notice.TryAgainCommand.CanExecute(null));

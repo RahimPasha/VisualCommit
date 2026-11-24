@@ -84,6 +84,14 @@ public sealed partial class OperationStatusViewModel : ObservableObject, IStatus
     [ObservableProperty]
     public partial string Text { get; private set; } = ReadyText;
 
+    /// <summary>
+    /// <see cref="Text"/> as a screen reader is told of it (D435): the running text without git's
+    /// stage and percentage, otherwise the text itself, ssh's notice included. Set after
+    /// <see cref="Text"/>.
+    /// </summary>
+    [ObservableProperty]
+    public partial string SpokenText { get; private set; } = ReadyText;
+
     [ObservableProperty]
     public partial OperationStatusTone Tone { get; private set; }
 
@@ -327,7 +335,7 @@ public sealed partial class OperationStatusViewModel : ObservableObject, IStatus
                 }
             }
 
-            Show(text, OperationStatusTone.Secondary, null, running: true, percent: current.Progress?.Percent, compact);
+            Show(text, OperationStatusTone.Secondary, null, running: true, percent: current.Progress?.Percent, compact, spokenText: current.RunningText);
             return;
         }
 
@@ -364,8 +372,11 @@ public sealed partial class OperationStatusViewModel : ObservableObject, IStatus
         RunningIsCancellable = current.Kind == OperationKind.Network || _mergeToolRuns;
     }
 
-    private void Show(string text, OperationStatusTone tone, string? toolTip, bool running, int? percent, string? compactText = null, OperationOffer? offer = null)
+    /// <param name="spokenText">What a screen reader is told (<see cref="SpokenText"/>): the running text without its progress; null for <paramref name="text"/> itself.</param>
+    private void Show(string text, OperationStatusTone tone, string? toolTip, bool running, int? percent, string? compactText = null, OperationOffer? offer = null, string? spokenText = null)
     {
+        spokenText ??= text;
+
         // A row's compact text (2.6): the text as built, without git's stage and never ssh's
         // notice; empty for "Ready". "Waiting for auto-fetch…" has no tooltip of its own there.
         var ready = compactText is null && string.Equals(text, ReadyText, StringComparison.Ordinal);
@@ -377,7 +388,7 @@ public sealed partial class OperationStatusViewModel : ObservableObject, IStatus
         // ssh's notice (3.2) waits for the user, so it is what the text says until its scope ends.
         if (_notices?.Text is { } notice)
         {
-            (text, tone, toolTip) = (notice, OperationStatusTone.Secondary, notice);
+            (text, tone, toolTip, spokenText) = (notice, OperationStatusTone.Secondary, notice, notice);
             offer = null;
         }
 
@@ -385,7 +396,10 @@ public sealed partial class OperationStatusViewModel : ObservableObject, IStatus
         OfferText = offer?.Label;
         HasOffer = offer is not null;
 
+        // The text first: the status bar's live region raises its Name change, with the text shown
+        // as the new name, when the spoken text changes (D435).
         Text = text;
+        SpokenText = spokenText;
         Tone = tone;
         ToolTip = toolTip;
         IsRunning = running;

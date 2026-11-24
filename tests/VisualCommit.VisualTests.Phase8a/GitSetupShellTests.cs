@@ -1,4 +1,5 @@
 using Avalonia.Automation;
+using Avalonia.Automation.Peers;
 using Avalonia.Controls;
 using Avalonia.VisualTree;
 using Avalonia.Headless.XUnit;
@@ -84,6 +85,109 @@ public sealed class GitSetupShellTests : Phase8aChecks
             app.Settle();
             Assert.Equal(F.AccentDark, ((ISolidColorBrush)text.Foreground!).Color);
         }
+    }
+
+    /// <summary>
+    /// The title is a polite live region (D435; design 9.3.9, step 21) that a client which has read
+    /// the screen hears: walking down from the window as a client does, it reaches the title, and a
+    /// search that ends on another state raises one Name change there, to the new state's title,
+    /// while one that ends on the same state raises none. The screen's live regions are the title and
+    /// the error line, nothing else (the error line is hidden here, so the walk reaches the title
+    /// alone): "Check again", whose text says "Checking…" while it searches, is none.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task The_title_is_a_polite_live_region_that_a_client_which_read_the_screen_hears_when_a_search_ends_on_another_state()
+    {
+        using var data = new TempDirectory("phase8a gitsetup");
+        var probe = new FakeGitSetupProbe(FakeGitSetupProbe.Windows(), FakeGitAnswer.Missing, FakeGitAnswer.TooOld(F.WindowsGit));
+        using var app = await StartEmptyAsync(data, gitProbe: probe);
+        await app.WaitForGitSetupAsync(guidance: F.MissingGuidanceWindows);
+        var tooOld = string.Format(System.Globalization.CultureInfo.InvariantCulture, F.TooOldTitleFormat, F.TooOldVersion);
+        var button = (Button)app.GitSetupPart(F.CheckAgainId)!;
+        var reached = ScreenAsAClientReachesIt(app);
+        Assert.Equal([F.TitleId], ClientWalk.LiveRegions(reached));
+        var title = ClientWalk.Find(reached, F.TitleId)!;
+        Assert.Equal(AutomationLiveSetting.Polite, title.GetLiveSetting());
+        Assert.Equal(F.MissingTitle, title.GetName());
+        using var titleNames = ShellDriver.RecordNameChanges(title);
+
+        // A search that ends on another state: nothing while it runs, then the new title.
+        var hold = probe.HoldNext();
+        app.Click(button);
+        await hold.Started.WaitAsync(ShellDriver.DefaultWaitTimeout, TestContext.Current.CancellationToken);
+        app.Settle();
+        Assert.Equal(F.Checking, app.GitSetupText(F.CheckAgainId));
+        Assert.Equal(0, titleNames.Count);
+        hold.Release();
+        await CheckAgainEndedAsync(app, probe, 2, tooOld);
+
+        Assert.Equal([((string?)F.MissingTitle, (string?)tooOld)], titleNames.Changes);
+
+        // A search that ends on the same state: the title says nothing. (Held, as a real search
+        // lasts: the fake's answer comes at once.)
+        hold = probe.HoldNext();
+        app.Click(button);
+        await hold.Started.WaitAsync(ShellDriver.DefaultWaitTimeout, TestContext.Current.CancellationToken);
+        hold.Release();
+        await CheckAgainEndedAsync(app, probe, 3, tooOld);
+
+        Assert.Equal(1, titleNames.Count);
+        Assert.Equal([F.TitleId], ClientWalk.LiveRegions(ScreenAsAClientReachesIt(app)));
+    }
+
+    /// <summary>
+    /// The error line is a polite live region (D435), hidden until Choose starts its check, and a
+    /// client reaches only what is shown: a walk down from the window before Choose does not reach
+    /// the line, whose "Checking…" comes as it shows, so that no client has the line when it says
+    /// it. A client that walks while the line says "Checking…" reaches it there and hears the
+    /// refusal: one Name change, from "Checking…" to why the file was refused. The screen's live
+    /// regions are then the title and the error line.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task The_error_line_is_a_polite_live_region_that_a_client_which_reached_it_during_Chooses_check_hears_refuse_the_file()
+    {
+        using var data = new TempDirectory("phase8a gitsetup");
+        var probe = new FakeGitSetupProbe(FakeGitSetupProbe.Windows(wingetPath: null), FakeGitAnswer.Missing)
+            .AnswerFor(F.Old, FakeGitAnswer.TooOld(F.Old, GitSource.Setting, F.TooOldVersion));
+        using var app = await StartEmptyAsync(data, gitProbe: probe);
+        await app.WaitForGitSetupAsync(guidance: F.MissingGuidanceWindows, choose: F.ChooseGitExe);
+        Assert.Null(ClientWalk.Find(ScreenAsAClientReachesIt(app), F.ErrorId));
+
+        app.Folders.AnswerFile(F.Old);
+        var hold = probe.HoldNext();
+        app.Click(app.GitSetupPart(F.ChooseId)!);
+        await hold.Started.WaitAsync(ShellDriver.DefaultWaitTimeout, TestContext.Current.CancellationToken);
+        app.Settle();
+        Assert.Equal(F.Checking, app.GitSetupText(F.ErrorId));
+        var reached = ScreenAsAClientReachesIt(app);
+        Assert.Equal([F.TitleId, F.ErrorId], ClientWalk.LiveRegions(reached));
+        var error = ClientWalk.Find(reached, F.ErrorId)!;
+        Assert.Equal(AutomationLiveSetting.Polite, error.GetLiveSetting());
+        Assert.Equal(F.Checking, error.GetName());
+        using var names = ShellDriver.RecordNameChanges(error);
+
+        hold.Release();
+        await app.WaitForAsync(() => app.GitSetupText(F.ErrorId) is { } text && text != F.Checking, "the refusal");
+        app.Settle();
+
+        var refusal = app.GitSetupText(F.ErrorId);
+        Assert.Equal([((string?)F.Checking, refusal)], names.Changes);
+        Assert.Equal(refusal, error.GetName());
+    }
+
+    /// <summary>The first-run screen's peers as a client reaches them now: walking down from the window to the screen, then below it.</summary>
+    private static IReadOnlyList<AutomationPeer> ScreenAsAClientReachesIt(ShellDriver app) =>
+        ClientWalk.Reach(ClientWalk.Find(ClientWalk.Reach(app.Window), "GitSetup")
+            ?? throw new InvalidOperationException("A client walking down from the window does not reach the first-run screen."));
+
+    /// <summary>Waits until the <paramref name="lookups"/>th search has ended on the state titled <paramref name="title"/>, "Check again" enabled again.</summary>
+    private static async Task CheckAgainEndedAsync(ShellDriver app, FakeGitSetupProbe probe, int lookups, string title)
+    {
+        await app.WaitForAsync(
+            () => probe.Lookups.Count == lookups && !app.Session.Shell.CheckGitAgainCommand.IsRunning
+                && app.GitSetupText(F.TitleId) == title && app.GitSetupPart(F.CheckAgainId) is { IsEffectivelyEnabled: true },
+            $"Check again to end on \"{title}\"");
+        app.Settle();
     }
 
     /// <summary>Every part of the screen shown lies inside its width: nothing is pushed out of the graph area, where it would be cut off.</summary>

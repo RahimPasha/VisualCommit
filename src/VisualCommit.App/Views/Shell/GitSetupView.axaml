@@ -19,12 +19,17 @@
        body. Tokens only. -->
   <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
     <StackPanel Margin="24" MaxWidth="520" VerticalAlignment="Center" Spacing="8">
+      <!-- The title and the error line are polite live regions (D435), and nothing else here: a
+           reader that has read the screen hears the title of a state a search ends on, and one that
+           has reached the error line while Choose checks hears the refusal. The error line shows
+           with its "Checking…", which therefore reaches no reader. -->
       <TextBlock Name="GitSetupTitle"
                  Text="{Binding Title}"
                  FontSize="16" FontWeight="SemiBold"
                  TextWrapping="Wrap" TextAlignment="Center"
                  HorizontalAlignment="Center"
-                 AutomationProperties.AutomationId="GitSetupTitle" />
+                 AutomationProperties.AutomationId="GitSetupTitle"
+                 AutomationProperties.LiveSetting="Polite" />
       <TextBlock Name="GitSetupBody"
                  Classes="secondary"
                  Text="{Binding Body}"
@@ -166,7 +171,8 @@
                        IsVisible="{Binding ShowsError}"
                        TextWrapping="Wrap" TextAlignment="Center"
                        HorizontalAlignment="Center"
-                       AutomationProperties.AutomationId="GitSetupError" />
+                       AutomationProperties.AutomationId="GitSetupError"
+                       AutomationProperties.LiveSetting="Polite" />
 
       <!-- The links: git-scm.com's other ways (macOS, Linux), then the user guide's page; they wrap on a narrow window. -->
       <WrapPanel Name="GitSetupLinks" HorizontalAlignment="Center" ItemsAlignment="Center" ItemSpacing="8" LineSpacing="4">
