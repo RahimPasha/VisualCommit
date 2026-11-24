@@ -508,8 +508,9 @@ public class StatusBarTests
     }
 
     /// <summary>
-    /// The operation's text is a polite live region (D435, ruling 36): Windows speaks each new text,
-    /// which its peer raises as one Name change; the text's peer is made as a client's read makes it.
+    /// The operation's text is a polite live region (D435, ruling 36): Windows speaks each new spoken
+    /// text, here the start, which its peer raises as one Name change; the text's peer is made as a
+    /// client's read makes it.
     /// </summary>
     [AvaloniaFact]
     public async Task The_operation_text_is_a_polite_live_region()
