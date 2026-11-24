@@ -419,13 +419,14 @@
                                             VerticalAlignment="Center"
                                             ToolTip.Tip="{Binding PathText}"
                                             AutomationProperties.AutomationId="GitProgramPath" />
-                        <!-- Browse… gets the focus back after its file is refused, and is described by
-                             the status under the row (D463), which a reader hears with the focus. -->
+                        <!-- Browse… gets the focus back after each of its runs, and is described by the
+                             row (D463): by the status under it while there is one, else by the path and
+                             the note, which a reader hears with the focus. -->
                         <Button Name="GitProgramBrowseButton" Grid.Column="1" Theme="{StaticResource VcActionButton}" Margin="10,0,0,0"
                                 Content="{x:Static gs:GitSetupTexts.Browse}"
                                 Command="{Binding BrowseCommand}"
                                 AutomationProperties.AutomationId="GitProgramBrowseButton" AutomationProperties.Name="{x:Static gs:GitSetupTexts.Browse}"
-                                AutomationProperties.HelpText="{Binding StatusText}" />
+                                AutomationProperties.HelpText="{Binding BrowseHelpText}" />
                         <Button Name="GitProgramUsePathButton" Grid.Column="2" Theme="{StaticResource VcActionButton}" Margin="8,0,0,0"
                                 Content="{Binding UsePathText}"
                                 Command="{Binding UsePathCommand}"
