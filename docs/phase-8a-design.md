@@ -509,10 +509,13 @@ public sealed class GitAccess
 
 WP0: the first `DetectAsync` searches; every later call returns that search. §5: a later call while
 none runs swaps in a new pending `Detection` first, so `GetRunnerAsync` meanwhile waits for the new
-search; a call during a search joins it. `GetRunnerAsync`'s three texts stay; the too-old text reads
-`GitVersion.Minimum`, never a literal (2.34.1 after §3, ruling 69); §5 adds ChosenMissing's. A tab's
-git calls take the detection's `Runner` through `GetRunnerAsync` (`GitRepositoryProvider.cs:57-81`),
-which §6's `HeldGitRunner` relies on.
+search; a call during a search joins it only when the lookup gives what that search was told (as
+built since step 19, `785351d`): a call told another lookup (a git chosen meanwhile) swaps in a new
+pending `Detection` at once too, and asks the probe once the running search has ended, however it
+ended; a lookup that cannot be read fails its search and is never joined. `GetRunnerAsync`'s three
+texts stay; the too-old text reads `GitVersion.Minimum`, never a literal (2.34.1 after §3, ruling
+69); §5 adds ChosenMissing's. A tab's git calls take the detection's `Runner` through
+`GetRunnerAsync` (`GitRepositoryProvider.cs:57-81`), which §6's `HeldGitRunner` relies on.
 
 `MainWindowViewModel`'s constructor gains a last parameter `GitAccess? gitAccess = null` (WP0),
 which `AppSession.Start` passes. **"Check again"** (§5, all new, in a new partial
@@ -797,6 +800,7 @@ public string InstanceFile => Path.Combine(DataDirectory, "instance.json");     
 // src/VisualCommit.App/Services/SingleInstanceGuard.cs (new; no Avalonia type: it runs before Avalonia)
 public enum GuardOutcome { Taken, Held, Unavailable }               // Unavailable: no lock file; start as today, with a Warning
 public enum ForwardAnswer { Activated, Starting, Closing, NotAnswered }
+public enum HeldResolution { Taken, HandedOver, NotAnswered }        // how a held start's request ended (step 19, D464 (1))
 public enum AppStartMode { Normal, NotAnswered }                     // NotAnswered: the notice, no session
 public sealed record SingleInstanceOptions(TimeSpan Connect, TimeSpan Reply, TimeSpan WaitWhileClosing)
 {
@@ -805,11 +809,12 @@ public sealed record SingleInstanceOptions(TimeSpan Connect, TimeSpan Reply, Tim
 public sealed class SingleInstanceGuard : IDisposable
 {
     public static SingleInstanceGuard TryTake(AppPaths paths, IAppLog log, SingleInstanceOptions? options = null);   // never throws
-    public GuardOutcome Outcome { get; }              // Held turns Taken after a successful WaitToTake or TryTakeNow
+    public GuardOutcome Outcome { get; }              // Held turns Taken after a successful TryTakeNow or ResolveHeld
     public string? Endpoint { get; }                  // its own endpoint while Taken, else null
     public ForwardAnswer AskToComeForward();          // Held: one JSON line each way over the endpoint instance.json names
     public bool TryTakeNow();                         // one attempt; on success Taken: the server starts, instance.json is written
-    public bool WaitToTake();                         // after Closing: TryTakeNow every 250 ms until WaitWhileClosing
+    public HeldResolution ResolveHeld();              // Held: the whole request, Program.Main's and Try again's (4.3.2)
+    public HeldResolution WaitToTake();               // after Closing: TryTakeNow every 250 ms until WaitWhileClosing, asking whoever took the folder meanwhile (4.3.2)
     public Func<ForwardAnswer>? ComeForward { get; set; }   // Taken: run on a pool thread, waited for at most Reply; null answers Starting
     public static string? LockingOffWarning(string dataDirectory, string? variableValue, bool switchOn, bool windows);   // pure: the Warning on macOS and Linux when .NET's file locking is off, else null
     public void Dispose();                            // Taken: stops the server, deletes instance.json, then releases the lock; Held or Unavailable: touches no file
@@ -825,6 +830,8 @@ socket path under `Path.GetTempPath()`) and holds nothing of the data folder's p
 with `PipeOptions.CurrentUserOnly | PipeOptions.Asynchronous`, so only the current user can connect
 (D448). `Program.Main` returns `AppLaunch.Current.ExitCode`: 0 when the first instance answers
 `Activated` or `Starting` (before Avalonia starts), 2 when the notice closes unanswered (ruling 67).
+As built since step 19 (D464, ruling 100), `ResolveHeld` gives that 0 as `HandedOver` also when the
+answer comes from a VisualCommit that took the folder while the start waited for a closing one.
 
 The notice is `src/VisualCommit.App/Views/InstanceNoticeWindow.axaml(.cs)`, a `Window` with a
 parameterless constructor (§7 gives it the icon), over `ViewModels/InstanceNoticeViewModel.cs`. Its ids:
@@ -856,7 +863,9 @@ fallback; no tooltip changes, ruling 34):
 The formats bind with `StringFormat={x:Static …}`, or through a converter in `AutomationNames` if the
 compiled binding refuses that. A stage row's buttons exist in UI Automation only on a hovered,
 selected or focused row (D425). §4's, §5's and §8's controls take their names from their own texts.
-The status bar's `OperationStatus` TextBlock gets `AutomationProperties.LiveSetting="Polite"` (ruling 36).
+The status bar's `OperationStatus` gets `AutomationProperties.LiveSetting="Polite"` (ruling 36): a
+`TextBlock` until step 19, since then a `Controls/StatusText`, a subclass of `TextBlock`
+(`StatusBarView.axaml:76-87`; 9.3.7, D463 (1)).
 
 The graph: `Controls/CommitGraphControl.Automation.cs` (new) holds the graph's peer, moved from
 `CommitGraphControl.cs`, now `List` with `ISelectionProvider` (name "Commit graph" and id `GraphRows`
@@ -1029,7 +1038,11 @@ wave adds to it. What wave 2 tells §12's launches is in 12.3.5.
   picture names and
   the real window's launch facts (exit codes, limits, the data folder's entries after "Close") for
   §12. `Program.Main`'s exit codes and the notice under a real desktop lifetime have run in no
-  test: §12's launches 4 to 6 are their first run.
+  test: §12's launches 4 to 6 are their first run. Since step 19's first round (merged at
+  `67ff55d`; D464, ruling 100) one method, `SingleInstanceGuard.ResolveHeld`, answers a held start
+  for `Program.Main` and for `RetryOn` with a `HeldResolution`, and `WaitToTake` returns one too
+  (1.11); the waits, the modes on macOS and Linux, the stale socket's probe and the new log lines
+  are 4.3's, the new tests 4.5's. The exit codes and the notice's texts are as they were.
 - **Wave 1's close** (the report's "Wave 1's comparison"). The references of every later merge are
   `D:/Projects/Personal/phase8-work/references/wave1/` until wave 2's close; from then they are those
   of the last closed wave (wave 2's, `D:/Projects/Personal/phase8-work/references/wave2/`, and after
@@ -1060,24 +1073,41 @@ wave adds to it. What wave 2 tells §12's launches is in 12.3.5.
   `gitSetupLink`, coloured by the view's own styles: `VcAccentBrush`, `VcAccentOnRowBrush` on hover.
 - **First run: Check again and the starts.** Choose, `Use the Git…` and the settings screen's
   close (a setting changed while git does not work) wait for a running Check again to end, then
-  run their own (`GitSetupViewModel.CheckAgainAfterRunningAsync`): that search went by the old
-  setting. `GitAccess` still joins a running search (1.2). `CheckHelper()` runs only while git
-  works and the helper was missing. The view model, not `FileLauncher.StartAsync`, logs `Started
-  in a terminal: …` and `Started: …`, with the `DisplayText` of the command before `ResolveStart`
-  (`cmd.exe`, not its full path). `WingetCommand` allows concurrent runs, so its button stays
-  enabled under its confirm.
+  run their own (`GitSetupViewModel.CheckAgainAfterRunningAsync`): the command runs one search at
+  a time, and the search it then starts reads the setting just changed. `GitAccess` joins a
+  running search only for a call told the same lookup, and searches after it for a call told
+  another (1.2, as built since step 19). `CheckHelper()` runs only while git works and the helper
+  was missing. The view model, not `FileLauncher.StartAsync`, logs `Started in a terminal: …` and
+  `Started: …`, with the `DisplayText` of the command before `ResolveStart` (`cmd.exe`, not its
+  full path). The screen's launches and Copy (`WingetCommand`, `CommandLineToolsCommand`,
+  `DownloadCommand`, `ShowFileCommand`, `MoreLinkCommand`, `GuideLinkCommand` and `CopyCommand`)
+  allow concurrent runs, so their buttons stay enabled, and keep the keyboard focus, while they
+  run, winget's under its confirm (all but winget's since step 19, `2a2a1fc`). Since step 19
+  Choose's probe of a file stops after `GitSetupViewModel.ChosenProbeLimit` (10 s; the file is then
+  refused with `GitSetupTexts.ChooseNoAnswer`) and with the window, and Choose and the row's Browse
+  get the keyboard focus back after a cancelled pick or a refused file (5.3).
 - **First run: the row, the netrc note, the ssh line.** After the row's `Use the Git it found` (the
   chosen git gone, another found), `GitProgramPath` reads `None found` and `GitProgramNote` only
-  `VisualCommit looks for Git again when you save.` (the lead's ruling). The netrc question is one
+  `VisualCommit looks for Git again when you save.` (the lead's ruling). After the row's `Use the
+  Git on the PATH` drops a chosen git that is in use and works, `GitProgramNote` reads `Chosen
+  here. VisualCommit looks for Git again at its next start.` (step 19's second round;
+  `GitSetupTexts.NextStartLooksAgainSuffix`; ruling 100). The netrc question is one
   of `SettingsDialogViewModel.Loaded`'s reads, not asked again that session once the note is
   dismissed. `MainWindowViewModel.HomeHasNetrc(variable, directoryExists, fileExists, windows)` is
   public static, for the tests. The ssh line is `AskPassBroker.AskPassRequireLineFor(OperatingSystem.IsWindows())`:
-  the constant `AskPassRequireLineWindows` on Windows, `AskPassRequireLineUnix` elsewhere.
+  the constant `AskPassRequireLineWindows` on Windows, `AskPassRequireLineUnix` elsewhere (5.3,
+  ruling 100).
 - **First run: names (§9).** Each button's and link's automation name is its text, bound where the
   text changes, so `GitSetupCheckAgainButton`'s reads `Checking…` during a search. `GitStatus`'s
   help text is `GitStatusToolTip`, none without a path; `GitSetupButton` sits left of `GitStatus`.
   The panels, the label `Git said:`, the row's `Grid` `GitProgramRow` and `AccountsNetrcNoteRow`
-  have no automation id. `GitProgramPath`'s tooltip is its path, with no help text.
+  have no automation id. `GitProgramPath`'s tooltip is its path, with no help text. Since step 19
+  `GitSetupTitle` and `GitSetupError` are polite live regions, and Check again's own text is no
+  live region (D463 (2)); the error line shows with its text in one step, so a reader hears a
+  refusal only if it reached the line during Choose's `Checking…`, and the title only once it has
+  read the screen (ruling 100). (Step 19's second round.) Choose and Check again, which get the
+  keyboard focus back after their outcome, are described by it through
+  `AutomationProperties.HelpText`: Choose by the error line, Check again by the title (D463 (3)).
 - **First run: the harness.** A headless test reaches a state by `StartEmptyAsync(data, gitProbe:,
   askPassHelper:)` with a `FakeGitSetupProbe`, then `WaitForGitSetupAsync`, as `GitSetupShellTests`
   does for twelve states (`ShellDriver.Phase8a.FirstRun.cs` also has `GitSetupPart`,
@@ -1112,8 +1142,13 @@ wave adds to it. What wave 2 tells §12's launches is in 12.3.5.
   show two rows' buttons there, and §9's names (1.12) and its sweep meet a focused row's buttons too.
   Tab and Shift+Tab walk both lists in their rows' order, rows below the view included, by
   `WorkingChangesView`'s own tunnel `KeyDown` (`55b8d3a`; 6.3.4 as corrected). After a row's action by
-  the keys the focus moves only if the run took it away, and after a switch of tabs nothing is done
-  (6.3.5 as corrected).
+  the keys the focus moves only if the run took it away (6.3.5 as corrected). After a switch of
+  tabs, since step 19 (D462 (1)), the window gives a focus that the switch took away (to nothing,
+  the window or an element no longer shown or enabled) to the same panel's target in the tab now
+  shown, as F6 would give it without its memory of the other tab's element, when that tab has a
+  repository and shows that panel, else to the graph area's target, with the frame if the element
+  that lost it had it; nothing while a dialog is open or a tab still opens, and a focus placed
+  meanwhile stays (`MainWindow.Keys.cs`, `FocusAfterSwitch`; `KeyboardPassTests.TabSwitch.cs`).
 - **Part K's harness** (§6). `HeldGitRunner` has `Probe`, `HoldNext(string word)`, `Started` (a
   `Task<GitCommand>`) and `Release()`; a row's Stage is `add --all -- <path>` (`K.AddWord`).
   `ShellDriver.Phase8a.Keyboard.cs` holds `FocusVisible`, `StageRows(list)`, `StageRow(list, path)`,
@@ -1201,8 +1236,14 @@ wave adds to it. What wave 2 tells §12's launches is in 12.3.5.
   the focus: from a stage row's own button or its Stage on nothing, the first F6 then starting at
   the left panel; from the graph or the summary on the same element. The lead's ruling: step 19's
   round fixes the first in `WorkingChangesView` (the graph area's target takes the focus), and no
-  picture changes. A row's Discard cancelled in its question gives the focus back to the row's
-  own button, with the frame (6.3.4), which a test now holds.
+  picture changes. D462 (1) replaced that ruling in step 19 with the window's rule for every panel
+  ("The stage rows" above): from a stage row, or its Stage reached by Tab, to a tab whose stage
+  panel shows, the focus now goes to that tab's first stage row, with the frame
+  (`Ctrl_Tab_from_a_focused_stage_row_gives_the_focus_to_the_other_tabs_first_row_with_the_frame`
+  and `Ctrl_Tab_from_a_stage_rows_Stage_reached_by_Tab_gives_the_focus_to_the_other_tabs_first_row_with_the_frame`,
+  which replace the two that stated "on nothing"), and no picture changes; from the graph or the
+  summary it stays where it was. A row's Discard cancelled in its question gives the focus back to
+  the row's own button, with the frame (6.3.4), which a test now holds.
 - **The performance pass** (§10, merged at `86ecb3a`, 2026-11-21). `StartupTimeline` has a second
   public overload, `FromProcess(IAppLog, Func<DateTimeOffset>)`, for the test of its Warning, and
   its texts are public constants (`WindowOpenedFormat`, `GitFoundFormat`, `FirstRowsFormat`,
@@ -1223,10 +1264,12 @@ wave adds to it. What wave 2 tells §12's launches is in 12.3.5.
   against wave 2's references. Not run by the builder, and the lead's on the desktop:
   `Phase8aPerformance` itself (10.8).
 - **About and the notices** (§8, merged at `f014b2b`; its fixes after the merge at `85e2884`).
-  `AboutSettingsViewModel` takes three optional parameters after 8.3.1's five (`readText` and
-  `vendorNotices`, through which a test makes a text unreadable, and the settings screen's
-  `lifetime`), and its four commands allow concurrent runs, so that their buttons keep the
-  keyboard focus (8.3.1); `AboutSettingsViewModel.PartId(file)` gives a vendor file's switch id and
+  `AboutSettingsViewModel` takes four optional parameters after 8.3.1's five (`readText` and
+  `vendorNotices`, through which a test makes a text unreadable, the settings screen's `lifetime`,
+  which a Save that closes the screen cancels too since step 19, and `saving`, since step 19
+  (ruling 100, `ce144f4`), the screen's Save as it runs, which a Show press waits for), and its four
+  commands allow concurrent runs, so that their buttons keep the keyboard focus (8.3.1);
+  `AboutSettingsViewModel.PartId(file)` gives a vendor file's switch id and
   `EmbeddedTexts.FileNameOf` is new. The text dialog's card is 760 × 600 at (170, 50) at 1100×700;
   with one text and no switch the text lies 12 below the title (with the switch: 12, then 8). The
   notices file and `notices/` are as 8.2 and 8.3.4 now say: the 12 Avalonia packages that ship,
@@ -1256,7 +1299,20 @@ wave adds to it. What wave 2 tells §12's launches is in 12.3.5.
   Name change after the peer is made has the old value null (`U.FirstOldName`), each later one the
   name raised before. For §12, `Phase8aExpectations.U` holds launch 13's facts (`GraphRowLaunch`,
   `MergeMoves`, `EventWait` 5 s, `LaunchNameIds`, `LaunchRowNames`); launch 13 reads no branch row,
-  so the branch row's help text is read in no real window.
+  so the branch row's help text is read in no real window. Since step 19's first round (merged at
+  `a60056e`; D463 (1)) the status bar's `OperationStatus` is a `Controls/StatusText`, a subclass of
+  `TextBlock` styled as one, named by its text with git's stage and percentage, whose peer raises
+  the Name change only when its `SpokenText` changes; `IStatusBarOperation` gained `SpokenText`
+  (`OperationStatusViewModel.SpokenText`, `BulkRun.SpokenText`,
+  `DashboardBulkViewModel.SpokenText`), so the live region speaks an operation's start, ssh's notice
+  and its result, and on a dashboard a run's start, ssh's notice while it shows, Cancel all's text
+  as it was at the click and the result, not the progress
+  (`StatusBarTests.The_operation_texts_live_region_speaks_the_start_and_the_result_not_the_progress`).
+  A new implementer of `IStatusBarOperation` gives its `SpokenText`. The first-run screen's
+  `GitSetupTitle` and `GitSetupError` and the notice's `InstanceNoticeStatus` are polite live
+  regions (D463 (2); "First run: names" above, 4.3.4); the tests take each peer as a client reaches
+  it, walking down from the window's peer (`ClientWalk`, 8a's project;
+  `InstanceNoticeLiveRegionTests`).
 - **At wave 3's merges** (the lead, 2026-11-21). The notices quote the copyright lines word for
   word, their holders' e-mail addresses included (8.3.4 as written): the builder had read its
   brief's "no e-mail address" as reaching third parties' notices, where it meant the owner's address
@@ -1292,7 +1348,11 @@ wave adds to it. What wave 2 tells §12's launches is in 12.3.5.
   `rm` while the hold is armed again. Not this wave's, for the review before the gate (status step
   19): the name a branch row gives for a moment while its folder opens (the spike's S4,
   "Avalonia.Controls.DockPanel"); a check whose `using var hold` throws in `Dispose` hides the first
-  exception.
+  exception. The second is answered in step 19's first round (merged at `876c197`): `FetchHold`'s
+  `Dispose` releases and never fails, writing a hold that gave up to the test's output instead, and
+  a check that holds a fetch ends its body with a look of its own after its last held step,
+  `Release` or `Assert.Empty(hold.GaveUp())` (the latter added then to `BulkRunTests` and phase 6's
+  W5 and W8), so it never passes on a hold that held nothing.
 - **At wave 3's close** (the lead, 2026-11-22). The one fault that the inspection of wave 3's new
   pictures found (the report's "Wave 3's comparison with wave 2's references"),
   `a1b-about-link-focus`, where Fluent's focus frame lay on a focused link's bounds, its text's line
@@ -1315,9 +1375,15 @@ wave adds to it. What wave 2 tells §12's launches is in 12.3.5.
   asserts it (`AssertFramedLink`), and `LinkFocusFrameTests` (App.Tests, 12 cases) holds it for
   About's links, in dark and in light, and for GitLab's two token links, with nothing moved, nothing
   drawn outside the bounds without the focus, no other control under the frame, the frame never hit
-  and no frame after a click. `VcRadioButton` (`Theme/Dialogs.axaml`) builds its focus frame round
-  its content and was not changed: that its frame probably takes clicks just outside it while it has
-  the keyboard's focus is on the list of the review before the gate (status step 19). The references
+  and no frame after a click. `VcRadioButton` (`Theme/Dialogs.axaml`) built its focus frame as two
+  borders round the ring and the content and was not changed then; that the frame took clicks just
+  outside the button while it had the keyboard's focus went to the list of the review before the
+  gate (status step 19). It did: its strokes, up to 7 px outside the button, took the pointer, and a
+  click in the gap above Hard in the Reset dialog checked Hard. Step 19 rebuilt it as the link's
+  (`763a1c5`, merged at `ce144f4`): the `Border` `FocusFrame` holding `FocusFrameInner` is laid over
+  the ring and the content with `IsHitTestVisible` false, its lines on the pixels they had, so it is
+  only drawn, never hit, and moves nothing; `RadioFocusFrameTests` (App.Tests) hold it for the Reset
+  dialog's three options and the settings screen's Theme and Pull options. The references
   of every later merge are wave 3's, `D:/Projects/Personal/phase8-work/references/wave3/` (1,235
   scripted pictures; `a1b-about-link-focus` there is the fix's). The "before" series (10.3.6, as
   built) was taken three times, none of them quiet throughout (D457 (1)), the second because of the
@@ -1377,24 +1443,31 @@ wave adds to it. What wave 2 tells §12's launches is in 12.3.5.
   rows: (1) a list whose rows have one height, the stage lists, calls `ReplaceAll(rows, showSame)`,
   which removes each row it tells of and inserts its rebuilt row at its index; (2) a row that shows
   the same stays, and a row that can show its rebuilt row by changing its own properties does so
-  (`IUpdatableRow`: the left panel's ref rows and section headers), the view told nothing of the
-  list; (3) a list of mixed heights, the left panel, calls `ReplaceAll(rows, showSame, sameItem)`
-  with what names an item, its rows' keys: the rows told of go by runs of consecutive rows, a run of
-  same-item rows replaced row by row and any other run removed and inserted, and runs are never
-  joined; (4) the list is reset above 64 rows told of. A rebuild that changes the number of rows
-  removes that whole part and inserts its new rows, as before phase 8a, with a reset above 64 rows
-  removed and inserted together, and a press on a row inside it is lost. Two limits are known. A row
-  that keeps its key but cannot change itself (a pull request row that shows something new or whose
-  request changed, a message row whose text changes, a ref row whose name, tooltip, level or opening
-  changes) is replaced: when it is the top row in view, the offset and the extent end short by the
-  heights of the consecutive replaced rows from it down, and a list scrolled by less goes to its top
-  and makes every control again, the click under a press lost with them; and a press on a replaced
-  row itself loses its click wherever the row is, as before phase 8a. And a row left in place
-  between the first and the last row that shows something new stays in the panel's estimate, so deep
-  in a long list the offset and the extent can end further off than before phase 8a. In the 105
-  pairs of cases on record no row moved in the window and no click was lost that the code before
-  kept, except in the first limit's own case (seven pull request rows replaced at the top under an
-  offset of 172 px); deep in the list, kept rows in view may get new controls, as they did before.
+  (`IUpdatableRow`: the left panel's ref rows and section headers, and since step 19 a file list's
+  rows, `ChangedFileRow`, for a folder's opening), the view told nothing of the list; (3) a list of
+  mixed heights, the left panel, calls `ReplaceAll(rows, showSame, sameItem)` with what names an
+  item, its rows' keys: the rows told of go by runs of consecutive rows, a run of same-item rows
+  replaced row by row and any other run removed and inserted, and runs are never joined; (4) the
+  list is reset above 64 rows told of. A rebuild that changes the number of rows removes that whole
+  part and inserts its new rows, as before phase 8a, with a reset above 64 rows removed and inserted
+  together, and a press on a row inside it is lost. As built since step 19 (D462 (3)) that holds
+  only for a rebuild that both removes and inserts rows: a row that can change itself counts as
+  kept at the list's start and end too, and a rebuild that only inserts rows or only removes them
+  (a folder or section opened or closed, a branch created or deleted, its header showing its new
+  count itself) tells the view of them in one Add or one Remove, however many, and never resets.
+  Two limits are known. A row that keeps its key but cannot change itself (a pull request row that
+  shows something new or whose request changed, a message row whose text changes, a ref row whose
+  name, tooltip or level changes; a remote, folder or section header that opens or closes has
+  changed itself since step 19) is replaced: when it is the top row in view, the offset and the
+  extent end short by the heights of the consecutive replaced rows from it down, and a list scrolled
+  by less goes to its top and makes every control again, the click under a press lost with them;
+  and a press on a replaced row itself loses its click wherever the row is, as before phase 8a. And
+  a row left in place between the first and the last row that shows something new stays in the
+  panel's estimate, so deep in a long list the offset and the extent can end further off than
+  before phase 8a. In the 105 pairs of cases on record no row moved in the window and no click was
+  lost that the code before kept, except in the first limit's own case (seven pull request rows
+  replaced at the top under an offset of 172 px); deep in the list, kept rows in view may get new
+  controls, as they did before.
   The lead chose that over joining two runs, which a round of the fix had tried: where a join
   gained, it brought the offset 1 to 47 px nearer (47 for two renames at the bottom of 60 branches,
   6 for a fetch), in a list where it is off already; where both runs lay below the top row in view
@@ -1416,13 +1489,16 @@ wave adds to it. What wave 2 tells §12's launches is in 12.3.5.
   first row it has made, or an insert above it, which near the top of the left panel misses by
   pixels and deep in it can give rows in view new controls, lose a press on one or draw them
   elsewhere (87 px lower after a fetch that drops the top remote branch in view, by up to 131 px at
-  the undo of a rename); a rebuild that changes the list's length; the row that itself shows
-  something new, which still loses its press, its focus and its tooltip; the keyboard focus that
-  Enter or Space on a section header, a folder or a file list's tree folder, or Space on a hidden
-  row's eye, drops; the other phases' walk-throughs, not yet searched for a hide or a solo followed
-  only by `WaitForIdleAsync`; the cost of a solo with thousands of branches now that each row
-  changes itself in place, not measured; and one more timeout of an older test, seen once (the
-  report has it).
+  the undo of a rename); a rebuild that changes the list's length (one that only inserts or only
+  removes rows is one change since step 19, above); the row that itself shows something new, which
+  still loses its press, its focus and its tooltip; the keyboard focus that Enter or Space on a
+  section header, a folder or a file list's tree folder, or Space on a hidden row's eye, drops
+  (answered in step 19's first round, merged at `c0bedc6`, D462 (3): the toggled folder or section
+  keeps its row and its control, and with them the focus, and an eye or solo button that hides
+  itself gives the focus to its branch's row); the other phases' walk-throughs, not yet searched
+  for a hide or a solo followed only by `WaitForIdleAsync`; the cost of a solo with thousands of
+  branches now that each row changes itself in place, not measured; and one more timeout of an
+  older test, seen once (the report has it).
 
 - **Wave 4: the restore order, as built, proven and merged** (the lead, 2026-11-23; section 14 with
   its 14.10; rulings 86 to 93; D458; merge `aedb12f`). The proof is taken again before the gate
@@ -2050,21 +2126,35 @@ Implements 1.11 whole and 1.10's `Guard`, `Mode` and `ExitCode`. Uses `AppLaunch
 In order: a comment that an updater's start-up hook goes first (the code names no phase, 0.3);
 `var paths = AppPaths.Resolve()`; the crash log on `paths.LogDirectory` and its handlers, as today;
 `using var guard = SingleInstanceGuard.TryTake(paths, crashLog)`. `Taken` or `Unavailable`: mode
-`Normal`. `Held`: `AskToComeForward()`; `Activated` or `Starting` return 0 at once (Avalonia never
-starts); `Closing` gives `Normal` if `WaitToTake()`, else `NotAnswered`; `NotAnswered` gives
-`NotAnswered`. Then WP0's line, extended: `AppLaunch.Current = new() { Timeline = …, Guard = guard,
-Mode = mode }`; the lifetime as today; return `AppLaunch.Current.ExitCode`. The `using` disposes the
-guard after the lifetime and on the rethrow. The waits (at most about 8.5 s: the lock's 250 ms,
-`Connect` and `Reply`; or 30 s after `Closing`) come before any UI thread exists (Q2).
+`Normal`. `Held`: `ResolveHeld()` (4.3.2; as built since step 19, D464 (1)), the one answer to a
+held start, which "Try again" shares (4.3.4): `HandedOver` (an answer `Activated` or `Starting`)
+returns 0 at once (Avalonia never starts); `Taken` (the lock taken after a `Closing`, or within the
+250 ms after an unanswered ask) gives `Normal`; `NotAnswered` gives `NotAnswered`. Then WP0's line,
+extended: `AppLaunch.Current = new() { Timeline = …, Guard = guard, Mode = mode }`; the lifetime as
+today; return `AppLaunch.Current.ExitCode`. The `using` disposes the guard after the lifetime and on
+the rethrow. The waits come before any UI thread exists (Q2), each with a limit (D464): at most
+about 8.5 s, the lock's 250 ms, `Connect` and `Reply`, then the lock's 250 ms after an unanswered
+ask; after `Closing`, `WaitWhileClosing` (30 s) on one clock however often the folder changes
+hands, plus at most one ask in flight (a 100 ms connect and `Reply`) and the lock's 250 ms.
 
 #### 4.3.2 The guard
 
 `TryTake` never throws. It creates the data folder and opens `instance.lock` with `OpenOrCreate`,
-`ReadWrite`, `FileShare.None`, keeping the stream:
+`ReadWrite`, `FileShare.None`, keeping the stream. On macOS and Linux (as built since step 19, D464
+(4)) the data folder, when the guard creates it, is the user's alone (0700,
+`Directory.CreateDirectory(path, mode)`, which gives the mode to the last folder alone: a missing
+folder above it, such as `~/.config`, gets the system's default mode, as `mkdir -p` gives it, and
+the data folder's mode keeps other users out of all below it), and so is a lock file it creates
+(0600, `FileStreamOptions.UnixCreateMode`): another user who could open the lock file could hold its
+lock; a folder or a lock file that exists keeps its mode. `instance.json` keeps the mode
+`DurableFile.Replace` gives every file it writes.
 - Opened: `Taken`. It starts the server, then writes `instance.json` through `DurableFile.Replace`
   with `Utf8JsonWriter`: `{"v":1,"pid":…,"endpoint":"…","started":"<ISO 8601 with offset>"}`. If the
   old file named a socket path `<Path.GetTempPath()>VisualCommit-<16 hex>` or `/tmp/VisualCommit-<16 hex>`
-  exactly and a file is there, it deletes it first (the lock was free, so its owner is gone).
+  exactly and a file is there, it deletes it first, but since step 19 (D464 (5)) only when no
+  server answers on it (one attempt to connect, 100 ms): a free lock does not prove its owner gone,
+  since a data folder copied while its instance runs names that instance's live socket, which a
+  start on the copy leaves to it.
 - `IOException` while `instance.lock` exists: the open is tried again every 50 ms for 250 ms (a virus
   scanner or the indexer may hold the file for a moment), then `Held`, without reading an HResult
   (Unix's for a held `flock` is unchecked). `TryTakeNow` makes no such retries.
@@ -2083,6 +2173,25 @@ client `{"v":1,"request":"come-forward","pid":<its pid>,"args":[]}`; server `{"v
 
 `TryTakeNow()` is one attempt; success makes `Outcome` `Taken` and runs `Taken`'s steps.
 `WaitToTake()` calls it every 250 ms until `WaitWhileClosing` has passed. `Default` is 5 s, 3 s, 30 s.
+
+As built since step 19 (D464 (1) to (3), ruling 100). `ResolveHeld()` (on `Held` only, as
+`AskToComeForward`) is a held start's whole request, which `Program.Main` and "Try again" make
+alike: `AskToComeForward()`; `Activated` or `Starting` give `HandedOver`; `Closing` goes to
+`WaitToTake()`; `NotAnswered` has the lock tried again every 50 ms for 250 ms, since a holder that
+ended during the ask (closed, crashed, or ended by the user as the notice advises) has let it go:
+`Taken` if it comes free, else `NotAnswered`. `WaitToTake()` returns a `HeldResolution` and keeps
+one clock: it tries the lock every 250 ms, `Taken` once it comes free, `NotAnswered` once
+`WaitWhileClosing` has passed; at each look it reads `instance.json`, and while that names an
+endpoint other than the one an ask last reached (another start took the folder the closing one let
+go), it makes one attempt to reach that holder (a 100 ms connect, then the request and `Reply`),
+the lock tried again between two looks: `Activated` or `Starting` give `HandedOver`, `NotAnswered`
+has the lock tried for 250 ms as above, `Closing` is waited for within what is left of the same
+`WaitWhileClosing`, and a refused connection is tried again at the next look. So a new holder that
+ends before it answers leaves the folder to the waiting start at once. Accepted (ruling 100): a new
+holder that keeps the lock while its endpoint refuses holds a waiting start until the wait ends,
+and the log names that case; a start whose ask is in flight as a closing holder's server is
+cancelled gets no answer, and if another start takes the lock within its 250 ms it shows the
+notice instead of asking that start, which "Try again" then hands over to.
 
 The endpoint: on Windows a pipe name `VisualCommit-<16 hex>` (`RandomNumberGenerator.GetHexString(16,
 lowercase: true)`); on macOS and Linux the socket path `<Path.GetTempPath()>VisualCommit-<16 hex>`, or
@@ -2158,27 +2267,47 @@ Texts (`InstanceNoticeTexts`, ruling 58):
 It says "did not answer", never that the other hangs: an elevated first instance on Windows refuses
 a normal one's connection (`CurrentUserOnly` checks elevation) while it works.
 
-"Try again" runs on a pool thread: `TryTakeNow()` gives `Free`; else `AskToComeForward()`:
-`Activated` or `Starting` give `HandedOver`, `Closing` gives `Free` if `WaitToTake()` and `NoAnswer`
-if not, `NotAnswered` gives `NoAnswer`. On the UI thread: `HandedOver` sets `ExitCode` 0, closes the
-notice and calls `desktop.Shutdown()`. `Free` (D422) runs `StartSession`, shows the main
-window as `desktop.MainWindow`, puts `ShutdownMode` back to `OnLastWindowClose`, sets `ExitCode` 0
-and closes the notice. `NoAnswer` shows the status and enables "Try again",
-which keeps the focus. "Close" during a try closes at once and drops its result. Every other
-close leaves `ExitCode` 2 and calls `desktop.Shutdown()`.
+"Try again" runs on a pool thread (`InstanceNoticeViewModel.RetryOn`): `TryTakeNow()` gives `Free`;
+else, as built since step 19 (D464 (1)), `ResolveHeld()` (4.3.2), as `Program.Main` makes it:
+`Taken` gives `Free`, `HandedOver` gives `HandedOver`, `NotAnswered` gives `NoAnswer`. On the UI
+thread: `HandedOver` sets `ExitCode` 0, closes the notice and calls `desktop.Shutdown()`. `Free`
+(D422) runs `StartSession`, shows the main window as `desktop.MainWindow`, puts `ShutdownMode` back
+to `OnLastWindowClose`, sets `ExitCode` 0 and closes the notice. `NoAnswer` shows the status and
+enables "Try again", which keeps the focus, given back if its disabling took it. "Close" during a
+try closes at once and drops its result. Every other close leaves `ExitCode` 2 and calls
+`desktop.Shutdown()`.
+
+The status (`InstanceNoticeViewModel.StatusLine`, empty until a try goes unanswered) is a polite
+live region since step 19 (D463 (2)); it shows with its text in one step, before a screen reader
+can have reached it, so a reader most likely finds the words only when it reads the notice
+(ruling 100). (Step 19's second round.) "Try again", which has the focus again after an unanswered
+try, is described by the status through `AutomationProperties.HelpText`, so that the focus's
+announcement carries it (D463 (3)).
 
 #### 4.3.5 Log lines
 
-Through the crash log; `{folder}` the data folder, `{pid}` from `instance.json` (`unknown` unread).
+Through the crash log; `{folder}` the data folder, `{pid}` from `instance.json` in a start's lines
+and from the request in the server's (as built, a line that names a process is written only once
+its id was read, so none reads `unknown`).
 - Info: `This VisualCommit holds the data folder {folder}: a second start on it is sent here.`
 - Info, by answer: `VisualCommit already runs on the data folder {folder} (process {pid}); it was asked to come to the front, and this start ends.`;
   `VisualCommit is starting on the data folder {folder} (process {pid}); this start ends.`;
   `VisualCommit on the data folder {folder} (process {pid}) is closing; this start waits up to 30 s for it.`
+  As built since step 19 (D464 (2)), the closing line names 30 s for the instance first asked; for
+  one that took the folder meanwhile and answers `closing` too, it names what is left of the wait,
+  in tenths of a second rounded down (`12.3`), never more.
 - Warning: `VisualCommit holds the data folder {folder} but did not answer ({why}).`, `{why}` one of
   `no instance.json`, `its endpoint refused the connection`, `no reply within 3 s`,
   `a reply this version does not read`.
 - After the wait: Info `The other VisualCommit closed; this start goes on.`, Warning
-  `The other VisualCommit did not close within 30 s.`
+  `The other VisualCommit did not close within 30 s.`, its seconds since step 19 those the last
+  closing line named; when the wait ends on a new holder whose endpoint refused the last attempt,
+  the Warning is instead `VisualCommit holds the data folder {folder} but did not answer (its
+  endpoint refused the connection).`, since the closing one did close.
+- New since step 19 (D464): Info `Another VisualCommit took the data folder while this start
+  waited; it is asked instead.`, once for each new holder's endpoint, as the waiting start first
+  sees it; Info `The data folder {folder} is free now; this start goes on.`, when the lock comes
+  free within the 250 ms after an unanswered ask.
 - Warning: `The data folder {folder} could not be locked against a second VisualCommit ({reason}); this one starts without that guard.`
 - Warning: `File locking is turned off (DOTNET_SYSTEM_IO_DISABLEFILELOCKING or System.IO.DisableFileLocking): a second VisualCommit on the data folder {folder} is not stopped.`
 - Server: Info `A second VisualCommit (process {pid}) started on this data folder: answered {activated|starting|closing}.`;
@@ -2206,8 +2335,9 @@ every step (D237), and a 250 ms window on the real clock failed in CI before
    holder's log has the server's line with the asker's pid.
 3. The test holds `instance.lock` itself, no `instance.json`: `NotAnswered`, with at least `Connect`
    (300 ms) elapsed and at most `Connect` plus 5 s, with `no instance.json` in the Warning.
-4. `ComeForward` answers `Closing`, the holder disposes 300 ms later: `WaitToTake` true, `Outcome`
-   `Taken`, and a third guard's ask reaches it.
+4. `ComeForward` answers `Closing`, the holder disposes 300 ms later: `WaitToTake` gives `Taken`
+   (true before step 19, which made it a `HeldResolution`), `Outcome` `Taken`, and a third guard's
+   ask reaches it.
 5. A lock file left unheld and an `instance.json` naming a stale endpoint (on macOS and Linux a file at
    that path): the next guard is `Taken` and serves; on Unix the stale file is gone.
 5a. A guard is `Taken`; the test replaces its `instance.json` with one naming a stale endpoint (as 5),
@@ -2229,6 +2359,49 @@ every step (D237), and a 250 ms window on the real clock failed in CI before
 11. A `Held` guard asks (`Activated`) and is disposed: the holder's `instance.json` is unchanged byte
     for byte, and a third guard's `AskToComeForward` gets `Activated`. The same holds for a `Held`
     guard disposed after `NotAnswered`.
+
+Step 19 added these (D464, ruling 100; the instance package, merged at `67ff55d`); 15 passed before
+the fix too and guards what a simpler form of it would have broken, and the others were committed
+failing first:
+12. `Two_starts_that_wait_for_a_closing_holder_end_one_taken_and_the_other_handed_over_to_it`, a
+    theory over the two callers, `ResolveHeld` as `Program.Main` makes it and `RetryOn` as "Try
+    again" does: two starts wait for one closing holder, which lets the folder go once both have its
+    answer; one ends `Taken`, the other `HandedOver` to it, with `Another VisualCommit took the data
+    folder…` and the new holder's `starting` line in its log and no `did not close within`.
+13. `A_holder_that_ends_while_it_is_asked_leaves_the_folder_to_the_asker`, over the same two
+    callers: the test holds the lock and serves the endpoint `instance.json` names, reads the
+    request and ends, the lock first: `Taken`, with `no reply within 5 s` and `The data folder
+    {folder} is free now; this start goes on.`
+14. `A_new_holder_that_ends_before_it_answers_a_waiting_start_leaves_the_folder_to_it_at_once`, a
+    theory over a new holder that crashed (its `instance.json` left) and one that closed (deleted
+    first): the waiter's `Connect` is 30 s, and it takes the folder within a third of that after the
+    lock is let go, `Taken`, with no Warning.
+15. `A_new_holder_that_does_not_answer_a_waiting_start_is_named_so_when_the_wait_runs_out`
+    (`WaitWhileClosing` 5 s, nothing serving the new holder's endpoint): `NotAnswered`, with the
+    Warning `…did not answer (its endpoint refused the connection).` and no `did not close within`.
+16. `A_new_holder_that_is_closing_too_is_waited_for_within_what_is_left_and_the_log_says_how_long`
+    (`WaitWhileClosing` 5 s, both holders answering `closing`): `NotAnswered`; the first closing
+    line names 5 s, the second fewer, and the last line `The other VisualCommit did not close within
+    {those seconds} s.`
+17. `A_folder_copied_while_its_instance_runs_leaves_that_instances_endpoint_to_it`: a guard on a
+    copy of a running guard's data folder is `Taken` with an endpoint of its own; on macOS and Linux
+    the running guard's socket is still there; an ask on the original folder gets `Starting`, and
+    the running guard logs no Warning.
+18. `On_macOS_and_Linux_the_lock_file_and_the_data_folder_the_guard_makes_are_the_users_alone` (the
+    lock file and the data folder, both made by the guard: no group or other bit; the missing folder
+    above the data folder is made, its mode not asserted, since it gets the system's default) and
+    `On_macOS_and_Linux_a_lock_file_and_a_data_folder_that_exist_keep_their_modes`; both skipped on
+    Windows.
+
+Tests 14 to 16 add about 11 s to the class, 15 and 16 waiting out their 5 s on purpose. Test 18,
+and test 17's one assertion that the fix changes, fail only on macOS and Linux: their failing first
+was shown by reasoning alone, no builder having such a machine. CI's run 45421164866 (on `b2ce493`,
+the six merges) was their first run, and that of test 5 with the probe before the stale file's
+deletion and of tests 13 to 16, which serve sockets at temporary paths: test 18's first test failed
+there in the macOS job and the four Linux jobs, since it expected the missing folder above the data
+folder to be the user's alone too and .NET gives the mode asked for to the last folder alone, so it
+was narrowed to the lock file and the data folder and renamed (`e3002ac`; D464 (4) as corrected);
+the others passed (ruling 100).
 
 `InstanceNoticeViewModelTests` (App.Tests): the texts per platform, word for word; the folder line's
 text is the folder given; `Trying…` and disabled while a held try runs; `NoAnswer` shows the status
@@ -2286,7 +2459,8 @@ folder's files (Grep), and each relaunch waits for the exit.
 ### 4.8 Lagged list, time, the pass
 
 Lagged list: nothing new (8a's project is listed; part I has no watcher). Default run: about 35 s
-(test 9 waits out the holder's 5 s `Reply`).
+(test 9 waits out the holder's 5 s `Reply`), without step 19's tests 14 to 16, which add about 11 s
+(4.5).
 Real-window pass: I1 about 50 s, I2's launches about 15 and 45 s: about 2 minutes (0.6).
 
 ### 4.9 Done when; risks; open points
@@ -2449,6 +2623,12 @@ button (§9's sweep and Narrator steps 20 and 21 read them); no picture changes.
 | `GitSetupMoreLink` | `Other ways to install Git` | M, L Missing, TooOld, ChosenMissing without a candidate | `https://git-scm.com/install/mac`, `/linux` |
 | `GitSetupGuideLink` | `How VisualCommit finds Git`; helper: `What the helper does` | all | `AppLinks.Guide` of the state's page |
 
+As built: the buttons that start something or copy (winget's, the Command Line Tools', Download,
+Show the file, Copy and the two links) allow a run while one runs, so each stays enabled, and keeps
+the keyboard focus, while the launcher starts a program off the UI thread or the clipboard answers;
+a second press starts the same again (winget's since §5, the others since step 19, `2a2a1fc`).
+Choose and Check again are disabled while they run, and give the focus back as below.
+
 **Texts** (`{v}` found, `{min}` `GitVersion.Minimum`; the path in `GitSetupPath`):
 
 | State | Title | Body | Guidance (`GitSetupGuidance`) |
@@ -2500,13 +2680,29 @@ The tools' start logs `Started: /usr/bin/xcode-select --install`. A failed start
 could not be started: {message}` in `GitSetupError`.
 
 **Choose**: the picker (`Choose git.exe`; `Choose the git program`); on Windows a name without `.exe`
-gets `SettingsTexts.ProgramNotExe` unrun; `GitSetupError` reads `Checking…`; `ProbeAsync`. Found:
-`settings.Update(GitExecutable = path)`, then Check again once a running one has ended
-(`GitSetupViewModel.CheckAgainAfterRunningAsync`, as for `Use the Git…`: a running search went by
-the old setting, and a call during it would join it, 1.2). Else, settings untouched, `GitSetupError`: `Git
-{v} at this path is too old: VisualCommit needs {min} or newer.`, `This Git did not report its
-version. Git said: {first line}`, `This file could not be started: {message}` or
-`SettingsTexts.ProgramMissing`.
+gets `SettingsTexts.ProgramNotExe` unrun; `GitSetupError` reads `Checking…`; `ProbeAsync`. As
+built since step 19 (ruling 100), the probe (`GitSetupViewModel.CheckChosenAsync`, Choose's and
+the row's Browse's) is stopped after `GitSetupViewModel.ChosenProbeLimit`, 10 s, which stops the
+program it runs (one that does not exit on `--version`), and ends with the window (Choose's token is
+the window's lifetime, `GitSetupServices.Lifetime`) or, for Browse, with the settings screen, whose
+token Cancel, Esc, the session's end and a Save that closes the screen cancel; a probe so ended
+refuses nothing and changes nothing. Found: `settings.Update(GitExecutable = path)`, then Check
+again once a running one has ended (`GitSetupViewModel.CheckAgainAfterRunningAsync`, as for `Use
+the Git…`: the command runs one search at a time, and the search it then starts reads the setting
+just changed; a call during a search told another lookup searches after it, 1.2). Else, settings
+untouched, `GitSetupError`: `Git {v} at this path is too old: VisualCommit needs {min} or newer.`,
+`This Git did not report its version. Git said: {first line}`, `This file could not be started:
+{message}`, `This file did not report its version within 10 seconds, so VisualCommit stopped it.`
+(`GitSetupTexts.ChooseNoAnswer`, since step 19; Choose can be pressed again) or
+`SettingsTexts.ProgramMissing`. Choose is disabled while its file dialog is open and its file is
+probed, which drops the keyboard focus, and a cancelled pick or a refused file starts no search
+that would place it: since step 19, once its run has ended with the focus on nothing, on the window
+or on a control no longer shown or enabled, the button takes it back, as by Tab when it had
+`:focus-visible` as it was pressed (`FocusReturn.AfterRun` with `FocusReturn.LostFrom`, from
+`GitSetupView`'s click handler), and the settings row's Browse does the same (`SettingsDialogView`);
+a Choose that found git hides the button, and the search's end places the focus. (Step 19's second
+round.) The button that gets the focus back is described by the outcome through
+`AutomationProperties.HelpText`: Choose by the error line, Browse by its refusal (D463 (3)).
 
 **Check again** (`MainWindowViewModel.Git.cs`), 1.2's order: `Looking for Git...`; the search; `Git`,
 `GitStatusText`, `GitStatusToolTip`; `CheckHelper()` off the UI thread, only while git works and the
@@ -2518,7 +2714,11 @@ dashboard's `RefreshCommand`. In HelperMissing git works, so Check again looks f
 `InitializeAsync` uses the same refresh. The button is disabled while it searches, which drops the
 focus (keyboard.md D-a): when the search ends with the focus on nothing or the window,
 `GitSetupCheckAgainButton` takes it again (`Tab` if it had `:focus-visible` when pressed, else
-`Unspecified`), or, the screen gone, the graph area's target.
+`Unspecified`), or, the screen gone, the graph area's target. The title is a polite live region
+since step 19 (D463 (2)), heard by a reader that has read the screen (ruling 100); (step 19's
+second round) the button that takes the focus again is described by the title through
+`AutomationProperties.HelpText`, so that the focus's announcement names the state the search ended
+on (D463 (3)).
 
 **Status bar.** `GitStatus` unchanged but for its help text (below); new texts `Chosen Git not found`, `Git {v} (helper missing)`;
 `ToolTip.Tip` `{path}, found on the PATH`, `{path}, found in Git for Windows' install folder` (else `in
@@ -2540,8 +2740,14 @@ usual install folders.`; then, while the choice differs from the git in use, ` V
 from its next start.` (git works) or ` VisualCommit looks for Git again when you save.`; after `Use
 the Git it found` while the chosen git is gone and another was found, the note is `VisualCommit
 looks for Git again when you save.` alone (no git is in use, yet one was found, so none of the texts
-above is true);
-`GitProgramBrowseButton` `Browse…` (Choose's checks; `GitProgramStatus`); `GitProgramUsePathButton`
+above is true); after `Use the Git on the PATH` drops a chosen git that is in use and works, also on
+reopening after Save, the note is `Chosen here. VisualCommit looks for Git again at its next
+start.` (step 19's second round; `GitSetupTexts.NextStartLooksAgainSuffix`; ruling 100: the next
+start's search looks in the usual install folders too, so it need not use the Git on the PATH;
+before step 19 the row said ` VisualCommit uses it from its next start.`, of the git Save drops);
+a chosen git in use that does not work keeps ` VisualCommit looks for Git again when you save.`;
+`GitProgramBrowseButton` `Browse…` (Choose's checks, its probe's limit and its focus given back, as
+above; `GitProgramStatus`); `GitProgramUsePathButton`
 `Use the Git on the PATH` while a path is chosen; `Use the Git it found` instead in ChosenMissing with a
 candidate, as on the screen, and while a pending choice would give way to a git in use that the install
 folders gave (`GitSource.InstallFolder`). Save's step 2 writes `GitExecutable`. After the screen
@@ -2561,6 +2767,17 @@ Dismissed for the session.
 **ssh line** (ruling 7): `AskPassBroker`, once per session, at its first Ask or Deny scope, Info `Git
 and ssh get SSH_ASKPASS_REQUIRE=force, so that ssh asks through VisualCommit; OpenSSH older than 8.4
 ignores it and asks in the terminal VisualCommit was started from, if there is one.`
+
+As built since step 19 (ruling 100, which amends ruling 7; D424 stands), that is the line on macOS
+and Linux, `AskPassBroker.AskPassRequireLineUnix`; on Windows it is
+`AskPassBroker.AskPassRequireLineWindows`, `Git and ssh get SSH_ASKPASS_REQUIRE=force, so that ssh
+asks through VisualCommit; OpenSSH older than 8.4 ignores it, and on Windows no terminal shows its
+question: cancel the operation if it waits.`, because the app starts every git without a console
+window, so ssh never reaches the terminal the app was started from. The broker logs
+`AskPassBroker.AskPassRequireLineFor(OperatingSystem.IsWindows())`. Nothing was measured with an
+old OpenSSH on Windows: the words hold whether ssh waits or fails. The guide's page
+(`troubleshooting/sign-in-and-ssh.md`) has a section, "An old OpenSSH does not ask through
+VisualCommit", with a line for each case.
 
 **Helper**: `HelperFound` volatile; `CheckHelper()` looks again, Info `The askpass helper is there now
 ({path}).`
@@ -2754,6 +2971,19 @@ commit. No other key picks. `OnContextRequested`'s keyboard branch takes `Select
 run`, so Shift+F10 right after opening shows run 0's menu. Opening picks nothing (b6a to b6h come from
 clicks). Enter does nothing new; "Show in graph" is in the run's menu. Tab leaves the text.
 
+As built since step 19 (ruling 100; the review's keyboard-5, the speech package, merged at
+`a60056e`): a pick by the pointer, a click in the gutter or a right-click on the gutter or the text,
+also puts the caret, which is not drawn, on the picked run and clears a selection
+(`BlameView.PutCaretOn`), without scrolling the text, so that the arrows go on from the run the user
+picked and not from where the caret was left. The caret goes to the first line of the picked run
+that is in view (step 19's second round); the first round put it on the run's first line, which
+the next arrow scrolled up to when it lay above the view. A click on the text leaves the caret to
+AvaloniaEdit, on the line clicked, and a right-click on the text inside a selection leaves the
+selection and the caret as they were. The first round's tests:
+`BlameViewTests.A_click_in_the_gutter_puts_the_caret_on_its_runs_first_line_so_that_the_arrows_go_on_from_that_run`,
+`BlameViewTests.A_click_in_the_gutter_moves_no_text_however_far_its_runs_first_line_lies` and
+`KeyboardPassTests.A_right_click_on_the_text_inside_a_selection_keeps_the_selection_and_one_outside_it_takes_the_caret_to_the_run`.
+
 **6.3.3 F3, Cancel.** The entry of 1.8. Its `run` keeps the title it was listed with and runs
 `OperationStatus.CancelCommand` only if `CanExecute` still holds and `OperationStatus.RunningTitle`
 still equals that title; otherwise it does nothing and logs Info
@@ -2796,12 +3026,63 @@ a pressed element: nothing, the window, an element not shown or not enabled, or 
   the palette's path keeps the focus where D104 put it.
 - `CreatePullRequestDialogView`: `ChooseBaseCommand`, the dialog's view, `PullRequestBaseChooseButton`,
   `Unspecified` (ruling 51). If 7a's or 7b's part N pictures change, it comes out as a known issue.
-- `WorkingChangesView`: the row actions (6.3.4) and Amend (6.3.7), `Tab`, armed only when the element
-  had `:focus-visible`, each with `LostFrom`: a row's pressed button keeps the focus while it still
-  stands on its row (a failed action), while Amend itself counts as lost and is given the focus again;
-  the target is null once the panel's `DataContext` is no longer the one the action was armed in (a
-  switch of tabs), so nothing is done then.
+- `WorkingChangesView`: the row actions (6.3.4), `Tab`, armed only when the pressed button had
+  `:focus-visible`, and Amend (6.3.7), each with `LostFrom`: a row's pressed button keeps the focus
+  while it still stands on its row (a failed action), while Amend itself counts as lost and is given
+  the focus again; the target is null once the panel's `DataContext` is no longer the one the action
+  was armed in (a switch of tabs), so the view does nothing then, and the window's rule below places
+  a focus that the switch took away. Amend's return was armed only when Amend had `:focus-visible`;
+  as built since step 19 (D462 (2), ruling 100) it is armed whenever Amend has the focus as a commit
+  starts (`OnViewModelChanged`, at `IsCommitting`), `Tab` when Amend had the frame and `Unspecified`
+  otherwise: the palette's Commit, the one path a user has to start a commit with Amend focused,
+  reaches it without the frame, which D104 gives back without it.
 `MainWindow.OnDialogRemoving` does not change.
+
+As built since step 19 (D462, ruling 100; the focus package, merged at `c0bedc6`), the focus is also
+kept, or given back, at these places, each only while the focus is lost, a focus the user or a view
+placed meanwhile staying where it is:
+- **A switch of tabs** (D462 (1); `MainWindow.Keys.cs`, `OnShellChanging`, `FocusAfterSwitch`). The
+  window notes where the focus lies, outside a menu, as the active tab begins to change: its region,
+  that region's panel and whether it had `:focus-visible`. Once the tab now shown is laid out and
+  its views have asked for what they ask themselves (two posts at `Loaded`: a dashboard's list, an
+  open diff's text), a focus that is then on nothing, the window or an element no longer shown or
+  enabled goes to the same panel's target in that tab, as F6 would give it without its memory of
+  the other tab's element (`KeyRegionNavigator.MarkedTargetIn`, D213), when that tab has a
+  repository and shows that panel; else to the graph area's target (a welcome page's Open, the
+  first-run screen's); `Tab` when the element that lost it had the frame. Nothing while a dialog is
+  open, while the tab still opens (it has no graph area's target yet) or when the focus lay outside
+  every region; a focus that the switch leaves shown (the graph, the summary of a stage panel still
+  shown) stays. It acts on every change of the active tab.
+- **A question cancelled** (D462 (2); `FocusReturn.AfterKeyboardPress(Button button,
+  Func<InputElement?>? instead = null)`, new), at a button whose command may ask first and is
+  disabled while it runs, so that D104's return finds it disabled. A press while the button has
+  `:focus-visible` arms it, a click nothing; once the run has ended with the focus taken away, the
+  button takes it back, `Tab`, while it still shows, enabled, with the data it was pressed for, and
+  when the run leaves the button hidden, `instead()` takes it, `Unspecified`. At `DiffView`'s
+  `DiscardFileButton` and `DiscardLinesButton` (a cancelled Discard lines clears the selection, as
+  before, so its button goes and the diff's text takes the focus, `DiffTextView.BodyFocusTarget`),
+  and at `WorkingChangesView`'s `StageAllButton` (its question on conflict markers),
+  `DiscardAllButton` and `RestoreDiscardButton`.
+- **A stage row's menu** (D462 (2); `WorkingChangesView.ArmRowMenuReturn`). A row's menu opened by
+  the keys (Shift+F10 or the Menu key) while the row or one of its buttons has the focus arms a
+  return: once the row has left its list (its Stage, Unstage or Discard chosen from the menu, or a
+  later change that removes it), the focus goes where 6.3.4 sends it after the row's own buttons,
+  the row now at the file's place first, with the frame if the focused element had it as the menu
+  opened. The return is dropped when the focus moves to another element of the window's regions,
+  when the panel shows another tab's lists and when another row's menu is opened so.
+- **Amend**, as the `WorkingChangesView` item above has it.
+- **An eye or solo button that hides itself** (D462 (3); `LeftPanelView.OnFocusLeavingList`): a
+  focused eye or solo button that hides itself (its branch shown again, its solo ended) leaves the
+  focus on nothing; once the layout has followed, the branch's row takes it, `Tab` when the button
+  had the focus by Tab or the arrows, while the panel shows the same tab and the row still stands
+  for that branch.
+- **The kept rows** (D462 (3); `IUpdatableRow`, `RowCollection`; 1.17's "As built" on the rows): a
+  section or folder of the left panel, and a tree folder of the stage lists, the commit's details or
+  a comparison, opened or closed by Enter or Space (or a click), keeps its row and its control, and
+  with them the focus, and its frame if it had one.
+
+Since step 19 §5's Choose (`GitSetupView`) and the Git program row's Browse (`SettingsDialogView`)
+call `AfterRun` too, after a cancelled pick or a refused file (5.3).
 
 **6.3.6 F6, the loading diff.** `DiffView` keeps `_focusAtOpen`, taken when the open's post runs: the focused element outside menus, as
 D104 takes it (the window's `MenuLayer.FocusOutsideMenus`, `MainWindow.axaml.cs:336`). Both posts call
@@ -2815,8 +3096,9 @@ file history's diff (`TakesFocusOnOpen=false`).
 and `IsAmend` before the await; on success it empties both boxes only if both still hold those (as
 `TakeBackRedoneMessage`), and unticks Amend only if still ticked. New `CanToggleAmend => CanAmend &&
 !IsCommitting` (notified by both), bound at `WorkingChangesView.axaml:419`. The boxes stay enabled:
-the summary keeps its focus and accent border on a Mod+Enter commit. Amend focused by keyboard when
-the commit starts gets the focus back once enabled (6.3.5). A failed commit keeps the boxes, as today.
+the summary keeps its focus and accent border on a Mod+Enter commit. Amend focused when the commit
+starts gets the focus back once enabled, with the frame only if it had it (6.3.5; as built since
+step 19, where it was Amend focused by keyboard). A failed commit keeps the boxes, as today.
 
 **6.3.8 Read-only text views** (ruling 52). `AcceptsTab = false` on `DiffPane` and `BlameTextEditor`.
 The activity log's output and the details panel are `SelectableTextBlock`s: a test asserts that Tab
@@ -2838,12 +3120,15 @@ Changed or proven by 8a:
 | Inline or side by side | Shift+Tab from the text | K1 (a scripted-only step added to its method 1 after step 10: Tab until `DiffText` has the focus, Shift+Tab until `SideBySideDiffButton` has the focus, at most four presses each followed by a wait for the focused id, Enter: `SideBySideDiffButton` selected, no git change) |
 | Stage or discard chosen lines | F6, Shift+arrows, then M or P | K1; `KeyboardPassTests` |
 | A file row's buttons | T from the row (F4) | K4; `WorkingChangesTests` |
-| Amend | T; disabled while committing (F7) | K7 (disabled while committing); `KeyboardPassTests` (focused by Tab, the focus given back) |
+| Amend | T; disabled while committing (F7) | K7 (disabled while committing); `KeyboardPassTests` (focused by Tab, the focus given back); since step 19 the user's path, the palette's Commit, by `KeyboardPassTests.Amend_focused_when_a_commit_starts_from_the_palette_gets_the_focus_back` (the focus given back without the frame, D104; D462 (2)), the two before starting the commit from the code |
 | Choose a blame run; its menu | arrows; M (F2) | K2; `BlameViewTests` |
 | Cancel the running operation | P "Cancel {title}" (F3); a long T walk | K3, K8; `StatusBarTests` |
 | Clone browser's Choose | T, arrows, Enter; the focus after (F5) | K5 |
 | A pick dialog's choice; a choice or push dialog's option | T into the list, arrows, Enter on the selected row; Enter on the checked option (D454) | `KeyboardPassTests` |
 | Resize a panel | T to its splitter, arrows by 10 | K8 |
+| Switch tabs with the focus in a panel | K, P; since step 19 a focus the switch took away goes to the same panel's target in the tab now shown, else the graph area's, with the frame if it had it (6.3.5; D462 (1)) | `KeyboardPassTests`: `Ctrl_Tab_from_a_focused_stage_row_gives_the_focus_to_the_other_tabs_first_row_with_the_frame` and `Ctrl_Tab_from_a_stage_rows_Stage_reached_by_Tab_gives_the_focus_to_the_other_tabs_first_row_with_the_frame`, renamed and rewritten at step 19 (they were `…_leaves_the_focus_on_nothing_and_F6_then_starts_at_the_left_panel`), the graph's and the summary's two as they were, and the ten facts of `KeyboardPassTests.TabSwitch.cs` |
+| A question cancelled after a press by the keys; Stage, Unstage or Discard from a stage row's menu opened by the keys | since step 19 the focus back on the button, with the frame (on the diff's text, without it, after Discard lines); the row now at the file's place (6.3.5; D462 (2)) | `KeyboardPassTests.FocusReturns.cs` (Amend's palette fact among them) |
+| A section, folder or tree folder opened or closed by Enter or Space; an eye or solo button that hides itself | since step 19 the focus kept on its control, with the frame; the branch's row (6.3.5; D462 (3)) | `KeyboardPassTests.Toggles.cs` |
 | Commits not next to each other | the mouse only (ruling 50) | the guide |
 
 **6.3.10 For the guide** (ruling 53), to §11: Tab in a diff reaches the hunks' buttons, Shift+Tab its
@@ -3255,8 +3540,14 @@ screens that are not Retina, is soft in round 2 and is judged only as the same m
 
 The repeats (§12, in part A's launch, 0.6), whose captures have no headless twin and are compared
 with none:
-- **B1, dark, 1100×700.** (a) `Icon.ExtractAssociatedIcon` of the built `VisualCommit.exe`: its opaque
-  pixels equal the `.ico`'s frame of that size within 2 per channel (proves `ApplicationIcon`). (b)
+- **B1, dark, 1100×700.** (a) The built `VisualCommit.exe`'s icon asked at 64 pixels,
+  `Icon.ExtractIcon(ExecutablePath, 0, 64)` (`ExecutableIconAt`), a frame the `.ico` holds at any
+  scaling: its opaque pixels equal the `.ico`'s frame of the size it came at within 2 per channel
+  (proves `ApplicationIcon`); the size asked and the size got go into run.txt. As built since step
+  19 (ruling 100; `3e32b9b` on `wip/p8a-realwindow`, which merges with the part), where it was
+  `Icon.ExtractAssociatedIcon` at its own size: that gives the icon at `SM_CXICON` for the test
+  host's DPI, 56 at 175 %, a size the `.ico` lacks (reasoned, not measured: the laptop runs at
+  200 %, where it gave 64). (b)
   `WM_GETICON` with `ICON_SMALL` and `ICON_BIG` both give an icon; their sizes and
   `GetSystemMetricsForDpi` of `SM_CXSMICON` and `SM_CXICON` at the window's DPI go into run.txt (the
   pair `ICON_SMALL` and `SM_CXSMICON` inspected, not asserted), and an
@@ -3264,11 +3555,23 @@ with none:
   `b1-title-bar-dark-with-frame` and the title bar's left 64 × caption height, enlarged four times,
   `b1-title-bar-icon-dark`. Inspected: the mark, sharp, left of "VisualCommit".
 - **B2, after a real click on Theme.** `b2-title-bar-light-with-frame`, `b2-title-bar-icon-light`; then
-  the taskbar button whose name starts with "VisualCommit", looked for from UI Automation's desktop
-  root for 10 s. Found within 10 s: its existence and bounds asserted, and it is captured by its bounds
-  as `b2-taskbar-button` (and four times enlarged). Inspected: the mark, not .NET's default icon. None
-  found (a hidden taskbar or no button): the method does not fail on it, run.txt has the line, and the
-  report's B2 says "Not run" for that step, which the gate then looks at by hand.
+  the taskbar buttons whose names start with "VisualCommit", looked for from UI Automation's desktop
+  root for 10 s until one shows on the display that holds the app's window
+  (`RealApp.TaskbarButtons`; `RealApp.DisplayBounds`, `MonitorFromWindow` and `GetMonitorInfo`'s
+  `rcMonitor`). run.txt notes that display and each button found, with its name, bounds, taskbar and
+  whether it lies on that display; only those on it count. Exactly one: its bounds asserted, and it
+  is captured by its bounds as `b2-taskbar-button` (and four times enlarged). Inspected: the mark,
+  not .NET's default icon. None found (a hidden taskbar or no button), or found but none on that
+  display: the method does not fail on it, run.txt has a "Not run" line of its own for each
+  (`Phase8aExpectations.B.TaskbarButtonNotRun`, `Phase8aRealWindowPass.NoTaskbarButtonOnDisplay`),
+  and the report's B2 says "Not run" for that step, which the gate then looks at by hand. More than
+  one on that display: none is captured, each is noted, and the launch fails at its end, saying to
+  close every other VisualCommit or unpin it. As built since step 19 (ruling 100; `e3c0884` and
+  `82922f5` on `wip/p8a-realwindow`, which merges with the part), where the first button found was
+  captured: a button does not say whose process it is, so another running or pinned VisualCommit's
+  could have been captured as this launch's, and Windows shows a window's button on every display's
+  taskbar by default, so a count over every taskbar would fail with no other VisualCommit running
+  (reasoned, not measured: the laptop has one display).
 
 §12 builds them (12.3.4 launch 3) with `RealApp.Phase8a.cs`'s `ExecutablePath` and Win32 calls (1.15),
 `IconFile` and, by the link, `Phase8aExpectations.B`.
@@ -3414,19 +3717,25 @@ tokens, 1.6 (`AppIdentity`, `TestIdentity.Pinned`), 1.7 (`AppLinks.Repository`,
 
 **8.3.1 The section.** `AboutSettingsViewModel(AppIdentity identity, DialogHostViewModel dialogs,
 IFileLauncher? launcher, IClipboardService? clipboard, IAppLog log)`; no `Identity` gives
-`AppIdentity.FromAssembly(typeof(App).Assembly)`. As built, three optional parameters follow:
+`AppIdentity.FromAssembly(typeof(App).Assembly)`. As built, optional parameters follow:
 `Func<string, string>? readText` and `Func<IReadOnlyList<string>>? vendorNotices` (null takes the
 app's own, `EmbeddedTexts.Read` and `.VendorNotices`; a test makes a text unreadable through them),
-and `CancellationToken lifetime`, the settings screen's token, which Cancel, Esc and the session's
-end cancel and Save does not: texts read after it show no dialog. The Show buttons read the texts
-off the UI thread (Q2) and show the dialog unawaited; a second press while the texts are read opens
-nothing more; a text that cannot be read is an Error (`The text {name} could not be read.`) and
-shows no dialog. The four commands allow concurrent runs, so their buttons stay enabled while they
-run: a disabled button would lose the keyboard focus, which the dialog gives back to it when it
-closes. The links call `OpenUrlAsync` with `AppLinks.Repository` and
-`AppLinks.Guide(GuidePage.Start)`, disabled without a launcher; a failure is a Warning (`Opening the
-repository's page failed.`, `Opening the user guide failed.`). About saves nothing. Down from Accounts
-reaches About; Down on About stays (`SettingsDialogView.axaml.cs:111`).
+`CancellationToken lifetime`, the settings screen's token, which Cancel, Esc and the session's end
+cancel, and since step 19 a Save that closes the screen too (Save did not before): texts read after
+it show no dialog; and, since step 19 (ruling 100; the firstrun package, merged at `ce144f4`),
+`Func<Task?>? saving`, the screen's Save as it runs (`ConfirmCommand.ExecutionTask`). A press of
+Show license… or Show third-party notices… whose texts are read while Save runs waits for that Save:
+one that closes the screen shows nothing, and one that keeps it open (a refused field, a key still
+decided by another file, a failed write) shows the text dialog over it afterwards, after the error
+dialog a failed write shows. The Show buttons read the texts off the UI thread (Q2) and show the
+dialog unawaited; a second press while the texts are read, or wait for Save, opens nothing more; a
+text that cannot be read is an Error (`The text {name} could not be read.`) and shows no dialog.
+The four commands allow concurrent runs, so their buttons stay enabled while they run: a disabled
+button would lose the keyboard focus, which the dialog gives back to it when it closes. The links
+call `OpenUrlAsync` with `AppLinks.Repository` and `AppLinks.Guide(GuidePage.Start)`, disabled
+without a launcher; a failure is a Warning (`Opening the repository's page failed.`, `Opening the
+user guide failed.`). About saves nothing. Down from Accounts reaches About; Down on About stays
+(`SettingsDialogView.axaml.cs:111`).
 
 The form is the Accounts section's (Spacing 18; rows `132,12,*`, `settingsLabel`, `settingsNote`,
 `VcActionButton`s 10 below), tokens only (1.5), about 356 high: no scrolling at 1100×700:
@@ -3448,7 +3757,10 @@ underline while hovered or focused. Every interactive control is named by its te
 parts, IClipboardService? clipboard, IAppLog log) : DialogViewModel<bool>`; `TextDocumentPart` (new:
 `Label`, `Text`, `AutomationId`, observable `IsShown`); `Shown` (the first part at opening),
 `ShowsSwitch`, `ShowCommand(part)`, `CopyAllCommand` (the shown text whole; the dialog stays; a failure
-is a Warning, `Copying the text to the clipboard failed.`), `ConfirmCommand` (Close, true); Esc false.
+is a Warning, `Copying the text to the clipboard failed.`; since step 19, `cef5fd2`, it allows
+concurrent runs, so that "Copy all" stays enabled, and keeps the keyboard focus, while another
+program holds the clipboard and the copy waits, a second press copying again), `ConfirmCommand`
+(Close, true); Esc false.
 The view on `dialogCard document`: the title (`DialogTitle`); 12 below, with several parts, a
 `WrapPanel` of `VcFlatButton`s 28 high, 4 apart, the shown one `selected` (`TextDocumentSwitch`); 8
 below, `DocumentTextView` (`TextDocumentText`); 20 below, "Copy all" (`TextDocumentCopyButton`, left)
@@ -3573,9 +3885,14 @@ VisualCommit". No text holds an e-mail address.
   both disabled; a throwing launcher, a Warning; as built, a text that cannot be read, an Error and
   no dialog, and, from the review,
   `The_texts_are_read_off_the_callers_thread_and_a_second_press_meanwhile_opens_nothing_more` and
-  `A_screen_closed_while_the_texts_are_read_shows_no_dialog`.
+  `A_screen_closed_while_the_texts_are_read_shows_no_dialog`. Since step 19, in
+  `SettingsDialogViewModelTests`, a press whose texts are read while Save runs (8.3.1):
+  `Show_license_pressed_while_save_writes_opens_no_dialog_that_outlives_the_screen`,
+  `Show_license_pressed_while_a_save_runs_that_keeps_the_screen_open_shows_its_dialog_once_after_the_save`
+  and `Texts_still_read_when_save_closes_the_screen_show_no_dialog`.
 - `TextDocumentDialogViewModelTests`: the first part shown; `ShowCommand` moves `IsShown`; Copy all puts
-  the shown text whole; Close true, Esc false; one part, no switch.
+  the shown text whole; Close true, Esc false; one part, no switch; since step 19
+  `Copy_all_stays_enabled_while_a_busy_clipboard_holds_the_copy`.
 - `DocumentTextViewTests` ([AvaloniaFact], a window, no session): Down a line, PageDown a view less a
   line, End the notices' last line, Home the first (alone and with the platform's command key); Tab
   leaves; the peer is a Document with the text. As built also:
@@ -3891,9 +4208,48 @@ reports is named only at the lead's word, from its area's texts class, never by 
 
 #### 9.3.7 The status bar
 
-`AutomationProperties.LiveSetting="Polite"` on the TextBlock `OperationStatus`
-(`StatusBarView.axaml:57-66`), one property (ruling 36). Its peer raises Name on each new `Text`, which
-the bridge turns into LiveRegionChanged; the running text holds git's percentage (9.9, risk 4).
+`AutomationProperties.LiveSetting="Polite"` on `OperationStatus` (`StatusBarView.axaml:76-87`), one
+property (ruling 36): a `TextBlock` until step 19, since then a `Controls/StatusText`, a subclass of
+`TextBlock` (below). As a `TextBlock` its peer raised Name on each new `Text`, which the bridge
+turns into LiveRegionChanged, and the running text holds git's percentage (9.9, risk 4).
+
+As built since step 19 (D463 (1), ruling 100; the speech package, merged at `a60056e`), the live
+region speaks what an operation says, not each step of its progress. `OperationStatus` is a
+`Controls/StatusText` (new), a `TextBlock` styled as one (`StyleKeyOverride`), whose peer raises the
+Name change only when its `SpokenText` changes, bound after `Text` to
+`IStatusBarOperation.SpokenText` (`StatusBarView.axaml`): an operation's start, ssh's notice and its
+result (`OperationStatusViewModel.SpokenText`, the running text without git's stage and percentage),
+and on a dashboard a run's start, ssh's notice while it shows, Cancel all's text as it was when
+clicked and the result (`BulkRun.SpokenText`, `DashboardBulkViewModel.SpokenText`), never the count
+of rows done. The element's name is the text shown, percentage included, its control type Text and
+its class `TextBlock`, as the real-window pass reads them; a new implementer of
+`IStatusBarOperation` gives its `SpokenText`. A switch of tabs speaks the status of the tab now
+shown when its spoken text differs from the one before, and nothing when the two are equal, as
+before the fix (ruling 100).
+`StatusBarTests.The_operation_texts_live_region_speaks_the_start_and_the_result_not_the_progress`
+holds it: twenty progress values, two Name changes, the start and the result.
+
+The first-run screen's title and error line (`GitSetupTitle`, `GitSetupError`) and the notice's
+status (`InstanceNoticeStatus`) are polite live regions too, and nothing else of those screens:
+"Check again"'s own text, `Checking…` while a search runs, is none (D463 (2); ruling 99's "nothing
+else"). What a reader is told of them is bounded by Windows' bridge, which makes a peer's node, the
+one that carries its events, only for a peer a client was handed (D455), while a control that is
+not shown is no child of its parent's peer. The error line and the status show with their text in
+one step, so no client holds them as they change: a client that has read the screen hears the title
+when a search ends on another state, and the error line only if it reached the line during Choose's
+`Checking…` (the refusal then); the notice's status, which shows with its words after the first
+unanswered try and is not changed by a second, is found when a reader reads the notice, never told
+as it comes. The tests take each peer as a client reaches it, walking down from the window's peer
+(`ClientWalk`, 8a's project):
+`GitSetupShellTests.The_title_is_a_polite_live_region_that_a_client_which_read_the_screen_hears_when_a_search_ends_on_another_state`,
+`GitSetupShellTests.The_error_line_is_a_polite_live_region_that_a_client_which_reached_it_during_Chooses_check_hears_refuse_the_file`
+and
+`InstanceNoticeLiveRegionTests.The_status_is_a_polite_live_region_that_a_client_reaches_only_once_a_try_went_unanswered`.
+So the outcome is said where the focus lands (step 19's second round; D463 (3)): each button that
+gets the keyboard focus back after such an outcome is described by it through
+`AutomationProperties.HelpText`, the notice's Try again by the status line, the first-run screen's
+Choose by the error line and its Check again by the title, the Git program row's Browse by its
+refusal.
 
 #### 9.3.8 The sweep
 
@@ -3978,7 +4334,7 @@ which §5 sets so that Narrator speaks them (9.3.9, steps 20 and 21); (14) §4's
 The walk-through (D411, the owner, about 20 minutes, at the gate) on one session of two tabs, a copy
 of the ops scenario with README.md changed, active, and a stopped merge's copy second, started by the
 lead's PowerShell line with CLAUDE.md's isolating variables and `VISUALCOMMIT_TIME_ZONE=UTC`, so that
-the dates heard are 9.3.5's; steps 20 and 21, last, by a second start, the lead's start line with
+the dates heard are 9.3.5's; steps 20 to 21a, last, by a second start, the lead's start line with
 `VISUALCOMMIT_GIT_STAND_IN=none` beside the isolating variables, made after the first app has been
 closed, since one instance runs per data folder (D421), so that the app finds no Git and shows the
 first-run screen (1.14) (the lead, 2026-11-21). Narrator: Ctrl+Win+Enter. Each step: "as expected", or
@@ -3995,14 +4351,27 @@ Esc: back. 10. A branch clicked in the left panel: its commit's row. 11. F6 to t
 first changed file's row, its name, "button". 12. Ctrl+Shift+M (the commit message), Shift+Tab to
 README.md's row, then Tab: "Stage README.md, button". 13. The status bar's toggle: "Activity log,
 button, Ctrl+J".
-14. Ctrl+Shift+F: the result; are the progress steps read? 15. Ctrl+F, `alpha` (it matches Alpha one
-and Alpha two), Enter: the match's row, its name and ", matches the search" if its hint is read; the
-focus stays in the box. 16. Ctrl+Shift+P, "fet": entries with keys. 17. Ctrl+,, Down to About, Enter,
-then Narrator+W: the owner's name and the version. 18. The resolver: "Next conflict, button,
-Alt+Down". 19. Narrator+Tab on the graph: "Commit graph, list" (ruling 35). 20. The first-run screen
-shows: the state's title, "VisualCommit needs Git", and its body. 21. Tab to "Check again", Enter: its
-result is spoken (no Git found again): "Checking…" while the search runs, then "Check again,
-button", the focus given back (5.3).
+14. Ctrl+Shift+F: the start, `Fetching from all remotes…`, and the result, `Fetched from all
+remotes`, are read, git's stages and percentages not (9.3.7, D463 (1)); is the start heard?
+15. Ctrl+F, `alpha` (it matches Alpha one and Alpha two), Enter: the match's row, its name and ",
+matches the search" if its hint is read; the focus stays in the box. 16. Ctrl+Shift+P, "fet":
+entries with keys. 17. Ctrl+,, Down to About, Enter, then Narrator+W: the owner's name and the
+version. 18. The resolver: "Next conflict, button, Alt+Down". 19. Narrator+Tab on the graph: "Commit
+graph, list" (ruling 35). 20. The first-run screen shows: the state's title, "VisualCommit needs
+Git", and its body. 21. Tab to "Check again", Enter: nothing is read while the search runs (the
+button is disabled and without the focus, and its text is no live region, 9.3.7); when it ends (no
+Git found again) the focus is given back, and Narrator reads "Check again, button" with the title of
+the state the search ended on, "VisualCommit needs Git", as its description (5.3; D463 (3); step
+19's second round).
+21a. Shift+Tab to "Choose git.exe…", Enter, and in the Open dialog a program that is no git
+(`C:\Windows\System32\whoami.exe`, which the report names): Choose refuses it, `GitSetupError` shows
+why, nothing is saved, the focus comes back to "Choose git.exe…", and Narrator reads "Choose
+git.exe…, button" with the refusal as its description (D463 (3); step 19's second round).
+Steps 14 and 21 were reworded and step 21a added at step 19 (ruling 100), with the reasons in the
+report: the live region spoke git's progress before (9.3.7), "Checking…" was never spoken, and no
+step reached a refused Choose. The notice's Try again, described by its status in the same way
+(step 19's second round), has no step: an unanswered try cannot be made by hand, and
+`InstanceNoticeLiveRegionTests` holds the status and the focus back on Try again.
 Silence where a row's name is expected (step 3's rows, step 5's Home and End): the live region does
 not reach Narrator (9.9, risk 1). Step 2's lone "Commit graph, list" and step 5's PageDown on the last
 row are no finding.
@@ -4037,7 +4406,12 @@ New, each written first and failing on the code before (recorded in the merge no
   the names 12 of its then 13 facts failed (all but state 14's notice, state 3 coming at the merge),
   each with these where its state shows them, and, outside 1.12's table, Fluent's scroll bars
   without a name and the stacked dialogs' Cancel (D456 (1), (2)); now all 14 facts report nothing.
-- `StatusBarTests.The_operation_text_is_a_polite_live_region`: Polite; a new text, one Name change.
+- `StatusBarTests.The_operation_text_is_a_polite_live_region`: Polite; a new text, one Name change
+  (since step 19, a new spoken text, here the start). Since step 19 (D463):
+  `StatusBarTests.The_operation_texts_live_region_speaks_the_start_and_the_result_not_the_progress`
+  (9.3.7); `OperationStatusViewModelTests` and `DashboardBulkViewModelTests` for `SpokenText`; the
+  live regions as a client reaches them, `GitSetupShellTests` and `InstanceNoticeLiveRegionTests`
+  over `ClientWalk` (8a's project; 9.3.7).
 - `Phase8aExpectationTestsU` (8a project, 6 tests): part U's expectations against the app's
   constants and `GraphRowSpeech`.
 
@@ -4141,7 +4515,11 @@ once, outside the pass.
 3. Whether a live region's help text is spoken (the count, the search) is unverified (step 6); the
    details panel's "3 commits selected" says it too. Open until the walk-through at the gate.
 4. `OperationStatus` may chatter through git's progress (S5, step 14). Open until the walk-through
-   at the gate.
+   at the gate. **Settled** by step 19's first round (D463 (1), ruling 100; 9.3.7): the live region
+   speaks an operation's start, ssh's notice and its result, not git's stages and percentages, as
+   `StatusBarTests.The_operation_texts_live_region_speaks_the_start_and_the_result_not_the_progress`
+   holds (two Name changes for twenty progress values); whether Narrator speaks the start and the
+   result is step 14's listen at the gate.
 5. `StringFormat` with `x:Static`, and the row's parent: the build and a test verify; the fallbacks
    are a converter and the parent Avalonia sets when it lists children. **Settled** by §9's build:
    the compiled binding takes `StringFormat` with `x:Static`, so no converter exists (9.3.6); the
@@ -4254,6 +4632,16 @@ summary mode write nothing. Reached by the watcher's refresh and by an operation
 `{name}: managed heap {N} MB after loading {n} commits.` at Info, `N` the heap size of the last
 collection in bytes divided by 1,048,576, rounded half away from zero. Neither line starts a process
 or waits on one (Q2); each is one append of the log, as the `loaded` line is; no git call is added.
+
+As built since step 19 (D465 (2), ruling 100), `SwapGraph` also keeps a scrolled graph's top commit
+at the top: `RepositoryViewModel.TopRowAnchor` takes the commit the control draws at the top, at
+the offset rounded to a whole pixel as the control draws it, and commits that come or go above it
+move the offset by as many rows, its part of a row kept; at the top (an offset under half a pixel
+included), with the working-changes row at the top, or when that commit left the graph, the offset
+stays. It acts on every swap, a hide's or a solo's included, and the working-changes row's one-row
+move (D60, `ApplyStatus`) is guarded by the same drawn offset (`bc467e3`, `53b9c77`). Neither
+writes a line or calls git, and M5's and M6's graphs, never scrolled, are left where they were, so
+what 10.3.4 measures is unchanged.
 
 #### 10.3.3 The harness's helpers
 
@@ -4420,7 +4808,11 @@ fast-forward Pull and a merge Pull (the set-ups of
 id (`OperationCalls`) to `GitCallBudget.AssertAtMost(calls, budget, …)`, each budget the count
 measured, with a comment naming git's version and the date (D280: a count that is a cost). It
 passes on today's code by design and fails when a read is added. The watcher's refreshes carry no
-operation id, so the lag of 0.4 cannot change the count.
+operation id, so the lag of 0.4 cannot change the count. As built since step 19 (D465 (1), ruling
+100), Pull's boolean read asks git a second time (`git config --type=bool --fixed-value --get
+<key> <value>`) only when its first command fails and the value in effect can be a boolean; the
+theory's set-ups and M7's scenario set no pull key, so neither reads a boolean, and neither the
+budgets nor M7's reads change.
 
 `PerformanceSeriesTests` (RealWindowTests, new, no window): the median of odd and even counts, the
 range, the rounding (1,513 ms × 1.25 gives 1,900; 412 MB gives 520; M7's 37 ms gives 50),
@@ -4608,11 +5000,11 @@ American spelling (D434). A slug never changes once the app links to it. `SUMMAR
 | Make it yours: `settings.md` | The six sections, the theme, the git program row (applies at the next start, ruling 42), the palette | `settings-general`, `settings-git`, `palette` |
 | `keyboard-and-screen-readers.md` | F1, F6, Shift+F6, Shift+F10 or Menu, Esc, Fn on a Mac; each item of §6.3.10 (ruling 53); a name on every control, the graph's row read (D411); Narrator on Windows the one reader tested (ruling 39); Windows' high contrast followed as light or dark (D411) | none |
 | Troubleshooting: `troubleshooting/git.md` | "How VisualCommit finds Git" (ruling 4's order); `{ #git-missing }`, `{ #git-chosen-missing }`, `{ #git-too-old }`, `{ #git-not-working }` (a broken `~/.gitconfig` names its line), `{ #helper-missing }` | the first-run shots |
-| `troubleshooting/sign-in-and-ssh.md` | The dialogs; "An OpenSSH older than 8.4 ignores VisualCommit's sign-in dialog and asks in the terminal VisualCommit was started from. RHEL 8 ships 8.0, and the OpenSSH built into Windows can be older where you chose it." (ruling 7); the netrc paragraph, git-lfs on every version (ruling 8) | none |
+| `troubleshooting/sign-in-and-ssh.md` | The dialogs; since step 19 (guide-2; ruling 7 as ruling 100 amends it) the section "An old OpenSSH does not ask through VisualCommit": "An OpenSSH older than 8.4 ignores VisualCommit's sign-in dialog. RHEL 8 ships 8.0, and the OpenSSH built into Windows can be older where you chose it.", then a bullet per system (on Linux and macOS it asks in the terminal VisualCommit was started from, if there is one: answer there, or cancel the operation in VisualCommit; on Windows no terminal shows its question, not even the one VisualCommit was started from, since VisualCommit runs git without a console window: cancel the operation if it waits) and the ways round it (update OpenSSH, load the key into an SSH agent before VisualCommit starts, or use the remote's HTTPS address; `ssh -V`, which may name another ssh than git's); the netrc paragraph, git-lfs on every version (ruling 8) | none |
 | `troubleshooting/data-and-logs.md` | Data and log folders per system (macOS's as §4 settles it); the activity log; reporting (8b's channel) | none |
 | `troubleshooting/large-repositories.md` | 100,000 commits tested, first rows in about 2 s (Q1), §10's numbers as indications, from the report's section "The performance series" (10.3.6 step 5); no writes for speed; `git commit-graph write`, `git maintenance start` (ruling 19) | none |
 | Reference: `reference/shortcuts.md` | The generated tables between `<!-- shortcuts:start -->` and `<!-- shortcuts:end -->` | none |
-| `reference/about.md` | The About section and how to open it; MIT License; the notices; "This site is built with mdBook (Mozilla Public License 2.0)" and its fonts' licences as the first build shows them | `about-section` |
+| `reference/about.md` | The About section and how to open it; MIT License; the notices; "This site is built with mdBook (Mozilla Public License 2.0)" and its fonts' licences as the first build shows them; since step 19 (S19-12) the four libraries the built site ships, with their licences: highlight.js (BSD 3-Clause), clipboard.js, elasticlunr and mark.js (MIT) | `about-section` |
 
 42 shots, 84 files, an estimated 13 to 21 MB per build.
 
@@ -4706,8 +5098,9 @@ SVG's presentation attributes `cursor`, `mask`, `fill`, `stroke`, `filter`, `cli
 `style` attribute or element, a `.css` file) every `url(...)`, `@import` and every string directly in
 an `image-set(...)` or `-webkit-image-set(...)` (not `type()`'s), with CSS escapes decoded (`\75 rl(` is `url(`). Every address
 loads except the ones a user goes to: an `a`'s or `area`'s `href` (an SVG `a`'s `xlink:href`), a
-`form`'s `action` and a button's `formaction`, a quotation's `cite`, an image's `longdesc`, and a
-`link`'s `href` whose every `rel` is `alternate`, `author`, `canonical`, `help`, `license` or `prev`
+`form`'s `action` and a `button`'s or `input`'s `formaction`, the `cite` of a `blockquote`, `q`,
+`del` or `ins`, an `img`'s or `iframe`'s `longdesc`, and a `link`'s `href` whose every `rel` is
+`alternate`, `author`, `canonical`, `help`, `license` or `prev`
 (so `next`, which Firefox prefetches, `prefetch`, `preconnect`, `dns-prefetch`, `prerender`, `apple-touch-icon`,
 `mask-icon`, `search` and a `link` without `rel` load). A `data:` URL passes except where it would
 be a document, a script or a style sheet: an `iframe`'s, `frame`'s, `embed`'s or `script`'s `src`,
@@ -4716,9 +5109,10 @@ element of class `playground` or `mdbook-runnable` fails, since mdBook's `book.j
 `play.rust-lang.org` for it. `xmlns` attributes are never read. The self-test has a case with a
 file of the site, one with a host and one protocol-relative for each loading form, a failing case
 for each `data:` document form, and passing cases for the navigation forms and inline SVG's
-namespaces (227 cases; the built site of 2026-11-23 stays clean). The fixes' reader added the
-`next` link, the `srcdoc`'s own base, SVG's presentation attributes and an image set's `type()`
-(245 cases; the same site stays clean).
+namespaces (227 cases; the built site of 2026-11-23 stays clean). The fixes' reader found four
+forms more, and the package's fixer made them hold: the `next` link loads, a `srcdoc`'s own base
+and SVG's presentation attributes are read, and an image set's `type()` is no address (245 cases;
+the same site stays clean).
 
 ### 11.4 Tests
 
@@ -4951,7 +5345,9 @@ New, all under `tests/VisualCommit.RealWindowTests/`:
   `AppContext.BaseDirectory`, asserted to exist (`The stand-in for git is missing at {path}: build
   tests/VisualCommit.RealWindowTests, which references it.`); `StandInEnvironment(standIn, version,
   failure)`; `StartBeside` (the executable through `StartInfoFor`, its output drained); `Minimise`,
-  `IsIconic`, `IsVisibleOnDesktop`, `ForegroundIsThis`, `WindowIcons`, `CaptureScreen`, `TaskbarButton`;
+  `IsIconic`, `IsVisibleOnDesktop`, `ForegroundIsThis`, `WindowIcons`, `CaptureScreen`,
+  `TaskbarButtons` and `DisplayBounds` (as built since step 19, ruling 100, in place of one
+  `TaskbarButton`: every button named so, and the display that holds the window; 12.3.4 launch 3);
   `OtherWindowOfProcess` (a top-level window but `InstanceNotice`); `BuiltVersionDisplay`
   (`AppVersionInfo.Parse` of the built `VisualCommit.dll`'s `FileVersionInfo.ProductVersion`);
   `RecordSelectedRowEvents` (FlaUI 5.0.0's handlers for `Name` changes and LiveRegionChanged on
@@ -5013,8 +5409,14 @@ text alone (no caret, icon, key text or border toward the foreground; `CommitSum
 the text typed into the focused `FilterBox` in launch 1 (L1's and L2's `sea`), which is read less the
 caret's column. No key is sent to a window that is not the foreground window: a launch whose first
 input is a key (launches 3, 5 and 6) first asserts `ForegroundIsThis`.
-Where no such rectangle exists, the comparison carries the colour and run.txt says so. A miss is
-reported to the lead, never met by a wider tolerance (§2.9 item 6).
+As built since step 19 (ruling 100), no read relies on the comparison for its colour: every text
+read has its rectangle (`BoxTextArea` and `TypedArea` always give one, and `LabelArea`, where UI
+Automation gives a label no text element, reads in the element's bounds inset by `LabelInset`, left
+of any key text, and run.txt says so), and for L6 a to c, where UI Automation gives `main`'s name
+no text element, the read is a problem (`NoHeadNameArea`), noted and asserted after the picture's
+comparison, the decision in the static `HeadInk`: the comparison matches colours within 48 a
+channel (D58) and cannot tell `#7C8CFF` from `#8B9AFF`. A miss is reported to the lead, never met
+by a wider tolerance (§2.9 item 6).
 
 #### 12.3.4 The launches, in `Phase8aOrder`
 
@@ -5032,7 +5434,10 @@ reported to the lead, never met by a wider tolerance (§2.9 item 6).
    `l6a`; b) pointer at the row's centre: `#8B9AFF` on `#2F3542`; `l6b` (pointer kept); c) a real
    click on the row, pointer at neutral: `#8B9AFF` on `#2A3150`; `l6c`.
 3. **`Check_A_and_B_about_and_icon`** (one empty tab). B1 as §7.5 a) to c): the executable's
-   associated icon and `WM_GETICON`'s two against the `.ico`'s frames (`IconFile`, the file under the
+   icon (as built since step 19, ruling 100, asked at 64 px, `ExecutableIconSize`, through
+   `Icon.ExtractIcon`, a frame the `.ico` holds at any scaling, with the size asked and the size got
+   in run.txt, where it was the associated icon, whose size Windows takes from the scaling) and
+   `WM_GETICON`'s two against the `.ico`'s frames (`IconFile`, the file under the
    `RepoRoot` metadata), within 2; `b1-title-bar-dark-with-frame` and `b1-title-bar-icon-dark` (the title
    bar's left 64 × caption height, four times, nearest-neighbour). Before A1's first key (B1 presses
    nothing, so A1's Ctrl+Shift+P is the launch's first input) `ForegroundIsThis` is asserted (12.3.3);
@@ -5049,11 +5454,27 @@ reported to the lead, never met by a wider tolerance (§2.9 item 6).
    `TextDocumentText`, or lies inside its bounds and is no button, since AvaloniaEdit's inner
    `TextArea` has no automation id; run.txt says which held; the lead, 2026-11-21), under 3 % from
    `a4a-license`; Esc, the focus back on the button. Esc. A real click on `ThemeSwitch`; B2:
-   `b2-title-bar-light-with-frame`, `b2-title-bar-icon-light`; `TaskbarButton("VisualCommit", 10 s)`:
-   found within 10 s, its existence and bounds asserted, and it is captured by its bounds as
-   `b2-taskbar-button` and `b2-taskbar-button-enlarged`. None found: the method does not fail on it,
-   run.txt says `B2's taskbar button: Not run (no taskbar button named VisualCommit was
-   found within 10 s).`, the report's B2 says "Not run" for that step, and the gate checks it by hand.
+   `b2-title-bar-light-with-frame`, `b2-title-bar-icon-light`; then, as built since step 19
+   (ruling 100), run.txt notes the display that holds the app's window (`DisplayBounds`:
+   `MonitorFromWindow`, then `GetMonitorInfo`'s `rcMonitor`, in screen pixels), and
+   `TaskbarButtons("VisualCommit", 10 s, display)` looks from the desktop root every 100 ms until a
+   look finds a button named so on that display, and gives every such button of that look, on every
+   taskbar (at the limit, the last look's). run.txt notes each with its name, its bounds, its
+   taskbar (`Shell_TrayWnd`, or `Shell_SecondaryTrayWnd` on another display) and whether it lies on
+   the window's display (its centre inside it, `TaskbarEntry.LiesOn`); only those on it count
+   (`SelectTaskbarButton`). Exactly one there: its bounds asserted, and it is captured by its bounds
+   as `b2-taskbar-button` and `b2-taskbar-button-enlarged`. None found: the method does not fail on
+   it, and run.txt says `B2's taskbar button: Not run (no taskbar button named VisualCommit was
+   found within 10 s).`; found, but none on the window's display: the same, with `B2's taskbar
+   button: Not run (taskbar buttons named VisualCommit were found within 10 s, but none on the
+   display that holds the app's window, at {display} (screen pixels); each is noted above).`
+   (`NoTaskbarButtonOnDisplay`); either Not-run line leaves that step to the gate's check by hand,
+   and the report's B2 says "Not run" for it. More than one on the window's display: none is
+   captured, and the method fails at its end, together with B1's problems, by
+   `MoreThanOneTaskbarButtonMessage`, which names each button and says to close every other
+   VisualCommit, or unpin it: a button does not say whose process it is, Windows gives each
+   executable's path a button of its own, and by default it shows one app's button on every
+   display's taskbar, so only the window's display counts.
 4. **`Check_I1_second_start_hands_over`** (data folder D; a session of one empty tab written before the start, `RealApp.Launch(D, session)`). The app `Minimise()`d;
    `session.json`'s and `instance.json`'s bytes read; `StartBeside(D, the same environment)`: the second
    start exits 0 within 10 s; the app is not iconic and is visible within 2 s; `ForegroundIsThis` noted,
@@ -5290,6 +5711,13 @@ from the caption buttons.
 - B1 (a): on the laptop `Icon.ExtractAssociatedIcon` of the Debug `VisualCommit.exe` gave 32×32, a
   size the `.ico` holds. The Release build the pass's command makes carries the same
   `ApplicationIcon`, but neither it nor the size under the test host's DPI awareness has been tried.
+  As built since step 19 (ruling 100), B1 (a) asks the size: `Icon.ExtractAssociatedIcon` gives the
+  icon at `SM_CXICON` for the test host's DPI, 56 at 175 %, a size the `.ico` lacks, so launch 3
+  would fail there with a correct icon (reasoned, not measured: the laptop runs at 200 %, where the
+  first runs got 64, 12.10); `ExecutableIconAt(ExecutableIconSize)` takes
+  `Icon.ExtractIcon(ExecutablePath, 0, 64)`, a frame the `.ico` holds at any scaling, and
+  `Phase8aOrderTests` hold the built executable's icon asked at 64, 48 and 96 against those frames,
+  with no app.
 - The `.ico`'s frames at 32 and below are drawn from `icon-small.svg` (the tile filling its square
   but for its rounded corners, radius 3.75 of 16); from 36 up from `icon.svg`, the tile inside a
   transparent margin of one sixteenth (31.5 px at 36). At the laptop's 200 % `SM_CXSMICON` (32) and
@@ -5300,9 +5728,12 @@ from the caption buttons.
   `b2-title-bar-icon-light`, `b2-taskbar-button`, `b2-taskbar-button-enlarged`, in that order),
   `WindowTitle` (`VisualCommit`), `TitleBarCropWidth` 64, `Enlargement` 4, `TaskbarButtonNameStart`
   (`VisualCommit`), `TaskbarButtonLimit` (10 s), `TaskbarButtonNotRun` (run.txt's line, word for
-  word the report's) and `IconTolerance` 2. The file uses `Avalonia.Media` (`Color`, `FontWeight`)
-  as 7b's linked expectations do; the real-window project links no `Phase8aExpectations*.cs` yet
-  (§12's 8a link line).
+  word the report's) and `IconTolerance` 2; B2's second Not-run line and its failure for more than
+  one button, since step 19, are the pass's own (`NoTaskbarButtonOnDisplay`,
+  `MoreThanOneTaskbarButtonMessage`). The file uses `Avalonia.Media` (`Color`, `FontWeight`)
+  as 7b's linked expectations do; the real-window project, which linked no
+  `Phase8aExpectations*.cs` when this was written, links them since §12's build by 12.2's 8a link
+  line (`39490c7` on `wip/p8a-realwindow`).
 - The notice window carries the same `Icon`, so launches 5 and 6 show the mark at the left of its
   title bar; I2's captures are its client area and do not change. Their fallback click on the
   notice's title bar must land away from that left end: a click on a window's icon opens its system
@@ -5318,7 +5749,10 @@ from the caption buttons.
 - `Phase8aRealWindowPass`, 13 methods (12.3.4). None fails first: each behaviour was proven by an
   earlier package's scripted check; this one proves the real window shows the same.
 - `Phase8aOrderTests` (no app; in the whole pass, outside D246's filter): `Phase8aOrder.Methods` names
-  every `[Fact]` of `Phase8aRealWindowPass` once; every capture name matches 0.3's pattern.
+  every `[Fact]` of `Phase8aRealWindowPass` once; every capture name matches 0.3's pattern. As built
+  on `wip/p8a-realwindow` since step 19 the class has the four tests more that 12.10 lists, six
+  tests and eight cases in all: B1 (a)'s icon asked at 64, 48 and 96, B2's buttons on the window's
+  display and more than one there, and L6 without a rectangle for `main`, each with no app.
 - Earlier tests changed: none. `StartInfoFor` moves code unchanged; the builder runs phase 0's
   `Check_8_the_real_window_matches_the_scripted_walk_through` alone once, the gate's pass all of them.
 
@@ -5375,23 +5809,32 @@ The lead checks at the merge (status step 19):
    all green, captures inspected; phase 0's method alone green.
 4. `Phase8aOrderTests` pass; a Grep of the part files finds no press of 12.3.2's list.
 5. D246's two runs (the lead, the owner present, after the 8a walk-through on the merge's commit) green,
-   made once; each run.txt read: high contrast off, 200 %, the stand-in, winget, the icons, the taskbar,
-   the version, U's events and names, every ink.
+   made once; each run.txt read: high contrast off, 200 %, the stand-in, winget, the icons, the
+   taskbar (since step 19 launch 3's line for the display that holds the app's window, and each
+   button's `on` or `not on` the window's display), the version, U's events and names, every ink.
 
 ### 12.9 Risks, unverified, open points
 
 Unverified, settled in the builder's first runs and D246's: the taskbar button's name and reach from
-the desktop root, a capture outside the window; `WM_GETICON` and `ExtractAssociatedIcon`'s size
-under per-monitor DPI; `ProductVersion` holding `+<commit>` (else `BuiltVersionDisplay` reads the
+the desktop root, a capture outside the window; `WM_GETICON`'s sizes under per-monitor DPI (B1 (a)
+asks its size since step 19, ruling 100, and `Phase8aOrderTests` hold `Icon.ExtractIcon` at 64, 48
+and 96, with no app); `ProductVersion` holding `+<commit>` (else `BuiltVersionDisplay` reads the
 attribute with `System.Reflection.Metadata`); a LiveRegionChanged from `GraphSelectedRow` reaching
 FlaUI (settled by §9's spike, ruling 32 and D450: its FlaUI client received one per move, but only
 once it had read the graph's first child, D455, so launch 13 reads it first; launch 13's own run,
 with its events' counts, is left to D246's runs); full-coverage ink at 200 % under ClearType (§2.9
 item 6); a tooltip over `main` in `l6b`; the notice found by `GetMainWindow`; the stand-in's runtime
-files in this output (the first build); F4's dialog title and box 1148 (S14's pattern).
+files in this output (the first build); F4's dialog title and box 1148 (S14's pattern). Unverified
+since step 19 (ruling 100): B2's rule per display, reasoned from Windows' setting "When using
+multiple displays, show my taskbar apps on" (all taskbars by default) and held only by
+`Phase8aOrderTests`' made-up bounds, since the laptop has one display and the rule meets a second
+only if one is attached at the gate; and whether the laptop's taskbar gives one button per program,
+which launch 3's next run shows.
 
 Risks: a gate's machine without `winget.exe` on its `PATH` fails launch 7 (D449); a run in the
-worktree proves no path with a space (the main checkout's does). The owner's icon is no longer one:
+worktree proves no path with a space (the main checkout's does); another VisualCommit, running or
+pinned to the taskbar, whose button lies on the display that holds the window fails launch 3 at its
+end, with the advice to close it or unpin it (ruling 100). The owner's icon is no longer one:
 the owner chose the mark before §7 was built (1.17, 7.8), so B's captures show it from D246's runs on
 and nothing waits there.
 
@@ -5442,6 +5885,39 @@ the process's main window; the stand-in's files land in the pass's output; F4's 
 laptop's work area. The runs' files are in `D:/Projects/Personal/phase8-work/wave4/realwindow/`
 (`run1/`, `run2/`). Left for the merge and the gate: 12.8 items 1, 2 and 5 (CI on the merge; D246's
 two runs).
+
+**The review's three fixes** (status step 19; ruling 99's *realwindow*, ruling 100). On
+`wip/p8a-realwindow` after `83f3f6b`, in the part's own worktree, never run on the desktop by their
+builder or fixer: `3e32b9b`, `e3c0884`, `c80689d` and `166299a`, then the reader's two points,
+`3ffec5c` (the test, failing), `82922f5` and `902288e`, the head; four files of
+`tests/VisualCommit.RealWindowTests` (`Phase8aRealWindowPass.cs`, `.AB.cs`, `.L.cs` and
+`RealApp.Phase8a.cs`). *B1 (a)*: `ExecutableIconAt(ExecutableIconSize)`,
+`Icon.ExtractIcon(ExecutablePath, 0, 64)` in place of `Icon.ExtractAssociatedIcon`, compared with
+the `.ico`'s frame of the size it came at by `PixelsAgainstFrame`, the rule `IconAgainstFrame` now
+calls; run.txt gets the size asked and the size got (12.3.4 launch 3, 12.3.5). *B2*:
+`RealApp.TaskbarButtons` and `DisplayBounds` in place of `TaskbarButton`; `TaskbarEntry` holds its
+taskbar's class and `LiesOn`; the choice is the static `SelectTaskbarButton`, the failure
+`MoreThanOneTaskbarButton`'s, and buttons that show only on other displays give a Not-run line of
+their own (`NoTaskbarButtonOnDisplay`); `TaskbarButtonPictures` returns its problem, which launch 3
+asserts with B1's at its end (12.3.4 launch 3). On one display every button lies on it, so on the
+laptop the display rule changes nothing: with one button launch 3 does what it did, with two kinds
+of run.txt line more (`B2's taskbar button: the display that holds the app's window at {…} (screen
+pixels)`, and on each button's line its taskbar and `on` or `not on` the window's display), and with
+more than one, where it captured the first, it now fails at its end; whether the laptop's taskbar
+gives one button per program is what launch 3's next run shows (12.9). *L6*: `ReadInk` takes a
+rectangle that cannot be missing, and L6 a to c read through `ReadHeadInk`, which hands the static
+`HeadInk` the ink rule: without a rectangle for `main`'s name it reads nothing and gives
+`NoHeadNameArea`'s problem, noted and asserted after the picture's comparison (12.3.3).
+*`Phase8aOrderTests`* gains four tests, six cases:
+`The_executables_icon_comes_at_the_size_asked_and_equals_that_frame` (a theory at
+`ExecutableIconSize`, 48 and 96, which reads the built `VisualCommit.exe` and starts no app),
+`More_than_one_taskbar_button_named_VisualCommit_fails_naming_each`,
+`B2_counts_only_the_taskbar_buttons_on_the_display_that_holds_the_window` and
+`L6_without_a_rectangle_for_main_is_a_problem`; with 12.4's two, six tests and eight cases, and its
+summary now names the rules of the steps it holds with no window. The fixer ran the class alone: the
+display fact failed on `3ffec5c` as meant, and 8 of 8 passed on `82922f5` and on `902288e`. No
+earlier test changed, and no scripted picture can change. Left for the lead before the part's merge:
+launches 2 and 3 run again on these fixes, the owner told (ruling 99).
 
 ## 13. The lead's rulings, what waits on the owner, and the open points
 
