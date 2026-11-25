@@ -217,13 +217,14 @@ public partial class Phase8aRealWindowPass
     }
 
     /// <summary>
-    /// The guard's two reads of one look in words for run.txt: while another window is in front, that the
-    /// focus was not read (<see cref="FocusedIdWhileInFront"/>).
+    /// The guard's two reads of one look in words for run.txt: while the app's window is not in front, that
+    /// the focus was not read (<see cref="FocusedIdWhileInFront"/>). The words do not say that another window
+    /// is in front: Windows can give no foreground window for a moment while the activation changes hands.
     /// </summary>
     private static string GuardReads(bool foreground, string? focusedId) =>
         foreground
             ? $"ForegroundIsThis true, UI Automation's focused element {(string.IsNullOrEmpty(focusedId) ? "none, or one without an id" : focusedId)}"
-            : "ForegroundIsThis false, UI Automation's focused element not read, as another window is in front";
+            : "ForegroundIsThis false, UI Automation's focused element not read, as the app's window is not in front";
 
     /// <summary>
     /// Waits until the keyboard focus is in the text <paramref name="textId"/>, an AvaloniaEdit editor
