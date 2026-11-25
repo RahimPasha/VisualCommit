@@ -487,9 +487,9 @@ public sealed partial class RealApp : IDisposable
     /// Waits until the platform dialog <paramref name="title"/> has closed. With its window handle, until
     /// Windows says that window is gone or hidden (<see cref="IsGoneFromDesktop"/>): the wait asks UI
     /// Automation nothing about a dialog that is going, and a dialog found only among the app's top-level
-    /// windows, which <see cref="Window"/>'s modal windows never list, is waited for too instead of counting
-    /// as closed at the first look. With a handle of zero, until those modal windows list no window of that
-    /// title, as before.
+    /// windows, which <see cref="Window"/>'s modal windows did not list at the look that found it, is waited
+    /// for too instead of counting as closed at the first look. With a handle of zero, until those modal
+    /// windows list no window of that title, as before.
     /// </summary>
     private void WaitForDialogClosed(IntPtr handle, string title, string what, TimeSpan timeout) =>
         WaitFor(
