@@ -244,7 +244,14 @@ public sealed class TempRepo : IDisposable
 
         var gitFolder = bare ? path : System.IO.Path.Combine(path, ".git");
         RemoveHookSamples(gitFolder);
-        return new BlankGitFolder(gitFolder);
+
+        // The folders as git left them, read here and not written down in the code: each version
+        // of git makes its own set (2.34, the floor, and 2.56 differ).
+        var folders = Directory.EnumerateDirectories(gitFolder, "*", SearchOption.AllDirectories)
+            .Select(folder => System.IO.Path.GetRelativePath(gitFolder, folder))
+            .Order(StringComparer.Ordinal)
+            .ToList();
+        return new BlankGitFolder(gitFolder, folders);
     }
 
     /// <summary>
@@ -915,18 +922,38 @@ public sealed class TempRepo : IDisposable
     }
 }
 
-/// <summary>A blank git folder (<see cref="TempRepo.BlankGitFolderAsync"/>), which a repository starts as a copy of.</summary>
+/// <summary>
+/// A blank git folder (<see cref="TempRepo.BlankGitFolderAsync"/>), which a repository starts as a
+/// copy of, and the folders that <c>git init</c> made in it, recorded right after it was made.
+/// </summary>
 /// <param name="path">The git folder.</param>
-internal sealed class BlankGitFolder(string path)
+/// <param name="folders">Every folder in it then, by its path relative to it.</param>
+internal sealed class BlankGitFolder(string path, IReadOnlyList<string> folders)
 {
     /// <summary>The git folder: a working repository's <c>.git</c>, or the bare repository itself.</summary>
     public string Path { get; } = path;
 
-    /// <summary>Copies the blank git folder to <paramref name="to"/>, which must not hold any of its files yet. Every copy of a blank folder is made here.</summary>
+    /// <summary>Every folder the git folder held when it was made, by its path relative to it (<c>refs</c>, <c>refs/heads</c>, <c>objects/pack</c>).</summary>
+    public IReadOnlyList<string> Folders { get; } = folders;
+
+    /// <summary>
+    /// Copies the blank git folder to <paramref name="to"/>, which must not hold any of its files
+    /// yet, and then makes each of <see cref="Folders"/> in the copy. Every copy of a blank folder
+    /// is made here. The folders are made whatever became of the blank's own since: a cleaner of
+    /// the temp folder that removes every empty folder, whatever its age, as Windows' Storage Sense
+    /// does when the disk runs low, removes the blank's empty ones (<c>hooks</c>,
+    /// <c>objects/pack</c>, <c>refs/heads</c>, <c>refs/tags</c> ...) while the test process it lives
+    /// for runs, and then <c>refs</c>, which held nothing else. Git takes no folder without
+    /// <c>refs</c> for a repository.
+    /// </summary>
     public void CopyTo(string to)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(to);
         TempRepo.CopyDirectory(Path, to);
+        foreach (var folder in Folders)
+        {
+            Directory.CreateDirectory(System.IO.Path.Combine(to, folder));
+        }
     }
 }
 
