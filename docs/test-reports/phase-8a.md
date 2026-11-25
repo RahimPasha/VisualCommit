@@ -5097,6 +5097,19 @@ so A1's capture at that size is not run there (run.txt says so).
   when a read through UI Automation failed in any of its looks, and the guard's run.txt words for a look
   made while the app's window is not in front say that the focus was not read; neither is an expected
   result.
+- **Phase 4's pictures `c10l-merged`, `c11g-second-stop` and `c11j-rebased`: the focus frame around the
+  graph** (2026-11-25; found by the comparison of step 19's whole default run with wave 3's references;
+  design 13.1's ruling 107; D462 (4), ruling 102). Each now shows the keyboard focus frame around the
+  commit list, the frame F6 gives it in phase 6's `k12a-f6-graph`, and nothing else differs (5,952,
+  5,454 and 5,952 pixels, all on the frame). Reason: when the resolver closes, the app has given the
+  banner's Continue the focus with the frame since phase 4 (`c10k-resolved`, `c11f-first-resolved`); the
+  walk-through clicks that Continue, and a click on a button that shows the frame counts as a press by
+  the keys (ruling 102); Continue's run disables it, and the window's rule for a press by the keys then
+  gives the focus to the graph with the frame, where it was left on nothing before step 19's fourth
+  round; a click on a row of the graph that has the focus leaves the frame. Phase 4's expected results
+  for these steps say nothing of the focus and stand as written. The real-window pass's launch for C10
+  clicks the same Continue and compares `c10l-merged` with this twin. Ruling 103 had said that no
+  earlier picture but Esc's in a diff would change: it was wrong.
 
 ### Wave 1's comparison with phase 7b's references (2026-11-20)
 

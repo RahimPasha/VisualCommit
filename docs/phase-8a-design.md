@@ -7020,14 +7020,14 @@ at 16:42: `161a801`. The results are
   on nothing: accepted, by D462.
 - The real-window pass and the walk-throughs. The second reader read every step of the pass that
   presses a key and then relies on the focus, phase 8a's part on its branch included, and found none
-  whose focus changes. The one visible change anywhere is Esc in a diff: the graph then has the
-  focus, without the frame, where nothing had it (phase 5's F12 in the real window, at the launch's
-  end; scripted, phase 2's check 03, phase 3's part A, phase 5's part B and F13). The lead ran those
-  four at the merge: all passed, and check 03's three pictures, `03c-closed` among them, are the
-  same files as wave 3's references. The fixer once saw phase 7a's part A fail all eight checks in
-  its scenario's set-up (`notes.git is not a bare repository`), before any code of the app ran, and
-  pass when run alone; other agents' runs shared the temporary folder then. Watched at the whole
-  default run.
+  whose focus changes. The one visible change anywhere is Esc in a diff (wrong: three pictures of
+  phase 4 change too, ruling 107): the graph then has the focus, without the frame, where nothing
+  had it (phase 5's F12 in the real window, at the launch's end; scripted, phase 2's check 03, phase
+  3's part A, phase 5's part B and F13). The lead ran those four at the merge: all passed, and check
+  03's three pictures, `03c-closed` among them, are the same files as wave 3's references. The fixer
+  once saw phase 7a's part A fail all eight checks in its scenario's set-up (`notes.git is not a
+  bare repository`), before any code of the app ran, and pass when run alone; other agents' runs
+  shared the temporary folder then. Watched at the whole default run.
 
 **The series taken again, and CI's run of the fourth round (the lead, 2026-11-24; D467).** 104. The
 restore order's series was taken again from 17:10 to 18:45, the owner told, with no agent at work:
@@ -7189,6 +7189,61 @@ result changes, and no agent ran a real-window check.
   `harden-dialogs/`.
 - *CI.* Run 45540349415 on ruling 105's push (`985577a`: §12's merge, the docs' merge, `14789f7`)
   and the guide workflow's run 45540349427 are in status.md's CI section.
+
+**Step 19's whole default run, what broke it, and the pictures' reading (the lead, 2026-11-25).**
+107. The lagged list passed on `640f728`'s code (21:12 to 21:58 on 2026-11-24: 1,114 tests in 0.4's
+seven commands, none failed), and CI's run 45546009890 on the hardening's merge is green in all six
+jobs. The whole default run (21:58 to 23:40 on `26b6634`, 1 h 40 min 18 s): 8,882 tests, 8,873
+passed, 7 skipped, 2 failed, phase 1's checks 13 and 14.
+
+- *The cause is outside the repository.* Both checks failed at once on "`large-history-v1.git` is
+  not a bare repository": the shared bare copy of the 100,000-commit history under the tests'
+  temporary root (`LargeHistory`; a `git clone --bare`, so every ref is packed) had lost every empty
+  folder at 15:05 on 2026-11-24, `refs` among them, and git takes a folder without `refs` for no
+  repository. The laptop's C: drive had 4.7 GB free of 350 GB; Windows' Storage Sense, on with
+  "delete temporary files that my apps aren't using" and set to run when the disk is low, removes
+  empty folders under `%TEMP%`, whatever their age. The commands the session and its agents ran in
+  that quarter of an hour were read: none deleted anything there. The same pass is what ruling 103
+  recorded as phase 7a's part A failing once in its set-up: the hosting template kept for the
+  process holds `notes.git`, a bare repository nothing is pushed to, which lost `refs` and
+  `objects`. The owner is asked to free space on C: before the gate (status.md, "Waiting on the
+  owner"); the lead changes no Windows setting and deletes nothing outside the tests' folders. A
+  package makes the test support code independent of the cleaner (the ruling after this one), and
+  the whole default run is made again on it.
+- *The pictures* (run `wf_f7ac8e66-ad4`, read only, 00:01 to 00:18, nine Opus agents, 1.2M tokens;
+  its result `D:/Projects/Personal/phase8-work/wave4/default-step19/inspect-result.json`, the
+  comparison in `…/default-step19/compare/`, the inspectors' crops in `…/default-step19/inspect/`).
+  Against wave 3's references 1,173 pictures are the same files, 57 changed, part G's four are new,
+  and five are missing, those of checks 13 and 14. Six inspectors read each changed and each new
+  picture with its reference and its difference picture; three verifiers then tried to refute every
+  verdict that was no plain variation, and agreed with each. 44 vary from run to run: a caret caught
+  in the other half of its blink (17), a temporary folder's random name in a text (13), a fake's
+  port in an address (3), a progress bar's state (3), edge pixels a few levels apart (8). 17 are
+  expected: `10b-second-tab` without the tooltip (ruling 100's tests-ci-3), the palette's thumb
+  three pixels shorter in six pictures and the shortcuts list with its Help group in two (§11),
+  `a1b-about-link-focus` (the link's frame, S19-18), part G's four new ones, each against its
+  check's expected result, and three of phase 4 that no ruling had named. None is a fault and none
+  is unexplained.
+- *Phase 4's `c10l-merged`, `c11g-second-stop` and `c11j-rebased`* now show the keyboard focus frame
+  around the graph, and nothing else differs in them. A verifier read the chain in the code. Since
+  phase 4 the app gives the banner's Continue the focus with the frame when the resolver closes
+  (`CommitGraphView.OnGraphFocusRequested`, `NavigationMethod.Tab`; `c10k-resolved` shows it). The
+  walk-through clicks that Continue, and a click on a button that shows the frame counts as a press
+  by the keys (ruling 102: `FocusReturn.FollowKeyboardPresses` looks at the button, never at the
+  device). Continue's run disables it, so the focus is lost, and the window's rule gives it to the
+  graph area's target with the frame (D462 (4)), where it was left on nothing before; a later click
+  on a row of the graph that has the focus leaves the frame. **The lead's ruling: accepted as the
+  rule's outcome.** It is what the fourth round's own fact holds for Continue pressed by the keys
+  (`The_banners_Continue_pressed_by_the_keys_that_ends_the_merge_gives_the_focus_to_the_graph_with_the_frame`),
+  and the frame the user clicked on was the app's own. A user of the mouse alone now sees the frame
+  around the commit list after Continue, until the focus moves: told to the owner, who may want a
+  click never to carry the frame along, which would be a change to ruling 102. Ruling 103's sentence
+  "The one visible change anywhere is Esc in a diff" was wrong: its reader read the steps that press
+  a key, and these steps click. The three pictures are in the report's list of changes. The
+  real-window pass compares `c10l-merged` with this twin after a real click on Continue, so phase
+  4's check C10 is run alone in the real window before step 19 closes; and the next whole run shows
+  whether the three are the same files again, since the frame in two of them needs the rule's look
+  to come before the walk-through's click on a row, which the walk-through's waits make so.
 
 ### 13.2 What the integration settled
 
