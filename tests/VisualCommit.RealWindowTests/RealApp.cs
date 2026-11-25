@@ -404,8 +404,7 @@ public sealed partial class RealApp : IDisposable
             () =>
             {
                 dialog = Window.ModalWindows.FirstOrDefault(window => TitleOf(window) == title)
-                    ?? _automation.GetDesktop()
-                        .FindAllChildren(condition => condition.ByProcessId(_process.Id))
+                    ?? TopLevelElementsOf(_process.Id)
                         .Select(element => element.AsWindow())
                         .FirstOrDefault(window => TitleOf(window) == title);
                 return dialog is not null;
@@ -450,8 +449,7 @@ public sealed partial class RealApp : IDisposable
             () =>
             {
                 dialog = Window.ModalWindows.FirstOrDefault(window => TitleOf(window) == title)
-                    ?? _automation.GetDesktop()
-                        .FindAllChildren(condition => condition.ByProcessId(_process.Id))
+                    ?? TopLevelElementsOf(_process.Id)
                         .Select(element => element.AsWindow())
                         .FirstOrDefault(window => TitleOf(window) == title);
                 return dialog is not null;

@@ -125,6 +125,13 @@ public sealed partial class RealApp
     public bool IsVisibleOnDesktop => Win32.IsWindowVisible(Handle) && !Win32.IsIconic(Handle);
 
     /// <summary>
+    /// Whether the window this <see cref="RealApp"/> was made on is gone (<c>IsWindow</c> false: destroyed,
+    /// not only hidden), read from Windows alone, so that a step that expects the window to close asks UI
+    /// Automation nothing about a window that is going.
+    /// </summary>
+    public bool IsWindowGone => !Win32.IsWindow(Handle);
+
+    /// <summary>
     /// Whether this window is the desktop's foreground window (<c>GetForegroundWindow</c>), the window
     /// the real keyboard's keys reach: a key is sent only while this holds.
     /// </summary>
@@ -273,8 +280,7 @@ public sealed partial class RealApp
             () =>
             {
                 dialog = Window.ModalWindows.FirstOrDefault(window => TitleOf(window) == title)
-                    ?? _automation.GetDesktop()
-                        .FindAllChildren(condition => condition.ByProcessId(_process.Id))
+                    ?? TopLevelElementsOf(_process.Id)
                         .Select(element => element.AsWindow())
                         .FirstOrDefault(window => TitleOf(window) == title);
                 return dialog is not null;
@@ -376,14 +382,14 @@ public sealed partial class RealApp
     /// <summary>
     /// A top-level window of the app's process other than the notice (<see cref="InstanceNoticeId"/>), on
     /// the screen: the main window that "Try again" opens in the process that showed the notice. Null
-    /// while there is none. One look; the caller waits for it.
+    /// while there is none. One look; the caller waits for it. Found by its handle
+    /// (<see cref="TopLevelElementsOf"/>).
     /// </summary>
     public Window? OtherWindowOfProcess()
     {
         try
         {
-            return _automation.GetDesktop()
-                .FindAllChildren(condition => condition.ByProcessId(_process.Id))
+            return TopLevelElementsOf(_process.Id)
                 .Where(element => element.Properties.AutomationId.ValueOrDefault != InstanceNoticeId
                     && !element.IsOffscreen
                     && element.BoundingRectangle is { Width: > 0, Height: > 0 })
@@ -449,18 +455,36 @@ public sealed partial class RealApp
     public int ProcessId => _process.Id;
 
     /// <summary>
-    /// Whether the process <paramref name="processId"/> has a top-level window on the desktop now, as UI
-    /// Automation lists them: one look, for a check that a start showed no window while it ran.
+    /// Whether the process <paramref name="processId"/> has a visible top-level window on the desktop now,
+    /// as Windows lists them: one look, for a check that a start showed no window while it ran.
     /// </summary>
-    public bool HasWindowOfProcess(int processId)
+    public bool HasWindowOfProcess(int processId) => Win32.VisibleTopLevelWindowsOf((uint)processId).Count > 0;
+
+    /// <summary>
+    /// The visible top-level windows of a process as UI Automation elements, found in Windows' own list of
+    /// windows and asked of UI Automation by their handles, never by a search of the desktop's children.
+    /// Such a search makes UI Automation ask every program on the desktop, and one that answers slowly
+    /// holds the search, and the app under test with it, for seconds: launch 6's wait for the main window
+    /// ran out on it in about two runs of five on the owner's desktop, and in none of sixteen by the handle.
+    /// </summary>
+    private IEnumerable<AutomationElement> TopLevelElementsOf(int processId)
     {
-        try
+        foreach (var window in Win32.VisibleTopLevelWindowsOf((uint)processId))
         {
-            return _automation.GetDesktop().FindAllChildren(condition => condition.ByProcessId(processId)).Length > 0;
-        }
-        catch (Exception ex) when (ex is COMException or FlaUI.Core.Exceptions.ElementNotAvailableException)
-        {
-            return false;
+            AutomationElement? element = null;
+            try
+            {
+                element = _automation.FromHandle(window);
+            }
+            catch (Exception ex) when (ex is COMException or FlaUI.Core.Exceptions.ElementNotAvailableException)
+            {
+                // The window went between the list and the look.
+            }
+
+            if (element is not null)
+            {
+                yield return element;
+            }
         }
     }
 
@@ -554,8 +578,8 @@ public sealed partial class RealApp
         List<TaskbarEntry> found = [];
         try
         {
-            var bars = _automation.GetDesktop()
-                .FindAllChildren(condition => condition.ByClassName("Shell_TrayWnd").Or(condition.ByClassName("Shell_SecondaryTrayWnd")));
+            // The taskbars by their window class, each asked of UI Automation by its handle (TopLevelElementsOf).
+            var bars = Win32.VisibleTopLevelWindowsOfClass("Shell_TrayWnd", "Shell_SecondaryTrayWnd").Select(window => _automation.FromHandle(window));
             foreach (var bar in bars)
             {
                 var taskbar = bar.Properties.ClassName.ValueOrDefault ?? "a taskbar";
@@ -809,6 +833,60 @@ public sealed partial class RealApp
         [DllImport("user32.dll")]
         [return: MarshalAs(UnmanagedType.Bool)]
         public static extern bool IsWindowVisible(IntPtr window);
+
+        [DllImport("user32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool IsWindow(IntPtr window);
+
+        private delegate bool EnumWindowsProc(IntPtr window, IntPtr parameter);
+
+        [DllImport("user32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool EnumWindows(EnumWindowsProc callback, IntPtr parameter);
+
+        [DllImport("user32.dll")]
+        private static extern uint GetWindowThreadProcessId(IntPtr window, out uint process);
+
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+        private static extern int GetClassName(IntPtr window, System.Text.StringBuilder name, int capacity);
+
+        /// <summary>The visible top-level windows of one of the window classes named, as Windows lists them.</summary>
+        public static List<IntPtr> VisibleTopLevelWindowsOfClass(params string[] classes)
+        {
+            var found = new List<IntPtr>();
+            var name = new System.Text.StringBuilder(256);
+            EnumWindows(
+                (window, _) =>
+                {
+                    if (IsWindowVisible(window) && GetClassName(window, name, name.Capacity) > 0 && classes.Contains(name.ToString(), StringComparer.Ordinal))
+                    {
+                        found.Add(window);
+                    }
+
+                    return true;
+                },
+                IntPtr.Zero);
+            return found;
+        }
+
+        /// <summary>The visible top-level windows of a process, front to back, as Windows lists them.</summary>
+        public static List<IntPtr> VisibleTopLevelWindowsOf(uint process)
+        {
+            var found = new List<IntPtr>();
+            EnumWindows(
+                (window, _) =>
+                {
+                    GetWindowThreadProcessId(window, out var owner);
+                    if (owner == process && IsWindowVisible(window))
+                    {
+                        found.Add(window);
+                    }
+
+                    return true;
+                },
+                IntPtr.Zero);
+            return found;
+        }
 
         [DllImport("user32.dll")]
         public static extern IntPtr GetForegroundWindow();

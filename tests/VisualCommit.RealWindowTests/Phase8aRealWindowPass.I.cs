@@ -234,13 +234,21 @@ public partial class Phase8aRealWindowPass
         var clock = Stopwatch.StartNew();
 
         // The main window in the same process, GitStatus in it; the notice closed. The RealApp's own window
-        // is still the notice's.
+        // is still the notice's. The notice's end is read from Windows, and the main window is found by its
+        // handle (RealApp.OtherWindowOfProcess): a search of the desktop's children through UI Automation
+        // asks every program on the desktop, and this wait ran out on such a search in about two runs of
+        // five, though the app had closed the notice within 0.1 s and opened its window within 1.5 s.
         Window? main = null;
         app.WaitFor(
             () =>
             {
+                if (!app.IsWindowGone)
+                {
+                    return false;
+                }
+
                 main = app.OtherWindowOfProcess();
-                return main is not null && HasGitStatus(main) && !app.IsVisibleOnDesktop;
+                return main is not null && HasGitStatus(main);
             },
             "the main window, with GitStatus, in the notice's process, and the notice closed",
             I.StartedHereWithin);
