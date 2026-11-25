@@ -7245,6 +7245,73 @@ passed, 7 skipped, 2 failed, phase 1's checks 13 and 14.
   whether the three are the same files again, since the frame in two of them needs the rule's look
   to come before the walk-through's click on a row, which the walk-through's waits make so.
 
+**The tests made independent of a cleaner of the temp folder (the lead, 2026-11-25; D468).** 108.
+The package ruling 107 named is built in two rounds, each with its tests first and read by
+independent readers, and merged (runs `wf_bcea0192-4f1`, 23:56 to 00:55, four Opus agents, 0.87M
+tokens, and `wf_3f6b9ccd-b5a`, 00:56 to 02:21, three, 0.69M; their results
+`D:/Projects/Personal/phase8-work/wave4/review/temp-cleaner-result.json` and
+`temp-cleaner-2-result.json`; `wip/p8a-temp-cleaner`, 20 commits from `ffff655`, the last `d576558`;
+merged at `c1bfaf7`, 02:22). Eight files, all under `tests/`: seven of `VisualCommit.Testing` and
+the new `tests/VisualCommit.Git.Tests/TempFolderCleanerTests.cs`. Nothing under `src/`.
+
+- *As built* (D468 has the rule). `LargeHistory.IsUsableAsync(folder, sha, bare, refs)` proves a
+  shared copy with `rev-parse --is-bare-repository`, one `cat-file --batch-check` of main and the
+  other refs as commits, and for a working copy `git --no-optional-locks status --porcelain
+  --untracked-files=no`; `MarkedSha` takes a marker only when it holds a SHA; `GetOrBuildAsync` and
+  `GetOrBuildBareAsync` delete a copy that fails (`DeleteCopy`) and make it again, the bare one
+  cloned into `large-history-v1.git.partial` and moved into place. `TempRepo.FoldersIn` lists a
+  folder's folders by relative path and `CopyDirectory(from, to, folders)` makes each after the
+  copy; `BlankGitFolder` (`Record`, `CopyTo`) uses them for the two blank folders of a process, at
+  all six places that copy one, and `TempRepo` and `TempWorkspace` (`RecordFolders`, `KeptFolders`)
+  for a template that `Scenarios.KeepUntilExit` keeps, in `CopyAsync`. `Record` and
+  `TemplateFoldersIn` refuse a record in which a git folder (a folder with a `HEAD` and a `config`)
+  has no `refs` or no `objects`.
+- *The first round and what its readers found.* The lead had ruled two things: the shared copies'
+  proof, and the blank folders' copies. Both readers showed from the code that the failure seen in
+  phase 7a was neither: had the blank been stripped, the template's first push would have failed
+  with git's own words; the message named `notes.git`, a bare repository of the hosting template
+  kept for the process, to which nothing is pushed, and which `TempRepo.CopyAsync` copied as it lay.
+  Phase 7b's template holds three such. The lead ruled a second round: the kept templates, the bare
+  copy moved into place whole (a reader: another process could meet it half made), and the proof
+  widened to the copy's other refs and the working copy's status (a reader: a cleaner that takes old
+  files would leave a copy the first proof accepts).
+- *Tests.* `TempFolderCleanerTests` has 21, each on repositories, blanks, templates and a workspace
+  of its own, never on the shared folder or on a template of the process: a stripped blank's copy is
+  a repository, bare and not; a stripped kept repository's and a stripped kept workspace's copies
+  have their folders, the bare one nothing was pushed to among them; a record without `refs` or
+  `objects` is refused, for a blank, a repository and a workspace; a shared copy is usable whole and
+  is not when it lost its empty folders, its commit, its tag, its branch, a tracked file or its
+  index, or when its marker names another commit; a stripped bare copy is made again and a whole one
+  is kept. Each was committed failing before its change, but for the three that state what already
+  held. The stripping in them removes every folder that holds nothing, again and again until none is
+  left, as the cleaner did.
+- *The proof on the laptop.* The first round's builder left the stripped shared copy as it lay and
+  ran phase 1's checks 13 and 14: both passed, and the bare copy had been made again by the code
+  (its marker of 00:19 on 2026-11-25); the working copy of 2026-11-18, whose refs are loose files,
+  passed the proof and was kept. Under the second round's wider proof both copies were kept in every
+  run. On the merged tree (`c1bfaf7`): the solution's build and the real-window project's with 0
+  warnings; `TempFolderCleanerTests` and `TempRepoTests` 40 of 40. On the branch's head before the
+  merge: the Git.Tests classes named `*ScenarioTests` 92 of 92, checks 13 and 14, phase 7a's part A
+  8 of 8 and phase 7b's part A 9 of 9. Cost: the largest template, phase 6's workspace of ten
+  repositories, records 375 folders in about 40 ms once per process, and a copy of it takes about a
+  second with or without the record.
+- *The lead's rulings on what is left.* Accepted, by D468 (4): the sixteen templates that
+  `VisualCommit.Git.Tests` keeps by helpers of its own (`PullParityTests`, `PullRebaseParityTests`,
+  `IntegratePullTests`, `KeepIgnoredCheckoutTests`, `UndoTestSupport`, `IgnoredInTheWayTests`) are
+  not recorded; a reader read each build and found no bare repository that nothing is pushed to, so
+  a strip costs them folders git makes again. A test in flight, and a template or the shared bare
+  copy stripped after its record or its proof, are not helped: the proof runs once per process, so a
+  `Check_14` that fails after a `Check_13` that passed, in one process, reads so. A delete of a
+  damaged shared copy that fails midway leaves a partly deleted copy without a marker; the guarantee
+  is "no half-made copy at the final path". No test of the package has run on git 2.34 yet: CI's
+  floor job is the first. All four go into the handoff. A probe of the lead's has watched an empty
+  folder in `%TEMP%` since 23:54 on 2026-11-24
+  (`D:/Projects/Personal/phase8-work/wave4/temp-cleaner-probe.log`); it had logged no strike by the
+  merge.
+- *Next.* The whole default run is made again on `c1bfaf7` (started at 02:27), with its 21 tests
+  more; its pictures are compared with wave 3's references and with the first run's, and checks 13
+  and 14's five pictures are read.
+
 ### 13.2 What the integration settled
 
 Beyond moving the packages' contracts into section 1: the broker's `gitVersion` goes at §3's merge,

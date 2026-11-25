@@ -373,11 +373,15 @@ Wave 4 and the review:
   `26b6634`): 8,882 tests, 8,873 passed, 7 skipped, **2 failed**, phase 1's checks 13 and 14, on a
   cause outside the repository: the shared 100,000-commit bare repository under the tests' temporary
   root had lost its empty folders, `refs` among them, at 15:05 that day, when Windows' Storage Sense
-  cleaned the temp folder of the nearly full C: drive ("Next step"; "Waiting on the owner"). Still
-  open: the harness made independent of that cleaner (a package, being built), the whole default run
-  again on it, the comparison's reading (under way on this run's pictures), phase 1's check 11 and
-  phase 6's W1 alone (the folder dialog), and the owner's answers: the dimmed texts and the C:
-  drive.
+  cleaned the temp folder of the nearly full C: drive ("Next step"; "Waiting on the owner"). **The
+  test support code is made independent of that cleaner** (D468; ruling 108; merged at `c1bfaf7`),
+  and the run's 61 changed and new pictures are read: 44 vary from run to run, 17 are expected, none
+  is a fault (ruling 107); three of the 17, phase 4's `c10l-merged`, `c11g-second-stop` and
+  `c11j-rebased`, show the focus frame around the graph by D462 (4) and ruling 102, which no ruling
+  had named. Still open: the whole default run again on `c1bfaf7` (started at 02:27 on 2026-11-25)
+  with its comparison, three checks alone in the real window (phase 1's check 11 and phase 6's W1
+  for the folder dialog, phase 4's C10 for the frame), CI's run, and the owner's answers: the dimmed
+  texts and the C: drive.
 
 Gate:
 
@@ -1059,36 +1063,37 @@ failing once in its set-up. **The cause:** the laptop's C: drive had 4.7 GB free
 Windows' Storage Sense is on with "delete temporary files that my apps aren't using" and runs when
 the disk is low, and it removes empty folders under `%TEMP%` whatever their age; no command of the
 session or of an agent deleted anything there (the transcripts of that quarter of an hour were
-read). CI is not touched by it. **Under way** (2026-11-25, from 00:05): (a) run `wf_bcea0192-4f1`, a
-package that makes the test support code independent of that cleaner, with its tests first, two
-independent readers and a fixer, in the worktree `D:/Projects/Personal/vc-wt/p8a-temp-cleaner` on
-`wip/p8a-temp-cleaner`, from `ffff655`: a shared copy of `LargeHistory` is proven usable through git
-before it is used and made again when it is not, and every copy of a blank git folder gets the
-folders `git init` made; the damaged shared copy is left as it is, so that the code's own repair is
-the proof; (b) run `wf_f7ac8e66-ad4`, read only: six inspectors and three verifiers read the 57
-pictures of this run that are not their references' files (wave 3's) and part G's four new ones; the
-comparison is in `…/default-step19/compare/` (1,173 the same files, 57 changed, 4 new, 5 missing:
-checks 13 and 14's). Twenty of the 57 were not among the 54 that varied in the whole run of
-2026-11-23; three of them, phase 4's `c10l-merged`, `c11g-second-stop` and `c11j-rebased`, show a
-focus frame around the graph that no ruling names: the banner's Continue, framed by the app since
-phase 4 when the resolver closes, is clicked, which counts as a press by the keys (ruling 102), so
-the focus goes to the graph with the frame when the banner goes (D462 (4)); a verifier reads the
-code for it, and ruling 103's sentence that Esc in a diff is the one visible change is wrong. (c) A
+read). CI is not touched by it. **The pictures are read** (run `wf_f7ac8e66-ad4`, 00:01 to 00:18 on
+2026-11-25; ruling 107): of the 57 pictures that are not their references' files and part G's four
+new ones, 44 vary from run to run, 17 are expected, none is a fault; three of the 17, phase 4's
+`c10l-merged`, `c11g-second-stop` and `c11j-rebased`, show the focus frame around the graph, which a
+verifier traced in the code to D462 (4) and ruling 102 and the lead accepted; they are in the
+report's list of changes, and ruling 103's sentence that no earlier picture but Esc's changes is
+marked wrong. **The test support code is independent of the cleaner** (runs `wf_bcea0192-4f1` and
+`wf_3f6b9ccd-b5a`, 23:56 to 02:21; D468, ruling 108; `wip/p8a-temp-cleaner`, 20 commits, merged at
+`c1bfaf7`, 02:22; the worktree stays until the run below has passed): the shared copies of
+`LargeHistory` proven through git and made again when damaged, every copy of a blank git folder and
+of a kept scenario template given the folders its source had; `TempFolderCleanerTests`, 21 tests. A
 probe of the lead's, outside the repository, logs each time an empty folder goes from `%TEMP%`
-(`D:/Projects/Personal/phase8-work/wave4/temp-cleaner-probe.log`). **Next for the lead, in this
-order:** (1) read the package's result, merge it, and run the classes it names; (2) read the
-inspection's result and rule on each picture that is no plain variation; a fault gets a fix before
-anything else; (3) the whole default run again on the merged package (`bash scripts/heavy-run.sh`,
-about 1 h 40 min), with no agent at work, its pictures compared with wave 3's references and with
-this run's, the pictures of checks 13 and 14 read, and the new references for the gate (ruling 102);
-(4) phase 1's check 11 and phase 6's W1 alone in the real window, the owner told, for the folder
-dialog's wait (ruling 106); (5) records: the next ruling (107) and D468 for the harness's
-independence of the cleaner, the report, CLAUDE.md's note on the temp folder; push; CI; (6) the
-owner's answers, asked with the gate's start, which needs the owner present anyway: the dimmed texts
-and the C: drive ("Waiting on the owner"); then step 19 is ticked. The package is reviewed with the
-rest in step 19 and merged last, in that step. The three finished worktrees (`p8a-restore`,
-`p8a-restore-base`, `p8a-guide`) are removed; their `wip/` branches stay local (D396). §11's
-builders got with their briefs: mdBook at
+(`D:/Projects/Personal/phase8-work/wave4/temp-cleaner-probe.log`; armed at 23:54 on 2026-11-24, no
+strike by 02:27). **The whole default run is under way again** (`bash scripts/heavy-run.sh`, started
+at 02:27:02 on `c1bfaf7`, in the background; its log
+`D:/Projects/Personal/phase8-work/wave4/default-step19b/run.log`; no agent works beside it; 8,903
+tests are expected, the 21 new ones among them). **Next for the lead, in this order:** (1) read the
+run's result; copy its scripted pictures beside the first run's; compare them with wave 3's
+references (`python -I scripts/compare-pictures.py D:/Projects/Personal/phase8-work/references/wave3
+<copy> <out>`) and with the first run's (`…/default-step19/visual/`): the same pictures must differ,
+each in its kind, the three of phase 4 must be the same files as in the first run, and checks 13 and
+14's five pictures are read; then the run's pictures become the references for the gate (ruling
+102); (2) three checks alone in the real window, the owner told: phase 1's `Check_11` and phase 6's
+`Check_W1` for the folder dialog's wait (ruling 106), phase 4's C10 for the frame's twin (ruling
+107); (3) the report's section on this comparison, the next ruling, the handoff's notes from D468
+(4); push; read CI's run (the floor's job runs the package's tests on git 2.34 for the first time)
+and record it; (4) the owner's answers, asked with the gate's start, which needs the owner present
+anyway: the dimmed texts and the C: drive ("Waiting on the owner"); then step 19 is ticked. The
+package is reviewed with the rest in step 19 and merged last, in that step. The three finished
+worktrees (`p8a-restore`, `p8a-restore-base`, `p8a-guide`) are removed; their `wip/` branches stay
+local (D396). §11's builders got with their briefs: mdBook at
 `D:/Projects/Personal/phase8-work/tools/mdbook-0.5.4/mdbook.exe` and the Linux archive's SHA-256 for
 `guide.yml` (Notes, "Wave 4"); the references `D:/Projects/Personal/phase8-work/references/wave3/`;
 rulings 80 (stop and report if the first-run link's frame touches its ink), 82 (the facts no check
