@@ -529,7 +529,10 @@ public partial class Phase8aRealWindowPass
     /// holds the app's window (<see cref="RealApp.DisplayBounds"/>, <see cref="RealApp.TaskbarButtons"/>), the
     /// pointer at the neutral point inside the window (no preview or tooltip of the taskbar opens); that
     /// display and each button found in run.txt, with its name, bounds, taskbar and whether it lies on that
-    /// display. Only those on it count (<see cref="SelectTaskbarButton"/>). One there: its bounds asserted not
+    /// display, and, when reads through UI Automation failed, how many of the looks found no button because
+    /// of it and the last failure's type (<see cref="RealApp.TaskbarLooks"/>), so that a "Not run" line that
+    /// follows tells a taskbar that could not be read from one with no such button. Only those on the
+    /// display count (<see cref="SelectTaskbarButton"/>). One there: its bounds asserted not
     /// empty, captured from the screen by its bounds as <c>b2-taskbar-button</c> and four times enlarged as
     /// <c>b2-taskbar-button-enlarged</c>. None found: run.txt's "Not run" line, and the method goes on; found,
     /// but none there: <see cref="NoTaskbarButtonOnDisplay"/>'s "Not run" line, the same. More than one there:
@@ -542,11 +545,17 @@ public partial class Phase8aRealWindowPass
         var display = app.DisplayBounds;
         Note(string.Create(CultureInfo.InvariantCulture, $"B2's taskbar button: the display that holds the app's window at {display} (screen pixels)"));
         var clock = Stopwatch.StartNew();
-        var found = app.TaskbarButtons(B.TaskbarButtonNameStart, B.TaskbarButtonLimit, display);
+        var looks = app.TaskbarButtons(B.TaskbarButtonNameStart, B.TaskbarButtonLimit, display);
         var after = clock.Elapsed;
+        var found = looks.Buttons;
         foreach (var each in found)
         {
             Note(string.Create(CultureInfo.InvariantCulture, $"B2's taskbar button: \"{each.Name}\" at {each.ScreenBounds} (screen pixels) on {each.Taskbar}, {(each.LiesOn(display) ? "on" : "not on")} the window's display, found after {after.TotalSeconds:0.0} s"));
+        }
+
+        if (looks.FailedLooks > 0)
+        {
+            Note(string.Create(CultureInfo.InvariantCulture, $"B2's taskbar button: {looks.FailedLooks} of the {looks.Looks} looks at the taskbars found no button because a read through UI Automation failed, the last with a {looks.LastFailure}"));
         }
 
         if (found.Count == 0)

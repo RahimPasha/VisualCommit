@@ -359,18 +359,30 @@ public sealed partial class RealApp
     /// its bounds on the screen and its taskbar; at the limit, the last look's, which are then on other
     /// displays, or none. A button does not say whose process it is: Windows groups the buttons by the
     /// executable's path, so each other running VisualCommit has a button of its own, with the same name,
-    /// and with more than one display one app can have a button on each display's taskbar.
+    /// and with more than one display one app can have a button on each display's taskbar. With the
+    /// buttons, how many looks were made and how many of them found none because a read failed
+    /// (<see cref="TaskbarLooks"/>).
     /// </summary>
-    public IReadOnlyList<TaskbarEntry> TaskbarButtons(string nameStart, TimeSpan limit, Rectangle display)
+    public TaskbarLooks TaskbarButtons(string nameStart, TimeSpan limit, Rectangle display)
     {
         ArgumentException.ThrowIfNullOrEmpty(nameStart);
         var clock = Stopwatch.StartNew();
+        var looks = 0;
+        var failedLooks = 0;
+        string? lastFailure = null;
         while (true)
         {
-            var found = FindTaskbarButtons(nameStart);
+            var found = FindTaskbarButtons(nameStart, out var failure);
+            looks++;
+            if (failure is not null)
+            {
+                failedLooks++;
+                lastFailure = failure.GetType().Name;
+            }
+
             if (found.Exists(entry => entry.LiesOn(display)) || clock.Elapsed >= limit)
             {
-                return found;
+                return new TaskbarLooks(found, looks, failedLooks, lastFailure);
             }
 
             Thread.Sleep(PollInterval);
@@ -614,12 +626,15 @@ public sealed partial class RealApp
     /// <paramref name="nameStart"/>, with non-empty bounds, the taskbars in the order Windows lists them and
     /// each one's buttons in the order UI Automation's search of it gives. None when a read through UI
     /// Automation failed while the taskbars were walked (<see cref="IsReadFailure"/>, a taskbar that changed
-    /// among them), so that a look never counts part of a taskbar. The taskbars' windows are listed outside
-    /// that catch: a failed enumeration (<see cref="System.ComponentModel.Win32Exception"/>) leaves the call and
-    /// never reads as no taskbar.
+    /// among them), so that a look never counts part of a taskbar, and <paramref name="failure"/> is then that
+    /// failure; null when no read failed. The taskbars' windows are listed outside that catch: a failed
+    /// enumeration (<see cref="System.ComponentModel.Win32Exception"/>) leaves the call and never reads as no
+    /// taskbar.
     /// </summary>
-    private List<TaskbarEntry> FindTaskbarButtons(string nameStart)
+    private List<TaskbarEntry> FindTaskbarButtons(string nameStart, out Exception? failure)
     {
+        failure = null;
+
         // The taskbars found in Windows' list of windows by their classes.
         var bars = Win32.VisibleTopLevelWindowsOfClass("Shell_TrayWnd", "Shell_SecondaryTrayWnd");
         List<TaskbarEntry> found = [];
@@ -642,6 +657,7 @@ public sealed partial class RealApp
         catch (Exception ex) when (IsReadFailure(ex))
         {
             // A taskbar redrew while it was walked, or a read of it failed: the next look reads it again, whole.
+            failure = ex;
             return [];
         }
 
@@ -655,6 +671,14 @@ public sealed partial class RealApp
         public bool LiesOn(Rectangle display) =>
             display.Contains(ScreenBounds.X + (ScreenBounds.Width / 2), ScreenBounds.Y + (ScreenBounds.Height / 2));
     }
+
+    /// <summary>
+    /// What <see cref="TaskbarButtons"/> found: the last look's <see cref="Buttons"/>, how many looks it made,
+    /// how many of them found none because a read through UI Automation failed (<see cref="IsReadFailure"/>),
+    /// and the type of the last such failure, null when none failed: so that run.txt can tell taskbars that
+    /// showed no such button from taskbars that could not be read.
+    /// </summary>
+    public sealed record TaskbarLooks(IReadOnlyList<TaskbarEntry> Buttons, int Looks, int FailedLooks, string? LastFailure);
 
     /// <summary>
     /// The window's icons (<see cref="WindowIcons"/>): <c>ICON_SMALL</c>'s and <c>ICON_BIG</c>'s images
