@@ -523,8 +523,9 @@ public partial class Phase8aRealWindowPass
 
     /// <summary>
     /// B2's taskbar button (the report's open point 51): the taskbar's buttons whose UI Automation names
-    /// start with <see cref="Phase8aExpectations.B.TaskbarButtonNameStart"/>, looked for from the desktop
-    /// root for <see cref="Phase8aExpectations.B.TaskbarButtonLimit"/> until one shows on the display that
+    /// start with <see cref="Phase8aExpectations.B.TaskbarButtonNameStart"/>, looked for on the taskbars
+    /// (found in Windows' list of windows by their classes, each asked of UI Automation by its handle) for
+    /// <see cref="Phase8aExpectations.B.TaskbarButtonLimit"/> until one shows on the display that
     /// holds the app's window (<see cref="RealApp.DisplayBounds"/>, <see cref="RealApp.TaskbarButtons"/>), the
     /// pointer at the neutral point inside the window (no preview or tooltip of the taskbar opens); that
     /// display and each button found in run.txt, with its name, bounds, taskbar and whether it lies on that

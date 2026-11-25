@@ -154,7 +154,7 @@ public static partial class Phase8aExpectations
         /// <summary>How the taskbar button's UI Automation name starts.</summary>
         public const string TaskbarButtonNameStart = "VisualCommit";
 
-        /// <summary>How long the taskbar button is looked for, from UI Automation's desktop root.</summary>
+        /// <summary>How long the taskbar button is looked for on the taskbars, found in Windows' list of windows by their classes and asked of UI Automation by their handles.</summary>
         public static readonly TimeSpan TaskbarButtonLimit = TimeSpan.FromSeconds(10);
 
         /// <summary>run.txt's line when no taskbar button is found within the limit (open point 51).</summary>

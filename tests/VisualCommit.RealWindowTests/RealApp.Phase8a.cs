@@ -343,8 +343,9 @@ public sealed partial class RealApp
 
     /// <summary>
     /// The taskbar's buttons whose UI Automation names start with <paramref name="nameStart"/>, looked for
-    /// from UI Automation's desktop root (the taskbars, <c>Shell_TrayWnd</c> and on another monitor
-    /// <c>Shell_SecondaryTrayWnd</c>, and their buttons) every 100 ms for at most
+    /// (<see cref="FindTaskbarButtons"/>: the taskbars, <c>Shell_TrayWnd</c> and on another monitor
+    /// <c>Shell_SecondaryTrayWnd</c>, found in Windows' list of windows by their classes, each asked of UI
+    /// Automation by its handle, and their buttons searched through UI Automation) every 100 ms for at most
     /// <paramref name="limit"/>, until a look finds one on <paramref name="display"/>
     /// (<see cref="TaskbarEntry.LiesOn"/>): every such button of that look, on every taskbar, with its name,
     /// its bounds on the screen and its taskbar; at the limit, the last look's, which are then on other
@@ -592,17 +593,22 @@ public sealed partial class RealApp
 
     /// <summary>
     /// One look for <see cref="TaskbarButtons"/>: every button on a taskbar whose name starts with
-    /// <paramref name="nameStart"/>, with non-empty bounds, in UI Automation's order. None when the taskbar
-    /// changed while it was walked, so that a look never counts part of it.
+    /// <paramref name="nameStart"/>, with non-empty bounds, the taskbars in the order Windows lists them and
+    /// each one's buttons in the order UI Automation's search of it gives. None when a read through UI
+    /// Automation failed while the taskbars were walked (<see cref="IsReadFailure"/>, a taskbar that changed
+    /// among them), so that a look never counts part of a taskbar. The taskbars' windows are listed outside
+    /// that catch: a failed enumeration (<see cref="System.ComponentModel.Win32Exception"/>) leaves the call and
+    /// never reads as no taskbar.
     /// </summary>
     private List<TaskbarEntry> FindTaskbarButtons(string nameStart)
     {
+        // The taskbars found in Windows' list of windows by their classes.
+        var bars = Win32.VisibleTopLevelWindowsOfClass("Shell_TrayWnd", "Shell_SecondaryTrayWnd");
         List<TaskbarEntry> found = [];
         try
         {
-            // The taskbars by their window class, each asked of UI Automation by its handle (TopLevelElementsOf).
-            var bars = Win32.VisibleTopLevelWindowsOfClass("Shell_TrayWnd", "Shell_SecondaryTrayWnd").Select(window => _automation.FromHandle(window));
-            foreach (var bar in bars)
+            // Each taskbar asked of UI Automation by its handle, its buttons searched through UI Automation.
+            foreach (var bar in bars.Select(window => _automation.FromHandle(window)))
             {
                 var taskbar = bar.Properties.ClassName.ValueOrDefault ?? "a taskbar";
                 foreach (var button in bar.FindAllDescendants(condition => condition.ByControlType(ControlType.Button)))
@@ -615,9 +621,9 @@ public sealed partial class RealApp
                 }
             }
         }
-        catch (Exception ex) when (ex is COMException or FlaUI.Core.Exceptions.ElementNotAvailableException)
+        catch (Exception ex) when (IsReadFailure(ex))
         {
-            // The taskbar redrew while it was walked: the next look reads it again, whole.
+            // A taskbar redrew while it was walked, or a read of it failed: the next look reads it again, whole.
             return [];
         }
 
