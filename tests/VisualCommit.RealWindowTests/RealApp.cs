@@ -184,6 +184,49 @@ public sealed partial class RealApp : IDisposable
                 Executable);
         }
 
+        var startInfo = StartInfoFor(dataDirectory, environment);
+        var process = Process.Start(startInfo) ?? throw new InvalidOperationException("The app did not start.");
+        process.OutputDataReceived += (_, _) => { };
+        process.ErrorDataReceived += (_, _) => { };
+        process.BeginOutputReadLine();
+        process.BeginErrorReadLine();
+
+        var automation = new UIA3Automation();
+        try
+        {
+            // Attached by id: FlaUI then has a process object of its own. Given ours, it
+            // disposes it, and this class could no longer wait for the app or stop it.
+            var application = FlaUI.Core.Application.Attach(process.Id);
+            var window = application.GetMainWindow(automation, TimeSpan.FromSeconds(30))
+                ?? throw new TimeoutException("The app's main window did not appear within 30 seconds.");
+
+            var app = new RealApp(process, automation, application, window, dataDirectory);
+
+            // On top of everything else, so that the screen captures show the app and the mouse
+            // reaches it, whatever other windows are open.
+            NativeMethods.SetWindowPos(
+                app.Handle, NativeMethods.HwndTopMost, 0, 0, 0, 0,
+                NativeMethods.SwpNoMove | NativeMethods.SwpNoSize | NativeMethods.SwpShowWindow);
+            WaitUntilIdle();
+            return app;
+        }
+        catch
+        {
+            automation.Dispose();
+            Stop(process);
+            process.Dispose();
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// How <see cref="Launch(string, IReadOnlyDictionary{string, string?}?)"/> starts the built app on
+    /// a data folder, and how a second start beside it is made: the executable with output pipes of
+    /// its own and an environment cut off from the machine as the scripted walk-through's is, then
+    /// <paramref name="environment"/>'s variables added, or removed where their value is null.
+    /// </summary>
+    private static ProcessStartInfo StartInfoFor(string dataDirectory, IReadOnlyDictionary<string, string?>? environment)
+    {
         // The app gets output pipes of its own. If it inherited the test host's, a leftover app
         // window would keep "dotnet test" waiting for ever.
         var startInfo = new ProcessStartInfo(Executable)
@@ -258,38 +301,7 @@ public sealed partial class RealApp : IDisposable
             }
         }
 
-        var process = Process.Start(startInfo) ?? throw new InvalidOperationException("The app did not start.");
-        process.OutputDataReceived += (_, _) => { };
-        process.ErrorDataReceived += (_, _) => { };
-        process.BeginOutputReadLine();
-        process.BeginErrorReadLine();
-
-        var automation = new UIA3Automation();
-        try
-        {
-            // Attached by id: FlaUI then has a process object of its own. Given ours, it
-            // disposes it, and this class could no longer wait for the app or stop it.
-            var application = FlaUI.Core.Application.Attach(process.Id);
-            var window = application.GetMainWindow(automation, TimeSpan.FromSeconds(30))
-                ?? throw new TimeoutException("The app's main window did not appear within 30 seconds.");
-
-            var app = new RealApp(process, automation, application, window, dataDirectory);
-
-            // On top of everything else, so that the screen captures show the app and the mouse
-            // reaches it, whatever other windows are open.
-            NativeMethods.SetWindowPos(
-                app.Handle, NativeMethods.HwndTopMost, 0, 0, 0, 0,
-                NativeMethods.SwpNoMove | NativeMethods.SwpNoSize | NativeMethods.SwpShowWindow);
-            WaitUntilIdle();
-            return app;
-        }
-        catch
-        {
-            automation.Dispose();
-            Stop(process);
-            process.Dispose();
-            throw;
-        }
+        return startInfo;
     }
 
     /// <summary>Whether a client area of this size, plus the window frame, fits the work area of the screen.</summary>

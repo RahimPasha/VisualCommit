@@ -352,5 +352,17 @@ public static partial class Phase8aExpectations
 
         /// <summary>The minimum of git the checks read, never a literal (1.2).</summary>
         public static GitVersion Minimum => GitVersion.Minimum;
+
+        /// <summary>
+        /// Part F's resting point at 1100×700 (design 12.3.5): where the pointer
+        /// rests before the pictures of a too-old git, <c>f5a-too-old</c> (scripted and real window) and
+        /// <c>f10c-ubuntu-too-old</c>, instead of the neutral point. There <c>GitStatus</c>'s long text,
+        /// <c>Git 2.29.0 is too old (needs 2.34.1 or newer)</c>, covers the neutral point (760, 687), and a
+        /// real pointer resting on it opens its tooltip. This point is the status bar's empty middle, right
+        /// of <c>OperationStatus</c>'s <c>Ready</c> and left of <c>GitSetupButton</c>: no control with a
+        /// tooltip or a hover look lies under it. Headless no pointer is drawn, so the scripted pictures
+        /// are the same files at either point.
+        /// </summary>
+        public static readonly (double X, double Y) RestingPoint = (400, 687);
     }
 }

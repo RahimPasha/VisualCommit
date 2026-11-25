@@ -1,7 +1,9 @@
 using System.Globalization;
 using System.Text.Json;
+using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.VisualTree;
@@ -53,13 +55,36 @@ public sealed partial class Phase8aChecksF
         }
     }
 
-    /// <summary>A picture of part F: <see cref="Phase8aChecks.Shot"/>, then no text cut off, no tooltip open and the set-up button not hovered.</summary>
-    private static Screenshot Picture(ShellDriver app, string name)
+    /// <summary>
+    /// A picture of part F: <see cref="Phase8aChecks.Shot"/>, then no text cut off, no tooltip open and the
+    /// set-up button not hovered. With <paramref name="atRest"/> the pointer rests at part F's resting
+    /// point (<see cref="Phase8aExpectations.F.RestingPoint"/>) instead of the neutral point, which a
+    /// too-old git's long <c>GitStatus</c> text covers (design 12.3.5), and the point is shown to lie in
+    /// the status bar on no control with a tooltip and in no button.
+    /// </summary>
+    private static Screenshot Picture(ShellDriver app, string name, bool atRest = false)
     {
-        var shot = Shot(app, name);
+        var rest = new Point(F.RestingPoint.X, F.RestingPoint.Y);
+        if (atRest)
+        {
+            app.MoveMouse(rest);
+        }
+
+        var shot = Shot(app, name, keepPointer: atRest);
         AssertNoClippedText(app);
         Assert.False(ToolTip.GetIsOpen(app.FindByAutomationId(F.StatusId)), "GitStatus's tooltip is open in the picture.");
         Assert.False(app.FindByAutomationId(F.SetUpButtonId).IsPointerOver, "GitSetupButton is hovered in the picture.");
+        if (atRest)
+        {
+            // After the capture, which drew a frame for the hit test: what lies under the point.
+            Assert.Null(app.ToolTipOwnerAt(rest));
+            var hit = app.Window.InputHitTest(rest) as Visual;
+            Assert.NotNull(hit);
+            var path = hit.GetSelfAndVisualAncestors().OfType<Control>().ToList();
+            Assert.DoesNotContain(path, control => control is Button);
+            Assert.Contains(path, control => AutomationProperties.GetAutomationId(control) == "StatusBar");
+        }
+
         return shot;
     }
 

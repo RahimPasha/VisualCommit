@@ -32,6 +32,11 @@
     <!-- The shared test helpers: scenario repos (TempRepo, Scenarios), the git isolation and
          the session file that opens repositories when the app starts (D46). -->
     <ProjectReference Include="..\VisualCommit.Testing\VisualCommit.Testing.csproj" />
+
+    <!-- The stand-in for git (docs/phase-8a-design.md 1.1, 1.14): its app host,
+         visualcommit-git-stand-in.exe, lands in this project's output folder, where the first-run
+         launches name it (RealApp.StandInPath). -->
+    <ProjectReference Include="..\VisualCommit.GitStandIn\VisualCommit.GitStandIn.csproj" />
   </ItemGroup>
 
   <!-- Phase 3's expectations, shared with the scripted walk-through, so that the pass clicks and
@@ -75,6 +80,13 @@
        which the pattern does not match. -->
   <ItemGroup>
     <Compile Include="..\VisualCommit.VisualTests.Phase7b*\Phase7bExpectations*.cs" Link="Phase7b\%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <!-- Phase 8a's expectations, likewise (docs/phase-8a-design.md 0.3, 12.2); their own tests,
+       Phase8aExpectationTests.<part>.cs and Phase8aSupportTests.cs, are left out by their names,
+       which the pattern does not match. -->
+  <ItemGroup>
+    <Compile Include="..\VisualCommit.VisualTests.Phase8a*\Phase8aExpectations*.cs" Link="Phase8a\%(Filename)%(Extension)" />
   </ItemGroup>
 
   <ItemGroup>

@@ -242,7 +242,7 @@ public sealed partial class Phase8aChecksF : Phase8aChecks
 
         // Step 1.
         await app.WaitForGitSetupAsync(guidance: F.TooOldGuidanceWindows, choose: F.ChooseGitExe, winget: true);
-        Picture(app, F.F5aTooOld);
+        Picture(app, F.F5aTooOld, atRest: true);
         AssertTooOldOnWindows(app, title, body);
         Assert.Empty(app.GitCalls());
 
@@ -458,7 +458,7 @@ public sealed partial class Phase8aChecksF : Phase8aChecks
         using var app = await StartFirstRunAsync(data, new FakeGitSetupProbe(FakeGitSetupProbe.Linux(FakeGitSetupProbe.Ubuntu), FakeGitAnswer.TooOld(F.UnixGit, GitSource.Path, F.TooOldVersion)));
 
         await app.WaitForGitSetupAsync(guidance: F.TooOldGuidanceLinux, choose: F.ChooseGitProgram);
-        Picture(app, F.F10cUbuntuTooOld);
+        Picture(app, F.F10cUbuntuTooOld, atRest: true);
         AssertScreen(app, Format(F.TooOldTitleFormat, F.TooOldVersion), Format(F.TooOldBodyFormat, F.Minimum, F.TooOldVersion), F.UnixGit, null, F.TooOldGuidanceLinux, null);
         AssertOffers(app, [(F.ChooseId, F.ChooseGitProgram), (F.CheckAgainId, F.CheckAgain)], MoreAndGuide);
         AssertGitStatus(app, Format(F.GitTooOldStatusFormat, F.TooOldVersion, F.Minimum), OnPath(F.UnixGit), F.SetUpGit);
