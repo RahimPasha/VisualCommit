@@ -808,9 +808,9 @@ public partial class Phase8aRealWindowPass(Phase8aRun fixture) : IClassFixture<P
 /// <summary>
 /// The 8a pass's order and picture names (docs/phase-8a-design.md 12.4), and the rules of its steps that
 /// need no window (B1 (a)'s extraction from the built executable, B2's taskbar buttons, L6's missing
-/// rectangle), with no app and no window: the class constructs no fixture of the pass and touches nothing
-/// of the desktop. It runs in the whole pass, outside D246's filter, and alone with
-/// <c>--filter-class "*Phase8aOrderTests"</c>.
+/// rectangle, which failures of a read through UI Automation count as unreadable), with no app and no
+/// window: the class constructs no fixture of the pass and touches nothing of the desktop. It runs in the
+/// whole pass, outside D246's filter, and alone with <c>--filter-class "*Phase8aOrderTests"</c>.
 /// </summary>
 public class Phase8aOrderTests
 {
@@ -927,6 +927,29 @@ public class Phase8aOrderTests
         Assert.Equal("the ink rule's answer", Assert.Single(Phase8aRealWindowPass.HeadInk(name, what, InkRule, noted.Add)));
         Assert.Equal(name, Assert.Single(read));
         Assert.Empty(noted);
+    }
+
+    /// <summary>
+    /// Which failures of a read through UI Automation count as unreadable (<see cref="RealApp.IsReadFailure"/>): one
+    /// of each kind it names, a <see cref="System.ComponentModel.Win32Exception"/> among them, which FlaUI 5.0.0's
+    /// <c>Com.Call</c> throws for every <c>COMException</c> it does not turn into an exception of its own; an
+    /// exception of another kind, such as an <see cref="IOException"/>, does not count.
+    /// </summary>
+    [Fact]
+    public void A_Win32Exception_counts_as_a_failed_read_and_an_IOException_does_not()
+    {
+        Exception[] failures =
+        [
+            new ArgumentException("E_INVALIDARG"),
+            new System.Runtime.InteropServices.COMException("A call into UI Automation failed.", unchecked((int)0x80004005)),
+            new TimeoutException("UIA Timeout"),
+            new InvalidOperationException("UIA Invalid Operation"),
+            new FlaUI.Core.Exceptions.ElementNotAvailableException(),
+            new System.ComponentModel.Win32Exception(0, "A call into UI Automation failed."),
+        ];
+
+        Assert.All(failures, failure => Assert.True(RealApp.IsReadFailure(failure), $"{failure.GetType().Name} does not count as a failed read."));
+        Assert.False(RealApp.IsReadFailure(new IOException("No read through UI Automation.")));
     }
 
     /// <summary>
