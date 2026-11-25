@@ -48,6 +48,111 @@ public class TempFolderCleanerTests
         Assert.Equal(commit, (await GitInAsync(repo, bare, "rev-parse", "refs/heads/main")).Trim());
     }
 
+    [Fact]
+    public async Task A_working_copy_and_its_bare_clone_are_usable_with_mains_sha_each_as_its_own_kind()
+    {
+        using var repo = await SmallHistoryAsync();
+        var bare = repo.SiblingPath(SmallBare);
+        var main = await repo.HeadAsync();
+
+        Assert.True(await LargeHistory.IsUsableAsync(repo.Path, main, bare: false));
+        Assert.True(await LargeHistory.IsUsableAsync(bare, main, bare: true));
+        Assert.False(await LargeHistory.IsUsableAsync(repo.Path, main, bare: true));
+        Assert.False(await LargeHistory.IsUsableAsync(bare, main, bare: false));
+    }
+
+    [Fact]
+    public async Task A_bare_copy_that_lost_its_empty_folders_is_not_usable()
+    {
+        using var repo = await SmallHistoryAsync();
+        var bare = repo.SiblingPath(SmallBare);
+        var main = await repo.HeadAsync();
+
+        // Its refs are all in packed-refs, so refs held nothing but empty folders.
+        RemoveEmptyFolders(bare);
+        Assert.False(Directory.Exists(Path.Combine(bare, "refs")));
+
+        Assert.False(await LargeHistory.IsUsableAsync(bare, main, bare: true));
+    }
+
+    [Fact]
+    public async Task A_copy_whose_marker_names_another_commit_than_main_is_not_usable()
+    {
+        using var repo = await SmallHistoryAsync();
+        var first = (await repo.GitAsync("rev-parse", "main~2")).StandardOutput.Trim();
+
+        Assert.False(await LargeHistory.IsUsableAsync(repo.SiblingPath(SmallBare), first, bare: true));
+        Assert.False(await LargeHistory.IsUsableAsync(repo.Path, first, bare: false));
+    }
+
+    [Fact]
+    public async Task A_working_copy_whose_git_folder_lost_its_refs_is_not_usable()
+    {
+        using var repo = await SmallHistoryAsync();
+        var main = await repo.HeadAsync();
+
+        TempRepo.DeleteDirectory(Path.Combine(repo.Path, ".git", "refs"));
+
+        Assert.False(await LargeHistory.IsUsableAsync(repo.Path, main, bare: false));
+    }
+
+    [Fact]
+    public async Task A_bare_copy_whose_commit_is_gone_is_not_usable()
+    {
+        using var repo = await SmallHistoryAsync();
+        var bare = repo.SiblingPath(SmallBare);
+        var main = await repo.HeadAsync();
+
+        // A local clone copies the loose objects as they are: main's commit is a file of its own.
+        var commit = Path.Combine(bare, "objects", main[..2], main[2..]);
+        File.SetAttributes(commit, FileAttributes.Normal);
+        File.Delete(commit);
+
+        Assert.False(await LargeHistory.IsUsableAsync(bare, main, bare: true));
+    }
+
+    [Fact]
+    public void A_marker_names_a_copy_only_with_a_sha()
+    {
+        using var folder = new TempDirectory("marker");
+        var marker = folder.Combine("copy.complete");
+        const string Sha = "0123456789abcdef0123456789abcdef01234567";
+
+        Assert.Null(LargeHistory.MarkedSha(marker));
+        File.WriteAllText(marker, Sha + "\n");
+        Assert.Equal(Sha, LargeHistory.MarkedSha(marker));
+        File.WriteAllText(marker, string.Empty);
+        Assert.Null(LargeHistory.MarkedSha(marker));
+        File.WriteAllText(marker, "not a sha\n");
+        Assert.Null(LargeHistory.MarkedSha(marker));
+    }
+
+    /// <summary>The folder of <see cref="SmallHistoryAsync"/>'s bare clone, beside the working tree.</summary>
+    private const string SmallBare = "small.git";
+
+    /// <summary>
+    /// A repository with three commits on <c>main</c> and, beside it (<see cref="SmallBare"/>), a
+    /// bare clone of it as the shared bare copy is made (<c>git clone --bare --no-hardlinks</c>),
+    /// whose refs are all in <c>packed-refs</c>.
+    /// </summary>
+    private static async Task<TempRepo> SmallHistoryAsync()
+    {
+        var repo = await TempRepo.CreateAsync("small");
+        try
+        {
+            await repo.CommitFileAsync("a.txt", "a\n", "First");
+            await repo.CommitFileAsync("b.txt", "b\n", "Second");
+            await repo.CommitFileAsync("c.txt", "c\n", "Third");
+            await repo.GitAsync("clone", "--quiet", "--bare", "--no-hardlinks", repo.Path, repo.SiblingPath(SmallBare));
+            return repo;
+        }
+        catch
+        {
+            repo.Dispose();
+            throw;
+        }
+    }
+
     /// <summary>
     /// Removes every folder under <paramref name="folder"/> that holds nothing, from the bottom up
     /// and again until none is left, as the cleaner does: a folder that held only empty folders
