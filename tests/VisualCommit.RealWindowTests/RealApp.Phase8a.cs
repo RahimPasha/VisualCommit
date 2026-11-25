@@ -484,6 +484,13 @@ public sealed partial class RealApp
     public bool HasWindowOfProcess(int processId) => Win32.VisibleTopLevelWindowsOf((uint)processId).Count > 0;
 
     /// <summary>
+    /// How many visible top-level windows the app's process has now, as Windows lists them: one look, read
+    /// from Windows alone, for run.txt. When Windows fails to list its windows, a
+    /// <see cref="System.ComponentModel.Win32Exception"/>.
+    /// </summary>
+    public int VisibleWindowCount => Win32.VisibleTopLevelWindowsOf((uint)_process.Id).Count;
+
+    /// <summary>
     /// The visible top-level windows of a process as UI Automation elements, found in Windows' own list of
     /// windows and asked of UI Automation by their handles, never by a search of the desktop's children.
     /// Such a search makes UI Automation ask every program on the desktop, and one that answers slowly

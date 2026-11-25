@@ -238,21 +238,35 @@ public partial class Phase8aRealWindowPass
         // handle (RealApp.OtherWindowOfProcess), every window of the process offered to HasGitStatus: a
         // search of the desktop's children through UI Automation asks every program on the desktop, and this
         // wait ran out on such a search in about two runs of five, though the app had closed the notice
-        // within 0.1 s and opened its window within 1.5 s.
+        // within 0.1 s and opened its window within 1.5 s. Each look keeps what it read, so that a wait that
+        // runs out says which of its grounds did not hold.
         Window? main = null;
-        app.WaitFor(
-            () =>
-            {
-                if (!app.IsWindowGone)
+        var (noticeGone, windows) = (false, 0);
+        try
+        {
+            app.WaitFor(
+                () =>
                 {
-                    return false;
-                }
+                    noticeGone = app.IsWindowGone;
+                    windows = app.VisibleWindowCount;
+                    if (!noticeGone)
+                    {
+                        return false;
+                    }
 
-                main = app.OtherWindowOfProcess(HasGitStatus);
-                return main is not null;
-            },
-            "the main window, with GitStatus, in the notice's process, and the notice closed",
-            I.StartedHereWithin);
+                    main = app.OtherWindowOfProcess(HasGitStatus);
+                    return main is not null;
+                },
+                "the main window, with GitStatus, in the notice's process, and the notice closed",
+                I.StartedHereWithin);
+        }
+        catch (TimeoutException ex)
+        {
+            var look = MainWindowLook(noticeGone, windows, main is not null);
+            Note(string.Create(CultureInfo.InvariantCulture, $"no main window after {clock.Elapsed.TotalSeconds:0.0} s; the wait's last look: {look}"));
+            throw new TimeoutException($"{ex.Message} The wait's last look: {look}.", ex);
+        }
+
         Note(string.Create(CultureInfo.InvariantCulture, $"the main window \"{main!.Title}\" after {clock.Elapsed.TotalSeconds:0.0} s, the notice closed"));
 
         var (version, holder) = ReadInstanceFile(paths.InstanceFile);
@@ -418,6 +432,25 @@ public partial class Phase8aRealWindowPass
         app.WaitFor(() => ToolTipsShown(app).Count == 0, $"no tooltip in the notice before {name}", StepTimeout);
         using var shot = Capture(app, name, keepPointer: true);
         CompareMasked(app, shot, name);
+    }
+
+    /// <summary>
+    /// Launch 6's last look for the main window in words, for run.txt and the failure when its wait runs out:
+    /// its three grounds as read, whether the notice's window was gone (<see cref="RealApp.IsWindowGone"/>),
+    /// how many visible top-level windows the process had in Windows' list (<see cref="RealApp.VisibleWindowCount"/>)
+    /// and whether one of them was accepted (<see cref="RealApp.OtherWindowOfProcess"/>, <see cref="HasGitStatus"/>),
+    /// which is looked for only once the notice's window is gone.
+    /// </summary>
+    private static string MainWindowLook(bool noticeGone, int windows, bool accepted)
+    {
+        var notice = noticeGone ? "gone (IsWindow false)" : "still there (IsWindow true)";
+        var taken = (accepted, noticeGone) switch
+        {
+            (true, _) => "one of them accepted",
+            (false, true) => "none of them accepted (a window other than the notice, on the screen, with GitStatus in it)",
+            (false, false) => "none looked at, as the notice's window was still there",
+        };
+        return string.Create(CultureInfo.InvariantCulture, $"the notice's window {notice}; {windows} visible top-level windows of the process in Windows' list; {taken}");
     }
 
     /// <summary>Whether <paramref name="window"/> holds <c>GitStatus</c>, the status bar's git, as the main window does; false while UI Automation cannot read it yet (<see cref="RealApp.IsReadFailure"/>), to be looked at again.</summary>
