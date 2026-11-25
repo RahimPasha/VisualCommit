@@ -159,6 +159,8 @@ public class TempFolderCleanerTests
         using var root = new TempDirectory("unrecorded");
         using (Unopenable(info))
         {
+            // The state is the one meant: a walk that goes into the folder fails.
+            Assert.Throws<UnauthorizedAccessException>(() => Directory.EnumerateDirectories(bare, "*", SearchOption.AllDirectories).ToList());
             Assert.Throws<UnauthorizedAccessException>(() => TempRepo.CopyDirectory(bare, root.Combine(EmptyBare)));
         }
     }
