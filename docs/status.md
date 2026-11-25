@@ -368,10 +368,10 @@ Wave 4 and the review:
   13 of 13 after it). Two readers found the change sound and asked for hardening, which is built,
   read by an independent reader, merged (`640f728`; ruling 106) and run on the desktop: launch 6 six
   of six, the part 13 of 13, phase 6's S14 through the file dialog. **The lagged list passed**
-  (21:12 to 21:58 on `640f728`'s code: seven commands, 1,114 tests, none failed). Still open: CI's
-  run of that merge, the whole default run (started at 21:58) with its comparison, phase 1's check
-  11 and phase 6's W1 alone after it (the folder dialog), and the owner's answer on the dimmed
-  texts.
+  (21:12 to 21:58 on `640f728`'s code: seven commands, 1,114 tests, none failed). CI's run
+  45546009890 on that merge is green in all six jobs. Still open: the whole default run (started at
+  21:58) with its comparison, phase 1's check 11 and phase 6's W1 alone after it (the folder
+  dialog), and the owner's answer on the dimmed texts.
 
 Gate:
 
@@ -407,6 +407,17 @@ Phase 8a's runs on `phase/8a-release-readiness`, the newest first. CI has six jo
 `e04762b`: the sixth, "ubuntu 22.04 container, git 2.34 (the floor)", did not fail the run until
 `bba59c7`, which made it required after its first green run.
 
+- [45546009890](https://github.com/RahimPasha/VisualCommit/actions/runs/45546009890), for `26b6634`
+  (the hardening of the real-window harness's lookups, `640f728`, with ruling 106): **success in all
+  six jobs.** `windows-latest`: 8,882 tests, 8,875 passed, 7 skipped, Test step 43 min 30 s of 70;
+  it compiled the real-window project as merged. `macos-latest`: 8,879 tests, 8,876 passed, 3
+  skipped, Test step 33 min 13 s of 70. `ubuntu-latest`: 8,879 tests, 8,875 passed, 4 skipped, Test
+  step 5 min 37 s. The floor's job (git 2.34.1): 8,879 tests with 4 skipped, Test step 8 min 27 s;
+  the two containers 8,879 tests with 4 skipped each, Test steps 5 min 51 s with Microsoft's
+  installer and 8 min 10 s with Ubuntu's packages, and the Secret Service's test passed in both. The
+  Windows and macOS keychain steps passed. The push changed the real-window project and one comment
+  of phase 8a's walk-through, so the guide's workflow did not run. The push after it, `6be5e9c`,
+  changed only docs and started no run.
 - [45540349415](https://github.com/RahimPasha/VisualCommit/actions/runs/45540349415), for `985577a`
   (§12's merge `b24b44a`, the docs of the third and fourth rounds, the harness's lookup by handle
   `14789f7` and ruling 105): **success in all six jobs.** `windows-latest`: 8,882 tests, 8,875
@@ -1030,13 +1041,13 @@ classes 126 and phase 8a's project 341, the classes the fixes added that start t
 six jobs, and the guide workflow's run on it too (the CI section). **The whole default run is under
 way** (`bash scripts/heavy-run.sh`, started at 21:58 on `26b6634`, whose code is `640f728`'s, in the
 background; its log `D:/Projects/Personal/phase8-work/wave4/default-step19/run.log`; no agent works
-beside it). **Next for the lead, in this order:** (1) read CI's run 45546009890 of the push that
-carries `640f728` and record it; (2) read the whole default run's result; it also writes again the
-scripted pictures that partial runs emptied (phase 1's and phase 6's folders held 3 and 9 on the
+beside it). CI's run 45546009890 on the hardening's merge is green in all six jobs (the CI section).
+**Next for the lead, in this order:** (1) read the whole default run's result; it also writes again
+the scripted pictures that partial runs emptied (phase 1's and phase 6's folders held 3 and 9 on the
 laptop), then the comparison of its pictures with wave 3's references
 (`D:/Projects/Personal/phase8-work/references/wave3/`) and the new references for the gate (ruling
-102); (3) phase 1's check 11 and phase 6's W1 alone in the real window, the owner told, for the
-folder dialog's wait (ruling 106); (4) the owner's answer on the dimmed texts ("Waiting on the
+102); (2) phase 1's check 11 and phase 6's W1 alone in the real window, the owner told, for the
+folder dialog's wait (ruling 106); (3) the owner's answer on the dimmed texts ("Waiting on the
 owner"), asked with the gate's start, which needs the owner present anyway: the gate's own default
 run takes the pictures a change of those colours would change; then step 19 is ticked. The package
 is reviewed with the rest in step 19 and merged last, in that step. The three finished worktrees
