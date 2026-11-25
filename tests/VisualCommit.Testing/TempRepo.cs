@@ -705,15 +705,21 @@ public sealed class TempRepo : IDisposable
 
     /// <summary>
     /// The folders under this repository's temporary folder when it was kept as a scenario's
-    /// template (<see cref="RecordFolders"/>), each by its path relative to that folder; empty for a
-    /// repository that was never kept.
+    /// template (<see cref="RecordFolders"/>), each by its path relative to that folder, which
+    /// <see cref="CopyAsync"/> makes in every copy; empty for a repository that was never kept, whose
+    /// copies hold what it holds.
     /// </summary>
     internal IReadOnlyList<string> KeptFolders { get; private set; } = [];
 
     /// <summary>
     /// Records every folder under this repository's temporary folder as it is now
     /// (<see cref="KeptFolders"/>), read from the disk with one listing: for a template that
-    /// <c>Scenarios</c> keeps for the whole test process, or a test's own.
+    /// <c>Scenarios</c> keeps for the whole test process, or a test's own. A template lives as long
+    /// as the process, and a cleaner of the temp folder that removes every empty folder, whatever its
+    /// age, as Windows' Storage Sense does when the disk runs low, strips it while it runs: a bare
+    /// repository that nothing was pushed to keeps its <c>HEAD</c> and loses <c>refs</c> and
+    /// <c>objects</c>, which held only empty folders, and every git folder loses its empty
+    /// <c>hooks</c> (the laptop on 2026-11-24). Every copy made after it has them again.
     /// </summary>
     internal void RecordFolders() => KeptFolders = FoldersIn(_root.Path);
 
@@ -723,14 +729,15 @@ public sealed class TempRepo : IDisposable
     /// pointed at the copy, and linked worktrees that lay in the old folder joined to the copy
     /// (<c>git worktree repair</c>). The copy's clock carries on from this one's, separately.
     /// Copying a built scenario is much faster than building it again, because building runs git
-    /// dozens of times.
+    /// dozens of times. The copy of a kept template also has every folder the template had when it
+    /// was kept (<see cref="KeptFolders"/>).
     /// </summary>
     public async Task<TempRepo> CopyAsync()
     {
         var root = new TempDirectory(System.IO.Path.GetFileName(Path));
         try
         {
-            CopyDirectory(_root.Path, root.Path);
+            CopyDirectory(_root.Path, root.Path, KeptFolders);
             var copy = new TempRepo(root, root.Combine(System.IO.Path.GetFileName(Path))) { _clock = new Clock(_clock.Now) };
 
             foreach (var (remote, url) in await copy.RemoteUrlsAsync())

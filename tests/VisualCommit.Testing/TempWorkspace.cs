@@ -99,30 +99,34 @@ public sealed class TempWorkspace : IDisposable
 
     /// <summary>
     /// The folders under the workspace's folder when it was kept as a template
-    /// (<see cref="RecordFolders"/>), each by its path relative to that folder; empty for a
-    /// workspace that was never kept.
+    /// (<see cref="RecordFolders"/>), each by its path relative to that folder, which
+    /// <see cref="CopyAsync"/> makes in every copy; empty for a workspace that was never kept, whose
+    /// copies hold what it holds.
     /// </summary>
     internal IReadOnlyList<string> KeptFolders { get; private set; } = [];
 
     /// <summary>
     /// Records every folder under the workspace's folder as it is now (<see cref="KeptFolders"/>),
     /// read from the disk with one listing: for the template that <c>Scenarios</c> keeps for the
-    /// whole test process, or a test's own.
+    /// whole test process, or a test's own. A cleaner of the temp folder strips the template while
+    /// the process runs, as <see cref="TempRepo.RecordFolders"/> tells; every copy made after it has
+    /// the folders again.
     /// </summary>
     internal void RecordFolders() => KeptFolders = TempRepo.FoldersIn(_root.Path);
 
     /// <summary>
     /// An independent copy of the whole folder in a new temporary folder, made by copying files
-    /// (<see cref="TempRepo.CopyDirectory"/>) and nothing else: no git process, and so nothing in
-    /// <see cref="Calls"/> of either. The relative URLs point the copy's repositories at the copy's
-    /// remotes.
+    /// (<see cref="TempRepo.CopyDirectory(string, string, IReadOnlyList{string})"/>) and nothing
+    /// else: no git process, and so nothing in <see cref="Calls"/> of either. The relative URLs point
+    /// the copy's repositories at the copy's remotes. The copy of a kept template also has every
+    /// folder the template had when it was kept (<see cref="KeptFolders"/>).
     /// </summary>
     public Task<TempWorkspace> CopyAsync()
     {
         var root = new TempDirectory("workspace");
         try
         {
-            TempRepo.CopyDirectory(_root.Path, root.Path);
+            TempRepo.CopyDirectory(_root.Path, root.Path, KeptFolders);
             return Task.FromResult(new TempWorkspace(root, _clocks, new GitCallLog()));
         }
         catch
