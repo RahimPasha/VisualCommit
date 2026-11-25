@@ -269,7 +269,7 @@ public static partial class Scenarios
     /// <summary>Makes <paramref name="bare"/> as a copy of the blank bare repository, on <c>main</c>, and pushes <paramref name="refspecs"/> to it in one push (none: it stays empty).</summary>
     private static async Task PushToNewBareAsync(TempRepo repo, string bare, string[] refspecs)
     {
-        TempRepo.CopyDirectory(await TempRepo.BlankBareFolderAsync().ConfigureAwait(false), bare);
+        (await TempRepo.BlankBareFolderAsync().ConfigureAwait(false)).CopyTo(bare);
         await File.WriteAllTextAsync(Path.Combine(bare, "HEAD"), "ref: refs/heads/main\n").ConfigureAwait(false);
         if (refspecs.Length > 0)
         {

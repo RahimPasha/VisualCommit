@@ -328,11 +328,33 @@ public static partial class Scenarios
         where T : IDisposable =>
         HangWatchdogAttribute.SharedPreparationAsync($"the {scenario} scenario's template", template.Value);
 
-    /// <summary>Deletes a shared template when the test process ends.</summary>
-    private static async Task<T> KeepUntilExit<T>(Task<T> building)
+    /// <summary>
+    /// Keeps a built repository as a shared template until the test process ends, and deletes it
+    /// then. Its folders are recorded first (<see cref="TempRepo.RecordFolders"/>), before any copy
+    /// is made, so that every copy has them, whatever a cleaner of the temp folder removes from the
+    /// template while the process runs.
+    /// </summary>
+    private static async Task<TempRepo> KeepUntilExit(Task<TempRepo> building) =>
+        Keep(await building.ConfigureAwait(false), template => template.RecordFolders());
+
+    /// <summary>Keeps the built workspace as a shared template, as <see cref="KeepUntilExit(Task{TempRepo})"/> keeps a repository (<see cref="TempWorkspace.RecordFolders"/>).</summary>
+    private static async Task<TempWorkspace> KeepUntilExit(Task<TempWorkspace> building) =>
+        Keep(await building.ConfigureAwait(false), template => template.RecordFolders());
+
+    /// <summary>Records a shared template's folders with <paramref name="recordFolders"/>, and deletes the template when the test process ends, or at once when the record fails.</summary>
+    private static T Keep<T>(T template, Action<T> recordFolders)
         where T : IDisposable
     {
-        var template = await building.ConfigureAwait(false);
+        try
+        {
+            recordFolders(template);
+        }
+        catch
+        {
+            template.Dispose();
+            throw;
+        }
+
         AppDomain.CurrentDomain.ProcessExit += (_, _) => template.Dispose();
         return template;
     }

@@ -135,12 +135,12 @@ public sealed class TempRepo : IDisposable
         {
             var path = root.Combine(name);
             var gitFolder = System.IO.Path.Combine(path, ".git");
-            CopyDirectory(blank, gitFolder);
+            blank.CopyTo(gitFolder);
 
             // Git for Windows hides the git folder it makes (core.hideDotFiles); so is the copy.
             if (OperatingSystem.IsWindows())
             {
-                File.SetAttributes(gitFolder, File.GetAttributes(blank));
+                File.SetAttributes(gitFolder, File.GetAttributes(blank.Path));
             }
 
             return new TempRepo(root, path);
@@ -183,10 +183,10 @@ public sealed class TempRepo : IDisposable
     ];
 
     /// <summary>The git folders of the blank repositories, one per initial branch (or <see cref="BareKey"/>), made once per test process.</summary>
-    private static readonly ConcurrentDictionary<string, Lazy<Task<string>>> BlankGitFolders = new(StringComparer.Ordinal);
+    private static readonly ConcurrentDictionary<string, Lazy<Task<BlankGitFolder>>> BlankGitFolders = new(StringComparer.Ordinal);
 
-    /// <summary>The key of the blank bare repository in <see cref="BlankGitFolders"/>: no branch name can be empty.</summary>
-    private const string BareKey = "";
+    /// <summary>The key of the blank bare repository in <see cref="BlankGitFolders"/>, and the branch <see cref="MakeBlankGitFolderAsync"/> takes for it: no branch name can be empty.</summary>
+    internal const string BareKey = "";
 
     /// <summary>
     /// The git folder of a repository that <c>git init --initial-branch <paramref name="initialBranch"/></c>
@@ -195,40 +195,56 @@ public sealed class TempRepo : IDisposable
     /// <see cref="BareRemoteSettings"/> set. Made once per test process, in a folder of its own
     /// under the tests' temp folder like every other repository (git probes that file system for
     /// its <c>core</c> settings), and deleted when the process ends. A git folder holds no path of
-    /// its own, so a copy of it is a repository of its own.
+    /// its own, so a copy of it is a repository of its own. Copy it with
+    /// <see cref="BlankGitFolder.CopyTo"/>.
     /// </summary>
-    internal static Task<string> BlankGitFolderAsync(string initialBranch) =>
-        BlankGitFolders.GetOrAdd(initialBranch, key => new Lazy<Task<string>>(() => MakeBlankGitFolderAsync(key))).Value;
+    internal static Task<BlankGitFolder> BlankGitFolderAsync(string initialBranch) =>
+        BlankGitFolders.GetOrAdd(initialBranch, key => new Lazy<Task<BlankGitFolder>>(() => MakeProcessBlankGitFolderAsync(key))).Value;
 
     /// <summary>The blank bare repository's folder (<see cref="BlankGitFolderAsync"/> with <see cref="BareKey"/>), for builders that copy it themselves (the workspace's <c>LeanRepositories</c>).</summary>
-    internal static Task<string> BlankBareFolderAsync() => BlankGitFolderAsync(BareKey);
+    internal static Task<BlankGitFolder> BlankBareFolderAsync() => BlankGitFolderAsync(BareKey);
 
-    private static async Task<string> MakeBlankGitFolderAsync(string initialBranch)
+    /// <summary>The process's blank git folder for <paramref name="initialBranch"/>, in a folder of its own that is deleted when the process ends.</summary>
+    private static async Task<BlankGitFolder> MakeProcessBlankGitFolderAsync(string initialBranch)
     {
         var root = new TempDirectory("blank");
         try
         {
-            var bare = initialBranch.Length == 0;
-            var path = root.Combine("blank");
-            Directory.CreateDirectory(path);
-            var blank = new TempRepo(root, path);
-            string[] init = bare ? ["init", "--quiet", "--bare"] : ["init", "--quiet", "--initial-branch", initialBranch];
-            await blank.GitAsync(init);
-            foreach (var (key, value) in bare ? BareRemoteSettings : RepositorySettings)
-            {
-                await blank.ConfigAsync(key, value);
-            }
-
-            var gitFolder = bare ? path : System.IO.Path.Combine(path, ".git");
-            RemoveHookSamples(gitFolder);
+            var blank = await MakeBlankGitFolderAsync(root, initialBranch);
             AppDomain.CurrentDomain.ProcessExit += (_, _) => root.Dispose();
-            return gitFolder;
+            return blank;
         }
         catch
         {
             root.Dispose();
             throw;
         }
+    }
+
+    /// <summary>
+    /// Makes a blank git folder as <see cref="BlankGitFolderAsync"/> describes it in
+    /// <c><paramref name="root"/>/blank</c>, which goes with <paramref name="root"/>: the process's
+    /// own blanks, and a test's own blank that it may change as it likes, where the process's are
+    /// copied by every other test of the process.
+    /// </summary>
+    internal static async Task<BlankGitFolder> MakeBlankGitFolderAsync(TempDirectory root, string initialBranch)
+    {
+        ArgumentNullException.ThrowIfNull(root);
+        ArgumentNullException.ThrowIfNull(initialBranch);
+        var bare = initialBranch.Length == 0;
+        var path = root.Combine("blank");
+        Directory.CreateDirectory(path);
+        var blank = new TempRepo(root, path);
+        string[] init = bare ? ["init", "--quiet", "--bare"] : ["init", "--quiet", "--initial-branch", initialBranch];
+        await blank.GitAsync(init);
+        foreach (var (key, value) in bare ? BareRemoteSettings : RepositorySettings)
+        {
+            await blank.ConfigAsync(key, value);
+        }
+
+        var gitFolder = bare ? path : System.IO.Path.Combine(path, ".git");
+        RemoveHookSamples(gitFolder);
+        return BlankGitFolder.Record(gitFolder);
     }
 
     /// <summary>
@@ -667,7 +683,7 @@ public sealed class TempRepo : IDisposable
     public async Task<string> AddBareRemoteAsync(string name = "origin", bool relative = false)
     {
         var barePath = _root.Combine(name + ".git");
-        CopyDirectory(await BlankGitFolderAsync(BareKey), barePath);
+        (await BlankGitFolderAsync(BareKey)).CopyTo(barePath);
         await GitAsync("remote", "add", name, relative ? "../" + name + ".git" : barePath);
         return barePath;
     }
@@ -688,19 +704,42 @@ public sealed class TempRepo : IDisposable
     }
 
     /// <summary>
+    /// The folders under this repository's temporary folder when it was kept as a scenario's
+    /// template (<see cref="RecordFolders"/>), each by its path relative to that folder, which
+    /// <see cref="CopyAsync"/> makes in every copy; empty for a repository that was never kept, whose
+    /// copies hold what it holds.
+    /// </summary>
+    internal IReadOnlyList<string> KeptFolders { get; private set; } = [];
+
+    /// <summary>
+    /// Records every folder under this repository's temporary folder as it is now
+    /// (<see cref="KeptFolders"/>), read from the disk with one listing: for a template that
+    /// <c>Scenarios</c> keeps for the whole test process, or a test's own. A template lives as long
+    /// as the process, and a cleaner of the temp folder that removes every empty folder, whatever its
+    /// age, as Windows' Storage Sense does when the disk runs low, strips it while it runs: a bare
+    /// repository that nothing was pushed to keeps its <c>HEAD</c> and loses <c>refs</c> and
+    /// <c>objects</c>, which held only empty folders, and every git folder loses its empty
+    /// <c>hooks</c> (the laptop on 2026-11-24). Every copy made after it has them again. A record
+    /// that a cleaner reached first is refused (<see cref="TemplateFoldersIn"/>).
+    /// </summary>
+    /// <exception cref="InvalidOperationException">A git folder under the repository's temporary folder holds no <c>refs</c> or no <c>objects</c>; nothing is recorded.</exception>
+    internal void RecordFolders() => KeptFolders = TemplateFoldersIn(_root.Path);
+
+    /// <summary>
     /// Makes an independent copy of this repository and everything next to it (bare remotes,
     /// clones) in a new temporary folder, with remote URLs that pointed into the old folder
     /// pointed at the copy, and linked worktrees that lay in the old folder joined to the copy
     /// (<c>git worktree repair</c>). The copy's clock carries on from this one's, separately.
     /// Copying a built scenario is much faster than building it again, because building runs git
-    /// dozens of times.
+    /// dozens of times. The copy of a kept template also has every folder the template had when it
+    /// was kept (<see cref="KeptFolders"/>).
     /// </summary>
     public async Task<TempRepo> CopyAsync()
     {
         var root = new TempDirectory(System.IO.Path.GetFileName(Path));
         try
         {
-            CopyDirectory(_root.Path, root.Path);
+            CopyDirectory(_root.Path, root.Path, KeptFolders);
             var copy = new TempRepo(root, root.Combine(System.IO.Path.GetFileName(Path))) { _clock = new Clock(_clock.Now) };
 
             foreach (var (remote, url) in await copy.RemoteUrlsAsync())
@@ -841,6 +880,66 @@ public sealed class TempRepo : IDisposable
         }
     }
 
+    /// <summary>
+    /// Copies <paramref name="from"/> as <see cref="CopyDirectory(string, string)"/> does, and then
+    /// makes each of <paramref name="folders"/>, paths relative to <paramref name="to"/>, in the copy:
+    /// the folders <paramref name="from"/> held when they were recorded (<see cref="FoldersIn"/>),
+    /// whatever became of them since. A folder the copy already has costs a look and nothing more.
+    /// </summary>
+    internal static void CopyDirectory(string from, string to, IReadOnlyList<string> folders)
+    {
+        ArgumentNullException.ThrowIfNull(folders);
+        CopyDirectory(from, to);
+        foreach (var folder in folders)
+        {
+            Directory.CreateDirectory(System.IO.Path.Combine(to, folder));
+        }
+    }
+
+    /// <summary>
+    /// Every folder under <paramref name="folder"/> as it is now, by its path relative to it, in
+    /// ordinal order: read from the disk with one listing, for <see cref="CopyDirectory(string, string, IReadOnlyList{string})"/>
+    /// to make again in a copy.
+    /// </summary>
+    internal static List<string> FoldersIn(string folder)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(folder);
+        return Directory.EnumerateDirectories(folder, "*", SearchOption.AllDirectories)
+            .Select(directory => System.IO.Path.GetRelativePath(folder, directory))
+            .Order(StringComparer.Ordinal)
+            .ToList();
+    }
+
+    /// <summary>
+    /// Every folder under a template's folder <paramref name="root"/> as it is now
+    /// (<see cref="FoldersIn"/>), for a template's record (<see cref="RecordFolders"/>,
+    /// <see cref="TempWorkspace.RecordFolders"/>), refused as <see cref="BlankGitFolder.Record"/>
+    /// refuses a blank's when a git folder in it has no <c>refs</c> or no <c>objects</c>: a cleaner of
+    /// the temp folder took them while the template was built, after an empty bare repository was
+    /// made and before the folders were read, and no copy of that git folder would be a repository.
+    /// A git folder here is a recorded folder that holds both a <c>HEAD</c> and a <c>config</c> file,
+    /// as a working repository's <c>.git</c> and a bare repository do; a linked worktree's folder
+    /// under <c>.git/worktrees</c> and <c>.git/logs</c> hold a <c>HEAD</c> and no <c>config</c>, and
+    /// are none. It costs one look for a <c>HEAD</c> in each folder, and one for a <c>config</c> where
+    /// there is one.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">A git folder under <paramref name="root"/> holds no <c>refs</c> or no <c>objects</c>.</exception>
+    internal static List<string> TemplateFoldersIn(string root)
+    {
+        var folders = FoldersIn(root);
+        var recorded = folders.ToHashSet(StringComparer.Ordinal);
+        var stripped = folders
+            .Where(folder => File.Exists(System.IO.Path.Combine(root, folder, "HEAD")) && File.Exists(System.IO.Path.Combine(root, folder, "config")))
+            .Where(folder => !recorded.Contains(System.IO.Path.Combine(folder, "refs")) || !recorded.Contains(System.IO.Path.Combine(folder, "objects")))
+            .ToList();
+        if (stripped.Count > 0)
+        {
+            throw new InvalidOperationException($"The template {root} lost the refs or objects folder of these git folders before its folders were recorded: [{string.Join(", ", stripped)}].");
+        }
+
+        return folders;
+    }
+
     /// <summary>The SHA of the current commit.</summary>
     public async Task<string> HeadAsync() => (await GitAsync("rev-parse", "HEAD")).StandardOutput.Trim();
 
@@ -896,6 +995,58 @@ public sealed class TempRepo : IDisposable
 
             Now = time;
         }
+    }
+}
+
+/// <summary>
+/// A blank git folder (<see cref="TempRepo.BlankGitFolderAsync"/>), which a repository starts as a
+/// copy of, and the folders that <c>git init</c> made in it, recorded right after it was made.
+/// </summary>
+/// <param name="path">The git folder.</param>
+/// <param name="folders">Every folder in it then, by its path relative to it.</param>
+internal sealed class BlankGitFolder(string path, IReadOnlyList<string> folders)
+{
+    /// <summary>The git folder: a working repository's <c>.git</c>, or the bare repository itself.</summary>
+    public string Path { get; } = path;
+
+    /// <summary>Every folder the git folder held when it was made, by its path relative to it (<c>refs</c>, <c>refs/heads</c>, <c>objects/pack</c>).</summary>
+    public IReadOnlyList<string> Folders { get; } = folders;
+
+    /// <summary>
+    /// The blank git folder <paramref name="gitFolder"/> with every folder it holds now, read right
+    /// after <c>git init</c> made it (<see cref="TempRepo.MakeBlankGitFolderAsync"/>): the folders as
+    /// git left them, read here and not written down in the code, as each version of git may make
+    /// its own set (the sets of 2.34, the floor, and 2.56 may differ: only 2.56's was looked at).
+    /// Only <c>refs</c> and <c>objects</c> are asked for, as git takes no folder without them for a
+    /// repository, whatever its version.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">The folder holds no <c>refs</c> or no <c>objects</c>: a cleaner of the temp folder took them before they were read, and no copy would be a repository.</exception>
+    public static BlankGitFolder Record(string gitFolder)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(gitFolder);
+        var folders = TempRepo.FoldersIn(gitFolder);
+        if (!folders.Contains("refs", StringComparer.Ordinal) || !folders.Contains("objects", StringComparer.Ordinal))
+        {
+            throw new InvalidOperationException($"The blank git folder {gitFolder} lost its refs or objects folder before its folders were recorded: [{string.Join(", ", folders)}].");
+        }
+
+        return new BlankGitFolder(gitFolder, folders);
+    }
+
+    /// <summary>
+    /// Copies the blank git folder to <paramref name="to"/>, which must not hold any of its files
+    /// yet, and then makes each of <see cref="Folders"/> in the copy. Every copy of a blank folder
+    /// is made here. The folders are made whatever became of the blank's own since: a cleaner of
+    /// the temp folder that removes every empty folder, whatever its age, as Windows' Storage Sense
+    /// does when the disk runs low, removes the blank's empty ones (<c>hooks</c>,
+    /// <c>objects/pack</c>, <c>refs/heads</c>, <c>refs/tags</c> ...) while the test process it lives
+    /// for runs, and then <c>refs</c>, which held nothing else. Git takes no folder without
+    /// <c>refs</c> for a repository.
+    /// </summary>
+    public void CopyTo(string to)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(to);
+        TempRepo.CopyDirectory(Path, to, Folders);
     }
 }
 
