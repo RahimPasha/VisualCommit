@@ -154,14 +154,18 @@ public static class LargeHistory
 
     /// <summary>
     /// The bare copy of <paramref name="working"/>, made beside it with a marker of its own as
-    /// <see cref="GetOrBuildAsync"/> makes the working tree's repo. A test can make it beside a
-    /// small working copy of its own, which leaves the shared folder alone.
+    /// <see cref="GetOrBuildAsync"/> makes the working tree's repo: cloned into a folder of its own
+    /// in the same folder, moved into place whole and marked after the move, so that no half-made
+    /// copy is ever at the final path, where a test process that proved the copy before reads it
+    /// without the lock. A test can make it beside a small working copy of its own, which leaves the
+    /// shared folder alone.
     /// </summary>
     internal static async Task<string> GetOrBuildBareAsync(string working)
     {
         var shared = Path.GetDirectoryName(working)!;
         var final = Path.Combine(shared, $"large-history-{Version}.git");
         var marker = final + ".complete";
+        var partial = final + ".partial";
 
         // Test processes of one run start at the same time: one makes the copy, the others wait for it.
         using var lockFile = await LockAsync(final + ".lock").ConfigureAwait(false);
@@ -175,16 +179,23 @@ public static class LargeHistory
         // (IsUsableAsync): either is made again.
         DeleteCopy(final, marker);
 
+        // A clone left from a make that did not finish goes first.
+        if (Directory.Exists(partial))
+        {
+            DeleteDirectory(partial);
+        }
+
         // Its own object files, not links to the working tree's repo's: nothing done to one can
         // reach the other.
         using var home = new TempDirectory("large-bare");
         var environment = TempRepo.IsolatedEnvironment(home.Combine("home"));
         var runner = new GitRunner(TempRepo.GitPath);
-        var clone = new GitCommand("clone", "--quiet", "--bare", "--no-hardlinks", working, final) { WorkingDirectory = shared, Environment = environment };
+        var clone = new GitCommand("clone", "--quiet", "--bare", "--no-hardlinks", working, partial) { WorkingDirectory = shared, Environment = environment };
         (await runner.RunAsync(clone).ConfigureAwait(false)).EnsureSuccess(clone);
-        var main = new GitCommand("rev-parse", "refs/heads/main") { WorkingDirectory = final, Environment = environment };
+        var main = new GitCommand("rev-parse", "refs/heads/main") { WorkingDirectory = partial, Environment = environment };
         var head = (await runner.RunAsync(main).ConfigureAwait(false)).EnsureSuccess(main).StandardOutput.Trim();
 
+        Directory.Move(partial, final);
         File.WriteAllText(marker, head + "\n");
         return final;
     }
