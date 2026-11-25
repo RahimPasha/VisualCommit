@@ -244,14 +244,7 @@ public sealed class TempRepo : IDisposable
 
         var gitFolder = bare ? path : System.IO.Path.Combine(path, ".git");
         RemoveHookSamples(gitFolder);
-
-        // The folders as git left them, read here and not written down in the code: each version
-        // of git makes its own set (2.34, the floor, and 2.56 differ).
-        var folders = Directory.EnumerateDirectories(gitFolder, "*", SearchOption.AllDirectories)
-            .Select(folder => System.IO.Path.GetRelativePath(gitFolder, folder))
-            .Order(StringComparer.Ordinal)
-            .ToList();
-        return new BlankGitFolder(gitFolder, folders);
+        return BlankGitFolder.Record(gitFolder);
     }
 
     /// <summary>
@@ -935,6 +928,22 @@ internal sealed class BlankGitFolder(string path, IReadOnlyList<string> folders)
 
     /// <summary>Every folder the git folder held when it was made, by its path relative to it (<c>refs</c>, <c>refs/heads</c>, <c>objects/pack</c>).</summary>
     public IReadOnlyList<string> Folders { get; } = folders;
+
+    /// <summary>
+    /// The blank git folder <paramref name="gitFolder"/> with every folder it holds now, read right
+    /// after <c>git init</c> made it (<see cref="TempRepo.MakeBlankGitFolderAsync"/>): the folders as
+    /// git left them, read here and not written down in the code, as each version of git makes its
+    /// own set (2.34, the floor, and 2.56 differ).
+    /// </summary>
+    public static BlankGitFolder Record(string gitFolder)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(gitFolder);
+        var folders = Directory.EnumerateDirectories(gitFolder, "*", SearchOption.AllDirectories)
+            .Select(folder => System.IO.Path.GetRelativePath(gitFolder, folder))
+            .Order(StringComparer.Ordinal)
+            .ToList();
+        return new BlankGitFolder(gitFolder, folders);
+    }
 
     /// <summary>
     /// Copies the blank git folder to <paramref name="to"/>, which must not hold any of its files

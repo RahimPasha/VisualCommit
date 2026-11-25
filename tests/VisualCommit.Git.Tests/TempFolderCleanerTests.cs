@@ -49,6 +49,22 @@ public class TempFolderCleanerTests
     }
 
     [Fact]
+    public async Task A_blank_git_folder_is_not_recorded_without_the_folders_git_needs()
+    {
+        // A cleaner that ran between git init and the record would leave a list without refs or
+        // objects, and every copy made from it would be no repository: the record refuses it.
+        using var root = new TempDirectory("stripped");
+        var blank = await TempRepo.MakeBlankGitFolderAsync(root, "main");
+        Assert.Contains("refs", blank.Folders);
+        Assert.Contains("objects", blank.Folders);
+
+        RemoveEmptyFolders(blank.Path);
+
+        var refused = Assert.Throws<InvalidOperationException>(() => BlankGitFolder.Record(blank.Path));
+        Assert.Contains(blank.Path, refused.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task A_working_copy_and_its_bare_clone_are_usable_with_mains_sha_each_as_its_own_kind()
     {
         using var repo = await SmallHistoryAsync();
