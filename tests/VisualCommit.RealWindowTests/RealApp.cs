@@ -412,10 +412,11 @@ public sealed partial class RealApp : IDisposable
             $"the folder dialog \"{title}\"",
             timeout);
 
+        var handle = HandleOf(dialog!);
         var box = DialogControl(dialog!, "1152", "the folder dialog's folder box", timeout).AsTextBox();
         box.Text = folder;
         DialogButton(dialog!, "the folder dialog's confirm button", timeout).Invoke();
-        WaitFor(() => !Window.ModalWindows.Any(window => TitleOf(window) == title), "the folder dialog to close", timeout);
+        WaitForDialogClosed(handle, title, "the folder dialog to close", timeout);
         WaitUntilIdle();
     }
 
@@ -457,6 +458,8 @@ public sealed partial class RealApp : IDisposable
             $"the file dialog \"{title}\"",
             timeout);
 
+        var handle = HandleOf(dialog!);
+
         // The box is an edit inside the file name combo box (1148), or the combo box itself.
         var name = DialogControl(dialog!, "1148", "the file dialog's file name box", timeout);
         var box = name.FindFirstDescendant(condition => condition.ByControlType(FlaUI.Core.Definitions.ControlType.Edit))?.AsTextBox()
@@ -469,9 +472,30 @@ public sealed partial class RealApp : IDisposable
         // automation id 1 as well) outlasted 30 s at the phase 6 gate's second and third passes.
         box.Focus();
         PressKey(VirtualKeyShort.RETURN);
-        WaitFor(() => !Window.ModalWindows.Any(window => TitleOf(window) == title), "the file dialog to close", timeout);
+        WaitForDialogClosed(handle, title, "the file dialog to close", timeout);
         WaitUntilIdle();
     }
+
+    /// <summary>
+    /// A platform dialog's window handle, read once when the dialog is found, for its close
+    /// (<see cref="WaitForDialogClosed"/>); zero when UI Automation gives none or the read fails
+    /// (<see cref="IsReadFailure"/>).
+    /// </summary>
+    private static IntPtr HandleOf(Window dialog) => ReadOr(() => dialog.Properties.NativeWindowHandle.ValueOrDefault, IntPtr.Zero);
+
+    /// <summary>
+    /// Waits until the platform dialog <paramref name="title"/> has closed. With its window handle, until
+    /// Windows says that window is gone or hidden (<see cref="IsGoneFromDesktop"/>): the wait asks UI
+    /// Automation nothing about a dialog that is going, and a dialog found only among the app's top-level
+    /// windows, which <see cref="Window"/>'s modal windows never list, is waited for too instead of counting
+    /// as closed at the first look. With a handle of zero, until those modal windows list no window of that
+    /// title, as before.
+    /// </summary>
+    private void WaitForDialogClosed(IntPtr handle, string title, string what, TimeSpan timeout) =>
+        WaitFor(
+            () => handle == IntPtr.Zero ? !Window.ModalWindows.Any(window => TitleOf(window) == title) : IsGoneFromDesktop(handle),
+            what,
+            timeout);
 
     /// <summary>
     /// The control <paramref name="automationId"/> of a platform dialog, waited for: the dialog's

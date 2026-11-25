@@ -132,6 +132,14 @@ public sealed partial class RealApp
     public bool IsWindowGone => !Win32.IsWindow(Handle);
 
     /// <summary>
+    /// Whether the top-level window <paramref name="window"/> has left the desktop, read from Windows alone:
+    /// destroyed (<c>IsWindow</c> false) or hidden (<c>IsWindowVisible</c> false). A dialog's close is waited
+    /// for on it (<see cref="WaitForDialogClosed"/>), so that the wait asks UI Automation nothing about a
+    /// dialog that is going.
+    /// </summary>
+    private static bool IsGoneFromDesktop(IntPtr window) => !Win32.IsWindow(window) || !Win32.IsWindowVisible(window);
+
+    /// <summary>
     /// Whether this window is the desktop's foreground window (<c>GetForegroundWindow</c>), the window
     /// the real keyboard's keys reach: a key is sent only while this holds.
     /// </summary>
@@ -325,7 +333,7 @@ public sealed partial class RealApp
             System.Globalization.CultureInfo.InvariantCulture,
             $"the path set through the file name box's Value pattern; the Enter sent once the dialog was the foreground window with that box focused, {clock.Elapsed.TotalSeconds:0.0} s after the box was given the focus");
         PressKey(VirtualKeyShort.RETURN);
-        WaitFor(() => !Window.ModalWindows.Any(window => TitleOf(window) == title), "the file dialog to close", timeout);
+        WaitForDialogClosed(handle, title, "the file dialog to close", timeout);
         WaitUntilIdle();
         return guard;
     }
