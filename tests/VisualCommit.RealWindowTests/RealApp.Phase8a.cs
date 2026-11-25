@@ -181,11 +181,18 @@ public sealed partial class RealApp
     /// Whether <paramref name="exception"/> is how a read through UI Automation fails: an
     /// <see cref="ArgumentException"/> (E_INVALIDARG, a cached read of a property the element's cache does not
     /// hold), a <see cref="COMException"/>, a <see cref="TimeoutException"/> (UI Automation's own time-out,
-    /// 0x80131505), an <see cref="InvalidOperationException"/>, or a FlaUI exception (an element no longer
-    /// available, a property or a pattern not supported or not cached).
+    /// 0x80131505), an <see cref="InvalidOperationException"/>, a FlaUI exception (an element no longer
+    /// available, a property or a pattern not supported or not cached), or a
+    /// <see cref="System.ComponentModel.Win32Exception"/>. FlaUI 5.0.0's <c>Com.Call</c>, which wraps
+    /// <c>UIA3Automation.FromHandle</c> and <c>FocusedElement</c>, catches a <see cref="COMException"/>, turns
+    /// 0x80040200 to 0x80040204 into FlaUI's exceptions, 0x80131505 into a <see cref="TimeoutException"/> and
+    /// 0x80131509 into an <see cref="InvalidOperationException"/>, and throws every other one again as a
+    /// <see cref="System.ComponentModel.Win32Exception"/>, so a <see cref="COMException"/> never leaves those
+    /// two calls.
     /// </summary>
     public static bool IsReadFailure(Exception exception) =>
-        exception is ArgumentException or COMException or TimeoutException or InvalidOperationException or FlaUI.Core.Exceptions.FlaUIException;
+        exception is ArgumentException or COMException or TimeoutException or InvalidOperationException
+            or FlaUI.Core.Exceptions.FlaUIException or System.ComponentModel.Win32Exception;
 
     /// <summary>
     /// A read through UI Automation that never throws: what <paramref name="read"/> gives, or
