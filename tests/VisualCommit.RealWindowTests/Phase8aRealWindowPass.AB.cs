@@ -201,6 +201,17 @@ public partial class Phase8aRealWindowPass
         return true;
     }
 
+    /// <summary>
+    /// One look's read of UI Automation's focused element for <see cref="EnsureForegroundBeforeFirstKey"/>: the
+    /// id <paramref name="read"/> gives, through <see cref="RealApp.ReadOr{T}"/>, so that a read that fails gives
+    /// none.
+    /// </summary>
+    internal static string? FocusedIdWhileInFront(bool foreground, Func<string?> read)
+    {
+        ArgumentNullException.ThrowIfNull(read);
+        return RealApp.ReadOr(read, null);
+    }
+
     /// <summary>The guard's two reads of one look in words for run.txt.</summary>
     private static string GuardReads(bool foreground, string? focusedId) =>
         $"ForegroundIsThis {(foreground ? "true" : "false")}, UI Automation's focused element {(string.IsNullOrEmpty(focusedId) ? "none, or one without an id" : focusedId)}";

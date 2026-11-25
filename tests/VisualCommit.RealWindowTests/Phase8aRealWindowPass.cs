@@ -808,9 +808,10 @@ public partial class Phase8aRealWindowPass(Phase8aRun fixture) : IClassFixture<P
 /// <summary>
 /// The 8a pass's order and picture names (docs/phase-8a-design.md 12.4), and the rules of its steps that
 /// need no window (B1 (a)'s extraction from the built executable, B2's taskbar buttons, L6's missing
-/// rectangle, which failures of a read through UI Automation count as unreadable), with no app and no
-/// window: the class constructs no fixture of the pass and touches nothing of the desktop. It runs in the
-/// whole pass, outside D246's filter, and alone with <c>--filter-class "*Phase8aOrderTests"</c>.
+/// rectangle, which failures of a read through UI Automation count as unreadable, the guard's look before a
+/// first key, which reads no focus while another window is in front), with no app and no window: the class
+/// constructs no fixture of the pass and touches nothing of the desktop. It runs in the whole pass, outside
+/// D246's filter, and alone with <c>--filter-class "*Phase8aOrderTests"</c>.
 /// </summary>
 public class Phase8aOrderTests
 {
@@ -950,6 +951,31 @@ public class Phase8aOrderTests
 
         Assert.All(failures, failure => Assert.True(RealApp.IsReadFailure(failure), $"{failure.GetType().Name} does not count as a failed read."));
         Assert.False(RealApp.IsReadFailure(new IOException("No read through UI Automation.")));
+    }
+
+    /// <summary>
+    /// The guard before a first key (design 12.3.3, <c>EnsureForegroundBeforeFirstKey</c>) reads UI Automation's
+    /// focused element only while the app's window is the foreground window: while another window is in front,
+    /// a look gives no focused id and makes no read, which would ask that other program through UI Automation;
+    /// while the app's window is in front, it gives what the read gives, and none when the read fails.
+    /// </summary>
+    [Fact]
+    public void The_guard_reads_no_focus_while_another_window_is_in_front()
+    {
+        var reads = 0;
+        string? Read()
+        {
+            reads++;
+            return I.TryAgainId;
+        }
+
+        Assert.Null(Phase8aRealWindowPass.FocusedIdWhileInFront(false, Read));
+        Assert.Null(Phase8aRealWindowPass.FocusedIdWhileInFront(false, () => throw new IOException("The focus was read while another window was in front.")));
+        Assert.Equal(0, reads);
+
+        Assert.Equal(I.TryAgainId, Phase8aRealWindowPass.FocusedIdWhileInFront(true, Read));
+        Assert.Equal(1, reads);
+        Assert.Null(Phase8aRealWindowPass.FocusedIdWhileInFront(true, () => throw new TimeoutException("UIA Timeout")));
     }
 
     /// <summary>
