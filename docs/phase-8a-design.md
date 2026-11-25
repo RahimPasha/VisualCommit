@@ -7312,6 +7312,66 @@ the new `tests/VisualCommit.Git.Tests/TempFolderCleanerTests.cs`. Nothing under 
   more; its pictures are compared with wave 3's references and with the first run's, and checks 13
   and 14's five pictures are read.
 
+**Step 19's second whole run, its pictures, three checks in the real window, and CI's run of the
+package (the lead, 2026-11-25).** 109. The whole default run on `c1bfaf7` (02:27 to 04:11, 1 h 43
+min 44 s): 8,903 tests, 8,893 passed, 7 skipped, 3 failed.
+
+- *The three failures are the cleaner's next strike.* The lead's probe logged an empty folder gone
+  from `%TEMP%` at 03:21:43, so the cause of ruling 107 is proven and not only inferred. Three
+  checks of phase 7b's walk-through
+  (`Check_P1_P10_P12_P13_P14_P7_gitlab_rows_badge_menus_and_filter`,
+  `Check_A6_azure_dialog_prefilled_from_the_tab`,
+  `Check_A5_A8_A11_gitlab_dialog_links_and_refusals`) were copying the kept hosting template at that
+  instant and failed within half a second each in `TempRepo.CopyDirectory`'s walk: "Access to the
+  path `…\web-app.git\objects\info` is denied", an empty folder whose delete was pending. Every copy
+  made after the strike, in every test process, got its folders back and passed, where before D468
+  the rest of phase 7a's and 7b's walk-throughs would have failed. Run alone at 04:12 the three
+  passed. **The lead's rulings:** this is D468 (4)'s case, a test in flight, and step 19's whole run
+  stands with it recorded; but it is the failure the gate's own run would meet, so one more small
+  round makes a copy that has a record walk past a folder it cannot open (the ruling after this
+  one); and the gate's default run is not counted on while C: is in its low state: the owner is
+  asked to free it first.
+- *The pictures.* The run's 1,228 scripted pictures and the three checks' 11 from their run alone
+  are one set of 1,239. Against wave 3's references 1,169 are the same files, 66 changed, part G's
+  four are new, none is missing. Of the 66, 46 had changed in the first run too: its 17 expected
+  ones are the same files as then, phase 4's three among them, but for `l31c-palette-light`, which
+  then also held a caret; the others vary as they did. Twenty had not changed in the first run, the
+  three of checks 13 and 14 among them, and seven changed in other boxes than then; run
+  `wf_6bed5b7d-0a5` read those 27 (two Opus inspectors and a verifier, read only, 04:15 to 04:22,
+  0.34M tokens; its result
+  `D:/Projects/Personal/phase8-work/wave4/default-step19b/inspect-result.json`): 26 vary from run to
+  run (a caret's blink in eight, a temporary folder's random name in seven, a progress bar's state
+  in three, edge pixels in eight) and one is the palette's expected thumb. Checks 13 and 14's five
+  pictures show what their checks expect, `13a` and `13c` being the references' files: the shared
+  repository made again by D468's code leaves no trace in them. No fault in either run. **The set is
+  the references for the gate** (ruling 102): `D:/Projects/Personal/phase8-work/references/step19/`,
+  its list `references/step19-pictures.sha256`.
+- *Three checks alone in the real window, the owner told* (04:22 to 04:27, on `4538d95`, whose code
+  is `c1bfaf7`'s; no agent at work). Phase 1's `Check_11_open_with_the_native_folder_dialog` passed,
+  through the folder dialog twice, and phase 6's `Check_W1_workspace_from_the_welcome_page` passed:
+  with ruling 106's S14 that is each dialog helper's wait on the dialog's window handle, run. Phase
+  4's `Check_C10_merge_conflict_end_to_end` passed: after a real click on the banner's framed
+  Continue the real capture shows the focus frame around the graph, as its twin does (`c10l-merged`
+  0.71 % from the scripted picture, `c10k-resolved` 0.72 %), which settles ruling 107's question for
+  the real-window pass.
+- *CI's run 45586070342* on the package's push (`b87ec31`) passed in five jobs and failed in
+  `windows-latest` on one test of phase 3, unchanged since then:
+  `RemoteOperationTests.A_cancelled_fetch_of_all_remotes_stops_the_running_fetch_and_skips_the_rest`.
+  The tests' server had engaged its hold of the fetch's pack, and no progress report with a
+  percentage came in 60 s. The job run again passed, so the run is green on its second attempt; the
+  floor's job ran the package's 21 tests on git 2.34 for the first time, and they passed. Two
+  analysts read the server's side and the client's (run `wf_d27b4f7e-ff9`, read only, 0.56M tokens;
+  its result and the job's log in `D:/Projects/Personal/phase8-work/wave4/review/ci-45586070342/`).
+  Both rule the package out: it changes neither the server, nor what it serves in this test, nor the
+  progress parser. The client's side is sound, so the held part of the response held no whole
+  progress line with a percentage; the lead's guess, a line of git's cut inside its first
+  percentage, needs git on the runner to have written that line in two writes, which one analyst
+  rates low and the other medium, and nothing recorded can settle it. **The lead's ruling:** no
+  change before the gate, since nine callers of the hold without a percentage take pictures while it
+  holds; for plan.md's Backlog at the close: that hold ends after a whole line with a percentage
+  when its first packet with one does not, and the test's failure message carries the progress
+  reports so far and the held part.
+
 ### 13.2 What the integration settled
 
 Beyond moving the packages' contracts into section 1: the broker's `gitVersion` goes at §3's merge,

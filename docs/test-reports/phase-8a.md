@@ -5654,6 +5654,54 @@ among them) and `LeftPanelViewModelTests`' three facts of a branch created or de
 section toggled. One earlier test's assertions change, `GraphReviewFixTests`' ("Changed in this report
 after its first commit").
 
+### Step 19's two whole runs: the comparison with wave 3's references (2026-11-24 and 25)
+
+**The runs** (design 13.1's rulings 107 to 109; D468). The first, on `26b6634` on 2026-11-24, 21:58 to
+23:40: 8,882 tests, 8,873 passed, 7 skipped, 2 failed, phase 1's checks 13 and 14, whose shared
+100,000-commit repository Windows' Storage Sense had stripped of its empty folders that afternoon (the
+C: drive was nearly full). The second, on `c1bfaf7` on 2026-11-25, 02:27 to 04:11, after the test
+support code was made independent of that cleaner: 8,903 tests, 8,893 passed, 7 skipped, 3 failed, three
+checks of phase 7b's walk-through that were copying their template at 03:21:43, the instant of the
+cleaner's next strike, which a probe logged; the three passed alone at 04:12, and their 11 pictures
+complete the second run's set. Neither failure is the app's.
+
+**The comparison** (`scripts/compare-pictures.py` against
+`D:/Projects/Personal/phase8-work/references/wave3/`, 1,235 scripted pictures; the outputs in
+`D:/Projects/Personal/phase8-work/wave4/default-step19/compare/` and `default-step19b/compare/`). First
+run: 1,173 the same files, 57 changed, 4 new, 5 missing (checks 13 and 14's). Second run, 1,239
+pictures: 1,169 the same files, 66 changed, 4 new, none missing. Every changed and every new picture was
+read with its reference and its difference picture, the first run's 61 by six inspectors and three
+verifiers, the second run's 27 that had not changed in the first run, or had changed in other places, by
+two inspectors and a verifier; a verifier tried to refute each verdict that was no plain variation.
+
+**What varies from run to run** (44 pictures in the first run, 26 of the second run's 27): a text caret
+caught in the other half of its blink; a temporary folder's random name in a text (the welcome page's
+"is not a git repository", git's output in a dialog, a tooltip, the clone form's fields, the scan's
+checklist, the workspace's rows); a fake's port in an address, where the walk-through's own port was
+taken; an indeterminate progress bar's state; and anti-aliased edge pixels a few levels apart. They are
+the kinds the whole run of 2026-11-23 showed against the same references.
+
+**What a merged change explains** (17 pictures, the same files in both runs but for a caret in one):
+`phase-1/10b-second-tab` without the new tab's tooltip (the entry on step 19's tests in "Changed in this
+report"); the palette's scroll thumb three pixels shorter in `phase-6/k10a-palette-commands`,
+`k10f-palette-names-repository`, `l31c-palette-dark` and `l31c-palette-light` and in
+`phase-8a/k3a-palette-cancel` and `l3a-palette-placeholder`, and the shortcuts list with its Help group
+in `phase-6/s14e-shortcuts-top` and `s14f-shortcuts-end` (part G's entry);
+`phase-8a/a1b-about-link-focus`, the focused link's frame (the entry on A1 and G3); part G's four new
+pictures, each read against its check's expected result; and `phase-4/c10l-merged`, `c11g-second-stop`
+and `c11j-rebased` with the focus frame around the graph (their entry in "Changed in this report", found
+by this comparison).
+
+**Checks 13 and 14** were taken in the second run only: `13a-clone-form` and `13c-cloned` are the
+references' files, and `13b-clone-in-progress`, `14a-clone-failed` and `14b-clone-cancelled` differ by
+the clone folder's random name alone; `13b` holds the clone at `Counting objects 45%` with the bar at
+45, as D150 has it. The shared repository they clone had been made again by the test support code, from
+the same history, and nothing of that shows.
+
+**The second run's set is the gate's reference**: `D:/Projects/Personal/phase8-work/references/step19/`
+(1,239 pictures; its list `references/step19-pictures.sha256`). No fault and no unexplained difference
+in either run.
+
 ## The performance series (design 10.3.6; D457)
 
 Phase 8a's performance pass (§10; D436 to D438) measures M2 to M7 (design 10.3.4) with the opt-in
