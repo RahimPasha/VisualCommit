@@ -92,6 +92,27 @@ public class TempFolderCleanerTests
     }
 
     [Fact]
+    public async Task A_bare_copy_that_lost_its_empty_folders_is_made_again()
+    {
+        // The bare copy is made beside the working copy it is cloned from, here a small one of the
+        // test's own, with its marker, as the shared one is.
+        using var repo = await SmallHistoryAsync();
+        var main = await repo.HeadAsync();
+        var bare = await LargeHistory.GetOrBuildBareAsync(repo.Path);
+        Assert.Equal(main, LargeHistory.MarkedSha(bare + ".complete"));
+        Assert.True(await LargeHistory.IsUsableAsync(bare, main, bare: true));
+
+        // Stripped with its marker left, as on the laptop on 2026-11-24.
+        RemoveEmptyFolders(bare);
+        Assert.False(Directory.Exists(Path.Combine(bare, "refs")));
+
+        Assert.Equal(bare, await LargeHistory.GetOrBuildBareAsync(repo.Path));
+        Assert.True(Directory.Exists(Path.Combine(bare, "refs")));
+        Assert.True(await LargeHistory.IsUsableAsync(bare, main, bare: true));
+        Assert.Equal(main, LargeHistory.MarkedSha(bare + ".complete"));
+    }
+
+    [Fact]
     public async Task A_copy_whose_marker_names_another_commit_than_main_is_not_usable()
     {
         using var repo = await SmallHistoryAsync();

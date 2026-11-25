@@ -149,8 +149,12 @@ public static class LargeHistory
         return final;
     }
 
-    /// <summary>The bare copy of <paramref name="working"/>, made beside it with a marker of its own as <see cref="GetOrBuildAsync"/> makes the working tree's repo.</summary>
-    private static async Task<string> GetOrBuildBareAsync(string working)
+    /// <summary>
+    /// The bare copy of <paramref name="working"/>, made beside it with a marker of its own as
+    /// <see cref="GetOrBuildAsync"/> makes the working tree's repo. A test can make it beside a
+    /// small working copy of its own, which leaves the shared folder alone.
+    /// </summary>
+    internal static async Task<string> GetOrBuildBareAsync(string working)
     {
         var shared = Path.GetDirectoryName(working)!;
         var final = Path.Combine(shared, $"large-history-{Version}.git");
