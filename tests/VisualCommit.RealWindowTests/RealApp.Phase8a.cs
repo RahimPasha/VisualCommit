@@ -139,8 +139,8 @@ public sealed partial class RealApp
 
     /// <summary>
     /// The element UI Automation reports as having the keyboard focus, or null when there is none or it
-    /// cannot be read: what a real Enter would press, and where a text's focus lies when its own element
-    /// has no automation id.
+    /// cannot be read (<see cref="IsReadFailure"/>): what a real Enter would press, and where a text's focus
+    /// lies when its own element has no automation id.
     /// </summary>
     public AutomationElement? FocusedElement()
     {
@@ -148,7 +148,7 @@ public sealed partial class RealApp
         {
             return _automation.FocusedElement();
         }
-        catch (Exception ex) when (ex is COMException or FlaUI.Core.Exceptions.ElementNotAvailableException)
+        catch (Exception ex) when (IsReadFailure(ex))
         {
             return null;
         }
@@ -158,7 +158,8 @@ public sealed partial class RealApp
     /// The automation id of UI Automation's focused element, or null when there is none or it cannot be
     /// read: as <see cref="FocusedAutomationId"/>, but an element that goes between the look and the read
     /// (FlaUI's <c>ElementNotAvailableException</c>, a focus that moves as a dialog closes or a button
-    /// turns disabled) counts as none, so that a wait on it looks again instead of ending.
+    /// turns disabled), or any other read that fails (<see cref="IsReadFailure"/>), counts as none, so that a
+    /// wait on it looks again instead of ending.
     /// </summary>
     public string? FocusedId()
     {
@@ -171,7 +172,7 @@ public sealed partial class RealApp
         {
             return focused.Properties.AutomationId.ValueOrDefault;
         }
-        catch (Exception ex) when (ex is COMException or FlaUI.Core.Exceptions.FlaUIException)
+        catch (Exception ex) when (IsReadFailure(ex))
         {
             return null;
         }
@@ -388,22 +389,27 @@ public sealed partial class RealApp
 
     /// <summary>
     /// A top-level window of the app's process other than the notice (<see cref="InstanceNoticeId"/>), on
-    /// the screen: the main window that "Try again" opens in the process that showed the notice. Null
-    /// while there is none. One look; the caller waits for it. Found by its handle
-    /// (<see cref="TopLevelElementsOf"/>).
+    /// the screen, that <paramref name="accept"/> takes: the main window that "Try again" opens in the
+    /// process that showed the notice. Each such window is offered in the order <c>EnumWindows</c> gives,
+    /// until one is taken, so that a popup of the app above the main window does not hide it. Null while
+    /// none is taken, and null when a read through UI Automation fails (<see cref="IsReadFailure"/>). One
+    /// look; the caller waits for it and looks again. Found by their handles (<see cref="TopLevelElementsOf"/>):
+    /// a failed enumeration of Windows' list leaves the call.
     /// </summary>
-    public Window? OtherWindowOfProcess()
+    public Window? OtherWindowOfProcess(Func<Window, bool> accept)
     {
+        ArgumentNullException.ThrowIfNull(accept);
+        var elements = TopLevelElementsOf(_process.Id);
         try
         {
-            return TopLevelElementsOf(_process.Id)
+            return elements
                 .Where(element => element.Properties.AutomationId.ValueOrDefault != InstanceNoticeId
                     && !element.IsOffscreen
                     && element.BoundingRectangle is { Width: > 0, Height: > 0 })
                 .Select(element => element.AsWindow())
-                .FirstOrDefault();
+                .FirstOrDefault(accept);
         }
-        catch (Exception ex) when (ex is COMException or FlaUI.Core.Exceptions.ElementNotAvailableException)
+        catch (Exception ex) when (IsReadFailure(ex))
         {
             return null;
         }

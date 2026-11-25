@@ -235,9 +235,10 @@ public partial class Phase8aRealWindowPass
 
         // The main window in the same process, GitStatus in it; the notice closed. The RealApp's own window
         // is still the notice's. The notice's end is read from Windows, and the main window is found by its
-        // handle (RealApp.OtherWindowOfProcess): a search of the desktop's children through UI Automation
-        // asks every program on the desktop, and this wait ran out on such a search in about two runs of
-        // five, though the app had closed the notice within 0.1 s and opened its window within 1.5 s.
+        // handle (RealApp.OtherWindowOfProcess), every window of the process offered to HasGitStatus: a
+        // search of the desktop's children through UI Automation asks every program on the desktop, and this
+        // wait ran out on such a search in about two runs of five, though the app had closed the notice
+        // within 0.1 s and opened its window within 1.5 s.
         Window? main = null;
         app.WaitFor(
             () =>
@@ -247,8 +248,8 @@ public partial class Phase8aRealWindowPass
                     return false;
                 }
 
-                main = app.OtherWindowOfProcess();
-                return main is not null && HasGitStatus(main);
+                main = app.OtherWindowOfProcess(HasGitStatus);
+                return main is not null;
             },
             "the main window, with GitStatus, in the notice's process, and the notice closed",
             I.StartedHereWithin);
@@ -419,14 +420,14 @@ public partial class Phase8aRealWindowPass
         CompareMasked(app, shot, name);
     }
 
-    /// <summary>Whether <paramref name="window"/> holds <c>GitStatus</c>, the status bar's git, as the main window does; false while UI Automation cannot read it yet.</summary>
+    /// <summary>Whether <paramref name="window"/> holds <c>GitStatus</c>, the status bar's git, as the main window does; false while UI Automation cannot read it yet (<see cref="RealApp.IsReadFailure"/>), to be looked at again.</summary>
     private static bool HasGitStatus(Window window)
     {
         try
         {
             return window.FindFirstDescendant(condition => condition.ByAutomationId("GitStatus")) is not null;
         }
-        catch (Exception ex) when (ex is System.Runtime.InteropServices.COMException or FlaUI.Core.Exceptions.FlaUIException)
+        catch (Exception ex) when (RealApp.IsReadFailure(ex))
         {
             return false;
         }
