@@ -202,6 +202,69 @@ public class TempFolderCleanerTests
     }
 
     [Fact]
+    public async Task A_whole_copy_with_its_other_refs_is_usable_as_its_own_kind()
+    {
+        using var repo = await SmallHistoryAsync();
+        var main = await repo.HeadAsync();
+
+        Assert.True(await LargeHistory.IsUsableAsync(repo.Path, main, bare: false, Feature, Middle));
+        Assert.True(await LargeHistory.IsUsableAsync(repo.SiblingPath(SmallBare), main, bare: true, Feature, Middle));
+    }
+
+    [Fact]
+    public async Task A_working_copy_that_lost_a_tracked_file_is_not_usable()
+    {
+        using var repo = await SmallHistoryAsync();
+        var main = await repo.HeadAsync();
+
+        File.Delete(Path.Combine(repo.Path, "a.txt"));
+
+        Assert.False(await LargeHistory.IsUsableAsync(repo.Path, main, bare: false, Feature, Middle));
+    }
+
+    [Fact]
+    public async Task A_working_copy_that_lost_its_index_is_not_usable()
+    {
+        using var repo = await SmallHistoryAsync();
+        var main = await repo.HeadAsync();
+
+        File.Delete(Path.Combine(repo.Path, ".git", "index"));
+
+        Assert.False(await LargeHistory.IsUsableAsync(repo.Path, main, bare: false, Feature, Middle));
+    }
+
+    [Theory]
+    [InlineData(Feature)]
+    [InlineData(Middle)]
+    public async Task A_working_copy_that_lost_its_feature_branch_or_its_tag_is_not_usable(string name)
+    {
+        using var repo = await SmallHistoryAsync();
+        var main = await repo.HeadAsync();
+
+        // The working copy's refs are files of their own, as git branch and git tag wrote them.
+        var file = Path.Combine([repo.Path, ".git", .. name.Split('/')]);
+        Assert.True(File.Exists(file));
+        File.Delete(file);
+
+        Assert.False(await LargeHistory.IsUsableAsync(repo.Path, main, bare: false, Feature, Middle));
+    }
+
+    [Theory]
+    [InlineData(Feature)]
+    [InlineData(Middle)]
+    public async Task A_bare_copy_that_lost_its_feature_branch_or_its_tag_is_not_usable(string name)
+    {
+        using var repo = await SmallHistoryAsync();
+        var bare = repo.SiblingPath(SmallBare);
+        var main = await repo.HeadAsync();
+
+        // The bare copy's refs are lines of packed-refs.
+        await GitInAsync(repo, bare, "update-ref", "-d", name);
+
+        Assert.False(await LargeHistory.IsUsableAsync(bare, main, bare: true, Feature, Middle));
+    }
+
+    [Fact]
     public void A_marker_names_a_copy_only_with_a_sha()
     {
         using var folder = new TempDirectory("marker");
@@ -261,10 +324,17 @@ public class TempFolderCleanerTests
     /// <summary>The folder of <see cref="SmallHistoryAsync"/>'s bare clone, beside the working tree.</summary>
     private const string SmallBare = "small.git";
 
+    /// <summary>The branch beside <c>main</c> that the 100k-commit repo has, and <see cref="SmallHistoryAsync"/>'s.</summary>
+    private const string Feature = "refs/heads/feature";
+
+    /// <summary>The tag the 100k-commit repo has, and <see cref="SmallHistoryAsync"/>'s.</summary>
+    private const string Middle = "refs/tags/" + LargeHistory.MiddleTag;
+
     /// <summary>
-    /// A repository with three commits on <c>main</c> and, beside it (<see cref="SmallBare"/>), a
-    /// bare clone of it as the shared bare copy is made (<c>git clone --bare --no-hardlinks</c>),
-    /// whose refs are all in <c>packed-refs</c>.
+    /// A repository with three commits on <c>main</c>, the branch <see cref="Feature"/> and the
+    /// lightweight tag <see cref="Middle"/> on the second, as the 100k-commit repo has its refs, and
+    /// beside it (<see cref="SmallBare"/>) a bare clone of it as the shared bare copy is made
+    /// (<c>git clone --bare --no-hardlinks</c>), whose refs are all in <c>packed-refs</c>.
     /// </summary>
     private static async Task<TempRepo> SmallHistoryAsync()
     {
@@ -274,6 +344,8 @@ public class TempFolderCleanerTests
             await repo.CommitFileAsync("a.txt", "a\n", "First");
             await repo.CommitFileAsync("b.txt", "b\n", "Second");
             await repo.CommitFileAsync("c.txt", "c\n", "Third");
+            await repo.GitAsync("branch", "feature", "main~1");
+            await repo.GitAsync("tag", LargeHistory.MiddleTag, "main~1");
             await repo.GitAsync("clone", "--quiet", "--bare", "--no-hardlinks", repo.Path, repo.SiblingPath(SmallBare));
             return repo;
         }
