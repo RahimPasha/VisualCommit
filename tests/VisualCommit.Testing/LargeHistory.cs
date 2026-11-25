@@ -38,6 +38,9 @@ public static class LargeHistory
     private const string Version = "v1";
     private const long FirstCommitTime = 1767268800; // 2026-01-01 12:00:00 UTC
 
+    /// <summary>The refs beside <c>main</c> that <see cref="BuildStream"/> makes and the tests read, which the proof of a copy holds too (<see cref="IsUsableAsync"/>).</summary>
+    private static readonly string[] OtherRefs = ["refs/heads/feature", "refs/tags/" + MiddleTag];
+
     private static readonly SemaphoreSlim BuildGate = new(1, 1);
     private static readonly SemaphoreSlim BareGate = new(1, 1);
     private static string? _path;
@@ -128,7 +131,7 @@ public static class LargeHistory
 
         // Test processes of one run start at the same time: one builds, the others wait for it.
         using var lockFile = await LockAsync(Path.Combine(shared, $"large-history-{Version}.lock")).ConfigureAwait(false);
-        if (MarkedSha(marker) is { } sha && await IsUsableAsync(final, sha, bare: false).ConfigureAwait(false))
+        if (MarkedSha(marker) is { } sha && await IsUsableAsync(final, sha, bare: false, OtherRefs).ConfigureAwait(false))
         {
             return final;
         }
@@ -162,7 +165,7 @@ public static class LargeHistory
 
         // Test processes of one run start at the same time: one makes the copy, the others wait for it.
         using var lockFile = await LockAsync(final + ".lock").ConfigureAwait(false);
-        if (MarkedSha(marker) is { } sha && await IsUsableAsync(final, sha, bare: true).ConfigureAwait(false))
+        if (MarkedSha(marker) is { } sha && await IsUsableAsync(final, sha, bare: true, OtherRefs).ConfigureAwait(false))
         {
             return final;
         }
@@ -204,24 +207,30 @@ public static class LargeHistory
 
     /// <summary>
     /// Whether git takes <paramref name="folder"/> for the shared copy whose marker holds
-    /// <paramref name="sha"/>: run in the folder with the tests' isolation, <c>git rev-parse
-    /// --is-bare-repository</c> says it is a repository of the kind asked for (<c>true</c> with
-    /// <paramref name="bare"/>, <c>false</c> for one with a working tree), its
-    /// <c>refs/heads/main</c> is <paramref name="sha"/>, and that commit can be read
-    /// (<c>git cat-file -e &lt;sha&gt;^{commit}</c>). Three git calls, once per test process and
-    /// copy (<see cref="GetAsync"/> and <see cref="GetBareAsync"/> keep what they found).
+    /// <paramref name="sha"/>, as the tests use it: run in the folder with the tests' isolation,
+    /// <c>git rev-parse --is-bare-repository</c> says it is a repository of the kind asked for
+    /// (<c>true</c> with <paramref name="bare"/>, <c>false</c> for one with a working tree);
+    /// <c>git cat-file --batch-check</c> finds that <c>refs/heads/main</c> names the commit
+    /// <paramref name="sha"/> and each of <paramref name="refs"/> a commit, and that each of these
+    /// commits can be read; and in a working copy <c>git status --porcelain --untracked-files=no</c>
+    /// prints nothing, so that its tracked files and its index are there and agree with
+    /// <c>main</c>. The status runs with <c>--no-optional-locks</c>, so that it writes nothing in a
+    /// copy that must only be read, as the app's own reads do. Three git calls for the working copy
+    /// and two for the bare one, once per test process and copy (<see cref="GetAsync"/> and
+    /// <see cref="GetBareAsync"/> keep what they found).
     /// <para>
     /// The marker alone proves none of it, as the copies outlive every test process: a cleaner of
     /// the temp folder that removes every empty folder, whatever its age, as Windows' Storage Sense
     /// does when the disk runs low, empties the bare copy's <c>refs</c>, whose refs are all in
     /// <c>packed-refs</c>, and removes it, and git then takes the folder for no repository (the
-    /// laptop on 2026-11-24); a cleaner that removes old files could take a ref or a pack.
+    /// laptop on 2026-11-24); a cleaner that removes old files could take a ref, a pack, a tracked
+    /// file or the index.
     /// </para>
     /// </summary>
     /// <param name="folder">The copy's folder: the working tree, or the bare repository.</param>
     /// <param name="sha">The SHA the copy's marker holds.</param>
     /// <param name="bare">Whether the copy is the bare one.</param>
-    /// <param name="refs">Other refs of the copy that its users read, by their full names; not proven yet.</param>
+    /// <param name="refs">Other refs of the copy that its users read, by their full names, each of which must name a commit.</param>
     internal static async Task<bool> IsUsableAsync(string folder, string sha, bool bare, params string[] refs)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(folder);
@@ -235,22 +244,34 @@ public static class LargeHistory
         using var home = new TempDirectory("large-proof");
         var environment = TempRepo.IsolatedEnvironment(home.Combine("home"));
         var runner = new GitRunner(TempRepo.GitPath);
-        Task<GitResult> Git(params string[] arguments) =>
-            runner.RunAsync(new GitCommand(arguments) { WorkingDirectory = folder, Environment = environment });
+        Task<GitResult> Git(string? input, params string[] arguments) =>
+            runner.RunAsync(new GitCommand(arguments) { WorkingDirectory = folder, Environment = environment, StandardInput = input });
 
-        var kind = await Git("rev-parse", "--is-bare-repository").ConfigureAwait(false);
+        var kind = await Git(null, "rev-parse", "--is-bare-repository").ConfigureAwait(false);
         if (!kind.Succeeded || kind.StandardOutput.Trim() != (bare ? "true" : "false"))
         {
             return false;
         }
 
-        var main = await Git("rev-parse", "--verify", "--quiet", "refs/heads/main").ConfigureAwait(false);
-        if (!main.Succeeded || !string.Equals(main.StandardOutput.Trim(), sha, StringComparison.Ordinal))
+        // One line per name, in the order given: "<sha> commit <size>" for a name that gives a
+        // commit git can read, "<name> missing" for one that gives none.
+        string[] names = ["refs/heads/main", .. refs];
+        var commits = await Git(string.Concat(names.Select(name => name + "^{commit}\n")), "cat-file", "--batch-check").ConfigureAwait(false);
+        var lines = commits.Succeeded ? commits.StandardOutput.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries) : [];
+        if (lines.Length != names.Length
+            || !lines.All(line => line.Split(' ') is [_, "commit", _])
+            || !lines[0].StartsWith(sha + " ", StringComparison.Ordinal))
         {
             return false;
         }
 
-        return (await Git("cat-file", "-e", sha + "^{commit}").ConfigureAwait(false)).Succeeded;
+        if (bare)
+        {
+            return true;
+        }
+
+        var status = await Git(null, "--no-optional-locks", "status", "--porcelain", "--untracked-files=no").ConfigureAwait(false);
+        return status.Succeeded && status.StandardOutput.Trim().Length == 0;
     }
 
     /// <summary>Deletes a shared copy and its marker, the marker first, so that no marker is left beside a copy deleted in part.</summary>
