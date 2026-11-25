@@ -6242,6 +6242,20 @@ The whole part on `14789f7`, the owner told, at 20:02 on 2026-11-24: 13 of 13 in
 logs in `D:/Projects/Personal/phase8-work/wave4/realwindow/handles-launch6/`, `handles-part/` and
 `handles-dialogs/`).
 
+**Hardened** (the lead, 2026-11-24; ruling 106; merged at `640f728`). What two readers of `14789f7`
+asked for: `IsReadFailure` counts a `Win32Exception`, and the lookups and the focus reads catch by
+it; `OtherWindowOfProcess(accept)` offers every window of the process to a predicate, each read on
+its own (launch 6 passes `HasGitStatus`); `EnsureForegroundBeforeFirstKey` reads the focus only
+while the app's window is in front (`FocusedIdWhileInFront`), and its run.txt words then say `UI
+Automation's focused element not read, as the app's window is not in front`; `ChooseFolderInDialog`,
+`ChooseFileInDialog` and `ChooseFileInDialogGuarded` wait for the dialog's close on its window
+handle (`WaitForDialogClosed`); `Win32.Enumerate` throws when `EnumWindows` fails; launch 6's wait,
+when it runs out, notes `no main window after {s} s; the wait's last look: …` with its three reads;
+`TaskbarButtons` returns `TaskbarLooks`, and launch 3 notes `B2's taskbar button: {n} of the {m}
+looks at the taskbars found no button because a read through UI Automation failed, the last with a
+{type}` when any look failed. `Phase8aOrderTests` has ten tests. The whole part on `640f728`, the
+owner told, at 21:05 on 2026-11-24: 13 of 13 in 4 min 49 s.
+
 ## 13. The lead's rulings, what waits on the owner, and the open points
 
 ### 13.1 The rulings in short form
@@ -7120,6 +7134,61 @@ on merged code, the owner told, 18:59 to 19:06: 12 of 13 in 6 min 47 s. Launch 6
   whole default run: the owner was not at the keyboard on the evening of 2026-11-24, a change of
   those colours is a fix package of its own, and the gate's default run takes every picture again
   after it.
+
+**The harness's lookups hardened (the lead, 2026-11-24).** 106. What ruling 105's readers asked for
+is built, read and merged (run `wf_1892749d-bf6`, 20:25 to 21:02, three Opus agents, 0.64M tokens: a
+builder with its tests first, an independent reader, a fixer; its result
+`D:/Projects/Personal/phase8-work/wave4/review/handles-harden-result.json`; `wip/p8a-rw-handles`, 14
+commits from `14789f7`, the last `418ab68`; merged at `640f728`, 21:03). Six files: five of
+`tests/VisualCommit.RealWindowTests` and one comment in `Phase8aExpectations.B.cs`. No expected
+result changes, and no agent ran a real-window check.
+
+- *As built.* `IsReadFailure` counts a `Win32Exception`: FlaUI 5.0.0's `Com.Call`, which
+  `UIA3Automation.FromHandle` and `FocusedElement` go through, throws every COM failure it does not
+  map as one (read in FlaUI's IL by the first reader and by the builder). `TopLevelElementsOf`,
+  `OtherWindowOfProcess`, `HasGitStatus`, `FindTaskbarButtons`, `FocusedElement` and `FocusedId`
+  catch by it. `OtherWindowOfProcess(accept)` offers every window of the process to a predicate,
+  each window read on its own through `ReadOr`, so neither a popup above the main window nor a
+  window whose read fails hides the main window; launch 6 passes `HasGitStatus`. The guard before a
+  first key reads the focus only while the app's window is in front (`FocusedIdWhileInFront`); all
+  three of its callers' conditions need the foreground, so no verdict changes. The three dialog
+  helpers read the dialog's handle once, when the dialog is found, and wait for its close on
+  Windows' word (`WaitForDialogClosed`, `IsGoneFromDesktop`: the window gone or hidden); a handle of
+  zero keeps the old wait. `Win32.Enumerate` throws when `EnumWindows` fails, and the lists are read
+  outside the catches (`TopLevelElementsOf` builds its list when called), so a failed list never
+  reads as "no window" or "no taskbar". When launch 6's wait runs out, run.txt gets its last look's
+  three reads (the notice's window gone or not, the count of the process's visible windows, a window
+  accepted or not) and the failure's message carries them. B2's taskbar step notes, before a Not-run
+  line or any other, how many of its looks a failed read emptied (`RealApp.TaskbarLooks`).
+- *Tests.* `Phase8aOrderTests` has ten:
+  `A_Win32Exception_counts_as_a_failed_read_and_an_IOException_does_not` and
+  `The_guard_reads_no_focus_while_another_window_is_in_front` are new, each committed failing before
+  its change (`9ab9113` before `03c36ce`, `c88fd33` before `6409351`).
+- *The reader's seven points.* Five applied: each window of `OtherWindowOfProcess` read on its own;
+  B2's count of failed looks, without which a failure that lasts the 10 s reads as "no button"; the
+  guard's words when the focus was not read, "as the app's window is not in front", since Windows
+  may name no foreground window while activation changes hands; two comments. One was the lead's,
+  the two passages of the docs (ruling 105). One is left as it is: a failed read of the focus now
+  reads as "No element has the keyboard focus" in the failure messages of `KeysOn` and of K's steps;
+  no key is sent either way, so nothing passes falsely.
+- *The lead's rulings.* The builder's three deviations are accepted (the list built when called, the
+  two lists read before their catches): they follow from the rule that a failed list fails loudly.
+  B2's line goes beyond ruling 105's point and is accepted: the look still counts no button, and
+  run.txt now tells a failed read from an empty taskbar. Seen and left, older than the package:
+  `TitleOf`, `FocusInText`, `AssertNeverPressed` and `AssertFocusIs` catch a `COMException` or
+  FlaUI's own exceptions only (theirs are property reads, which FlaUI does not convert), and
+  `SendKeys` reads the focused element before it asserts the foreground.
+- *Run on the desktop, the owner told* (21:04 to 21:12, on `640f728`; the project's Release build
+  with 0 warnings and `Phase8aOrderTests` 10 of 10 before it). Launch 6 six times: 6 of 6, the main
+  window found after 0.8 to 1.5 s. The whole part: 13 of 13 in 4 min 49 s (295 s with the lock);
+  B2's button found after 0.1 s, where the search from the desktop root had taken 0.5 s; I1's second
+  start seen with a window in 0 of 5 looks. Phase 6's S14, through the file dialog: passed. Phase
+  1's check 11 and phase 6's W1, which use the folder dialog, wait for the whole default run's
+  pictures and are run alone after it. The logs are in
+  `D:/Projects/Personal/phase8-work/wave4/realwindow/harden-launch6/`, `harden-part/` and
+  `harden-dialogs/`.
+- *CI.* Run 45540349415 on ruling 105's push (`985577a`: §12's merge, the docs' merge, `14789f7`)
+  and the guide workflow's run 45540349427 are in status.md's CI section.
 
 ### 13.2 What the integration settled
 

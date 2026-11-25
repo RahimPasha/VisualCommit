@@ -2355,23 +2355,26 @@ the launch's order:
      `b2-taskbar-button-enlarged`. Inspected: the owner's mark, not .NET's default icon, whichever frame
      Windows draws (the small drawing at 32 pixels and below, the full one above). None found within 10
      s (a hidden taskbar, or no button): the method does not fail on it, and run.txt says `B2's taskbar
-     button: Not run (no taskbar button named VisualCommit was found within 10 s).` Found, but none on
-     the window's display: the method does not fail on it either, and run.txt says `B2's taskbar button:
-     Not run (taskbar buttons named VisualCommit were found within 10 s, but none on the display that
-     holds the app's window, at {display} (screen pixels); each is noted above).` In both the report
-     marks B2's taskbar button "Not run" with that reason, and the gate checks the button by hand (open
-     point 51). More than one on the window's display: none is captured, each is noted, and the launch
-     fails at its end, before the app is closed, with B1's problems if it has any and `B2's taskbar
-     button: {n} taskbar buttons named VisualCommit lie on the display that holds the app's window, so
-     none was captured: another VisualCommit is running (or is pinned to the taskbar), and its button
-     cannot be told from this launch's. Close every other VisualCommit, or unpin it, and run the launch
-     again. The buttons: {each one's name, bounds and taskbar}.` Since step 19's fix (`e3c0884` and
-     `82922f5` on `wip/p8a-realwindow`; ruling 100); until then the first button named so was captured,
-     wherever it lay. Reason: a button does not say whose process it is, and Windows gives each
-     executable's path a button of its own, so another running or pinned VisualCommit's button could
-     have been captured as this launch's; and Windows shows a window's button on every display's taskbar
-     by default ("When using multiple displays, show my taskbar apps on: All taskbars"), so a count over
-     every taskbar would fail with no other VisualCommit running. `Phase8aOrderTests`'
+     button: Not run (no taskbar button named VisualCommit was found within 10 s).` When a read through
+     UI Automation failed in any of the looks, run.txt says so on a line before that one or any other of
+     the step's verdicts: `B2's taskbar button: {n} of the {m} looks at the taskbars found no button
+     because a read through UI Automation failed, the last with a {the exception's type}` (ruling 106).
+     Found, but none on the window's display: the method does not fail on it either, and run.txt says
+     `B2's taskbar button: Not run (taskbar buttons named VisualCommit were found within 10 s, but none
+     on the display that holds the app's window, at {display} (screen pixels); each is noted above).` In
+     both the report marks B2's taskbar button "Not run" with that reason, and the gate checks the
+     button by hand (open point 51). More than one on the window's display: none is captured, each is
+     noted, and the launch fails at its end, before the app is closed, with B1's problems if it has any
+     and `B2's taskbar button: {n} taskbar buttons named VisualCommit lie on the display that holds the
+     app's window, so none was captured: another VisualCommit is running (or is pinned to the taskbar),
+     and its button cannot be told from this launch's. Close every other VisualCommit, or unpin it, and
+     run the launch again. The buttons: {each one's name, bounds and taskbar}.` Since step 19's fix
+     (`e3c0884` and `82922f5` on `wip/p8a-realwindow`; ruling 100); until then the first button named so
+     was captured, wherever it lay. Reason: a button does not say whose process it is, and Windows gives
+     each executable's path a button of its own, so another running or pinned VisualCommit's button
+     could have been captured as this launch's; and Windows shows a window's button on every display's
+     taskbar by default ("When using multiple displays, show my taskbar apps on: All taskbars"), so a
+     count over every taskbar would fail with no other VisualCommit running. `Phase8aOrderTests`'
      `More_than_one_taskbar_button_named_VisualCommit_fails_naming_each` and
      `B2_counts_only_the_taskbar_buttons_on_the_display_that_holds_the_window` hold the choice with no
      window; the multi-display case is reasoned from Windows' setting, not measured (the laptop has one
@@ -4724,7 +4727,15 @@ the search for up to 19 s. The harness now takes a process's windows from Window
 Automation for each by its handle, in this launch and in every other place that searched the desktop:
 the three dialog helpers' fallbacks, B2's taskbars, and I1's look for a window of the second process,
 which reads Windows' list alone. By the handle launch 6 passed 16 of 16 and then 6 of 6, the main window
-found after 0.6 to 1.2 s, and the whole part 13 of 13 in 4 min 44 s where it had taken 6 min 47 s.
+found after 0.6 to 1.2 s, and the whole part 13 of 13 in 4 min 44 s where it had taken 6 min 47 s. Two
+readers of the change then asked for hardening, built and merged the same evening (`640f728`; ruling
+106), again with no expected result changed: the harness's catches count the exception FlaUI makes of a
+COM failure it does not map; launch 6 offers every window of the process to its test for GitStatus, each
+read on its own; the guard before a first key reads the focus only while the app's window is in front;
+the dialog helpers wait for a dialog's close on its window handle; a list of windows that Windows fails
+to give fails the step; and run.txt says more where a step gives up (launch 6's last look, B2's looks
+that a failed read emptied). On that code launch 6 passed 6 of 6, the whole part 13 of 13 in 4 min 49 s,
+and phase 6's S14 came through the file dialog.
 
 **For the gate's inspection.** The framed captures (`b1-title-bar-dark-with-frame`,
 `b2-title-bar-light-with-frame`, and phase 0's) show a pale line about 170 logical pixels long at the
@@ -5081,7 +5092,11 @@ so A1's capture at that size is not run there (run.txt says so).
   changes: the same buttons are found, and the same ones count. Reason: a search of the desktop's
   children through UI Automation asks every program on the desktop, and one that answers slowly holds
   it; launch 6's wait for the main window ran out on such a search in the part's first run on merged
-  code ("§12, the real-window part", above), and the harness no longer makes one anywhere.
+  code ("§12, the real-window part", above), and the harness no longer makes one anywhere. With the
+  hardening of the same evening (`640f728`; ruling 106) the step's text gains one run.txt line, written
+  when a read through UI Automation failed in any of its looks, and the guard's run.txt words for a look
+  made while the app's window is not in front say that the focus was not read; neither is an expected
+  result.
 
 ### Wave 1's comparison with phase 7b's references (2026-11-20)
 

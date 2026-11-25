@@ -365,9 +365,12 @@ Wave 4 and the review:
   (`b24b44a`). Its part's first run on merged code failed launch 6, as about two runs in five then
   did, on the package's own commit too: the harness searched the whole desktop through UI Automation
   for the app's window, and it now finds every window by its handle (`14789f7`; ruling 105; the part
-  13 of 13 after it). Two readers found the change sound and asked for hardening, which a package
-  builds. Still open: that package with its runs on the desktop, the push and CI's run, the lagged
-  list, the whole default run with its comparison, and the owner's answer on the dimmed texts.
+  13 of 13 after it). Two readers found the change sound and asked for hardening, which is built,
+  read by an independent reader, merged (`640f728`; ruling 106) and run on the desktop: launch 6 six
+  of six, the part 13 of 13, phase 6's S14 through the file dialog. Still open: CI's run of that
+  merge, the lagged list (started at 21:12), the whole default run with its comparison, phase 1's
+  check 11 and phase 6's W1 alone after it (the folder dialog), and the owner's answer on the dimmed
+  texts.
 
 Gate:
 
@@ -997,26 +1000,29 @@ the whole desktop through UI Automation for the app's window, which a slow progr
 holds for seconds; the harness now finds every window by its handle (`14789f7`; ruling 105): launch
 6 passed 22 of 22 after it and the part 13 of 13 in 4 min 44 s. Two readers found the change sound
 and raised hardening points (run `wf_80e5f4db-840`; its result `…/wave4/review/handles-read.json`;
-ruling 105 lists them). **A package builds them now** (run `wf_1892749d-bf6`, started at 20:24: a
-builder, an independent reader and a fixer, in the worktree
-`D:/Projects/Personal/vc-wt/p8a-rw-handles` on `wip/p8a-rw-handles`, from `14789f7`; no agent runs
-the real-window checks). The worktree `p8a-realwindow` is removed; `wip/p8a-realwindow` and
-`wip/p8a-docs-34` stay local (D396). **Next for the lead, in this order:** (1) read the package's
-result, merge it (`git merge --no-ff`), build the real-window project in Release, and run on the
-desktop, the owner told: launch 6 several times, launches 3, 5 and 7, the whole 8a part
-(`--filter-class "*Phase8aRealWindowPass"`) and phase 6's S14 for the file dialog; record it as the
-ruling after 105, in design 12.10 and in the report; remove the worktree; push; (2) read CI's run of
-this push, or of that one if it cancels this one, and record it; (3) the lagged list (design 0.4;
-phase 8a's project, run whole in it, holds the classes the fixes added that start the app), one
-command at a time through `scripts/heavy-run.sh`, with no agent at work; (4) the whole default run
-(`bash scripts/heavy-run.sh`), which also writes again the scripted pictures that partial runs
-emptied (phase 1's and phase 6's folders hold 3 and 9 on the laptop), the comparison of its pictures
-with wave 3's references, and the new references for the gate (ruling 102); (5) the owner's answer
-on the dimmed texts ("Waiting on the owner"), asked with the gate's start, which needs the owner
-present anyway: the gate's own default run takes the pictures a change of those colours would
-change; then step 19 is ticked. The package is reviewed with the rest in step 19 and merged last, in
-that step. The three finished worktrees (`p8a-restore`, `p8a-restore-base`, `p8a-guide`) are
-removed; their `wip/` branches stay local (D396). §11's builders got with their briefs: mdBook at
+ruling 105 lists them). **The hardening is built, read, merged and run** (run `wf_1892749d-bf6`,
+20:25 to 21:02, three agents, 0.64M tokens; its result `…/wave4/review/handles-harden-result.json`;
+`wip/p8a-rw-handles`, 14 commits, merged at `640f728`, 21:03; ruling 106 has it as built, the
+reader's seven points and the lead's rulings). On `640f728`, the owner told, 21:04 to 21:12: launch
+6 six of six, the whole 8a part 13 of 13 in 4 min 49 s, phase 6's S14 through the file dialog. The
+worktrees `p8a-realwindow` and `p8a-rw-handles` are removed; `wip/p8a-realwindow`, `wip/p8a-docs-34`
+and `wip/p8a-rw-handles` stay local (D396). **The lagged list runs** (started at 21:12 on
+`640f728`'s code, in the background, by the lead's script outside the repository, which runs design
+0.4's seven commands one after the other through `scripts/heavy-run.sh` and writes a log for each
+into `D:/Projects/Personal/phase8-work/wave4/lagged-step19/`; no agent is at work beside it). **Next
+for the lead, in this order:** (1) read CI's run of the push that carries `640f728` and record it;
+(2) read the lagged list's seven results; a failure under the lag gets a fix, never a looser test;
+(3) the whole default run (`bash scripts/heavy-run.sh`), which also writes again the scripted
+pictures that partial runs emptied (phase 1's and phase 6's folders held 3 and 9 on the laptop),
+then the comparison of its pictures with wave 3's references
+(`D:/Projects/Personal/phase8-work/references/wave3/`) and the new references for the gate (ruling
+102); (4) phase 1's check 11 and phase 6's W1 alone in the real window, the owner told, for the
+folder dialog's wait (ruling 106); (5) the owner's answer on the dimmed texts ("Waiting on the
+owner"), asked with the gate's start, which needs the owner present anyway: the gate's own default
+run takes the pictures a change of those colours would change; then step 19 is ticked. The package
+is reviewed with the rest in step 19 and merged last, in that step. The three finished worktrees
+(`p8a-restore`, `p8a-restore-base`, `p8a-guide`) are removed; their `wip/` branches stay local
+(D396). §11's builders got with their briefs: mdBook at
 `D:/Projects/Personal/phase8-work/tools/mdbook-0.5.4/mdbook.exe` and the Linux archive's SHA-256 for
 `guide.yml` (Notes, "Wave 4"); the references `D:/Projects/Personal/phase8-work/references/wave3/`;
 rulings 80 (stop and report if the first-run link's frame touches its ink), 82 (the facts no check

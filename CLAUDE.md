@@ -459,12 +459,12 @@ What to know about them:
   `winget` on the PATH, or its launch 7 fails (D449). It starts a second process of the app beside
   the first (the instance guard's launches), minimises the app's window and brings it back, and its
   F4 confirms Windows' Open dialog on git's program, which leaves an entry in the user's lists of
-  recent files. The rules it holds with no window are `Phase8aOrderTests` (8 tests): they run in the
-  whole pass and under their own `--filter-class "*Phase8aOrderTests"`, not under the part's filter.
-  The harness finds every window by its handle (`RealApp.TopLevelElementsOf`, from Windows' own list
-  of windows), never by a search of the desktop's children through UI Automation: such a search asks
-  every program on the desktop, and on 2026-11-24 it held launch 6's wait past its 15 s in about two
-  runs of five (`docs/phase-8a-design.md` 13.1, ruling 105).
+  recent files. The rules it holds with no window are `Phase8aOrderTests` (10 tests): they run in
+  the whole pass and under their own `--filter-class "*Phase8aOrderTests"`, not under the part's
+  filter. The harness finds every window by its handle (`RealApp.TopLevelElementsOf`, from Windows'
+  own list of windows), never by a search of the desktop's children through UI Automation: such a
+  search asks every program on the desktop, and on 2026-11-24 it held launch 6's wait past its 15 s
+  in about two runs of five (`docs/phase-8a-design.md` 13.1, ruling 105).
 - The performance series (`Phase8aPerformance`, opt-in through `VISUALCOMMIT_PERF_RUNS`; without the
   variable the real-window pass shows its five facts skipped) measures the start with one and with
   ten restored 100,000-commit tabs, memory, the reload after an outside commit and after a fetch,
