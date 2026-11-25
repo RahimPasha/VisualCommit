@@ -7372,6 +7372,54 @@ min 44 s): 8,903 tests, 8,893 passed, 7 skipped, 3 failed.
   when its first packet with one does not, and the test's failure message carries the progress
   reports so far and the held part.
 
+**The copy walks past a folder it cannot open (the lead, 2026-11-25; D468 (6)).** 110. Built, read
+and merged (run `wf_7cd74cb6-55c`, 04:27 to 05:13, three Opus agents, 0.54M tokens; its result
+`D:/Projects/Personal/phase8-work/wave4/review/copy-walk-result.json`; `wip/p8a-copy-walk`, seven
+commits from `4538d95`, the last `4fe7bd3`; merged at `67e1842`, 05:15), then read once more in its
+final form (run `wf_63e52e09-2f3`, read only, 0.18M tokens; `copy-walk-final-read.json`). Two files:
+`tests/VisualCommit.Testing/TempRepo.cs` and
+`tests/VisualCommit.Git.Tests/TempFolderCleanerTests.cs`.
+
+- *As built.* `TempRepo.CopyDirectory` has one private walk that takes its enumeration options. The
+  copy without a record uses `StrictWalk`, the options `SearchOption.AllDirectories` stood for; the
+  copy with a record uses `WalkPastUnopenable`, the same with `IgnoreInaccessible`: it does not go
+  into a folder it cannot open and goes on, and the folder, which holds nothing by the cleaner's
+  rule, is made in the copy. An empty record counts as none (`folders.Count > 0`), so a repository
+  or workspace that was never kept copies strictly. `File.Copy`, the record's own walks and
+  everything else are as they were; there is no retry.
+- *How it came about.* The lead's brief said to make the state by deleting the empty folder while a
+  handle to it is open. The builder first proved, as told, that the state is the one meant, found
+  that on the laptop's Windows 11 it is not (the folder's name goes at once), stopped and reported
+  the state that does hold: the delete disposition set through a held handle
+  (`SetFileInformationByHandle`, `FileDispositionInfo`), under which a strict walk throws the
+  incident's own "Access to the path … is denied". The reader, who had only tests to read, asked for
+  that state and for the empty record's case. The fixer checked the state itself, committed the fact
+  failing where the incident failed (`TempRepo.cs:872`, through `CopyAsync`), and built the change.
+  Since the change then had no independent reader, the lead had its final form read: sound, six
+  notes, no defect.
+- *Tests.* `TempFolderCleanerTests` has 25, four more: a whole repository, its hidden `.git` and a
+  hidden file among them, is copied alike with a record and without; a kept repository's copy walks
+  past a folder that cannot be opened, and has it; a copy without a record fails on such a folder,
+  and so does a copy of a repository that was never kept. On Windows the folder is marked for
+  deletion through a held handle; on macOS and Linux it loses its permissions, which a root process
+  ignores, so the three facts that make the state are skipped there for a root process
+  (`Assert.SkipWhen`, as `SingleInstanceGuardTests` does): CI's three container jobs count three
+  more skipped each. The Unix form has run nowhere before CI's macOS and Linux jobs.
+- *Runs on the merged tree* (`67e1842`). The solution's build with 0 warnings;
+  `TempFolderCleanerTests` 25 of 25; `VisualCommit.Git.Tests` whole through the script: 3,290 tests,
+  none failed, in 25 min 9 s (1,518 s with the lock); phase 7b's walk-through whole: 178 tests, none
+  failed, in 3 min 56 s. On the branch before the merge: `TempRepoTests` 19 of 19, the classes named
+  `*ScenarioTests` 92 of 92, phase 7b's part A 9 of 9.
+- *The lead's rulings.* The whole default run is not made a third time for this change: it lies in
+  one method of the test support code, facts pin both of its sides, a wrong option would fail every
+  scenario at once, and the gate's counted run is the whole run on the final code. Accepted as they
+  are, for the handoff: under a folder refused for another reason than the cleaner's, the tolerant
+  copy leaves out what the folder holds, without a word (no such folder exists in a template, and
+  the summary says so); the Windows fact needs to be the only holder of its folder, so an indexer or
+  a scanner that holds it would fail the fact, never pass it; and the copies that stay strict,
+  `Scenarios.AuthRemoteAsync`'s copy of its bare repository among them, are D468 (4)'s tests in
+  flight.
+
 ### 13.2 What the integration settled
 
 Beyond moving the packages' contracts into section 1: the broker's `gitVersion` goes at §3's merge,
