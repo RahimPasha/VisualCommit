@@ -406,6 +406,19 @@ Phase 8a's runs on `phase/8a-release-readiness`, the newest first. CI has six jo
 `e04762b`: the sixth, "ubuntu 22.04 container, git 2.34 (the floor)", did not fail the run until
 `bba59c7`, which made it required after its first green run.
 
+- [45540349415](https://github.com/RahimPasha/VisualCommit/actions/runs/45540349415), for `985577a`
+  (§12's merge `b24b44a`, the docs of the third and fourth rounds, the harness's lookup by handle
+  `14789f7` and ruling 105): **success in all six jobs.** `windows-latest`: 8,882 tests, 8,875
+  passed, 7 skipped, Test step 44 min 11 s of 70; it also compiled the merged real-window project.
+  `macos-latest`: 8,879 tests, 8,876 passed, 3 skipped, Test step 40 min 3 s of 70. `ubuntu-latest`:
+  8,879 tests, 8,875 passed, 4 skipped, Test step 8 min 12 s. The floor's job (git 2.34.1): 8,879
+  tests with 4 skipped, Test step 6 min 28 s; the two containers 8,879 tests with 4 skipped each,
+  Test steps 6 min 36 s with Microsoft's installer and 5 min 36 s with Ubuntu's packages, and the
+  Secret Service's test passed in both. The Windows and macOS keychain steps passed. The same number
+  of tests as the run before: §12 adds none to the default run, and its three files of part F's
+  walk-through passed at their first run on macOS and Linux. **The guide's workflow** on the same
+  push, [45540349427](https://github.com/RahimPasha/VisualCommit/actions/runs/45540349427):
+  **success** (its build job; no deploy off `master`).
 - [45528731262](https://github.com/RahimPasha/VisualCommit/actions/runs/45528731262), for `25fb8b0`
   (the one fact corrected for macOS, with ruling 104 and D467): **success in all six jobs.**
   `windows-latest`: 8,882 tests, 8,875 passed, 7 skipped, Test step 43 min 28 s of 70.
@@ -1009,12 +1022,13 @@ worktrees `p8a-realwindow` and `p8a-rw-handles` are removed; `wip/p8a-realwindow
 and `wip/p8a-rw-handles` stay local (D396). **The lagged list runs** (started at 21:12 on
 `640f728`'s code, in the background, by the lead's script outside the repository, which runs design
 0.4's seven commands one after the other through `scripts/heavy-run.sh` and writes a log for each
-into `D:/Projects/Personal/phase8-work/wave4/lagged-step19/`; no agent is at work beside it). **Next
-for the lead, in this order:** (1) read CI's run of the push that carries `640f728` and record it;
-(2) read the lagged list's seven results; a failure under the lag gets a fix, never a looser test;
-(3) the whole default run (`bash scripts/heavy-run.sh`), which also writes again the scripted
-pictures that partial runs emptied (phase 1's and phase 6's folders held 3 and 9 on the laptop),
-then the comparison of its pictures with wave 3's references
+into `D:/Projects/Personal/phase8-work/wave4/lagged-step19/`; no agent is at work beside it). CI's
+run 45540349415 on ruling 105's push is green in all six jobs, and the guide workflow's run on it
+too (the CI section). **Next for the lead, in this order:** (1) read CI's run of the push that
+carries `640f728` and record it; (2) read the lagged list's seven results; a failure under the lag
+gets a fix, never a looser test; (3) the whole default run (`bash scripts/heavy-run.sh`), which also
+writes again the scripted pictures that partial runs emptied (phase 1's and phase 6's folders held 3
+and 9 on the laptop), then the comparison of its pictures with wave 3's references
 (`D:/Projects/Personal/phase8-work/references/wave3/`) and the new references for the gate (ruling
 102); (4) phase 1's check 11 and phase 6's W1 alone in the real window, the owner told, for the
 folder dialog's wait (ruling 106); (5) the owner's answer on the dimmed texts ("Waiting on the
