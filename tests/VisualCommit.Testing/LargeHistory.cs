@@ -126,7 +126,7 @@ public static class LargeHistory
 
         // Test processes of one run start at the same time: one builds, the others wait for it.
         using var lockFile = await LockAsync(Path.Combine(shared, $"large-history-{Version}.lock")).ConfigureAwait(false);
-        if (File.Exists(marker) && Directory.Exists(Path.Combine(final, ".git")))
+        if (MarkedSha(marker) is { } sha && await IsUsableAsync(final, sha, bare: false).ConfigureAwait(false))
         {
             return final;
         }
@@ -156,7 +156,7 @@ public static class LargeHistory
 
         // Test processes of one run start at the same time: one makes the copy, the others wait for it.
         using var lockFile = await LockAsync(final + ".lock").ConfigureAwait(false);
-        if (File.Exists(marker) && File.Exists(Path.Combine(final, "HEAD")))
+        if (MarkedSha(marker) is { } sha && await IsUsableAsync(final, sha, bare: true).ConfigureAwait(false))
         {
             return final;
         }
@@ -179,6 +179,22 @@ public static class LargeHistory
 
         File.WriteAllText(marker, head + "\n");
         return final;
+    }
+
+    /// <summary>The SHA a shared copy's marker holds, or null when it has no marker.</summary>
+    internal static string? MarkedSha(string marker) =>
+        File.Exists(marker) ? File.ReadAllText(marker).Trim() : null;
+
+    /// <summary>
+    /// Whether <paramref name="folder"/> can be used as the shared copy whose marker holds
+    /// <paramref name="sha"/>: a bare repository with <paramref name="bare"/>, one with a working
+    /// tree without it. Taken from the folder's git files being there.
+    /// </summary>
+    internal static Task<bool> IsUsableAsync(string folder, string sha, bool bare)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(folder);
+        ArgumentNullException.ThrowIfNull(sha);
+        return Task.FromResult(bare ? File.Exists(Path.Combine(folder, "HEAD")) : Directory.Exists(Path.Combine(folder, ".git")));
     }
 
     /// <summary>The fast-import stream of the whole history.</summary>
