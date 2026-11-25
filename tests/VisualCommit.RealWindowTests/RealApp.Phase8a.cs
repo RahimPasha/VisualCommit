@@ -132,6 +132,14 @@ public sealed partial class RealApp
     public bool IsWindowGone => !Win32.IsWindow(Handle);
 
     /// <summary>
+    /// Whether the top-level window <paramref name="window"/> has left the desktop, read from Windows alone:
+    /// destroyed (<c>IsWindow</c> false) or hidden (<c>IsWindowVisible</c> false). A dialog's close is waited
+    /// for on it (<see cref="WaitForDialogClosed"/>), so that the wait asks UI Automation nothing about a
+    /// dialog that is going.
+    /// </summary>
+    private static bool IsGoneFromDesktop(IntPtr window) => !Win32.IsWindow(window) || !Win32.IsWindowVisible(window);
+
+    /// <summary>
     /// Whether this window is the desktop's foreground window (<c>GetForegroundWindow</c>), the window
     /// the real keyboard's keys reach: a key is sent only while this holds.
     /// </summary>
@@ -139,8 +147,8 @@ public sealed partial class RealApp
 
     /// <summary>
     /// The element UI Automation reports as having the keyboard focus, or null when there is none or it
-    /// cannot be read: what a real Enter would press, and where a text's focus lies when its own element
-    /// has no automation id.
+    /// cannot be read (<see cref="IsReadFailure"/>): what a real Enter would press, and where a text's focus
+    /// lies when its own element has no automation id.
     /// </summary>
     public AutomationElement? FocusedElement()
     {
@@ -148,7 +156,7 @@ public sealed partial class RealApp
         {
             return _automation.FocusedElement();
         }
-        catch (Exception ex) when (ex is COMException or FlaUI.Core.Exceptions.ElementNotAvailableException)
+        catch (Exception ex) when (IsReadFailure(ex))
         {
             return null;
         }
@@ -158,7 +166,8 @@ public sealed partial class RealApp
     /// The automation id of UI Automation's focused element, or null when there is none or it cannot be
     /// read: as <see cref="FocusedAutomationId"/>, but an element that goes between the look and the read
     /// (FlaUI's <c>ElementNotAvailableException</c>, a focus that moves as a dialog closes or a button
-    /// turns disabled) counts as none, so that a wait on it looks again instead of ending.
+    /// turns disabled), or any other read that fails (<see cref="IsReadFailure"/>), counts as none, so that a
+    /// wait on it looks again instead of ending.
     /// </summary>
     public string? FocusedId()
     {
@@ -171,7 +180,7 @@ public sealed partial class RealApp
         {
             return focused.Properties.AutomationId.ValueOrDefault;
         }
-        catch (Exception ex) when (ex is COMException or FlaUI.Core.Exceptions.FlaUIException)
+        catch (Exception ex) when (IsReadFailure(ex))
         {
             return null;
         }
@@ -181,11 +190,18 @@ public sealed partial class RealApp
     /// Whether <paramref name="exception"/> is how a read through UI Automation fails: an
     /// <see cref="ArgumentException"/> (E_INVALIDARG, a cached read of a property the element's cache does not
     /// hold), a <see cref="COMException"/>, a <see cref="TimeoutException"/> (UI Automation's own time-out,
-    /// 0x80131505), an <see cref="InvalidOperationException"/>, or a FlaUI exception (an element no longer
-    /// available, a property or a pattern not supported or not cached).
+    /// 0x80131505), an <see cref="InvalidOperationException"/>, a FlaUI exception (an element no longer
+    /// available, a property or a pattern not supported or not cached), or a
+    /// <see cref="System.ComponentModel.Win32Exception"/>. FlaUI 5.0.0's <c>Com.Call</c>, which wraps
+    /// <c>UIA3Automation.FromHandle</c> and <c>FocusedElement</c>, catches a <see cref="COMException"/>, turns
+    /// 0x80040200 to 0x80040204 into FlaUI's exceptions, 0x80131505 into a <see cref="TimeoutException"/> and
+    /// 0x80131509 into an <see cref="InvalidOperationException"/>, and throws every other one again as a
+    /// <see cref="System.ComponentModel.Win32Exception"/>, so a <see cref="COMException"/> never leaves those
+    /// two calls.
     /// </summary>
     public static bool IsReadFailure(Exception exception) =>
-        exception is ArgumentException or COMException or TimeoutException or InvalidOperationException or FlaUI.Core.Exceptions.FlaUIException;
+        exception is ArgumentException or COMException or TimeoutException or InvalidOperationException
+            or FlaUI.Core.Exceptions.FlaUIException or System.ComponentModel.Win32Exception;
 
     /// <summary>
     /// A read through UI Automation that never throws: what <paramref name="read"/> gives, or
@@ -317,7 +333,7 @@ public sealed partial class RealApp
             System.Globalization.CultureInfo.InvariantCulture,
             $"the path set through the file name box's Value pattern; the Enter sent once the dialog was the foreground window with that box focused, {clock.Elapsed.TotalSeconds:0.0} s after the box was given the focus");
         PressKey(VirtualKeyShort.RETURN);
-        WaitFor(() => !Window.ModalWindows.Any(window => TitleOf(window) == title), "the file dialog to close", timeout);
+        WaitForDialogClosed(handle, title, "the file dialog to close", timeout);
         WaitUntilIdle();
         return guard;
     }
@@ -335,25 +351,38 @@ public sealed partial class RealApp
 
     /// <summary>
     /// The taskbar's buttons whose UI Automation names start with <paramref name="nameStart"/>, looked for
-    /// from UI Automation's desktop root (the taskbars, <c>Shell_TrayWnd</c> and on another monitor
-    /// <c>Shell_SecondaryTrayWnd</c>, and their buttons) every 100 ms for at most
+    /// (<see cref="FindTaskbarButtons"/>: the taskbars, <c>Shell_TrayWnd</c> and on another monitor
+    /// <c>Shell_SecondaryTrayWnd</c>, found in Windows' list of windows by their classes, each asked of UI
+    /// Automation by its handle, and their buttons searched through UI Automation) every 100 ms for at most
     /// <paramref name="limit"/>, until a look finds one on <paramref name="display"/>
     /// (<see cref="TaskbarEntry.LiesOn"/>): every such button of that look, on every taskbar, with its name,
     /// its bounds on the screen and its taskbar; at the limit, the last look's, which are then on other
     /// displays, or none. A button does not say whose process it is: Windows groups the buttons by the
     /// executable's path, so each other running VisualCommit has a button of its own, with the same name,
-    /// and with more than one display one app can have a button on each display's taskbar.
+    /// and with more than one display one app can have a button on each display's taskbar. With the
+    /// buttons, how many looks were made and how many of them found none because a read failed
+    /// (<see cref="TaskbarLooks"/>).
     /// </summary>
-    public IReadOnlyList<TaskbarEntry> TaskbarButtons(string nameStart, TimeSpan limit, Rectangle display)
+    public TaskbarLooks TaskbarButtons(string nameStart, TimeSpan limit, Rectangle display)
     {
         ArgumentException.ThrowIfNullOrEmpty(nameStart);
         var clock = Stopwatch.StartNew();
+        var looks = 0;
+        var failedLooks = 0;
+        string? lastFailure = null;
         while (true)
         {
-            var found = FindTaskbarButtons(nameStart);
+            var found = FindTaskbarButtons(nameStart, out var failure);
+            looks++;
+            if (failure is not null)
+            {
+                failedLooks++;
+                lastFailure = failure.GetType().Name;
+            }
+
             if (found.Exists(entry => entry.LiesOn(display)) || clock.Elapsed >= limit)
             {
-                return found;
+                return new TaskbarLooks(found, looks, failedLooks, lastFailure);
             }
 
             Thread.Sleep(PollInterval);
@@ -381,25 +410,33 @@ public sealed partial class RealApp
 
     /// <summary>
     /// A top-level window of the app's process other than the notice (<see cref="InstanceNoticeId"/>), on
-    /// the screen: the main window that "Try again" opens in the process that showed the notice. Null
-    /// while there is none. One look; the caller waits for it. Found by its handle
-    /// (<see cref="TopLevelElementsOf"/>).
+    /// the screen, that <paramref name="accept"/> takes: the main window that "Try again" opens in the
+    /// process that showed the notice. Each such window is offered in the order <c>EnumWindows</c> gives,
+    /// until one is taken, so that a popup of the app above the main window does not hide it. A window
+    /// whose read through UI Automation fails (<see cref="IsReadFailure"/>), in the three filters or in
+    /// <paramref name="accept"/>, is passed over at that look, so that it does not hide the windows after
+    /// it either. Null while none is taken. One look; the caller waits for it and looks again. Found by
+    /// their handles (<see cref="TopLevelElementsOf"/>): a failed enumeration of Windows' list leaves the call.
     /// </summary>
-    public Window? OtherWindowOfProcess()
+    public Window? OtherWindowOfProcess(Func<Window, bool> accept)
     {
-        try
+        ArgumentNullException.ThrowIfNull(accept);
+        foreach (var element in TopLevelElementsOf(_process.Id))
         {
-            return TopLevelElementsOf(_process.Id)
-                .Where(element => element.Properties.AutomationId.ValueOrDefault != InstanceNoticeId
+            var window = element.AsWindow();
+            var taken = ReadOr(
+                () => element.Properties.AutomationId.ValueOrDefault != InstanceNoticeId
                     && !element.IsOffscreen
-                    && element.BoundingRectangle is { Width: > 0, Height: > 0 })
-                .Select(element => element.AsWindow())
-                .FirstOrDefault();
+                    && element.BoundingRectangle is { Width: > 0, Height: > 0 }
+                    && accept(window),
+                false);
+            if (taken)
+            {
+                return window;
+            }
         }
-        catch (Exception ex) when (ex is COMException or FlaUI.Core.Exceptions.ElementNotAvailableException)
-        {
-            return null;
-        }
+
+        return null;
     }
 
     /// <summary>
@@ -456,19 +493,32 @@ public sealed partial class RealApp
 
     /// <summary>
     /// Whether the process <paramref name="processId"/> has a visible top-level window on the desktop now,
-    /// as Windows lists them: one look, for a check that a start showed no window while it ran.
+    /// as Windows lists them: one look, for a check that a start showed no window while it ran. When Windows
+    /// fails to list its windows, a <see cref="System.ComponentModel.Win32Exception"/>, never false.
     /// </summary>
     public bool HasWindowOfProcess(int processId) => Win32.VisibleTopLevelWindowsOf((uint)processId).Count > 0;
+
+    /// <summary>
+    /// How many visible top-level windows the app's process has now, as Windows lists them: one look, read
+    /// from Windows alone, for run.txt. When Windows fails to list its windows, a
+    /// <see cref="System.ComponentModel.Win32Exception"/>.
+    /// </summary>
+    public int VisibleWindowCount => Win32.VisibleTopLevelWindowsOf((uint)_process.Id).Count;
 
     /// <summary>
     /// The visible top-level windows of a process as UI Automation elements, found in Windows' own list of
     /// windows and asked of UI Automation by their handles, never by a search of the desktop's children.
     /// Such a search makes UI Automation ask every program on the desktop, and one that answers slowly
-    /// holds the search, and the app under test with it, for seconds: launch 6's wait for the main window
-    /// ran out on it in about two runs of five on the owner's desktop, and in none of sixteen by the handle.
+    /// holds the search, and the harness's wait with it, for seconds: launch 6's wait for the main window
+    /// ran out on it in about two runs of five on the owner's desktop, and in none of twenty-two by the handle.
+    /// In the order <c>EnumWindows</c> gives. A window whose look fails (<see cref="IsReadFailure"/>) is left
+    /// out; the list itself is read whole, here and not when the result is walked, so that a failed
+    /// enumeration (<see cref="System.ComponentModel.Win32Exception"/>) leaves the call and never reads as no
+    /// window.
     /// </summary>
-    private IEnumerable<AutomationElement> TopLevelElementsOf(int processId)
+    private List<AutomationElement> TopLevelElementsOf(int processId)
     {
+        List<AutomationElement> found = [];
         foreach (var window in Win32.VisibleTopLevelWindowsOf((uint)processId))
         {
             AutomationElement? element = null;
@@ -476,16 +526,19 @@ public sealed partial class RealApp
             {
                 element = _automation.FromHandle(window);
             }
-            catch (Exception ex) when (ex is COMException or FlaUI.Core.Exceptions.ElementNotAvailableException)
+            catch (Exception ex) when (IsReadFailure(ex))
             {
-                // The window went between the list and the look.
+                // The window went between the list and the look, or UI Automation could not read it: the
+                // look skips it.
             }
 
             if (element is not null)
             {
-                yield return element;
+                found.Add(element);
             }
         }
+
+        return found;
     }
 
     /// <summary>The screen point in the middle of the title bar: half the window's width across, half the title bar's height down.</summary>
@@ -570,17 +623,25 @@ public sealed partial class RealApp
 
     /// <summary>
     /// One look for <see cref="TaskbarButtons"/>: every button on a taskbar whose name starts with
-    /// <paramref name="nameStart"/>, with non-empty bounds, in UI Automation's order. None when the taskbar
-    /// changed while it was walked, so that a look never counts part of it.
+    /// <paramref name="nameStart"/>, with non-empty bounds, the taskbars in the order Windows lists them and
+    /// each one's buttons in the order UI Automation's search of it gives. None when a read through UI
+    /// Automation failed while the taskbars were walked (<see cref="IsReadFailure"/>, a taskbar that changed
+    /// among them), so that a look never counts part of a taskbar, and <paramref name="failure"/> is then that
+    /// failure; null when no read failed. The taskbars' windows are listed outside that catch: a failed
+    /// enumeration (<see cref="System.ComponentModel.Win32Exception"/>) leaves the call and never reads as no
+    /// taskbar.
     /// </summary>
-    private List<TaskbarEntry> FindTaskbarButtons(string nameStart)
+    private List<TaskbarEntry> FindTaskbarButtons(string nameStart, out Exception? failure)
     {
+        failure = null;
+
+        // The taskbars found in Windows' list of windows by their classes.
+        var bars = Win32.VisibleTopLevelWindowsOfClass("Shell_TrayWnd", "Shell_SecondaryTrayWnd");
         List<TaskbarEntry> found = [];
         try
         {
-            // The taskbars by their window class, each asked of UI Automation by its handle (TopLevelElementsOf).
-            var bars = Win32.VisibleTopLevelWindowsOfClass("Shell_TrayWnd", "Shell_SecondaryTrayWnd").Select(window => _automation.FromHandle(window));
-            foreach (var bar in bars)
+            // Each taskbar asked of UI Automation by its handle, its buttons searched through UI Automation.
+            foreach (var bar in bars.Select(window => _automation.FromHandle(window)))
             {
                 var taskbar = bar.Properties.ClassName.ValueOrDefault ?? "a taskbar";
                 foreach (var button in bar.FindAllDescendants(condition => condition.ByControlType(ControlType.Button)))
@@ -593,9 +654,10 @@ public sealed partial class RealApp
                 }
             }
         }
-        catch (Exception ex) when (ex is COMException or FlaUI.Core.Exceptions.ElementNotAvailableException)
+        catch (Exception ex) when (IsReadFailure(ex))
         {
-            // The taskbar redrew while it was walked: the next look reads it again, whole.
+            // A taskbar redrew while it was walked, or a read of it failed: the next look reads it again, whole.
+            failure = ex;
             return [];
         }
 
@@ -609,6 +671,14 @@ public sealed partial class RealApp
         public bool LiesOn(Rectangle display) =>
             display.Contains(ScreenBounds.X + (ScreenBounds.Width / 2), ScreenBounds.Y + (ScreenBounds.Height / 2));
     }
+
+    /// <summary>
+    /// What <see cref="TaskbarButtons"/> found: the last look's <see cref="Buttons"/>, how many looks it made,
+    /// how many of them found none because a read through UI Automation failed (<see cref="IsReadFailure"/>),
+    /// and the type of the last such failure, null when none failed: so that run.txt can tell taskbars that
+    /// showed no such button from taskbars that could not be read.
+    /// </summary>
+    public sealed record TaskbarLooks(IReadOnlyList<TaskbarEntry> Buttons, int Looks, int FailedLooks, string? LastFailure);
 
     /// <summary>
     /// The window's icons (<see cref="WindowIcons"/>): <c>ICON_SMALL</c>'s and <c>ICON_BIG</c>'s images
@@ -803,10 +873,11 @@ public sealed partial class RealApp
 
     /// <summary>
     /// The Win32 calls of these launches beside the shared <see cref="NativeMethods"/>: the window's
-    /// state on the desktop, its icons, its visible frame and the window under a point. Each only reads,
-    /// but for <c>ShowWindowAsync</c>, which minimises the app's own window. No call waits on the app's
-    /// thread without a limit: <c>WM_GETICON</c> goes by <c>SendMessageTimeoutW</c>, the minimise is
-    /// posted, and <c>GetWindowTextW</c> reads another process's window's title without a message.
+    /// state on the desktop, its icons, its visible frame, the window under a point and the top-level
+    /// windows Windows lists (<c>EnumWindows</c>). Each only reads, but for <c>ShowWindowAsync</c>, which
+    /// minimises the app's own window. No call waits on the app's thread without a limit: <c>WM_GETICON</c>
+    /// goes by <c>SendMessageTimeoutW</c>, the minimise is posted, and <c>GetWindowTextW</c> reads another
+    /// process's window's title without a message.
     /// </summary>
     private static class Win32
     {
@@ -840,52 +911,69 @@ public sealed partial class RealApp
 
         private delegate bool EnumWindowsProc(IntPtr window, IntPtr parameter);
 
-        [DllImport("user32.dll")]
+        [DllImport("user32.dll", SetLastError = true)]
         [return: MarshalAs(UnmanagedType.Bool)]
         private static extern bool EnumWindows(EnumWindowsProc callback, IntPtr parameter);
 
         [DllImport("user32.dll")]
         private static extern uint GetWindowThreadProcessId(IntPtr window, out uint process);
 
-        [DllImport("user32.dll", CharSet = CharSet.Unicode)]
-        private static extern int GetClassName(IntPtr window, System.Text.StringBuilder name, int capacity);
-
-        /// <summary>The visible top-level windows of one of the window classes named, as Windows lists them.</summary>
+        /// <summary>
+        /// The visible top-level windows of one of the window classes named, as Windows lists them.
+        /// <see cref="System.ComponentModel.Win32Exception"/> when Windows fails to list them (<see cref="Enumerate"/>).
+        /// </summary>
         public static List<IntPtr> VisibleTopLevelWindowsOfClass(params string[] classes)
         {
             var found = new List<IntPtr>();
             var name = new System.Text.StringBuilder(256);
-            EnumWindows(
-                (window, _) =>
+            Enumerate(window =>
+            {
+                if (IsWindowVisible(window) && GetClassNameW(window, name, name.Capacity) > 0 && classes.Contains(name.ToString(), StringComparer.Ordinal))
                 {
-                    if (IsWindowVisible(window) && GetClassName(window, name, name.Capacity) > 0 && classes.Contains(name.ToString(), StringComparer.Ordinal))
-                    {
-                        found.Add(window);
-                    }
-
-                    return true;
-                },
-                IntPtr.Zero);
+                    found.Add(window);
+                }
+            });
             return found;
         }
 
-        /// <summary>The visible top-level windows of a process, front to back, as Windows lists them.</summary>
+        /// <summary>
+        /// The visible top-level windows of a process, in the order <c>EnumWindows</c> gives (the Z order in
+        /// practice), as Windows lists them. <see cref="System.ComponentModel.Win32Exception"/> when Windows
+        /// fails to list them (<see cref="Enumerate"/>).
+        /// </summary>
         public static List<IntPtr> VisibleTopLevelWindowsOf(uint process)
         {
             var found = new List<IntPtr>();
-            EnumWindows(
-                (window, _) =>
+            Enumerate(window =>
+            {
+                GetWindowThreadProcessId(window, out var owner);
+                if (owner == process && IsWindowVisible(window))
                 {
-                    GetWindowThreadProcessId(window, out var owner);
-                    if (owner == process && IsWindowVisible(window))
-                    {
-                        found.Add(window);
-                    }
-
-                    return true;
-                },
-                IntPtr.Zero);
+                    found.Add(window);
+                }
+            });
             return found;
+        }
+
+        /// <summary>
+        /// Hands every top-level window Windows lists (<c>EnumWindows</c>) to <paramref name="each"/>. When
+        /// <c>EnumWindows</c> returns false with an error set, a
+        /// <see cref="System.ComponentModel.Win32Exception"/> with that error: a failed enumeration never reads as
+        /// no window, so that a check that asserts there is none (I1's second start) fails then instead of passing.
+        /// </summary>
+        private static void Enumerate(Action<IntPtr> each)
+        {
+            if (!EnumWindows(
+                    (window, _) =>
+                    {
+                        each(window);
+                        return true;
+                    },
+                    IntPtr.Zero)
+                && Marshal.GetLastPInvokeError() is var error and not 0)
+            {
+                throw new System.ComponentModel.Win32Exception(error, $"Windows did not list its top-level windows (EnumWindows failed with error {error}).");
+            }
         }
 
         [DllImport("user32.dll")]

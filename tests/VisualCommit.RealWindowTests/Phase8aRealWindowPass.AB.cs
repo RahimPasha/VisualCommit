@@ -154,21 +154,23 @@ public partial class Phase8aRealWindowPass
 
     /// <summary>
     /// The guard before a launch's first key (design 12.3.3, 12.3.4 launches 3, 5 and 6, 12.3.5), and in
-    /// launch 5 before its first capture too (D459): each look reads the two conditions once,
-    /// <see cref="RealApp.ForegroundIsThis"/> and the id of UI Automation's focused element
-    /// (<see cref="RealApp.FocusedId"/>, read through <see cref="RealApp.ReadOr{T}"/>, so that a read that fails,
-    /// also while another window is in front, counts as a look with no focused id and ends nothing), and
-    /// <paramref name="ready"/> judges those reads. When it does not
-    /// hold, one real click on the window's title bar, away from its left end and its caption buttons
-    /// (<see cref="RealApp.ClickTitleBar"/>), then a wait of at most 5 s until it holds, else the method fails
-    /// with <paramref name="failure"/> before any key. When another window lies over the point the click
-    /// would land on, nothing is clicked and the method fails with <paramref name="failure"/> and that
-    /// window's words. run.txt says whether the click was needed and, on each of its lines, what the look
-    /// behind it read; each line starts with <paramref name="when"/>. Returns it.
+    /// launch 5 before its first capture too (D459): each look reads <see cref="RealApp.ForegroundIsThis"/> once
+    /// and, only while it holds, the id of UI Automation's focused element (<see cref="RealApp.FocusedId"/>, by
+    /// <see cref="FocusedIdWhileInFront"/>). While another window is in front the focus is not read, as the read
+    /// would ask that other program through UI Automation, and the look counts as one with no focused id; a read
+    /// that fails counts so too and ends nothing. <paramref name="ready"/> judges those reads; none a caller
+    /// gives is true while the foreground is false. When it does not hold, one real click on the window's
+    /// title bar, away from its left end and its caption buttons (<see cref="RealApp.ClickTitleBar"/>), then
+    /// a wait of at most 5 s until it holds, else the method fails with <paramref name="failure"/> before any
+    /// key. When another window lies over the point the click would land on, nothing is clicked and the
+    /// method fails with <paramref name="failure"/> and that window's words. run.txt says whether the click
+    /// was needed and, on each of its lines, what the look behind it read; each line starts with
+    /// <paramref name="when"/>. Returns it.
     /// </summary>
     private bool EnsureForegroundBeforeFirstKey(RealApp app, Func<bool, string?, bool> ready, string what, string failure, string when = "before the first key")
     {
-        var (foreground, focused) = (app.ForegroundIsThis, RealApp.ReadOr(app.FocusedId, (string?)null));
+        var foreground = app.ForegroundIsThis;
+        var focused = FocusedIdWhileInFront(foreground, app.FocusedId);
         if (ready(foreground, focused))
         {
             Note($"{when}: {what}, with no click ({GuardReads(foreground, focused)})");
@@ -188,7 +190,7 @@ public partial class Phase8aRealWindowPass
         }
         try
         {
-            app.WaitFor(() => ready(foreground = app.ForegroundIsThis, focused = RealApp.ReadOr(app.FocusedId, (string?)null)), what, I.ForegroundAgainWithin);
+            app.WaitFor(() => ready(foreground = app.ForegroundIsThis, focused = FocusedIdWhileInFront(foreground, app.FocusedId)), what, I.ForegroundAgainWithin);
         }
         catch (TimeoutException)
         {
@@ -201,9 +203,28 @@ public partial class Phase8aRealWindowPass
         return true;
     }
 
-    /// <summary>The guard's two reads of one look in words for run.txt.</summary>
+    /// <summary>
+    /// One look's read of UI Automation's focused element for <see cref="EnsureForegroundBeforeFirstKey"/>, made
+    /// only while the app's window is the foreground window (<paramref name="foreground"/>): the id
+    /// <paramref name="read"/> gives, through <see cref="RealApp.ReadOr{T}"/>, so that a read that fails gives
+    /// none. While another window is in front, none, and <paramref name="read"/> is not called: UI Automation's
+    /// focused element then lies in that other program, and the read would ask it.
+    /// </summary>
+    internal static string? FocusedIdWhileInFront(bool foreground, Func<string?> read)
+    {
+        ArgumentNullException.ThrowIfNull(read);
+        return foreground ? RealApp.ReadOr(read, null) : null;
+    }
+
+    /// <summary>
+    /// The guard's two reads of one look in words for run.txt: while the app's window is not in front, that
+    /// the focus was not read (<see cref="FocusedIdWhileInFront"/>). The words do not say that another window
+    /// is in front: Windows can give no foreground window for a moment while the activation changes hands.
+    /// </summary>
     private static string GuardReads(bool foreground, string? focusedId) =>
-        $"ForegroundIsThis {(foreground ? "true" : "false")}, UI Automation's focused element {(string.IsNullOrEmpty(focusedId) ? "none, or one without an id" : focusedId)}";
+        foreground
+            ? $"ForegroundIsThis true, UI Automation's focused element {(string.IsNullOrEmpty(focusedId) ? "none, or one without an id" : focusedId)}"
+            : "ForegroundIsThis false, UI Automation's focused element not read, as the app's window is not in front";
 
     /// <summary>
     /// Waits until the keyboard focus is in the text <paramref name="textId"/>, an AvaloniaEdit editor
@@ -503,12 +524,16 @@ public partial class Phase8aRealWindowPass
 
     /// <summary>
     /// B2's taskbar button (the report's open point 51): the taskbar's buttons whose UI Automation names
-    /// start with <see cref="Phase8aExpectations.B.TaskbarButtonNameStart"/>, looked for from the desktop
-    /// root for <see cref="Phase8aExpectations.B.TaskbarButtonLimit"/> until one shows on the display that
+    /// start with <see cref="Phase8aExpectations.B.TaskbarButtonNameStart"/>, looked for on the taskbars
+    /// (found in Windows' list of windows by their classes, each asked of UI Automation by its handle) for
+    /// <see cref="Phase8aExpectations.B.TaskbarButtonLimit"/> until one shows on the display that
     /// holds the app's window (<see cref="RealApp.DisplayBounds"/>, <see cref="RealApp.TaskbarButtons"/>), the
     /// pointer at the neutral point inside the window (no preview or tooltip of the taskbar opens); that
     /// display and each button found in run.txt, with its name, bounds, taskbar and whether it lies on that
-    /// display. Only those on it count (<see cref="SelectTaskbarButton"/>). One there: its bounds asserted not
+    /// display, and, when reads through UI Automation failed, how many of the looks found no button because
+    /// of it and the last failure's type (<see cref="RealApp.TaskbarLooks"/>), so that a "Not run" line that
+    /// follows tells a taskbar that could not be read from one with no such button. Only those on the
+    /// display count (<see cref="SelectTaskbarButton"/>). One there: its bounds asserted not
     /// empty, captured from the screen by its bounds as <c>b2-taskbar-button</c> and four times enlarged as
     /// <c>b2-taskbar-button-enlarged</c>. None found: run.txt's "Not run" line, and the method goes on; found,
     /// but none there: <see cref="NoTaskbarButtonOnDisplay"/>'s "Not run" line, the same. More than one there:
@@ -521,11 +546,17 @@ public partial class Phase8aRealWindowPass
         var display = app.DisplayBounds;
         Note(string.Create(CultureInfo.InvariantCulture, $"B2's taskbar button: the display that holds the app's window at {display} (screen pixels)"));
         var clock = Stopwatch.StartNew();
-        var found = app.TaskbarButtons(B.TaskbarButtonNameStart, B.TaskbarButtonLimit, display);
+        var looks = app.TaskbarButtons(B.TaskbarButtonNameStart, B.TaskbarButtonLimit, display);
         var after = clock.Elapsed;
+        var found = looks.Buttons;
         foreach (var each in found)
         {
             Note(string.Create(CultureInfo.InvariantCulture, $"B2's taskbar button: \"{each.Name}\" at {each.ScreenBounds} (screen pixels) on {each.Taskbar}, {(each.LiesOn(display) ? "on" : "not on")} the window's display, found after {after.TotalSeconds:0.0} s"));
+        }
+
+        if (looks.FailedLooks > 0)
+        {
+            Note(string.Create(CultureInfo.InvariantCulture, $"B2's taskbar button: {looks.FailedLooks} of the {looks.Looks} looks at the taskbars found no button because a read through UI Automation failed, the last with a {looks.LastFailure}"));
         }
 
         if (found.Count == 0)
