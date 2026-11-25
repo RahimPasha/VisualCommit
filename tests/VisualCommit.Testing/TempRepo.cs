@@ -719,9 +719,11 @@ public sealed class TempRepo : IDisposable
     /// age, as Windows' Storage Sense does when the disk runs low, strips it while it runs: a bare
     /// repository that nothing was pushed to keeps its <c>HEAD</c> and loses <c>refs</c> and
     /// <c>objects</c>, which held only empty folders, and every git folder loses its empty
-    /// <c>hooks</c> (the laptop on 2026-11-24). Every copy made after it has them again.
+    /// <c>hooks</c> (the laptop on 2026-11-24). Every copy made after it has them again. A record
+    /// that a cleaner reached first is refused (<see cref="TemplateFoldersIn"/>).
     /// </summary>
-    internal void RecordFolders() => KeptFolders = FoldersIn(_root.Path);
+    /// <exception cref="InvalidOperationException">A git folder under the repository's temporary folder holds no <c>refs</c> or no <c>objects</c>; nothing is recorded.</exception>
+    internal void RecordFolders() => KeptFolders = TemplateFoldersIn(_root.Path);
 
     /// <summary>
     /// Makes an independent copy of this repository and everything next to it (bare remotes,
@@ -906,6 +908,36 @@ public sealed class TempRepo : IDisposable
             .Select(directory => System.IO.Path.GetRelativePath(folder, directory))
             .Order(StringComparer.Ordinal)
             .ToList();
+    }
+
+    /// <summary>
+    /// Every folder under a template's folder <paramref name="root"/> as it is now
+    /// (<see cref="FoldersIn"/>), for a template's record (<see cref="RecordFolders"/>,
+    /// <see cref="TempWorkspace.RecordFolders"/>), refused as <see cref="BlankGitFolder.Record"/>
+    /// refuses a blank's when a git folder in it has no <c>refs</c> or no <c>objects</c>: a cleaner of
+    /// the temp folder took them while the template was built, after an empty bare repository was
+    /// made and before the folders were read, and no copy of that git folder would be a repository.
+    /// A git folder here is a recorded folder that holds both a <c>HEAD</c> and a <c>config</c> file,
+    /// as a working repository's <c>.git</c> and a bare repository do; a linked worktree's folder
+    /// under <c>.git/worktrees</c> and <c>.git/logs</c> hold a <c>HEAD</c> and no <c>config</c>, and
+    /// are none. It costs one look for a <c>HEAD</c> in each folder, and one for a <c>config</c> where
+    /// there is one.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">A git folder under <paramref name="root"/> holds no <c>refs</c> or no <c>objects</c>.</exception>
+    internal static List<string> TemplateFoldersIn(string root)
+    {
+        var folders = FoldersIn(root);
+        var recorded = folders.ToHashSet(StringComparer.Ordinal);
+        var stripped = folders
+            .Where(folder => File.Exists(System.IO.Path.Combine(root, folder, "HEAD")) && File.Exists(System.IO.Path.Combine(root, folder, "config")))
+            .Where(folder => !recorded.Contains(System.IO.Path.Combine(folder, "refs")) || !recorded.Contains(System.IO.Path.Combine(folder, "objects")))
+            .ToList();
+        if (stripped.Count > 0)
+        {
+            throw new InvalidOperationException($"The template {root} lost the refs or objects folder of these git folders before its folders were recorded: [{string.Join(", ", stripped)}].");
+        }
+
+        return folders;
     }
 
     /// <summary>The SHA of the current commit.</summary>

@@ -110,9 +110,11 @@ public sealed class TempWorkspace : IDisposable
     /// read from the disk with one listing: for the template that <c>Scenarios</c> keeps for the
     /// whole test process, or a test's own. A cleaner of the temp folder strips the template while
     /// the process runs, as <see cref="TempRepo.RecordFolders"/> tells; every copy made after it has
-    /// the folders again.
+    /// the folders again. A record that a cleaner reached first is refused
+    /// (<see cref="TempRepo.TemplateFoldersIn"/>).
     /// </summary>
-    internal void RecordFolders() => KeptFolders = TempRepo.FoldersIn(_root.Path);
+    /// <exception cref="InvalidOperationException">A git folder under the workspace's folder holds no <c>refs</c> or no <c>objects</c>; nothing is recorded.</exception>
+    internal void RecordFolders() => KeptFolders = TempRepo.TemplateFoldersIn(_root.Path);
 
     /// <summary>
     /// An independent copy of the whole folder in a new temporary folder, made by copying files
