@@ -933,8 +933,10 @@ internal sealed class BlankGitFolder(string path, IReadOnlyList<string> folders)
     /// The blank git folder <paramref name="gitFolder"/> with every folder it holds now, read right
     /// after <c>git init</c> made it (<see cref="TempRepo.MakeBlankGitFolderAsync"/>): the folders as
     /// git left them, read here and not written down in the code, as each version of git makes its
-    /// own set (2.34, the floor, and 2.56 differ).
+    /// own set (2.34, the floor, and 2.56 differ). Only <c>refs</c> and <c>objects</c> are asked
+    /// for, as git takes no folder without them for a repository, whatever its version.
     /// </summary>
+    /// <exception cref="InvalidOperationException">The folder holds no <c>refs</c> or no <c>objects</c>: a cleaner of the temp folder took them before they were read, and no copy would be a repository.</exception>
     public static BlankGitFolder Record(string gitFolder)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(gitFolder);
@@ -942,6 +944,11 @@ internal sealed class BlankGitFolder(string path, IReadOnlyList<string> folders)
             .Select(folder => System.IO.Path.GetRelativePath(gitFolder, folder))
             .Order(StringComparer.Ordinal)
             .ToList();
+        if (!folders.Contains("refs", StringComparer.Ordinal) || !folders.Contains("objects", StringComparer.Ordinal))
+        {
+            throw new InvalidOperationException($"The blank git folder {gitFolder} lost its refs or objects folder before its folders were recorded: [{string.Join(", ", folders)}].");
+        }
+
         return new BlankGitFolder(gitFolder, folders);
     }
 
