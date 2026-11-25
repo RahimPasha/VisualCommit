@@ -163,6 +163,15 @@ public class TempFolderCleanerTests
         Assert.True(Directory.Exists(Path.Combine(bare, "refs")));
         Assert.True(await LargeHistory.IsUsableAsync(bare, main, bare: true));
         Assert.Equal(main, LargeHistory.MarkedSha(bare + ".complete"));
+
+        // The copy made again is whole, and the proof takes it as it is: the next call keeps it, with
+        // its marker, and does not make it again, which would take the file left in it.
+        var left = Path.Combine(bare, "left-by-the-test");
+        await File.WriteAllTextAsync(left, "kept\n", TestContext.Current.CancellationToken);
+        var marked = File.GetLastWriteTimeUtc(bare + ".complete");
+        Assert.Equal(bare, await LargeHistory.GetOrBuildBareAsync(repo.Path));
+        Assert.True(File.Exists(left));
+        Assert.Equal(marked, File.GetLastWriteTimeUtc(bare + ".complete"));
     }
 
     [Fact]
