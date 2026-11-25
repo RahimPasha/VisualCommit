@@ -1085,7 +1085,11 @@ wave adds to it. What wave 2 tells §12's launches is in 12.3.5.
   run, winget's under its confirm (all but winget's since step 19, `2a2a1fc`). Since step 19
   Choose's probe of a file stops after `GitSetupViewModel.ChosenProbeLimit` (10 s; the file is then
   refused with `GitSetupTexts.ChooseNoAnswer`) and with the window, and Choose and the row's Browse
-  get the keyboard focus back after a cancelled pick or a refused file (5.3).
+  get the keyboard focus back after a cancelled pick or a refused file (5.3). Since step 19's third
+  round (ruling 102) the row's `Use the Git on the PATH` (`Use the Git it found`), pressed by the
+  keys, gives it to Browse and the netrc note's Dismiss to the Accounts section's button, both with
+  the frame (`FocusReturn.AfterKeyboardPressThatHides`), and the screen's `Use the Git…` pressed by
+  the keys gets Check again the frame after its search, as Check again does (5.3, 6.3.5).
 - **First run: the row, the netrc note, the ssh line.** After the row's `Use the Git it found` (the
   chosen git gone, another found), `GitProgramPath` reads `None found` and `GitProgramNote` only
   `VisualCommit looks for Git again when you save.` (the lead's ruling). After the row's `Use the
@@ -1108,9 +1112,9 @@ wave adds to it. What wave 2 tells §12's launches is in 12.3.5.
   read the screen (ruling 100). The buttons that get the keyboard focus back after an outcome are
   described by it through `AutomationProperties.HelpText` (D463 (3), ruling 101; 5.3, 9.3.7):
   Choose by `ErrorText`, the error line, Check again by `Title`, the title, and the row's
-  `GitProgramBrowseButton` by `GitProgramViewModel.StatusText`, its status, which is empty after a
-  pass (ruling 101: by the row's path and note when it has no status, step 19's third round);
-  `GitProgramStatus` is no live region.
+  `GitProgramBrowseButton` by the row at all times, `GitProgramViewModel.BrowseHelpText`: its
+  status (`StatusText`) while it has one, else its path and note joined by a full stop and a space
+  (D463 (3) as ruling 101 amended it; as built, ruling 102); `GitProgramStatus` is no live region.
 - **First run: the harness.** A headless test reaches a state by `StartEmptyAsync(data, gitProbe:,
   askPassHelper:)` with a `FakeGitSetupProbe`, then `WaitForGitSetupAsync`, as `GitSetupShellTests`
   does for twelve states (`ShellDriver.Phase8a.FirstRun.cs` also has `GitSetupPart`,
@@ -1119,7 +1123,10 @@ wave adds to it. What wave 2 tells §12's launches is in 12.3.5.
   `HoldNext()`, whose `ProbeHold` (`Started`, `Release()`) holds the next lookup once recorded.
   `FakeGitAnswer.ChosenMissing` throws for a lookup without a `ChosenPath`, so a start that reaches
   it by Check again (9.3.8's state 10) writes `gitExecutable` first, as F3 does. `RealAt`'s log
-  lines name the machine's git. The stand-in's namespace is `VisualCommit.GitStandInProgram`.
+  lines name the machine's git; since step 19's third round `FakeGitAnswer.AvailableAt(path,
+  source, version)` (`Setting` and 2.47.1 by default) makes up a git that is found and new enough
+  without running one, for a chosen file through `AnswerFor`. The stand-in's namespace is
+  `VisualCommit.GitStandInProgram`.
 - **First run, for §12.** `Phase8aExpectations.F` (BCL, Avalonia and Core only) holds launches 7
   to 10's facts: `RealWindowPictures`, `MissingLaunchScenario`, `MissingLaunchStandIn`,
   `TooOldVersionLine`, `NativePickerTitle`, `NativePickerWithin` (30 s), `FoundAgainWithin` (60 s),
@@ -1250,7 +1257,7 @@ wave adds to it. What wave 2 tells §12's launches is in 12.3.5.
   the focus: from a stage row's own button or its Stage on nothing, the first F6 then starting at
   the left panel; from the graph or the summary on the same element. The lead's ruling: step 19's
   round fixes the first in `WorkingChangesView` (the graph area's target takes the focus), and no
-  picture changes. D462 (1) replaced that ruling in step 19 with the window's rule for every panel
+  picture changes. D462 (1) replaced that ruling in step 19 with the window's return for every panel
   ("The stage rows" above): from a stage row, or its Stage reached by Tab, to a tab whose stage
   panel shows, the focus now goes to that tab's first stage row, with the frame
   (`Ctrl_Tab_from_a_focused_stage_row_gives_the_focus_to_the_other_tabs_first_row_with_the_frame`
@@ -1530,7 +1537,9 @@ wave adds to it. What wave 2 tells §12's launches is in 12.3.5.
   elsewhere (87 px lower after a fetch that drops the top remote branch in view, by up to 131 px at
   the undo of a rename); a rebuild that changes the list's length (one that only inserts or only
   removes rows is one change since step 19, above); the row that itself shows something new, which
-  still loses its press, its focus and its tooltip; the keyboard focus that Enter or Space on a
+  still loses its press, its focus and its tooltip (the window's rule of step 19's fourth round
+  follows no loss that no press by the keys came before, a refresh that replaces focused pull
+  request rows among them, ruling 103; 6.3.5); the keyboard focus that Enter or Space on a
   section header, a folder or a file list's tree folder, or Space on a hidden row's eye, drops
   (answered in step 19's first round, merged at `c0bedc6`, D462 (3): the toggled folder or section
   keeps its row and its control, and with them the focus, and an eye or solo button that hides
@@ -2638,7 +2647,9 @@ shown (`GitSetupViewModel.HasShown`), null before, so a session that finds git m
 `GitSetupView`. Each button of the `WrapPanel` `GitSetupButtons` carries `kr:KeyRegion.IsMain` (Copy
 and the links do not), so the first shown is the graph area's focus target
 (`CommitGraphView.GraphAreaFocusTarget`); the view takes no focus itself, and hidden while holding
-it gives it to the graph area's target. Layout as the welcome page, `MaxWidth` 520: title (16,
+it gives it to the graph area's target (after "Continue without it" pressed by the keys, which
+hides the screen with itself, the welcome page's Open gets it with the frame, by the window's rule
+of step 19's fourth round, 6.3.5). Layout as the welcome page, `MaxWidth` 520: title (16,
 SemiBold), body (`secondary`), the path (`PathTextBlock`), "Git said:" over a `SelectableTextBlock`
 (`VcCodeFontFamily`, `VcBorderBrush`, six lines, then a scroll bar), guidance, the command with Copy,
 buttons (`VcActionButton`), `GitSetupError`, links (`VcFlatButton`s of class `gitSetupLink` in the
@@ -2742,18 +2753,22 @@ that would place it: since step 19, once its run has ended with the focus on not
 or on a control no longer shown or enabled, the button takes it back, as by Tab when it had
 `:focus-visible` as it was pressed (`FocusReturn.AfterRun` with `FocusReturn.LostFrom`, from
 `GitSetupView`'s click handler), and the settings row's Browse does the same (`SettingsDialogView`);
-a Choose that found git hides the button, and the search's end places the focus. The button that
-gets the focus back is described by the outcome through `AutomationProperties.HelpText`, which a
-reader is told with the focus (D463 (3); 9.3.7): Choose by `ErrorText`, the error line, which reads
-`Checking…` while its file is probed and the refusal once it is refused (empty before); the row's
-Browse by `GitProgramViewModel.StatusText`, its status, with the same `Checking…` and refusals, and
-empty after a file that passes (ruling 101: by the row's path and note when it has no status, step
-19's third round). The error line also carries a failed start of winget or of the Command Line
-Tools (`{winget|xcode-select} could not be started: {message}`, above), so Choose is then described
-by a failure that is not its own until a new state, a chosen file or another start replaces it; and
-that failure is spoken nowhere as it happens: its button keeps the focus, so no focus event follows,
-and the error line's live region has no node (D455). Accepted, with a Backlog row (ruling 101): a
-text that changes while its button keeps the focus needs another means than a description.
+a Choose that found git hides the button, and the search's end places the focus, on Check again or
+the graph area's target, both without the frame also after a press by the keys (accepted, a Backlog
+row, ruling 102). The button that gets the focus back is described by the outcome through
+`AutomationProperties.HelpText`, which a reader is told with the focus (D463 (3); 9.3.7): Choose by
+`ErrorText`, the error line, which reads `Checking…` while its file is probed and the refusal once
+it is refused (empty before); the row's Browse by the row at all times,
+`GitProgramViewModel.BrowseHelpText`: its status (`StatusText`) while it has one, with the same
+`Checking…` and refusals, else the row's path and note joined by a full stop and a space
+(`C:\Program Files\Git\cmd\git.exe. Found on the PATH.`), so that a Browse that passes is told with
+the file chosen and its note (D463 (3) as ruling 101 amended it; as built, ruling 102). The error
+line also carries a failed start of winget or of the Command Line Tools (`{winget|xcode-select}
+could not be started: {message}`, above), so Choose is then described by a failure that is not its
+own until a new state, a chosen file or another start replaces it; and that failure is spoken
+nowhere as it happens: its button keeps the focus, so no focus event follows, and the error line's
+live region has no node (D455). Accepted, with a Backlog row (ruling 101): a text that changes while
+its button keeps the focus needs another means than a description.
 
 **Check again** (`MainWindowViewModel.Git.cs`), 1.2's order: `Looking for Git...`; the search; `Git`,
 `GitStatusText`, `GitStatusToolTip`; `CheckHelper()` off the UI thread, only while git works and the
@@ -2765,10 +2780,18 @@ dashboard's `RefreshCommand`. In HelperMissing git works, so Check again looks f
 `InitializeAsync` uses the same refresh. The button is disabled while it searches, which drops the
 focus (keyboard.md D-a): when the search ends with the focus on nothing or the window,
 `GitSetupCheckAgainButton` takes it again (`Tab` if it had `:focus-visible` when pressed, else
-`Unspecified`), or, the screen gone, the graph area's target. The title is a polite live region
-since step 19 (D463 (2)), heard by a reader that has read the screen (ruling 100); the button is
-described by the title at all times, its `AutomationProperties.HelpText` being `Title`, so that the
-focus given back is announced with the title of the state the search ended on (D463 (3); 9.3.7).
+`Unspecified`), or, the screen gone, the graph area's target. Since step 19's third round the same
+holds for the screen's `GitSetupUsePathButton`, whose press drops the setting and starts the search:
+pressed with the frame, it gets Check again the frame (`GitSetupView.PressedWithKeys`, read at the
+Click of either button). The graph area's target takes the focus `Unspecified` after any press:
+framed by the same look, it would be framed after a click on a Check again that still shows its
+frame from a key, as the fixer's first form framed the graph in part F's `f4a-found-again` (F4's
+click after F13's Enter; withdrawn, the picture the same file), so a search that finds git and
+closes the screen leaves the focus there without the frame, also after a press by the keys
+(accepted, a Backlog row, ruling 102). The title is a polite live region since step 19 (D463 (2)),
+heard by a reader that has read the screen (ruling 100); the button is described by the title at all
+times, its `AutomationProperties.HelpText` being `Title`, so that the focus given back is announced
+with the title of the state the search ended on (D463 (3); 9.3.7).
 
 **Status bar.** `GitStatus` unchanged but for its help text (below); new texts `Chosen Git not found`, `Git {v} (helper missing)`;
 `ToolTip.Tip` `{path}, found on the PATH`, `{path}, found in Git for Windows' install folder` (else `in
@@ -2797,14 +2820,16 @@ next start's search looks in the usual install folders too, so it need not use t
 PATH; before step 19 the row said ` VisualCommit uses it from its next start.`, of the git Save
 drops); a chosen git in use that does not work keeps ` VisualCommit looks for Git again when you
 save.`; `GitProgramBrowseButton` `Browse…` (Choose's checks, its probe's limit, its focus given back
-and its description by its status, empty after a pass, as above (ruling 101: by the row's path and
-note when it has no status, step 19's third round); `GitProgramStatus`, no live region);
-`GitProgramUsePathButton`
+and its description by the row, its status or else its path and note, as above; `GitProgramStatus`,
+no live region); `GitProgramUsePathButton`
 `Use the Git on the PATH` while a path is chosen; `Use the Git it found` instead in ChosenMissing with a
 candidate, as on the screen, and while a pending choice would give way to a git in use that the install
-folders gave (`GitSource.InstallFolder`). Save's step 2 writes `GitExecutable`. After the screen
-closes, a changed setting while git does not work runs Check again, once a running one has ended (as
-Choose).
+folders gave (`GitSource.InstallFolder`). Pressed by the keys, with the frame, it drops the choice
+and so hides itself, and Browse gets the focus, with the frame, described by the row's path and note
+as the focus comes (`FocusReturn.AfterKeyboardPressThatHides`, from `SettingsDialogView`; D462 (2)
+as amended, ruling 102); a click arms nothing and leaves the focus on nothing, as before. Save's
+step 2 writes `GitExecutable`. After the screen closes, a changed setting while git does not work
+runs Check again, once a running one has ended (as Choose).
 
 **Netrc note** (ruling 8): `AccountsNetrcNote` (classes `settingsNote notice warning`: the existing
 `TextBlock.notice.warning` style gives `VcWarningBrush`) and
@@ -2814,7 +2839,10 @@ folder has a .netrc or _netrc file. With Git {v}, an entry in that file for a ho
 requests to it before your signed-in account. Git 2.46 or later stops this for git's own requests;
 git-lfs reads the file with every version of Git.` `HomeHasNetrc`: either file in
 `GitConfigLocations.Home(gitSettings.Variable, Directory.Exists, IsWindows)`; never its content.
-Dismissed for the session.
+Dismissed for the session. Dismiss pressed by the keys, with the frame, hides the note's row with
+itself, and the Accounts section's button (`SettingsNavAccounts`), where the screen puts its first
+focus for the section, gets the focus, with the frame (`FocusReturn.AfterKeyboardPressThatHides`;
+step 19's third round, ruling 102); a click arms nothing.
 
 **ssh line** (ruling 7): `AskPassBroker`, once per session, at its first Ask or Deny scope, Info `Git
 and ssh get SSH_ASKPASS_REQUIRE=force, so that ssh asks through VisualCommit; OpenSSH older than 8.4
@@ -2991,7 +3019,17 @@ New: `Views/FocusReturn.cs` (6.3.5); `tests/VisualCommit.Testing/Headless/HeldGi
 `ShellDriver.Phase8a.Keyboard.cs`; in 8a's project `KeyboardPassTests.cs`, `Phase8aChecks.K.cs`,
 `Phase8aExpectations.K.cs`, `Phase8aExpectationTests.K.cs`. Test files changed (App.Tests):
 `DiffTextViewTests.cs`, `ConflictPanesTests.cs`, `BlameViewTests.cs`, `WorkingChangesTests.cs`,
-`StatusBarTests.cs`; and `tests/VisualCommit.VisualTests/Phase2/Phase2Checks.Helpers.cs`.
+`StatusBarTests.cs`; and `tests/VisualCommit.VisualTests/Phase2/Phase2Checks.Helpers.cs`. Since
+step 19 (D462, D466; rulings 100 to 103) also `Views/RowOrderStackPanel.cs`, the lists' items panel
+(6.3.4), and, since its fourth round, `Views/FocusReturn.Presses.cs`, the window's rule for a press
+by the keys (6.3.5); in 8a's project `KeyboardPassTests.TabSwitch.cs`, `.FocusReturns.cs`,
+`.Toggles.cs`, `.RowOrder.cs`, the seven `KeyboardPassTests.AfterPress*.cs` (6.3.9) and
+`FirstRunFocusTests.cs`. Changed by its third and fourth rounds, beside `FocusReturn.cs`,
+`DiffView.axaml.cs`, `WelcomeView.axaml.cs` and `MainWindow.axaml.cs` above:
+`Views/Dialogs/DialogView.cs`, `Views/Shell/MenuLayer.axaml.cs`, `Views/KeyRouter.cs`,
+`Views/KeyRegions.cs` (`KeyRegionNavigator.MarkedTargetIn` made static), `Views/MainWindow.Keys.cs`
+and 5.2's `Views/Dialogs/SettingsDialogView.axaml(.cs)`, `Views/Shell/GitSetupView.axaml.cs` and
+`ViewModels/Settings/GitProgramViewModel.cs`.
 
 Contracts: implements 1.8's sentence for §6 and 1.15's `HeldGitRunner`; uses 1.15's
 `ShellDriver.Start(gitProbe:)`, 1.2's `IGitSetupProbe`, `MachineGitSetupProbe`, `GitDetection`, 1.15's
@@ -3011,7 +3049,10 @@ e.Handled = true)` (as `ConflictPanes.cs:198-208`). With `AcceptsTab = false`:
 - On `BarRemoving`, when the bar holds the focused element and it has `:focus-visible`, or raised
   the action while it had, the left text area takes the focus (`Unspecified`) before the bar leaves.
   After "Stage hunk" by Enter the focus is in the text; a "Discard hunk" cancelled in its question
-  keeps the bar, and D104 gives the button its focus back.
+  keeps the bar, and D104 gives the button its focus back. On the file's last hunk, "Stage hunk" or
+  "Unstage hunk" by Enter, or "Discard hunk" by Enter and confirmed, closes the diff with the hunk,
+  and the graph area's target gets the focus, with the frame (since step 19's fourth round, by the
+  window's rule, 6.3.5).
 - F6 and Ctrl+End are unchanged (`KeyRegion.IsMain` on the left editor).
 
 **6.3.2 F2, the blame.** `BlameText.AddHandler(KeyDownEvent, OnTextKeyDown, RoutingStrategies.Bubble,
@@ -3133,7 +3174,8 @@ nothing, the window or an element not shown has the focus, or one outside `scope
 what that says of the focused element (the scope then serves only to find the window).
 `FocusReturn.LostFrom(TopLevel? topLevel, InputElement pressed, Func<bool> stillThere)` is that test for
 a pressed element: nothing, the window, an element not shown or not enabled, or `pressed` itself once
-`stillThere()` is false. A focus the user moved meanwhile elsewhere stays.
+`stillThere()` is false. A focus the user moved meanwhile elsewhere stays while it stands there at
+the run's end.
 - `WelcomeView`: `BrowseCommand`, scope `CloneForm`, `CloneFromGitHubButton`, `Unspecified`: after
   Choose or Esc in the browser, "From GitHub…" (or "From an account…") has the focus, with no frame;
   the palette's path keeps the focus where D104 put it.
@@ -3143,17 +3185,99 @@ a pressed element: nothing, the window, an element not shown or not enabled, or 
   `:focus-visible`, and Amend (6.3.7), each with `LostFrom`: a row's pressed button keeps the focus
   while it still stands on its row (a failed action), while Amend itself counts as lost and is given
   the focus again; the target is null once the panel's `DataContext` is no longer the one the action
-  was armed in (a switch of tabs), so the view does nothing then, and the window's rule below places
-  a focus that the switch took away. Amend's return was armed only when Amend had `:focus-visible`;
-  as built since step 19 (D462 (2), ruling 100) it is armed whenever Amend has the focus as a commit
-  starts (`OnViewModelChanged`, at `IsCommitting`), `Tab` when Amend had the frame and `Unspecified`
-  otherwise: the palette's Commit, the one path a user has to start a commit with Amend focused,
-  reaches it without the frame, which D104 gives back without it.
+  was armed in (a switch of tabs), so the view does nothing then, and the window's return after a
+  switch, below, places a focus that the switch took away. Amend's return was armed only when Amend
+  had `:focus-visible`; as built since step 19 (D462 (2), ruling 100) it is armed whenever Amend has
+  the focus as a commit starts (`OnViewModelChanged`, at `IsCommitting`), `Tab` when Amend had the
+  frame and `Unspecified` otherwise: the palette's Commit, the one path a user has to start a commit
+  with Amend focused, reaches it without the frame, which D104 gives back without it.
 `MainWindow.OnDialogRemoving` does not change.
+
+**The window's rule for a press by the keys** (D462 (4), ruling 103; step 19's fourth round, merged
+at `161a801`; `Views/FocusReturn.Presses.cs`). Three rounds of returns made control by control still
+left the fault at over sixty controls that their own press hides, removes or disables (two sweeps
+listed 64 and 63), so the window now follows every press by the keys itself, and every return of
+this section, the earlier rounds' below included, acts first. It follows a click on a `Button` that
+has the focus and shows the keyboard's frame (`:focus-visible`) at its Click, as Enter or Space
+after Tab or the arrows make it (`FocusReturn.FollowKeyboardPresses(TopLevel window)`, a handler of
+`Button.ClickEvent` that `MainWindow` adds once, in `OnDataContextChanged`); a dialog's confirm run
+by Enter or Mod+Enter in one of its boxes, on its list's selected row or on its checked option
+(`DialogView` calls `FocusReturn.AfterKeyboardAction(pressed, command)` just before the command
+runs); a menu that the keys opened, from its opening (`MenuLayer`, for `MenuOpenedBy.Keyboard`,
+calls `FocusReturn.AfterKeyboardMenu(opener)` as the menu opens, on the element that had the focus
+then), so that an action chosen from it, or the opener's next loss once the menu has closed, is
+followed; and a key of the router pressed while the focused element shows the frame (Stage all on a
+row, Close tab on the tab's own button: `FocusReturn.AfterKeyboardShortcut(focused)`, from
+`KeyRouter.OnTunnel` before `Commands.Run` and from `OnBubble` before Undo or Redo), followed beside
+a press of the same element that is still followed, a newer key on the element replacing the one
+before, so a held or repeated key arms one follower. A press inside a menu is not followed. Whether
+a click was by the keys is told by the button's look (focused, with the frame), everywhere in the
+app, and a key of the router is followed only on an element with that look; a dialog's confirm by
+Enter or Mod+Enter and a menu that the keys opened are followed whatever the look, which then
+decides only whether the focus comes back with the frame. Avalonia keeps that look on a focused
+button that is then clicked, so such a click counts as a press by the keys (accepted, ruling 102),
+and a click on a button without the frame arms nothing.
+
+A press whose command is an `IAsyncRelayCommand` is followed to the end of the run it starts (a
+command that does not start leaves nothing waiting), any other to the element's next loss of the
+focus. Then, two rounds at `Loaded` later, so that every view's own return has acted first, a focus
+that is on nothing, on the window or on an element no longer shown or enabled goes to the first of
+these that can take it, shown, enabled and in the window:
+1. the pressed element itself, while it stands with the data it was pressed for;
+2. the target its view names for it (`FocusReturn.Instead(InputElement pressed, Func<InputElement?>
+   target, NavigationMethod method = Tab, bool whileRunning = false)`, called once as the view is
+   made): in `WelcomeView`'s clone form `CloneStartButton` (Clone) and `CloneCancelButton` (the
+   Cancel shown while a clone runs) stand for each other, and the form's own Cancel,
+   `CloneCloseButton`, has the welcome page's `CloneRepoButton`; in `DiffView` "Stage lines",
+   "Unstage lines" and "Show diff" (`ShowLargeDiffButton`) have the diff's text
+   (`DiffTextView.BodyFocusTarget`, `Unspecified`);
+3. the first stop of the item now at its place in the list it lay in, the list scrolled to it;
+4. in a dialog, what the dialog focuses as it opens (`DialogView.OpeningFocus()`, internal: its
+   first text box that can be typed into, or the one it names, else its `InitialFocus`, the
+   settings screen's shown section's button), else the dialog's first stop; elsewhere the target
+   of the region it lay in, as F6 gives it (`KeyRegionNavigator.MarkedTargetIn`, static);
+5. outside a dialog, the graph area's target, for an element in no region (the tab strip, the
+   toolbar, the status bar) or in one no longer shown.
+
+It comes with the frame when the pressed element had it (a target its view names, by that target's
+method). A text box given the focus back keeps the caret and selection it had at the press, where
+Tab would select all a single-line box holds; a dialog's opening box gets them as on opening, and a
+region's mark keeps what F6 gives it. The look waits in four cases. A pressed element that its press
+disabled with no run of its own to wait for (the create form's Cancel in its cancel window) is
+looked at again once it is enabled or leaves the window. While a dialog stands over the element's
+place (any dialog for an element outside the dialogs, one above its own for an element in a dialog),
+the look comes again at each change of the top dialog, so that no focus goes behind one; a dialog
+that the action closed leaves the return to D104. While the window is not active no look is made
+(`FocusReturn.WhenActive`): the platform's taking of the focus from a window it deactivates is no
+loss of a press's, and the look comes once the window is active again and Avalonia has given back
+the focus it remembered. A look that finds the active tab changed since the press, for an element in
+a region, comes again two rounds at `Loaded` later, so that `FocusAfterSwitch` (below) has acted,
+and then gives a focus still lost to the graph area's target of the tab now shown. A focus still on
+the element, or in a menu that gives it back, keeps the press followed to the element's next loss. A
+hold ends when the focus moves after the press to another element that stands, outside a menu and
+outside a dialog over the element's place (the user's Tab or click, or a view's own placement), so a
+focus the user has moved stays also when the user's own later action loses it; and it ends at a
+press of the mouse on the armed element. Nothing of a closed tab is held: the element's data and the
+tab active at the press are held weakly, and every end of a hold removes it from the rule's tables.
+
+While a press's own run lasts, only a target named with `whileRunning` takes the focus that the run
+took as it disabled the pressed element: the clone form's Clone hands it to its Cancel while the
+clone runs. Every other control that its own run disables leaves the focus on nothing until the
+run ends (Fetch all and Pull all, the toolbar's Fetch and Pull on a dashboard, the rebase's Start,
+the resolver's Merge tool, Undo and Redo): accepted, a Backlog row (ruling 103). D104's return
+stays without the frame, and so do the graph area's closers (a page's Close, the search's, the
+comparison's, the rebase's Cancel, the activity log's), whose own return gives the graph the focus
+`Unspecified` before the rule looks. Not followed, and recorded (ruling 103): a loss with no press
+before it (an operation's end hiding the status bar's Cancel, a bulk run's end hiding Cancel all, a
+refresh replacing focused pull request rows) and a command run from a palette that was opened over
+a focus without the frame (Mod+Shift+P over a framed element arms that element through the
+router).
 
 As built since step 19 (D462, ruling 100; the focus package, merged at `c0bedc6`), the focus is also
 kept, or given back, at these places, each only while the focus is lost, a focus the user or a view
-placed meanwhile staying where it is:
+placed meanwhile staying where it is; each acts before the window's rule looks, and `AfterRun` (so
+`AfterKeyboardPress` too), `AfterKeyboardPressThatHides` and the return after a switch wait as it
+does while the window is not active:
 - **A switch of tabs** (D462 (1); `MainWindow.Keys.cs`, `OnShellChanging`, `FocusAfterSwitch`). The
   window notes where the focus lies, outside a menu, as the active tab begins to change: its region,
   that region's panel and whether it had `:focus-visible`. Once the tab now shown is laid out and
@@ -3165,7 +3289,11 @@ placed meanwhile staying where it is:
   first-run screen's); `Tab` when the element that lost it had the frame. Nothing while a dialog is
   open, while the tab still opens (it has no graph area's target yet) or when the focus lay outside
   every region; a focus that the switch leaves shown (the graph, the summary of a stage panel still
-  shown) stays. It acts on every change of the active tab.
+  shown) stays. It acts on every change of the active tab. Since step 19's fourth round (D462 (4)) a
+  focus that a press by the keys took away before the switch, and so lay outside every region at the
+  switch, goes to the graph area's target of the tab now shown, with the frame when the pressed
+  element had it, when the window's rule looks: its look after the press's run or the element's loss
+  finds the tab changed and comes again two rounds at `Loaded` later, after `FocusAfterSwitch`.
 - **A question cancelled** (D462 (2); `FocusReturn.AfterKeyboardPress(Button button,
   Func<InputElement?>? instead = null)`, new), at a button whose command may ask first and is
   disabled while it runs, so that D104's return finds it disabled. A press while the button has
@@ -3189,13 +3317,31 @@ placed meanwhile staying where it is:
   focus on nothing; once the layout has followed, the branch's row takes it, `Tab` when the button
   had the focus by Tab or the arrows, while the panel shows the same tab and the row still stands
   for that branch.
+- **A button that its own command hides** (D462 (2) as amended, ruling 102; step 19's third round;
+  `FocusReturn.AfterKeyboardPressThatHides(Button button, Func<InputElement?> instead)`, new):
+  pressed while it shows the frame, a click arming nothing, and hidden by the press with the focus
+  lost once the layout has followed, the button gives the focus to `instead()`, `Tab`, while it
+  still has the data it was pressed for and `instead()` shows, enabled. At `SettingsDialogView`'s
+  `GitProgramUsePathButton`, "Use the Git on the PATH" ("Use the Git it found"), to Browse
+  (`GitProgramBrowseButton`), and at `AccountsNetrcDismiss`, the netrc note's Dismiss, to the
+  Accounts section's button (`SettingsNavAccounts`); 5.3.
+- **Esc in a diff** (D462 (4), ruling 103; `MainWindow.CloseDiff`). Esc that closes the diff (no
+  text box having the focus) while the focus lay in the diff gives the graph area's target the
+  focus two rounds at `Loaded` later, when it is then on nothing, the window or an element no
+  longer shown or enabled, with the frame only if the diff's focused element had it
+  (`FocusGraphAreaIfLost`): from the diff's text, which has the focus without the frame as the diff
+  opens, the graph then has it without the frame, where before step 19's fourth round nothing had
+  it. A page or a list under the diff that takes the focus back keeps it.
 - **The kept rows** (D462 (3); `IUpdatableRow`, `RowCollection`; 1.17's "As built" on the rows): a
   section or folder of the left panel, and a tree folder of the stage lists, the commit's details or
   a comparison, opened or closed by Enter or Space (or a click), keeps its row and its control, and
   with them the focus, and its frame if it had one.
 
 Since step 19 §5's Choose (`GitSetupView`) and the Git program row's Browse (`SettingsDialogView`)
-call `AfterRun` too, after a cancelled pick or a refused file (5.3).
+call `AfterRun` too, after a cancelled pick or a refused file (5.3). Since its third round the
+first-run screen's `Use the Git on the PATH` (`Use the Git it found`), pressed with the frame, gets
+Check again the frame after its search, as Check again pressed with it does (`GitSetupView`,
+`PressedWithKeys`; 5.3).
 
 **6.3.6 F6, the loading diff.** `DiffView` keeps `_focusAtOpen`, taken when the open's post runs: the focused element outside menus, as
 D104 takes it (the window's `MenuLayer.FocusOutsideMenus`, `MainWindow.axaml.cs:336`). Both posts call
@@ -3219,13 +3365,15 @@ leaves them, and only its failure changes `ActivityLogView.axaml`. No earlier ch
 one (Grep of `Key.Tab`, `VirtualKeyShort.TAB` in `tests/`).
 
 **6.3.9 The inventory for the report**, returned in the merge report. K a key; P the palette; M
-Shift+F10 or Menu on a row that F6 or Tab reaches; T Tab or arrows. Unchanged: toolbar (K, P; theme
-P, settings), tabs (K), open, clone, init (K, P), graph selection (F6, arrows, Shift), its menus (M),
+Shift+F10 or Menu on a row that F6 or Tab reaches; T Tab or arrows. Unchanged, but for where the
+focus goes after an action by the keys that takes it away (below): toolbar (K, P; theme P,
+settings), tabs (K), open, clone, init (K, P), graph selection (F6, arrows, Shift), its menus (M),
 left panel (Mod+Shift+E, arrows, M, P; its Tab changed, below), drags (their menus, ruling 11),
-working changes' keys (K), a file's diff (T, Enter), diff close, history, blame (Esc, K), file
-actions in the diff (M, P), pages (arrows, M, Esc), search (K), resolver (K, T bar to bar), rebase
-list (Alt+arrows, p r s f d), conflict banner (Mod+Enter, P, T), activity log (K, F6, arrows, M),
-dashboard (K, M), dialogs, settings (K, T). Changed or proven by 8a:
+working changes' keys (K), a file's diff (arrows, Enter; the Tab through its list changed, below),
+diff close, history, blame (Esc, K), file actions in the diff (M, P), pages (arrows, M, Esc), search
+(K), resolver (K, T bar to bar), rebase list (Alt+arrows, p r s f d), conflict banner (Mod+Enter, P,
+T), activity log (K, F6, arrows, M), dashboard (K, M), dialogs, settings (K, T). Changed or proven
+by 8a:
 
 | Action | After 8a | Proof |
 |---|---|---|
@@ -3239,9 +3387,11 @@ dashboard (K, M), dialogs, settings (K, T). Changed or proven by 8a:
 | Clone browser's Choose | T, arrows, Enter; the focus after (F5) | K5 |
 | A pick dialog's choice; a choice or push dialog's option | T into the list, arrows, Enter on the selected row; Enter on the checked option (D454) | `KeyboardPassTests` |
 | Resize a panel | T to its splitter, arrows by 10 | K8 |
-| Switch tabs with the focus in a panel | K, P; since step 19 a focus the switch took away goes to the same panel's target in the tab now shown, else the graph area's, with the frame if it had it (6.3.5; D462 (1)) | `KeyboardPassTests`: `Ctrl_Tab_from_a_focused_stage_row_gives_the_focus_to_the_other_tabs_first_row_with_the_frame` and `Ctrl_Tab_from_a_stage_rows_Stage_reached_by_Tab_gives_the_focus_to_the_other_tabs_first_row_with_the_frame`, renamed and rewritten at step 19 (they were `…_leaves_the_focus_on_nothing_and_F6_then_starts_at_the_left_panel`), the graph's and the summary's two as they were, and the ten facts of `KeyboardPassTests.TabSwitch.cs` |
+| Switch tabs with the focus in a panel | K, P; since step 19 a focus the switch took away goes to the same panel's target in the tab now shown, else the graph area's, with the frame if it had it (6.3.5; D462 (1)); since its fourth round a focus that a press by the keys took away before the switch goes to the graph area's target of the tab now shown, with the frame if the pressed control had it (D462 (4)) | `KeyboardPassTests`: `Ctrl_Tab_from_a_focused_stage_row_gives_the_focus_to_the_other_tabs_first_row_with_the_frame` and `Ctrl_Tab_from_a_stage_rows_Stage_reached_by_Tab_gives_the_focus_to_the_other_tabs_first_row_with_the_frame`, renamed and rewritten at step 19 (they were `…_leaves_the_focus_on_nothing_and_F6_then_starts_at_the_left_panel`), the graph's and the summary's two as they were, and the ten facts of `KeyboardPassTests.TabSwitch.cs`; since the fourth round `Open_pressed_by_the_keys_choosing_a_folder_another_tab_shows_gives_the_focus_to_that_tabs_graph` (`KeyboardPassTests.AfterPress.Missed.cs`), and `A_keyboard_Stage_held_while_the_user_goes_to_another_tab_leaves_that_tabs_lists_alone`, which now expects the other tab's graph, framed, once the stage has ended, where it expected the focus left on nothing (ruling 103) |
 | A question cancelled after a press by the keys; Stage, Unstage or Discard from a stage row's menu opened by the keys | since step 19 the focus back on the button, with the frame (on the diff's text, without it, after Discard lines); the row now at the file's place (6.3.5; D462 (2)) | `KeyboardPassTests.FocusReturns.cs` (Amend's palette fact among them) |
 | A section, folder or tree folder opened or closed by Enter or Space; an eye or solo button that hides itself | since step 19 the focus kept on its control, with the frame; the branch's row (6.3.5; D462 (3)) | `KeyboardPassTests.Toggles.cs` |
+| A button that its own press by the keys hides: the Git program row's "Use the Git on the PATH" ("Use the Git it found"), the netrc note's Dismiss; the first-run screen's "Use the Git on the PATH" | since step 19's third round the focus to Browse and to the Accounts section's button, with the frame; after the first-run screen's search Check again, with the frame, or, the screen gone, the graph area's target, without it (6.3.5, 5.3; D462 (2), ruling 102) | `FirstRunFocusTests`: `The_rows_drop_button_pressed_by_the_keys_gives_the_focus_to_Browse_with_the_frame` (three cases), `The_netrc_notes_Dismiss_pressed_by_Enter_gives_the_focus_to_the_Accounts_button_with_the_frame`, `The_first_run_screens_drop_button_pressed_by_Enter_gives_the_focus_where_the_search_puts_it` (two cases; with the screen gone it holds the place alone) and the guard `A_click_on_the_rows_drop_button_gives_the_focus_to_nobody` |
+| A control that its own press by the keys hides, removes or disables (over sixty, ruling 103); a dialog's confirm by Enter in its box; an action from a menu opened by the keys; a key of the window's on a framed element; Esc in a diff | since step 19's fourth round the window's rule gives a focus so lost to the control itself, the target its view names, the item now at its place, its dialog's or its region's target, else the graph area's, with the frame if the control had it; after Esc in a diff the graph area's target, framed only if the diff's element was (6.3.5; D462 (4)) | the seven `KeyboardPassTests.AfterPress*.cs`, 113 methods and 122 cases, most of them pressing their control by the keys: `KeyboardPassTests.AfterPress.cs` (25 methods, 29 cases: the tab strip, the toolbar, the status bar's offer, the stage panel, the diff, Esc in it among them, and the right panel), `.Welcome.cs` (18, 20: the welcome page and its clone form, the first-run screen's "Continue without it", the status bar's Cancel, a dashboard), `.GraphArea.cs` (17, 18: the conflict banner, the resolver, the rebase list, the file history's and the blame's pages, a branch and a workspace deleted from their menus opened by the keys), `.Dialogs.cs` (10, 10: the Remotes dialog, the create form, the settings screen's Save, its Accounts section and the sign-in dialog, the left panel's sign-in row), `.Guards.cs` (13, 13: controls whose press left the focus somewhere before the round), `.Missed.cs` (17, 17: what the round's reader found, eight of them guards) and `.Reading.cs` (13, 15: what the second reading found: the window inactive, a moved focus, a box's caret, a failed Stage lines and Unstage lines, a mouse press, closed tabs, a repeated key) |
 | Tab through a list's rows: the left panel's, a commit's or a comparison's changed files, the stage lists | since step 19's second round T in the rows' order, also after rows were inserted or the list scrolled, rows below the view included; Tab into a list reaches its first row, Shift+Tab its last (6.3.4; D466) | `KeyboardPassTests.RowOrder.cs`, eight facts: six walks, each from the stop before the list through every stop its rows hold to the stop after it and back with Shift+Tab, each stop framed (the left panel after a folder opened, a branch hidden and a branch made outside the app, and after a scroll down and up; a commit's and a comparison's tree after a folder closed and opened; the unstaged list after a file made outside the app came first; the two stage lists walked as one when no stop lies between them), and two guards, the activity log's and the interactive rebase's rows one stop after a row was inserted or moved |
 | Commits not next to each other | the mouse only (ruling 50) | the guide |
 
@@ -4319,8 +4469,9 @@ none: a section (`RefSectionRow`) has no tooltip, and an open pull request (`Pul
 message of the Pull requests section (`PullRequestMessageRow`) have theirs on a part inside the
 button, which the button's peer does not read (9.9 item 7). A control outside 1.12 that the sweep
 reports is named only at the lead's word, from its area's texts class, never by a tooltip's change.
-Since step 19 four buttons more carry a help text, the outcome after which they get the focus back,
-and no name changes with it (D463 (3); 9.3.7).
+Since step 19 four buttons more carry a help text, the outcome after which they get the focus back
+(the Git program row's Browse is described by the row at all times: its status, else its path and
+note), and no name changes with it (D463 (3); 9.3.7).
 
 #### 9.3.7 The status bar
 
@@ -4367,20 +4518,24 @@ button that gets the keyboard focus back after such an outcome is described by i
 before an unanswered try), the first-run screen's Choose by the error line (`ErrorText`:
 `Checking…` while its file is probed, then the refusal; also a failed start of winget or of the
 Command Line Tools, 5.3) and its Check again by the title (`Title`, at all times), and the Git
-program row's Browse by its status (`GitProgramViewModel.StatusText`: `Checking…` while its file
-is probed, then the refusal; empty after a pass) (ruling 101: by the row's path and note when it has
-no status, step 19's third round). In Avalonia 12.1.3 a peer's help text is UI Automation's
-HelpText on Windows and `accessibilityHelp` on macOS, which VoiceOver speaks as a hint. The
-window's peer raises a focus change at each change of the focused control, and Windows' bridge
-makes the focused peer's node for it there and then (`RootAutomationNode`,
-`AutomationNode.GetOrCreate`), so the description reaches a reader with the focus also when no
-client had reached the button before, which a live region's change does not (D455).
-`OutcomeAtFocusTests` (8a's project, four facts) records each focus event as the bridge takes it,
-the focused peer's id, name and help text read at that moment (`ClientWalk.RecordFocus`), and reads
-each button as a client reaches it: no help text before an outcome (Check again's is the title from
-the start), `Checking…` while Choose's or Browse's file is held in its probe, and the focus back on
-the button with the outcome as its help text, its name its own. What Narrator says is the gate's
-listen (D460).
+program row's Browse by the row at all times (`GitProgramViewModel.BrowseHelpText`): its status
+while it has one (`StatusText`: `Checking…` while its file is probed, then the refusal), else the
+row's path and note (`C:\Program Files\Git\cmd\git.exe. Found on the PATH.`), so that the focus
+that comes back after a Browse that passes reads the file chosen and its note, and Tab onto Browse
+reads which git the row shows (D463 (3) as ruling 101 amended it; as built, ruling 102). In Avalonia
+12.1.3 a peer's help text is UI Automation's HelpText on Windows and `accessibilityHelp` on macOS,
+which VoiceOver speaks as a hint. The window's peer raises a focus change at each change of the
+focused control, and Windows' bridge makes the focused peer's node for it there and then
+(`RootAutomationNode`, `AutomationNode.GetOrCreate`), so the description reaches a reader with the
+focus also when no client had reached the button before, which a live region's change does not
+(D455). `OutcomeAtFocusTests` (8a's project, four facts) records each focus event as the bridge
+takes it, the focused peer's id, name and help text read at that moment (`ClientWalk.RecordFocus`),
+and reads each button as a client reaches it: no help text before an outcome (Check again's is the
+title from the start, and Browse's the row's path and note, also in the focus event as Tab reaches
+it), `Checking…` while Choose's or Browse's file is held in its probe, and the focus back on the
+button with the outcome as its help text, its name its own: Browse's the refusal after a refused
+file, and that file and its note after one that passes; after "Use the Git on the PATH" Browse reads
+the row's path and note again. What Narrator says is the gate's listen (D460).
 
 #### 9.3.8 The sweep
 
