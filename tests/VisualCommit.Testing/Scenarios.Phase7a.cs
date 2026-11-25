@@ -232,7 +232,7 @@ public static partial class Scenarios
     private static async Task PushToBareAsync(TempRepo repo, string ownerAndName, string[] refspecs)
     {
         var bare = BareOf(repo, ownerAndName);
-        TempRepo.CopyDirectory(await TempRepo.BlankBareFolderAsync().ConfigureAwait(false), bare);
+        (await TempRepo.BlankBareFolderAsync().ConfigureAwait(false)).CopyTo(bare);
         await File.WriteAllTextAsync(Path.Combine(bare, "HEAD"), "ref: refs/heads/main\n").ConfigureAwait(false);
         if (refspecs.Length > 0)
         {

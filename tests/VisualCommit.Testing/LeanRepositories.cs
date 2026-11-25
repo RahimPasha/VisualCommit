@@ -57,13 +57,13 @@ internal static class LeanRepositories
         var path = root.Combine(repository.Name);
         var gitFolder = Path.Combine(path, ".git");
         var blank = await TempRepo.BlankGitFolderAsync("main").ConfigureAwait(false);
-        TempRepo.CopyDirectory(blank, gitFolder);
+        blank.CopyTo(gitFolder);
 
         // Git for Windows hides the git folder it makes (core.hideDotFiles); so is this one, as
         // TempRepo.CreateAsync's.
         if (OperatingSystem.IsWindows())
         {
-            File.SetAttributes(gitFolder, File.GetAttributes(blank));
+            File.SetAttributes(gitFolder, File.GetAttributes(blank.Path));
         }
 
         File.AppendAllText(Path.Combine(gitFolder, "config"), ConfigText(repository), Utf8);
@@ -74,7 +74,7 @@ internal static class LeanRepositories
         if (repository.RemoteHolds is { } holds)
         {
             var remote = root.Combine(RemotesFolder, repository.Name + ".git");
-            TempRepo.CopyDirectory(await TempRepo.BlankBareFolderAsync().ConfigureAwait(false), remote);
+            (await TempRepo.BlankBareFolderAsync().ConfigureAwait(false)).CopyTo(remote);
             var remoteRefs = new Dictionary<string, string> { ["refs/heads/main"] = repository.RemoteMain ?? throw new InvalidOperationException($"{repository.Name}'s remote has no main.") };
             await RunAsync(runner, remote, environment, StreamOf(repository, holds, remoteRefs), "fast-import", "--quiet").ConfigureAwait(false);
         }
