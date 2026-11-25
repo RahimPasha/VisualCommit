@@ -114,6 +114,51 @@ public class TempFolderCleanerTests
     }
 
     [Fact]
+    public async Task A_whole_repository_is_copied_as_it_is_with_a_record_and_without_its_hidden_folders_and_files_among_them()
+    {
+        // Git for Windows makes a repository's .git hidden (git init does; this one is a copy of a
+        // blank git folder, so the test hides it there), and .NET takes a name that starts with a dot
+        // for hidden on macOS and Linux: a walk that passed over hidden entries would copy no
+        // repository.
+        using var repo = await TempRepo.CreateAsync("whole");
+        await repo.CommitFileAsync("a.txt", "a\n", "First");
+        var gitFolder = Path.Combine(repo.Path, ".git");
+        var hidden = Path.Combine(repo.Path, ".hidden");
+        await File.WriteAllTextAsync(hidden, "kept\n", TestContext.Current.CancellationToken);
+        if (OperatingSystem.IsWindows())
+        {
+            File.SetAttributes(gitFolder, File.GetAttributes(gitFolder) | FileAttributes.Hidden);
+            File.SetAttributes(hidden, File.GetAttributes(hidden) | FileAttributes.Hidden);
+        }
+
+        var (folders, files) = EntriesIn(repo.Path);
+        Assert.Contains(".git", folders);
+        Assert.Contains(Path.Combine(".git", "objects"), folders);
+        Assert.Contains(".hidden", files);
+        Assert.Contains(Path.Combine(".git", "HEAD"), files);
+        var head = await repo.HeadAsync();
+
+        using var root = new TempDirectory("whole-copies");
+        var withoutRecord = root.Combine("without-record");
+        var withRecord = root.Combine("with-record");
+        TempRepo.CopyDirectory(repo.Path, withoutRecord);
+        TempRepo.CopyDirectory(repo.Path, withRecord, TempRepo.FoldersIn(repo.Path));
+
+        foreach (var copy in new[] { withoutRecord, withRecord })
+        {
+            var (copiedFolders, copiedFiles) = EntriesIn(copy);
+            Assert.Equal(folders, copiedFolders);
+            Assert.Equal(files, copiedFiles);
+            foreach (var file in files)
+            {
+                Assert.Equal(await File.ReadAllBytesAsync(Path.Combine(repo.Path, file), TestContext.Current.CancellationToken), await File.ReadAllBytesAsync(Path.Combine(copy, file), TestContext.Current.CancellationToken));
+            }
+
+            Assert.Equal(head, (await GitInAsync(repo, copy, "rev-parse", "HEAD")).Trim());
+        }
+    }
+
+    [Fact]
     public async Task A_kept_repository_whose_bare_repository_lost_its_refs_before_the_record_is_refused()
     {
         // A cleaner that ran while the template was built, after its bare repository was made and
@@ -371,6 +416,18 @@ public class TempFolderCleanerTests
             root.Dispose();
             throw;
         }
+    }
+
+    /// <summary>
+    /// Every folder and every file under <paramref name="folder"/>, hidden ones among them, each by its
+    /// path relative to it, in ordinal order; a folder that cannot be opened fails the listing.
+    /// </summary>
+    private static (List<string> Folders, List<string> Files) EntriesIn(string folder)
+    {
+        var walk = new EnumerationOptions { RecurseSubdirectories = true, AttributesToSkip = 0, IgnoreInaccessible = false };
+        List<string> Relative(IEnumerable<string> paths) =>
+            paths.Select(path => Path.GetRelativePath(folder, path)).Order(StringComparer.Ordinal).ToList();
+        return (Relative(Directory.EnumerateDirectories(folder, "*", walk)), Relative(Directory.EnumerateFiles(folder, "*", walk)));
     }
 
     /// <summary>Every folder named <c>hooks</c> under <paramref name="folder"/>, by its path relative to it, in ordinal order: git's hooks folders.</summary>
