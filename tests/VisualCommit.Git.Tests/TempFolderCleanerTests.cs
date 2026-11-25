@@ -168,10 +168,11 @@ public class TempFolderCleanerTests
     [Fact]
     public async Task A_whole_repository_is_copied_as_it_is_with_a_record_and_without_its_hidden_folders_and_files_among_them()
     {
-        // Git for Windows makes a repository's .git hidden (git init does; this one is a copy of a
-        // blank git folder, so the test hides it there), and .NET takes a name that starts with a dot
-        // for hidden on macOS and Linux: a walk that passed over hidden entries would copy no
-        // repository.
+        // Git for Windows makes a repository's .git hidden, and .NET takes a name that starts with a
+        // dot for hidden on macOS and Linux: a walk that passed over hidden entries would copy no
+        // repository. TempRepo.CreateAsync gives the copy of the blank git folder the blank's
+        // attributes already; the test hides .git itself all the same, so that the fact does not
+        // depend on how the blank was made.
         using var repo = await TempRepo.CreateAsync("whole");
         await repo.CommitFileAsync("a.txt", "a\n", "First");
         var gitFolder = Path.Combine(repo.Path, ".git");
