@@ -7,9 +7,10 @@ namespace VisualCommit.Git.Tests;
 /// <summary>
 /// Tests of what the builders do about a cleaner of the temp folder that removes every empty
 /// folder, whatever its age, as Windows' Storage Sense does when the disk runs low: the blank git
-/// folders, which live for a test process, and the shared copies of the 100k-commit repo, which
-/// live for the machine, lose folders that git needs. Each test strips a folder of its own; none
-/// touches the process's blanks, which the other tests of the process copy, or the shared folder.
+/// folders and the scenarios' templates, which live for a test process, and the shared copies of
+/// the 100k-commit repo, which live for the machine, lose folders that git needs. Each test strips a
+/// folder of its own; none touches the process's blanks or templates, which the other tests of the
+/// process copy, or the shared folder.
 /// </summary>
 public class TempFolderCleanerTests
 {
@@ -62,6 +63,58 @@ public class TempFolderCleanerTests
 
         var refused = Assert.Throws<InvalidOperationException>(() => BlankGitFolder.Record(blank.Path));
         Assert.Contains(blank.Path, refused.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_copy_of_a_kept_repository_that_lost_its_empty_folders_has_them()
+    {
+        // A template of the test's own, with a bare repository beside it that nothing is pushed to,
+        // made as phase 7a's template makes github/octo/notes.git, and kept as Scenarios keeps a
+        // template: its folders recorded, then copied for each test.
+        using var template = await TempRepo.CreateAsync("kept");
+        await template.CommitFileAsync("a.txt", "a\n", "First");
+        var empty = template.SiblingPath(EmptyBare);
+        (await TempRepo.BlankBareFolderAsync()).CopyTo(empty);
+        await File.WriteAllTextAsync(Path.Combine(empty, "HEAD"), "ref: refs/heads/main\n", TestContext.Current.CancellationToken);
+        template.RecordFolders();
+        Assert.Contains(Path.Combine(EmptyBare, "refs", "heads"), template.KeptFolders);
+
+        // Stripped while the process runs, as on the laptop on 2026-11-24: the bare repository keeps
+        // its HEAD and loses refs and objects, and every git folder loses its empty hooks.
+        var root = Path.GetDirectoryName(template.Path)!;
+        var hooks = HooksIn(root);
+        Assert.Equal(2, hooks.Count);
+        RemoveEmptyFolders(root);
+        Assert.False(Directory.Exists(Path.Combine(empty, "refs")));
+        Assert.Empty(HooksIn(root));
+
+        using var copy = await template.CopyAsync();
+        Assert.Equal("true", (await GitInAsync(copy, copy.SiblingPath(EmptyBare), "rev-parse", "--is-bare-repository")).Trim());
+        Assert.Equal(hooks, HooksIn(Path.GetDirectoryName(copy.Path)!));
+    }
+
+    [Fact]
+    public async Task A_copy_of_a_kept_workspace_that_lost_its_empty_folders_has_them()
+    {
+        // A workspace of the test's own, built as Scenarios builds the ten-repository one, with two
+        // of its repositories (api with its remote, notes without) and a bare remote beside them that
+        // nothing is pushed to; kept as Scenarios keeps the workspace's template.
+        using var template = await SmallWorkspaceAsync();
+        var empty = Path.Combine(template.Root, LeanRepositories.RemotesFolder, EmptyBare);
+        template.RecordFolders();
+        Assert.Contains(Path.Combine(LeanRepositories.RemotesFolder, EmptyBare, "refs", "heads"), template.KeptFolders);
+
+        // api's working repository, its remote, notes' and the empty remote: four hooks folders.
+        var hooks = HooksIn(template.Root);
+        Assert.Equal(4, hooks.Count);
+        RemoveEmptyFolders(template.Root);
+        Assert.False(Directory.Exists(Path.Combine(empty, "refs")));
+        Assert.Empty(HooksIn(template.Root));
+
+        using var copy = await template.CopyAsync();
+        var api = copy.Repo("api");
+        Assert.Equal("true", (await GitInAsync(api, Path.Combine(copy.Root, LeanRepositories.RemotesFolder, EmptyBare), "rev-parse", "--is-bare-repository")).Trim());
+        Assert.Equal(hooks, HooksIn(copy.Root));
     }
 
     [Fact]
@@ -163,6 +216,47 @@ public class TempFolderCleanerTests
         File.WriteAllText(marker, "not a sha\n");
         Assert.Null(LargeHistory.MarkedSha(marker));
     }
+
+    /// <summary>The folder of a template's bare repository that nothing is pushed to.</summary>
+    private const string EmptyBare = "empty.git";
+
+    /// <summary>
+    /// A workspace in a folder of the test's own, built as <c>Scenarios</c> builds the workspace's
+    /// template (<see cref="LeanRepositories.BuildAsync"/> for each repository): the template's
+    /// <c>api</c>, with <c>remotes/api.git</c>, and <c>notes</c>, with no remote, and beside them
+    /// <c>remotes/</c><see cref="EmptyBare"/>, a copy of the blank bare repository on <c>main</c>.
+    /// </summary>
+    private static async Task<TempWorkspace> SmallWorkspaceAsync()
+    {
+        var root = new TempDirectory("workspace");
+        try
+        {
+            var runner = new GitRunner(TempRepo.GitPath, new GitCallLog());
+            var repositories = Scenarios.WorkspaceRepositories.Where(repository => repository.Name is "api" or "notes").ToList();
+            foreach (var repository in repositories)
+            {
+                await LeanRepositories.BuildAsync(root, repository, runner);
+            }
+
+            var empty = root.Combine(LeanRepositories.RemotesFolder, EmptyBare);
+            (await TempRepo.BlankBareFolderAsync()).CopyTo(empty);
+            await File.WriteAllTextAsync(Path.Combine(empty, "HEAD"), "ref: refs/heads/main\n", TestContext.Current.CancellationToken);
+            var clocks = repositories.ToDictionary(repository => repository.Name, repository => repository.Clock, StringComparer.Ordinal);
+            return new TempWorkspace(root, clocks, new GitCallLog());
+        }
+        catch
+        {
+            root.Dispose();
+            throw;
+        }
+    }
+
+    /// <summary>Every folder named <c>hooks</c> under <paramref name="folder"/>, by its path relative to it, in ordinal order: git's hooks folders.</summary>
+    private static List<string> HooksIn(string folder) =>
+        Directory.EnumerateDirectories(folder, "hooks", SearchOption.AllDirectories)
+            .Select(hooks => Path.GetRelativePath(folder, hooks))
+            .Order(StringComparer.Ordinal)
+            .ToList();
 
     /// <summary>The folder of <see cref="SmallHistoryAsync"/>'s bare clone, beside the working tree.</summary>
     private const string SmallBare = "small.git";
