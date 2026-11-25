@@ -20,7 +20,9 @@ namespace VisualCommit.Testing;
 /// <para>
 /// The repo is built once per machine and kept in the temp folder under a versioned name, so
 /// test runs and the parallel test processes of one run share it. It must only be read: change
-/// <see cref="Version"/> whenever the generator changes, so an old copy is not used.
+/// <see cref="Version"/> whenever the generator changes, so an old copy is not used. Each test
+/// process proves a copy through git before it uses it (<see cref="IsUsableAsync"/>), and one that
+/// fails the proof is built again, as one whose build did not finish is.
 /// </para>
 /// </summary>
 public static class LargeHistory
@@ -131,11 +133,11 @@ public static class LargeHistory
             return final;
         }
 
-        // A copy without its marker is left over from a build that did not finish.
-        if (Directory.Exists(final))
-        {
-            DeleteDirectory(final);
-        }
+        // A copy without its marker is left over from a build that did not finish, and one that
+        // git does not take for the repository its marker names has lost files or folders since
+        // (IsUsableAsync). Either is built again; the bare copy, which has object files of its own,
+        // is proven on its own.
+        DeleteCopy(final, marker);
 
         using var repo = await TempRepo.CreateAsync("large").ConfigureAwait(false);
         await repo.GitWithInputAsync(BuildStream(), "fast-import", "--quiet").ConfigureAwait(false);
@@ -161,11 +163,10 @@ public static class LargeHistory
             return final;
         }
 
-        // A copy without its marker is left over from one that did not finish.
-        if (Directory.Exists(final))
-        {
-            DeleteDirectory(final);
-        }
+        // A copy without its marker is left over from one that did not finish, and one that git
+        // does not take for the repository its marker names has lost files or folders since
+        // (IsUsableAsync): either is made again.
+        DeleteCopy(final, marker);
 
         // Its own object files, not links to the working tree's repo's: nothing done to one can
         // reach the other.
@@ -181,20 +182,76 @@ public static class LargeHistory
         return final;
     }
 
-    /// <summary>The SHA a shared copy's marker holds, or null when it has no marker.</summary>
-    internal static string? MarkedSha(string marker) =>
-        File.Exists(marker) ? File.ReadAllText(marker).Trim() : null;
+    /// <summary>
+    /// The SHA a shared copy's marker holds: the copy's <c>main</c> when it was made. Null when
+    /// there is no marker or it holds no SHA (40 or 64 lower-case hexadecimal digits).
+    /// </summary>
+    internal static string? MarkedSha(string marker)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(marker);
+        if (!File.Exists(marker))
+        {
+            return null;
+        }
+
+        var text = File.ReadAllText(marker).Trim();
+        return text.Length is 40 or 64 && text.All(char.IsAsciiHexDigitLower) ? text : null;
+    }
 
     /// <summary>
-    /// Whether <paramref name="folder"/> can be used as the shared copy whose marker holds
-    /// <paramref name="sha"/>: a bare repository with <paramref name="bare"/>, one with a working
-    /// tree without it. Taken from the folder's git files being there.
+    /// Whether git takes <paramref name="folder"/> for the shared copy whose marker holds
+    /// <paramref name="sha"/>: run in the folder with the tests' isolation, <c>git rev-parse
+    /// --is-bare-repository</c> says it is a repository of the kind asked for (<c>true</c> with
+    /// <paramref name="bare"/>, <c>false</c> for one with a working tree), its
+    /// <c>refs/heads/main</c> is <paramref name="sha"/>, and that commit can be read
+    /// (<c>git cat-file -e &lt;sha&gt;^{commit}</c>). Three git calls, once per test process and
+    /// copy (<see cref="GetAsync"/> and <see cref="GetBareAsync"/> keep what they found).
+    /// <para>
+    /// The marker alone proves none of it, as the copies outlive every test process: a cleaner of
+    /// the temp folder that removes every empty folder, whatever its age, as Windows' Storage Sense
+    /// does when the disk runs low, empties the bare copy's <c>refs</c>, whose refs are all in
+    /// <c>packed-refs</c>, and removes it, and git then takes the folder for no repository (the
+    /// laptop on 2026-11-24); a cleaner that removes old files could take a ref or a pack.
+    /// </para>
     /// </summary>
-    internal static Task<bool> IsUsableAsync(string folder, string sha, bool bare)
+    internal static async Task<bool> IsUsableAsync(string folder, string sha, bool bare)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(folder);
-        ArgumentNullException.ThrowIfNull(sha);
-        return Task.FromResult(bare ? File.Exists(Path.Combine(folder, "HEAD")) : Directory.Exists(Path.Combine(folder, ".git")));
+        ArgumentException.ThrowIfNullOrWhiteSpace(sha);
+        if (!Directory.Exists(folder))
+        {
+            return false;
+        }
+
+        using var home = new TempDirectory("large-proof");
+        var environment = TempRepo.IsolatedEnvironment(home.Combine("home"));
+        var runner = new GitRunner(TempRepo.GitPath);
+        Task<GitResult> Git(params string[] arguments) =>
+            runner.RunAsync(new GitCommand(arguments) { WorkingDirectory = folder, Environment = environment });
+
+        var kind = await Git("rev-parse", "--is-bare-repository").ConfigureAwait(false);
+        if (!kind.Succeeded || kind.StandardOutput.Trim() != (bare ? "true" : "false"))
+        {
+            return false;
+        }
+
+        var main = await Git("rev-parse", "--verify", "--quiet", "refs/heads/main").ConfigureAwait(false);
+        if (!main.Succeeded || !string.Equals(main.StandardOutput.Trim(), sha, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        return (await Git("cat-file", "-e", sha + "^{commit}").ConfigureAwait(false)).Succeeded;
+    }
+
+    /// <summary>Deletes a shared copy and its marker, the marker first, so that no marker is left beside a copy deleted in part.</summary>
+    private static void DeleteCopy(string folder, string marker)
+    {
+        File.Delete(marker);
+        if (Directory.Exists(folder))
+        {
+            DeleteDirectory(folder);
+        }
     }
 
     /// <summary>The fast-import stream of the whole history.</summary>
