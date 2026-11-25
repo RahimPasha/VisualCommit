@@ -218,10 +218,15 @@ public static class LargeHistory
     /// laptop on 2026-11-24); a cleaner that removes old files could take a ref or a pack.
     /// </para>
     /// </summary>
-    internal static async Task<bool> IsUsableAsync(string folder, string sha, bool bare)
+    /// <param name="folder">The copy's folder: the working tree, or the bare repository.</param>
+    /// <param name="sha">The SHA the copy's marker holds.</param>
+    /// <param name="bare">Whether the copy is the bare one.</param>
+    /// <param name="refs">Other refs of the copy that its users read, by their full names; not proven yet.</param>
+    internal static async Task<bool> IsUsableAsync(string folder, string sha, bool bare, params string[] refs)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(folder);
         ArgumentException.ThrowIfNullOrWhiteSpace(sha);
+        ArgumentNullException.ThrowIfNull(refs);
         if (!Directory.Exists(folder))
         {
             return false;
