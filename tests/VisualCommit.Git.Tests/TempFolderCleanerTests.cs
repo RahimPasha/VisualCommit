@@ -68,14 +68,10 @@ public class TempFolderCleanerTests
     [Fact]
     public async Task A_copy_of_a_kept_repository_that_lost_its_empty_folders_has_them()
     {
-        // A template of the test's own, with a bare repository beside it that nothing is pushed to,
-        // made as phase 7a's template makes github/octo/notes.git, and kept as Scenarios keeps a
-        // template: its folders recorded, then copied for each test.
-        using var template = await TempRepo.CreateAsync("kept");
-        await template.CommitFileAsync("a.txt", "a\n", "First");
+        // A template of the test's own, kept as Scenarios keeps a template: its folders recorded, then
+        // copied for each test.
+        using var template = await RepositoryWithAnEmptyBareAsync();
         var empty = template.SiblingPath(EmptyBare);
-        (await TempRepo.BlankBareFolderAsync()).CopyTo(empty);
-        await File.WriteAllTextAsync(Path.Combine(empty, "HEAD"), "ref: refs/heads/main\n", TestContext.Current.CancellationToken);
         template.RecordFolders();
         Assert.Contains(Path.Combine(EmptyBare, "refs", "heads"), template.KeptFolders);
 
@@ -115,6 +111,37 @@ public class TempFolderCleanerTests
         var api = copy.Repo("api");
         Assert.Equal("true", (await GitInAsync(api, Path.Combine(copy.Root, LeanRepositories.RemotesFolder, EmptyBare), "rev-parse", "--is-bare-repository")).Trim());
         Assert.Equal(hooks, HooksIn(copy.Root));
+    }
+
+    [Fact]
+    public async Task A_kept_repository_whose_bare_repository_lost_its_refs_before_the_record_is_refused()
+    {
+        // A cleaner that ran while the template was built, after its bare repository was made and
+        // before its folders were read, would leave a record without that repository's refs and
+        // objects, and no copy of it would be a repository: the record refuses it, as the blank git
+        // folder's does. The working repository, whose refs and objects hold files, is no reason.
+        using var template = await RepositoryWithAnEmptyBareAsync();
+        RemoveEmptyFolders(Path.GetDirectoryName(template.Path)!);
+        Assert.True(Directory.Exists(Path.Combine(template.Path, ".git", "refs")));
+
+        var refused = Assert.Throws<InvalidOperationException>(template.RecordFolders);
+        Assert.Contains(EmptyBare, refused.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain(Path.Combine(Path.GetFileName(template.Path), ".git"), refused.Message, StringComparison.Ordinal);
+        Assert.Empty(template.KeptFolders);
+    }
+
+    [Fact]
+    public async Task A_kept_workspace_whose_bare_remote_lost_its_refs_before_the_record_is_refused()
+    {
+        using var template = await SmallWorkspaceAsync();
+        RemoveEmptyFolders(template.Root);
+
+        var refused = Assert.Throws<InvalidOperationException>(template.RecordFolders);
+        Assert.Contains(Path.Combine(LeanRepositories.RemotesFolder, EmptyBare), refused.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain(Path.Combine("api", ".git"), refused.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain(Path.Combine(LeanRepositories.RemotesFolder, "api.git"), refused.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain(Path.Combine("notes", ".git"), refused.Message, StringComparison.Ordinal);
+        Assert.Empty(template.KeptFolders);
     }
 
     [Fact]
@@ -291,6 +318,29 @@ public class TempFolderCleanerTests
 
     /// <summary>The folder of a template's bare repository that nothing is pushed to.</summary>
     private const string EmptyBare = "empty.git";
+
+    /// <summary>
+    /// A repository with one commit in a folder of the test's own and, beside it, the bare
+    /// repository <see cref="EmptyBare"/> that nothing is pushed to, made as phase 7a's template makes
+    /// <c>github/octo/notes.git</c>: a copy of the blank bare repository, on <c>main</c>.
+    /// </summary>
+    private static async Task<TempRepo> RepositoryWithAnEmptyBareAsync()
+    {
+        var repo = await TempRepo.CreateAsync("kept");
+        try
+        {
+            await repo.CommitFileAsync("a.txt", "a\n", "First");
+            var empty = repo.SiblingPath(EmptyBare);
+            (await TempRepo.BlankBareFolderAsync()).CopyTo(empty);
+            await File.WriteAllTextAsync(Path.Combine(empty, "HEAD"), "ref: refs/heads/main\n", TestContext.Current.CancellationToken);
+            return repo;
+        }
+        catch
+        {
+            repo.Dispose();
+            throw;
+        }
+    }
 
     /// <summary>
     /// A workspace in a folder of the test's own, built as <c>Scenarios</c> builds the workspace's
