@@ -476,10 +476,12 @@ public class TempFolderCleanerTests
     /// Puts the empty folder <paramref name="folder"/> into a state in which its parent lists it and
     /// nothing can open it, until the result is disposed. On Windows it is the state a cleaner of the
     /// temp folder leaves a folder in for an instant: a handle that allows the delete is held open and
-    /// the folder is deleted, so the delete is pending, and the folder goes when the handle is closed.
-    /// No folder on macOS or Linux is ever in that state; there the folder loses its permissions
-    /// instead, which an ordinary user's process cannot open, and has them again when the result is
-    /// disposed.
+    /// the folder is marked for deletion through that handle (its delete disposition), so the delete is
+    /// pending, every open of the folder is refused, and the folder goes when the handle is closed.
+    /// <c>Directory.Delete</c> with the handle held open does not leave that state: on the laptop's
+    /// Windows 11 on 2026-11-25 the folder's name left its parent at once. No folder on macOS or Linux
+    /// is ever in that state; there the folder loses its permissions instead, which an ordinary user's
+    /// process cannot open, and has them again when the result is disposed.
     /// </summary>
     private static IDisposable Unopenable(string folder)
     {
@@ -500,7 +502,12 @@ public class TempFolderCleanerTests
 
         try
         {
-            Directory.Delete(folder);
+            byte delete = 1;
+            if (!SetFileInformationByHandle(handle, DispositionInfo, ref delete, sizeof(byte)))
+            {
+                throw new System.ComponentModel.Win32Exception(System.Runtime.InteropServices.Marshal.GetLastPInvokeError(), $"SetFileInformationByHandle could not mark {folder} for deletion.");
+            }
+
             return handle;
         }
         catch
@@ -523,8 +530,18 @@ public class TempFolderCleanerTests
     /// <summary>The flag without which <c>CreateFileW</c> opens no folder (<c>FILE_FLAG_BACKUP_SEMANTICS</c>).</summary>
     private const uint BackupSemantics = 0x02000000;
 
+    /// <summary>
+    /// The class of the information that marks a file or folder for deletion when its last handle is
+    /// closed (<c>FileDispositionInfo</c>), a <c>FILE_DISPOSITION_INFO</c>: one byte, not zero to delete.
+    /// </summary>
+    private const int DispositionInfo = 4;
+
     [System.Runtime.InteropServices.DllImport("kernel32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode, SetLastError = true)]
     private static extern Microsoft.Win32.SafeHandles.SafeFileHandle CreateFileW(string fileName, uint desiredAccess, FileShare shareMode, IntPtr securityAttributes, FileMode creationDisposition, uint flagsAndAttributes, IntPtr templateFile);
+
+    [System.Runtime.InteropServices.DllImport("kernel32.dll", SetLastError = true)]
+    [return: System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.Bool)]
+    private static extern bool SetFileInformationByHandle(Microsoft.Win32.SafeHandles.SafeFileHandle file, int informationClass, ref byte information, uint size);
 
     /// <summary>
     /// Every folder and every file under <paramref name="folder"/>, hidden ones among them, each by its
