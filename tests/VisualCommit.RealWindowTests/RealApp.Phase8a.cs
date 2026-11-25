@@ -400,28 +400,31 @@ public sealed partial class RealApp
     /// A top-level window of the app's process other than the notice (<see cref="InstanceNoticeId"/>), on
     /// the screen, that <paramref name="accept"/> takes: the main window that "Try again" opens in the
     /// process that showed the notice. Each such window is offered in the order <c>EnumWindows</c> gives,
-    /// until one is taken, so that a popup of the app above the main window does not hide it. Null while
-    /// none is taken, and null when a read through UI Automation fails (<see cref="IsReadFailure"/>). One
-    /// look; the caller waits for it and looks again. Found by their handles (<see cref="TopLevelElementsOf"/>):
-    /// a failed enumeration of Windows' list leaves the call.
+    /// until one is taken, so that a popup of the app above the main window does not hide it. A window
+    /// whose read through UI Automation fails (<see cref="IsReadFailure"/>), in the three filters or in
+    /// <paramref name="accept"/>, is passed over at that look, so that it does not hide the windows after
+    /// it either. Null while none is taken. One look; the caller waits for it and looks again. Found by
+    /// their handles (<see cref="TopLevelElementsOf"/>): a failed enumeration of Windows' list leaves the call.
     /// </summary>
     public Window? OtherWindowOfProcess(Func<Window, bool> accept)
     {
         ArgumentNullException.ThrowIfNull(accept);
-        var elements = TopLevelElementsOf(_process.Id);
-        try
+        foreach (var element in TopLevelElementsOf(_process.Id))
         {
-            return elements
-                .Where(element => element.Properties.AutomationId.ValueOrDefault != InstanceNoticeId
+            var window = element.AsWindow();
+            var taken = ReadOr(
+                () => element.Properties.AutomationId.ValueOrDefault != InstanceNoticeId
                     && !element.IsOffscreen
-                    && element.BoundingRectangle is { Width: > 0, Height: > 0 })
-                .Select(element => element.AsWindow())
-                .FirstOrDefault(accept);
+                    && element.BoundingRectangle is { Width: > 0, Height: > 0 }
+                    && accept(window),
+                false);
+            if (taken)
+            {
+                return window;
+            }
         }
-        catch (Exception ex) when (IsReadFailure(ex))
-        {
-            return null;
-        }
+
+        return null;
     }
 
     /// <summary>
