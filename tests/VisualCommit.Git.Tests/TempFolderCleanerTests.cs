@@ -114,6 +114,56 @@ public class TempFolderCleanerTests
     }
 
     [Fact]
+    public async Task A_copy_of_a_kept_repository_walks_past_a_folder_it_cannot_open_and_has_it()
+    {
+        Assert.SkipWhen(!OperatingSystem.IsWindows() && Environment.IsPrivilegedProcess, NoUnopenableFolderAsRoot);
+
+        // Phase 7b's walk-through on 2026-11-25: the cleaner was deleting the empty objects/info of a
+        // kept template's bare repository while three copies of the template walked it, and none of
+        // the walks could go into the folder.
+        using var template = await RepositoryWithAnEmptyBareAsync();
+        template.RecordFolders();
+        var bare = template.SiblingPath(EmptyBare);
+        var info = Path.Combine(bare, "objects", "info");
+        Assert.Contains(Path.Combine(EmptyBare, "objects", "info"), template.KeptFolders);
+        Assert.Empty(Directory.EnumerateFileSystemEntries(info));
+
+        TempRepo copy;
+        using (Unopenable(info))
+        {
+            // The state is the one meant: a walk that goes into the folder fails.
+            Assert.Throws<UnauthorizedAccessException>(() => Directory.EnumerateDirectories(bare, "*", SearchOption.AllDirectories).ToList());
+            copy = await template.CopyAsync();
+        }
+
+        using (copy)
+        {
+            var copied = copy.SiblingPath(EmptyBare);
+            Assert.True(Directory.Exists(Path.Combine(copied, "objects", "info")));
+            Assert.Equal("true", (await GitInAsync(copy, copied, "rev-parse", "--is-bare-repository")).Trim());
+        }
+    }
+
+    [Fact]
+    public async Task A_copy_without_a_record_fails_on_a_folder_it_cannot_open()
+    {
+        Assert.SkipWhen(!OperatingSystem.IsWindows() && Environment.IsPrivilegedProcess, NoUnopenableFolderAsRoot);
+
+        // A folder that nobody recorded has no way back into the copy, so a copy that cannot walk into
+        // one fails loudly rather than leave it out.
+        using var template = await RepositoryWithAnEmptyBareAsync();
+        var bare = template.SiblingPath(EmptyBare);
+        var info = Path.Combine(bare, "objects", "info");
+        Assert.Empty(Directory.EnumerateFileSystemEntries(info));
+
+        using var root = new TempDirectory("unrecorded");
+        using (Unopenable(info))
+        {
+            Assert.Throws<UnauthorizedAccessException>(() => TempRepo.CopyDirectory(bare, root.Combine(EmptyBare)));
+        }
+    }
+
+    [Fact]
     public async Task A_whole_repository_is_copied_as_it_is_with_a_record_and_without_its_hidden_folders_and_files_among_them()
     {
         // Git for Windows makes a repository's .git hidden (git init does; this one is a copy of a
@@ -417,6 +467,64 @@ public class TempFolderCleanerTests
             throw;
         }
     }
+
+    /// <summary>Why the facts of a folder that cannot be opened are skipped where they are.</summary>
+    private const string NoUnopenableFolderAsRoot =
+        "No folder can be made that this process cannot open: macOS and Linux have no folder whose delete is pending, and a process running as root opens a folder without permissions all the same. Windows and the macOS and Linux jobs that do not run as root run this.";
+
+    /// <summary>
+    /// Puts the empty folder <paramref name="folder"/> into a state in which its parent lists it and
+    /// nothing can open it, until the result is disposed. On Windows it is the state a cleaner of the
+    /// temp folder leaves a folder in for an instant: a handle that allows the delete is held open and
+    /// the folder is deleted, so the delete is pending, and the folder goes when the handle is closed.
+    /// No folder on macOS or Linux is ever in that state; there the folder loses its permissions
+    /// instead, which an ordinary user's process cannot open, and has them again when the result is
+    /// disposed.
+    /// </summary>
+    private static IDisposable Unopenable(string folder)
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            var mode = File.GetUnixFileMode(folder);
+            File.SetUnixFileMode(folder, UnixFileMode.None);
+            return new ModeRestored(folder, mode);
+        }
+
+        var handle = CreateFileW(folder, DeleteAccess, FileShare.ReadWrite | FileShare.Delete, IntPtr.Zero, FileMode.Open, BackupSemantics, IntPtr.Zero);
+        if (handle.IsInvalid)
+        {
+            var error = System.Runtime.InteropServices.Marshal.GetLastPInvokeError();
+            handle.Dispose();
+            throw new System.ComponentModel.Win32Exception(error, $"CreateFileW could not open {folder}.");
+        }
+
+        try
+        {
+            Directory.Delete(folder);
+            return handle;
+        }
+        catch
+        {
+            handle.Dispose();
+            throw;
+        }
+    }
+
+    /// <summary>Gives a folder back the mode it had (<see cref="Unopenable"/>) when it is disposed.</summary>
+    [System.Runtime.Versioning.UnsupportedOSPlatform("windows")]
+    private sealed class ModeRestored(string folder, UnixFileMode mode) : IDisposable
+    {
+        public void Dispose() => File.SetUnixFileMode(folder, mode);
+    }
+
+    /// <summary>The access right to delete a file or folder (<c>DELETE</c>).</summary>
+    private const uint DeleteAccess = 0x00010000;
+
+    /// <summary>The flag without which <c>CreateFileW</c> opens no folder (<c>FILE_FLAG_BACKUP_SEMANTICS</c>).</summary>
+    private const uint BackupSemantics = 0x02000000;
+
+    [System.Runtime.InteropServices.DllImport("kernel32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode, SetLastError = true)]
+    private static extern Microsoft.Win32.SafeHandles.SafeFileHandle CreateFileW(string fileName, uint desiredAccess, FileShare shareMode, IntPtr securityAttributes, FileMode creationDisposition, uint flagsAndAttributes, IntPtr templateFile);
 
     /// <summary>
     /// Every folder and every file under <paramref name="folder"/>, hidden ones among them, each by its
