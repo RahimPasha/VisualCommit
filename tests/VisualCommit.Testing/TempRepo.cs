@@ -704,6 +704,20 @@ public sealed class TempRepo : IDisposable
     }
 
     /// <summary>
+    /// The folders under this repository's temporary folder when it was kept as a scenario's
+    /// template (<see cref="RecordFolders"/>), each by its path relative to that folder; empty for a
+    /// repository that was never kept.
+    /// </summary>
+    internal IReadOnlyList<string> KeptFolders { get; private set; } = [];
+
+    /// <summary>
+    /// Records every folder under this repository's temporary folder as it is now
+    /// (<see cref="KeptFolders"/>), read from the disk with one listing: for a template that
+    /// <c>Scenarios</c> keeps for the whole test process, or a test's own.
+    /// </summary>
+    internal void RecordFolders() => KeptFolders = FoldersIn(_root.Path);
+
+    /// <summary>
     /// Makes an independent copy of this repository and everything next to it (bare remotes,
     /// clones) in a new temporary folder, with remote URLs that pointed into the old folder
     /// pointed at the copy, and linked worktrees that lay in the old folder joined to the copy
@@ -857,6 +871,36 @@ public sealed class TempRepo : IDisposable
         }
     }
 
+    /// <summary>
+    /// Copies <paramref name="from"/> as <see cref="CopyDirectory(string, string)"/> does, and then
+    /// makes each of <paramref name="folders"/>, paths relative to <paramref name="to"/>, in the copy:
+    /// the folders <paramref name="from"/> held when they were recorded (<see cref="FoldersIn"/>),
+    /// whatever became of them since. A folder the copy already has costs a look and nothing more.
+    /// </summary>
+    internal static void CopyDirectory(string from, string to, IReadOnlyList<string> folders)
+    {
+        ArgumentNullException.ThrowIfNull(folders);
+        CopyDirectory(from, to);
+        foreach (var folder in folders)
+        {
+            Directory.CreateDirectory(System.IO.Path.Combine(to, folder));
+        }
+    }
+
+    /// <summary>
+    /// Every folder under <paramref name="folder"/> as it is now, by its path relative to it, in
+    /// ordinal order: read from the disk with one listing, for <see cref="CopyDirectory(string, string, IReadOnlyList{string})"/>
+    /// to make again in a copy.
+    /// </summary>
+    internal static List<string> FoldersIn(string folder)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(folder);
+        return Directory.EnumerateDirectories(folder, "*", SearchOption.AllDirectories)
+            .Select(directory => System.IO.Path.GetRelativePath(folder, directory))
+            .Order(StringComparer.Ordinal)
+            .ToList();
+    }
+
     /// <summary>The SHA of the current commit.</summary>
     public async Task<string> HeadAsync() => (await GitAsync("rev-parse", "HEAD")).StandardOutput.Trim();
 
@@ -940,10 +984,7 @@ internal sealed class BlankGitFolder(string path, IReadOnlyList<string> folders)
     public static BlankGitFolder Record(string gitFolder)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(gitFolder);
-        var folders = Directory.EnumerateDirectories(gitFolder, "*", SearchOption.AllDirectories)
-            .Select(folder => System.IO.Path.GetRelativePath(gitFolder, folder))
-            .Order(StringComparer.Ordinal)
-            .ToList();
+        var folders = TempRepo.FoldersIn(gitFolder);
         if (!folders.Contains("refs", StringComparer.Ordinal) || !folders.Contains("objects", StringComparer.Ordinal))
         {
             throw new InvalidOperationException($"The blank git folder {gitFolder} lost its refs or objects folder before its folders were recorded: [{string.Join(", ", folders)}].");
@@ -965,11 +1006,7 @@ internal sealed class BlankGitFolder(string path, IReadOnlyList<string> folders)
     public void CopyTo(string to)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(to);
-        TempRepo.CopyDirectory(Path, to);
-        foreach (var folder in Folders)
-        {
-            Directory.CreateDirectory(System.IO.Path.Combine(to, folder));
-        }
+        TempRepo.CopyDirectory(Path, to, Folders);
     }
 }
 

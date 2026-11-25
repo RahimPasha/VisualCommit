@@ -98,6 +98,20 @@ public sealed class TempWorkspace : IDisposable
     }
 
     /// <summary>
+    /// The folders under the workspace's folder when it was kept as a template
+    /// (<see cref="RecordFolders"/>), each by its path relative to that folder; empty for a
+    /// workspace that was never kept.
+    /// </summary>
+    internal IReadOnlyList<string> KeptFolders { get; private set; } = [];
+
+    /// <summary>
+    /// Records every folder under the workspace's folder as it is now (<see cref="KeptFolders"/>),
+    /// read from the disk with one listing: for the template that <c>Scenarios</c> keeps for the
+    /// whole test process, or a test's own.
+    /// </summary>
+    internal void RecordFolders() => KeptFolders = TempRepo.FoldersIn(_root.Path);
+
+    /// <summary>
     /// An independent copy of the whole folder in a new temporary folder, made by copying files
     /// (<see cref="TempRepo.CopyDirectory"/>) and nothing else: no git process, and so nothing in
     /// <see cref="Calls"/> of either. The relative URLs point the copy's repositories at the copy's
