@@ -463,7 +463,8 @@ public sealed partial class RealApp
 
     /// <summary>
     /// Whether the process <paramref name="processId"/> has a visible top-level window on the desktop now,
-    /// as Windows lists them: one look, for a check that a start showed no window while it ran.
+    /// as Windows lists them: one look, for a check that a start showed no window while it ran. When Windows
+    /// fails to list its windows, a <see cref="System.ComponentModel.Win32Exception"/>, never false.
     /// </summary>
     public bool HasWindowOfProcess(int processId) => Win32.VisibleTopLevelWindowsOf((uint)processId).Count > 0;
 
@@ -471,11 +472,16 @@ public sealed partial class RealApp
     /// The visible top-level windows of a process as UI Automation elements, found in Windows' own list of
     /// windows and asked of UI Automation by their handles, never by a search of the desktop's children.
     /// Such a search makes UI Automation ask every program on the desktop, and one that answers slowly
-    /// holds the search, and the app under test with it, for seconds: launch 6's wait for the main window
+    /// holds the search, and the harness's wait with it, for seconds: launch 6's wait for the main window
     /// ran out on it in about two runs of five on the owner's desktop, and in none of sixteen by the handle.
+    /// In the order <c>EnumWindows</c> gives. A window whose look fails (<see cref="IsReadFailure"/>) is left
+    /// out; the list itself is read whole, here and not when the result is walked, so that a failed
+    /// enumeration (<see cref="System.ComponentModel.Win32Exception"/>) leaves the call and never reads as no
+    /// window.
     /// </summary>
-    private IEnumerable<AutomationElement> TopLevelElementsOf(int processId)
+    private List<AutomationElement> TopLevelElementsOf(int processId)
     {
+        List<AutomationElement> found = [];
         foreach (var window in Win32.VisibleTopLevelWindowsOf((uint)processId))
         {
             AutomationElement? element = null;
@@ -483,16 +489,19 @@ public sealed partial class RealApp
             {
                 element = _automation.FromHandle(window);
             }
-            catch (Exception ex) when (ex is COMException or FlaUI.Core.Exceptions.ElementNotAvailableException)
+            catch (Exception ex) when (IsReadFailure(ex))
             {
-                // The window went between the list and the look.
+                // The window went between the list and the look, or UI Automation could not read it: the
+                // look skips it.
             }
 
             if (element is not null)
             {
-                yield return element;
+                found.Add(element);
             }
         }
+
+        return found;
     }
 
     /// <summary>The screen point in the middle of the title bar: half the window's width across, half the title bar's height down.</summary>
@@ -810,10 +819,11 @@ public sealed partial class RealApp
 
     /// <summary>
     /// The Win32 calls of these launches beside the shared <see cref="NativeMethods"/>: the window's
-    /// state on the desktop, its icons, its visible frame and the window under a point. Each only reads,
-    /// but for <c>ShowWindowAsync</c>, which minimises the app's own window. No call waits on the app's
-    /// thread without a limit: <c>WM_GETICON</c> goes by <c>SendMessageTimeoutW</c>, the minimise is
-    /// posted, and <c>GetWindowTextW</c> reads another process's window's title without a message.
+    /// state on the desktop, its icons, its visible frame, the window under a point and the top-level
+    /// windows Windows lists (<c>EnumWindows</c>). Each only reads, but for <c>ShowWindowAsync</c>, which
+    /// minimises the app's own window. No call waits on the app's thread without a limit: <c>WM_GETICON</c>
+    /// goes by <c>SendMessageTimeoutW</c>, the minimise is posted, and <c>GetWindowTextW</c> reads another
+    /// process's window's title without a message.
     /// </summary>
     private static class Win32
     {
@@ -847,52 +857,69 @@ public sealed partial class RealApp
 
         private delegate bool EnumWindowsProc(IntPtr window, IntPtr parameter);
 
-        [DllImport("user32.dll")]
+        [DllImport("user32.dll", SetLastError = true)]
         [return: MarshalAs(UnmanagedType.Bool)]
         private static extern bool EnumWindows(EnumWindowsProc callback, IntPtr parameter);
 
         [DllImport("user32.dll")]
         private static extern uint GetWindowThreadProcessId(IntPtr window, out uint process);
 
-        [DllImport("user32.dll", CharSet = CharSet.Unicode)]
-        private static extern int GetClassName(IntPtr window, System.Text.StringBuilder name, int capacity);
-
-        /// <summary>The visible top-level windows of one of the window classes named, as Windows lists them.</summary>
+        /// <summary>
+        /// The visible top-level windows of one of the window classes named, as Windows lists them.
+        /// <see cref="System.ComponentModel.Win32Exception"/> when Windows fails to list them (<see cref="Enumerate"/>).
+        /// </summary>
         public static List<IntPtr> VisibleTopLevelWindowsOfClass(params string[] classes)
         {
             var found = new List<IntPtr>();
             var name = new System.Text.StringBuilder(256);
-            EnumWindows(
-                (window, _) =>
+            Enumerate(window =>
+            {
+                if (IsWindowVisible(window) && GetClassNameW(window, name, name.Capacity) > 0 && classes.Contains(name.ToString(), StringComparer.Ordinal))
                 {
-                    if (IsWindowVisible(window) && GetClassName(window, name, name.Capacity) > 0 && classes.Contains(name.ToString(), StringComparer.Ordinal))
-                    {
-                        found.Add(window);
-                    }
-
-                    return true;
-                },
-                IntPtr.Zero);
+                    found.Add(window);
+                }
+            });
             return found;
         }
 
-        /// <summary>The visible top-level windows of a process, front to back, as Windows lists them.</summary>
+        /// <summary>
+        /// The visible top-level windows of a process, in the order <c>EnumWindows</c> gives (the Z order in
+        /// practice), as Windows lists them. <see cref="System.ComponentModel.Win32Exception"/> when Windows
+        /// fails to list them (<see cref="Enumerate"/>).
+        /// </summary>
         public static List<IntPtr> VisibleTopLevelWindowsOf(uint process)
         {
             var found = new List<IntPtr>();
-            EnumWindows(
-                (window, _) =>
+            Enumerate(window =>
+            {
+                GetWindowThreadProcessId(window, out var owner);
+                if (owner == process && IsWindowVisible(window))
                 {
-                    GetWindowThreadProcessId(window, out var owner);
-                    if (owner == process && IsWindowVisible(window))
-                    {
-                        found.Add(window);
-                    }
-
-                    return true;
-                },
-                IntPtr.Zero);
+                    found.Add(window);
+                }
+            });
             return found;
+        }
+
+        /// <summary>
+        /// Hands every top-level window Windows lists (<c>EnumWindows</c>) to <paramref name="each"/>. When
+        /// <c>EnumWindows</c> returns false with an error set, a
+        /// <see cref="System.ComponentModel.Win32Exception"/> with that error: a failed enumeration never reads as
+        /// no window, so that a check that asserts there is none (I1's second start) fails then instead of passing.
+        /// </summary>
+        private static void Enumerate(Action<IntPtr> each)
+        {
+            if (!EnumWindows(
+                    (window, _) =>
+                    {
+                        each(window);
+                        return true;
+                    },
+                    IntPtr.Zero)
+                && Marshal.GetLastPInvokeError() is var error and not 0)
+            {
+                throw new System.ComponentModel.Win32Exception(error, $"Windows did not list its top-level windows (EnumWindows failed with error {error}).");
+            }
         }
 
         [DllImport("user32.dll")]
