@@ -367,9 +367,10 @@ Wave 4 and the review:
   for the app's window, and it now finds every window by its handle (`14789f7`; ruling 105; the part
   13 of 13 after it). Two readers found the change sound and asked for hardening, which is built,
   read by an independent reader, merged (`640f728`; ruling 106) and run on the desktop: launch 6 six
-  of six, the part 13 of 13, phase 6's S14 through the file dialog. Still open: CI's run of that
-  merge, the lagged list (started at 21:12), the whole default run with its comparison, phase 1's
-  check 11 and phase 6's W1 alone after it (the folder dialog), and the owner's answer on the dimmed
+  of six, the part 13 of 13, phase 6's S14 through the file dialog. **The lagged list passed**
+  (21:12 to 21:58 on `640f728`'s code: seven commands, 1,114 tests, none failed). Still open: CI's
+  run of that merge, the whole default run (started at 21:58) with its comparison, phase 1's check
+  11 and phase 6's W1 alone after it (the folder dialog), and the owner's answer on the dimmed
   texts.
 
 Gate:
@@ -1019,19 +1020,23 @@ ruling 105 lists them). **The hardening is built, read, merged and run** (run `w
 reader's seven points and the lead's rulings). On `640f728`, the owner told, 21:04 to 21:12: launch
 6 six of six, the whole 8a part 13 of 13 in 4 min 49 s, phase 6's S14 through the file dialog. The
 worktrees `p8a-realwindow` and `p8a-rw-handles` are removed; `wip/p8a-realwindow`, `wip/p8a-docs-34`
-and `wip/p8a-rw-handles` stay local (D396). **The lagged list runs** (started at 21:12 on
-`640f728`'s code, in the background, by the lead's script outside the repository, which runs design
-0.4's seven commands one after the other through `scripts/heavy-run.sh` and writes a log for each
-into `D:/Projects/Personal/phase8-work/wave4/lagged-step19/`; no agent is at work beside it). CI's
-run 45540349415 on ruling 105's push is green in all six jobs, and the guide workflow's run on it
-too (the CI section). **Next for the lead, in this order:** (1) read CI's run of the push that
-carries `640f728` and record it; (2) read the lagged list's seven results; a failure under the lag
-gets a fix, never a looser test; (3) the whole default run (`bash scripts/heavy-run.sh`), which also
-writes again the scripted pictures that partial runs emptied (phase 1's and phase 6's folders held 3
-and 9 on the laptop), then the comparison of its pictures with wave 3's references
+and `wip/p8a-rw-handles` stay local (D396). **The lagged list passed** (21:12 to 21:58 on
+`640f728`'s code, every watcher holding its events for 1.5 s, design 0.4's seven commands one after
+the other through `scripts/heavy-run.sh`, no agent at work; a log for each in
+`D:/Projects/Personal/phase8-work/wave4/lagged-step19/`): phase 2's checks 25 tests, the App.Tests
+classes 217, phase 6's five 21, phase 7a's walk-through 206, phase 7b's 178, the Hosting.Tests
+classes 126 and phase 8a's project 341, the classes the fixes added that start the app among them;
+1,114 tests, none failed, in 46 minutes. CI's run 45540349415 on ruling 105's push is green in all
+six jobs, and the guide workflow's run on it too (the CI section). **The whole default run is under
+way** (`bash scripts/heavy-run.sh`, started at 21:58 on `26b6634`, whose code is `640f728`'s, in the
+background; its log `D:/Projects/Personal/phase8-work/wave4/default-step19/run.log`; no agent works
+beside it). **Next for the lead, in this order:** (1) read CI's run 45546009890 of the push that
+carries `640f728` and record it; (2) read the whole default run's result; it also writes again the
+scripted pictures that partial runs emptied (phase 1's and phase 6's folders held 3 and 9 on the
+laptop), then the comparison of its pictures with wave 3's references
 (`D:/Projects/Personal/phase8-work/references/wave3/`) and the new references for the gate (ruling
-102); (4) phase 1's check 11 and phase 6's W1 alone in the real window, the owner told, for the
-folder dialog's wait (ruling 106); (5) the owner's answer on the dimmed texts ("Waiting on the
+102); (3) phase 1's check 11 and phase 6's W1 alone in the real window, the owner told, for the
+folder dialog's wait (ruling 106); (4) the owner's answer on the dimmed texts ("Waiting on the
 owner"), asked with the gate's start, which needs the owner present anyway: the gate's own default
 run takes the pictures a change of those colours would change; then step 19 is ticked. The package
 is reviewed with the rest in step 19 and merged last, in that step. The three finished worktrees
