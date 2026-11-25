@@ -6842,6 +6842,32 @@ at 16:42: `161a801`. The results are
   pass when run alone; other agents' runs shared the temporary folder then. Watched at the whole
   default run.
 
+**The series taken again, and CI's run of the fourth round (the lead, 2026-11-24; D467).** 104. The
+restore order's series was taken again from 17:10 to 18:45, the owner told, with no agent at work:
+ten pairs by D461 (2)'s script, two of them void for a scheduled task that started during a run and
+taken again. **D457 (5)'s three conditions hold on the ten kept pairs** (D467; 14.10 and the report
+have the numbers): the order stays merged, its numbers replace the first series', and the bounds
+stay where they are, no kept run having passed one and none being lowered on one evening's series.
+The laptop was not the same on the two days: Adobe's Desktop Service, found on 2026-11-24 to have
+used a full processor core without pause since 2026-11-11, had ended by the retake, so the retake's
+times are lower than the first series' and the two are not to be compared with each other. Every
+measure of this phase taken before 2026-11-24 was taken under that load (the "before" series of
+2026-11-22, the first alternated series, Q1 in the real-window runs): the handoff says so, and
+CLAUDE.md's note on the performance series tells the next taker to look for a process that uses a
+core without pause.
+
+**CI's run 45515065583** on the fourth round's push (`4bba1ba`) passed in five jobs and failed in
+macOS's on one of the round's 122 new facts,
+`Open_pressed_by_the_keys_choosing_a_folder_another_tab_shows_gives_the_focus_to_that_tabs_graph`:
+the wait for the tab that shows the folder ran out. The fact answered the folder dialog with the
+temporary folder's path as the test made it; macOS reaches that folder through a link (`/var` for
+`/private/var`), the tab holds git's spelling, and the app does not take the two for one folder
+(`WorkspacePaths.Same`, as the harness has noted since phase 6), so the folder opened in the new
+tab. The lead's ruling: the fact answers with the tab's own path, the same on every system, which is
+no branch for a machine; that Open does not find a tab through a link's spelling is the app's, older
+than the phase, and goes to the Backlog beside the two tabs on one worktree that D209 accepted. The
+other 121 facts passed on macOS and Linux at their first run there.
+
 ### 13.2 What the integration settled
 
 Beyond moving the packages' contracts into section 1: the broker's `gitVersion` goes at §3's merge,
@@ -8098,6 +8124,19 @@ the first two conditions and the probe stand without it. The series is taken aga
 ten pairs, the builds' order alternating by pair, with a script that waits before every run and
 reads the scheduler from 60 s before a run's begin (`…/wave4/restore/series2/run_series2.sh`); D457
 (5)'s rule and its consequence apply to the retake. The order stays merged meanwhile.
+
+**The series taken again (the lead, 2026-11-24, 17:10 to 18:45, the owner told; D467): proven.** Ten
+pairs with D461 (2)'s script; pairs 3 and 5 were void (a scheduled task started during a run) and
+were taken again as 13 and 15; every kept run's reading shows no task. The base's M2 3,016 to 5,535
+ms, median 3,810; its M3 4,917 to 9,032 ms, median 7,212. The order's M2 2,953 to 5,328 ms, median
+3,656; its M3 3,173 to 3,998 ms, median 3,684.5. D457 (5)'s three conditions hold: 3,684.5 under
+4,570; 7,212 above 4,762.5; 3,656 within 3,016 to 5,535. Less the window's opening, the ten tabs
+take a median of 1,382.5 ms with the order against 4,755.5 ms without it, and one tab 1,446.5
+against 1,456 ms. The order stays; the numbers replace the first series'; the bounds stay as they
+are (D461 (4)). The laptop was quieter than at the first series, when Adobe's Desktop Service used a
+full core (D467), so the two series' times are not to be compared with each other. The files are in
+`D:/Projects/Personal/phase8-work/wave4/restore/series2/` (`series.log`, a file per run, the void
+pairs under `dropped/`).
 
 **Merged** (step 8). `aedb12f`; the bounds in `23bea54`, a commit of their own: M3's 8,900 ms, and
 M2's raised from 6,100 to 9,500 ms by ruling 93. On `23bea54`, 15:01 to 16:03, with no builder at

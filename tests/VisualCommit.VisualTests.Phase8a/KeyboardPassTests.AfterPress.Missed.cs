@@ -45,7 +45,11 @@ public sealed partial class KeyboardPassTests
         await app.WaitForAsync(() => app.Session.Shell.ActiveTab is { ShowsWelcome: true } tab && !ReferenceEquals(tab, shows), "the new tab's welcome page");
         var welcome = app.Session.Shell.ActiveTab;
         app.Settle();
-        app.Folders.Answer(repo.Path);
+
+        // The folder as the tab itself spells it, which is git's spelling: where the temporary
+        // folder is reached through a link (macOS's /var for /private/var) the two spellings differ,
+        // and the app does not take them for one folder (WorkspacePaths.Same).
+        app.Folders.Answer(shows.RepositoryPath!);
 
         await PressWithTheFolderDialogHeldAsync(app, app.FindByAutomationId("OpenRepoButton"));
         await app.WaitForAsync(() => ReferenceEquals(app.Session.Shell.ActiveTab, shows) && !welcome.Welcome.OpenCommand.IsRunning, "the tab that shows the folder");

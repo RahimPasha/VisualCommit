@@ -330,7 +330,9 @@ Wave 4 and the review:
   tests, none failed. **Amended on 2026-11-24 (D461):** the review before the gate found that the
   series does not show the rule's third condition, one of its kept base runs having begun 15 s after
   a scheduled task started; the series is taken again before the gate, in step 19, and D457 (5)'s
-  rule and consequence apply to it. The order stays merged meanwhile.
+  rule and consequence apply to it. **Taken again on 2026-11-24, 17:10 to 18:45: proven** (D467; the
+  report's "The series taken again"; design 14.10): the three conditions hold on ten kept pairs, the
+  order stays merged and the bounds stay.
 - [x] 18. §12, the real-window part for 8a's checks (`Phase8aRealWindowPass`, D442 to D446): built
   on the Windows machine, each of its 13 methods run alone, the owner told before each. **Done on
   2026-11-23** on `wip/p8a-realwindow` (`83f3f6b`; design 12.10, rulings 96 to 98, D459): built and
@@ -356,9 +358,10 @@ Wave 4 and the review:
   round** swept the whole app for controls that their own press hides, removes or disables under the
   keyboard's focus, found over sixty, and built one rule for the window in place of a return for
   each; its final state was read a second time (runs `wf_17596548-fdb` and `wf_8d736e1c-7f2`; merged
-  at `161a801`; ruling 103, D462 (4)). Still open: the docs for the third and fourth rounds and CI,
-  the series taken again (launches 2 and 3 of the real-window part ran again on their fixes on
-  2026-11-24 and passed), the owner's answer on the dimmed texts, §12's merge, the lagged list, the
+  at `161a801`; ruling 103, D462 (4)). Done on 2026-11-24 besides: launches 2 and 3 of the
+  real-window part on their fixes (passed), and the restore order's series taken again (D467:
+  proven). Still open: the docs for the third and fourth rounds, CI's run of the one fact corrected
+  after macOS failed it, the owner's answer on the dimmed texts, §12's merge, the lagged list, the
   whole default run and CI.
 
 Gate:
@@ -395,6 +398,27 @@ Phase 8a's runs on `phase/8a-release-readiness`, the newest first. CI has six jo
 `e04762b`: the sixth, "ubuntu 22.04 container, git 2.34 (the floor)", did not fail the run until
 `bba59c7`, which made it required after its first green run.
 
+- [45515065583](https://github.com/RahimPasha/VisualCommit/actions/runs/45515065583), for `4bba1ba`
+  (step 19's fourth round, `161a801`): **failure: `macos-latest` failed one test, the five other
+  jobs passed.** `windows-latest`: 8,882 tests, 8,875 passed, 7 skipped, Test step 39 min 4 s of 70.
+  `macos-latest`: 8,879 tests, 8,875 passed, 1 failed, 3 skipped, Test step 23 min 51 s of 70.
+  `ubuntu-latest`: 8,879 tests, 8,875 passed, 4 skipped, Test step 5 min 53 s. The floor's job (git
+  2.34.1): 8,879 tests with 4 skipped, Test step 7 min 37 s; the two containers 8,879 tests with 4
+  skipped each, Test steps 7 min 58 s with Microsoft's installer and 8 min 51 s with Ubuntu's
+  packages, and the Secret Service's test passed in both. 122 tests more than the run before, the
+  fourth round's, at their first run off Windows. The one failure:
+  `KeyboardPassTests.Open_pressed_by_the_keys_choosing_a_folder_another_tab_shows_gives_the_focus_to_that_tabs_graph`,
+  "Timed out after 60 s waiting for the tab that shows the folder". The fact answered the folder
+  dialog with the temporary folder's path as the test made it; macOS reaches that folder through a
+  link (`/var` for `/private/var`), the tab holds git's spelling, and the app does not take the two
+  spellings for one folder (`WorkspacePaths.Same`, known since phase 6: the harness's `CallsSince`
+  says so), so the folder opened in the new tab instead of the tab that showed it being activated.
+  The fact now answers with the tab's own path, the same on every system (the commit after it); that
+  Open does not find a tab through a link's spelling goes to the Backlog with the two tabs on one
+  worktree that D209 accepted. The log is in
+  `D:/Projects/Personal/phase8-work/wave4/review/ci-45515065583/`. **The guide's workflow** on the
+  same push, [45515065511](https://github.com/RahimPasha/VisualCommit/actions/runs/45515065511):
+  **success**.
 - [45462804153](https://github.com/RahimPasha/VisualCommit/actions/runs/45462804153), for `e455dd4`
   (step 19's third round, `c9c3279`, with the docs of the second round): **success in all six
   jobs.** `windows-latest`: 8,760 tests, 8,753 passed, 7 skipped, Test step 27 min 37 s of 70.
@@ -947,36 +971,30 @@ among them, phase 2's check 03 with its three pictures the same files, phase 3's
 part B and F13). Ruling 103 has the rule as built, what the second read found and the lead's
 rulings; D462 has its (4). The worktree is removed; `wip/p8a-after-hide` stays local (D396). CI's
 run 45462804153 on the third round is green in all six jobs (the CI section). **No run is under
-way.** **Next for the lead, in this order:** (1) read CI's run of the fourth round's push and record
-it: its 122 new facts (`KeyboardPassTests.AfterPress*.cs`) have their first run on macOS and Linux
-there; (2) one docs pass for the third and fourth rounds (the design, the report, the architecture
-page), from `…/wave4/review/third-result.json` (`code.fixed.expectedResults`),
-`…/fourth-result.json` (`fixed.expectedResults`) and `…/fourth-second-read.json`
-(`fixed.expectedResults` and `forTheLead`), which also settles what the second round's docs writers
-left to the lead (`third-result.json`, each file's `written.forTheLead` and `applied.left`: 6.3.9's
-"a file's diff (T, Enter)", the palette named twice in 6.3.4, the report's bullet on step 21 that
-cites `OutcomeAtFocusTests` beside a title the test does not hold, the architecture page's sentence
-on Choose's and Browse's focus after a run). Its agents only read and write docs, so it may run
-beside the whole default run, but not beside the series; push; read CI; (3) with no agent at work
-and the owner told just before (launches 2 and 3 of the real-window part ran again on their three
-fixes on 2026-11-24 at 15:21 and 15:24, the owner told, and passed, their run.txt as the fixes
-predicted: design 12.10): take the restore order's series again as D461 says: the worktrees
-`p8a-restore-base` at `3f67850` and `p8a-restore` on `wip/p8a-restore` stand ready, their Release
-builds made at 00:24 and 00:28 on 2026-11-24, `bash
-D:/Projects/Personal/phase8-work/wave4/restore/series2/run_series2.sh 1 10`, about an hour and a
-half, a void pair taken again under its number plus ten, and its outcome recorded by D457 (5)'s
-rule. The machine's state for it: on 2026-11-24 Adobe's Desktop Service was found to have used a
-full core without pause since 2026-11-11 (11.7 days of processor time), so through every measure of
-this phase, the first series among them; the series is taken in that state, as the first was, and
-its record says so; (4) ask the owner about the dimmed texts before the whole default run, since a
-change of those colours changes earlier pictures; (5) merge §12 last, with CLAUDE.md's rows and
-notes for 8a's real-window checks as ruling 99 lists them (S19-34); then the lagged list, with the
-classes the fixes added that start the app (`OutcomeAtFocusTests`, `FirstRunFocusTests`,
-`FirstRunSearchTests`), the whole default run (`bash scripts/heavy-run.sh`), the comparison of its
-pictures with wave 3's references, the push and CI's run; then step 19 is ticked. The package is
-reviewed with the rest in step 19 and merged last, in that step. The three finished worktrees
-(`p8a-restore`, `p8a-restore-base`, `p8a-guide`) are removed; their `wip/` branches stay local
-(D396). §11's builders got with their briefs: mdBook at
+way.** **Next for the lead, in this order:** (1) read CI's run of the push that corrects the one
+fact macOS failed, and record it (run 45515065583 on the fourth round passed in five jobs; macOS
+failed one of the 122 new facts on a path's spelling, ruling 104 and the CI section); (2) one docs
+pass for the third and fourth rounds (the design, the report, the architecture page), from
+`…/wave4/review/third-result.json` (`code.fixed.expectedResults`), `…/fourth-result.json`
+(`fixed.expectedResults`) and `…/fourth-second-read.json` (`fixed.expectedResults` and
+`forTheLead`), which also settles what the second round's docs writers left to the lead
+(`third-result.json`, each file's `written.forTheLead` and `applied.left`: 6.3.9's "a file's diff
+(T, Enter)", the palette named twice in 6.3.4, the report's bullet on step 21 that cites
+`OutcomeAtFocusTests` beside a title the test does not hold, the architecture page's sentence on
+Choose's and Browse's focus after a run). Its agents only read and write docs, so it may run beside
+the whole default run, but not beside the series; push; read CI; (3) done on 2026-11-24: launches 2
+and 3 of the real-window part ran again on their three fixes at 15:21 and 15:24 and passed (design
+12.10), and the restore order's series was taken again from 17:10 to 18:45 and proves the order
+(D467, ruling 104; the files in `D:/Projects/Personal/phase8-work/wave4/restore/series2/`; the two
+worktrees of the series are removed, `wip/p8a-restore` stays local); (4) ask the owner about the
+dimmed texts before the whole default run, since a change of those colours changes earlier pictures;
+(5) merge §12 last, with CLAUDE.md's rows and notes for 8a's real-window checks as ruling 99 lists
+them (S19-34); then the lagged list, with the classes the fixes added that start the app
+(`OutcomeAtFocusTests`, `FirstRunFocusTests`, `FirstRunSearchTests`), the whole default run (`bash
+scripts/heavy-run.sh`), the comparison of its pictures with wave 3's references, the push and CI's
+run; then step 19 is ticked. The package is reviewed with the rest in step 19 and merged last, in
+that step. The three finished worktrees (`p8a-restore`, `p8a-restore-base`, `p8a-guide`) are
+removed; their `wip/` branches stay local (D396). §11's builders got with their briefs: mdBook at
 `D:/Projects/Personal/phase8-work/tools/mdbook-0.5.4/mdbook.exe` and the Linux archive's SHA-256 for
 `guide.yml` (Notes, "Wave 4"); the references `D:/Projects/Personal/phase8-work/references/wave3/`;
 rulings 80 (stop and report if the first-run link's frame touches its ink), 82 (the facts no check

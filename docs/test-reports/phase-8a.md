@@ -5822,6 +5822,47 @@ then: their values come from the fix's run of pair 9, which began 7 s after a ta
 was not checked, and the "fourteen runs that met no scheduled task" count that run and pair 5's base
 run, so D461 (4) has a bound raised when a kept run of the retake passes it and none lowered.
 
+**The series taken again: proven** (the lead, 2026-11-24, 17:10 to 18:45, the owner told; D467). The
+same two builds, ten pairs, the builds' order alternating by pair, each run after the script's waits
+(what is due within five minutes, a task started in the last five minutes that still runs, 90 s after
+any task's start), the scheduler read after each run from 60 s before its begin. Pairs 3 and 5 were
+void: OneDrive's update task (17:23:01) and Windows' `Location\Notifications` (17:23:27) started during
+pair 3's base run, and `Location\Notifications` (17:53:31) during pair 5's run of the order; they were
+taken again as pairs 13 and 15. Every kept run's reading shows no task. Milliseconds, one counted run of
+each measure per command, each after its own warm-up launch:
+
+| Pair | Base began | Base M2 | Base M3 | Order began | Order M2 | Order M3 |
+|---|---|---|---|---|---|---|
+| 1 | 17:10 | 3,016 | 4,917 | 17:11 | 4,520 | 3,688 |
+| 2 | 17:21 | 5,535 | 8,427 | 17:20 | 3,004 | 3,243 |
+| 4 | 17:50 | 3,179 | 5,731 | 17:36 | 5,328 | 3,998 |
+| 6 | 18:06 | 5,150 | 7,356 | 18:05 | 2,978 | 3,345 |
+| 7 | 18:08 | 3,813 | 6,820 | 18:09 | 3,874 | 3,681 |
+| 8 | 18:11 | 3,807 | 7,131 | 18:10 | 3,681 | 3,755 |
+| 9 | 18:22 | 3,741 | 7,073 | 18:23 | 3,631 | 3,933 |
+| 10 | 18:25 | 4,571 | 9,026 | 18:24 | 3,811 | 3,953 |
+| 13 | 18:27 | 3,621 | 7,293 | 18:35 | 3,026 | 3,207 |
+| 15 | 18:36 | 5,156 | 9,032 | 18:43 | 2,953 | 3,173 |
+| 3, void | 17:22 | 3,503 | 6,284 | 17:35 | 3,014 | 3,503 |
+| 5, void | 17:51 | 5,814 | 8,005 | 17:52 | 3,496 | 3,568 |
+
+On the ten kept pairs the base's M2 has the median 3,810 ms (3,016 to 5,535) and its M3 7,212 ms (4,917
+to 9,032); the order's M2 3,656 ms (2,953 to 5,328) and its M3 3,684.5 ms (3,173 to 3,998). **The rule's
+three conditions hold:** the order's M3 median lies under 1.25 times its M2 median, 4,570 ms; the base's
+M3 median lies above 1.25 times its M2 median, 4,762.5 ms; and the order's M2 median lies within the
+base's range. Less the window's opening, the ten tabs take a median of 1,382.5 ms with the order against
+4,755.5 ms without it, and one tab 1,446.5 against 1,456 ms: the order makes no difference with one tab,
+which is what the review doubted. So the order stays merged and these numbers replace the first series'.
+The two bounds stay (D461 (4)): no kept run passed one (M2's 9,500 ms against 5,535 at most; M3's 8,900
+ms against 3,998 at most with the order), and none is lowered on one evening's series. The times are
+lower than the first series' because the laptop was quieter, not because the builds differ: on
+2026-11-24 Adobe's Desktop Service was found to have used a full processor core without pause since
+2026-11-11, through the first series and every earlier measure of this phase; by the retake it had
+ended, and Snagit's editor, which used a full core at 17:04, did so for about nine minutes more, which
+covers pair 1's two runs. The conditions hold without pair 1 as well (3,681 under 4,539; 7,293 above
+4,766; 3,631 within 3,179 to 5,535). The series' files:
+`D:/Projects/Personal/phase8-work/wave4/restore/series2/`.
+
 **The bounds after it** (ruling 93; D458; the commit `23bea54`). M3's: 8,900 ms, the slowest of the five
 counted runs with the order (7,077 ms) times 1.25, rounded up. M2's: raised from 6,100 to 9,500 ms, as
 D457 (3) provides: the unchanged build's M2 passed 6,100 ms in a series taken as D457 (2) says (6,143 ms
