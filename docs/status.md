@@ -369,9 +369,15 @@ Wave 4 and the review:
   read by an independent reader, merged (`640f728`; ruling 106) and run on the desktop: launch 6 six
   of six, the part 13 of 13, phase 6's S14 through the file dialog. **The lagged list passed**
   (21:12 to 21:58 on `640f728`'s code: seven commands, 1,114 tests, none failed). CI's run
-  45546009890 on that merge is green in all six jobs. Still open: the whole default run (started at
-  21:58) with its comparison, phase 1's check 11 and phase 6's W1 alone after it (the folder
-  dialog), and the owner's answer on the dimmed texts.
+  45546009890 on that merge is green in all six jobs. **The whole default run** (21:58 to 23:40 on
+  `26b6634`): 8,882 tests, 8,873 passed, 7 skipped, **2 failed**, phase 1's checks 13 and 14, on a
+  cause outside the repository: the shared 100,000-commit bare repository under the tests' temporary
+  root had lost its empty folders, `refs` among them, at 15:05 that day, when Windows' Storage Sense
+  cleaned the temp folder of the nearly full C: drive ("Next step"; "Waiting on the owner"). Still
+  open: the harness made independent of that cleaner (a package, being built), the whole default run
+  again on it, the comparison's reading (under way on this run's pictures), phase 1's check 11 and
+  phase 6's W1 alone (the folder dialog), and the owner's answers: the dimmed texts and the C:
+  drive.
 
 Gate:
 
@@ -1038,21 +1044,51 @@ the other through `scripts/heavy-run.sh`, no agent at work; a log for each in
 classes 217, phase 6's five 21, phase 7a's walk-through 206, phase 7b's 178, the Hosting.Tests
 classes 126 and phase 8a's project 341, the classes the fixes added that start the app among them;
 1,114 tests, none failed, in 46 minutes. CI's run 45540349415 on ruling 105's push is green in all
-six jobs, and the guide workflow's run on it too (the CI section). **The whole default run is under
-way** (`bash scripts/heavy-run.sh`, started at 21:58 on `26b6634`, whose code is `640f728`'s, in the
-background; its log `D:/Projects/Personal/phase8-work/wave4/default-step19/run.log`; no agent works
-beside it). CI's run 45546009890 on the hardening's merge is green in all six jobs (the CI section).
-**Next for the lead, in this order:** (1) read the whole default run's result; it also writes again
-the scripted pictures that partial runs emptied (phase 1's and phase 6's folders held 3 and 9 on the
-laptop), then the comparison of its pictures with wave 3's references
-(`D:/Projects/Personal/phase8-work/references/wave3/`) and the new references for the gate (ruling
-102); (2) phase 1's check 11 and phase 6's W1 alone in the real window, the owner told, for the
-folder dialog's wait (ruling 106); (3) the owner's answer on the dimmed texts ("Waiting on the
-owner"), asked with the gate's start, which needs the owner present anyway: the gate's own default
-run takes the pictures a change of those colours would change; then step 19 is ticked. The package
-is reviewed with the rest in step 19 and merged last, in that step. The three finished worktrees
-(`p8a-restore`, `p8a-restore-base`, `p8a-guide`) are removed; their `wip/` branches stay local
-(D396). §11's builders got with their briefs: mdBook at
+six jobs, and the guide workflow's run on it too (the CI section). **The whole default run ended
+with two failures of one cause outside the repository** (`bash scripts/heavy-run.sh`, 21:58:44 to
+23:40:48 on `26b6634`, whose code is `640f728`'s; 1 h 40 min 18 s, 6,124 s with the lock; its log
+`D:/Projects/Personal/phase8-work/wave4/default-step19/run.log`, its 1,234 scripted pictures copied
+to `…/default-step19/visual/`): 8,882 tests, 8,873 passed, 7 skipped, 2 failed. Phase 1's
+`Check_13_clone_with_progress` and `Check_14_a_failed_and_a_cancelled_clone` failed at once with
+"`…\VisualCommit.Tests\shared\large-history-v1.git` is not a bare repository": that shared copy
+(`LargeHistory`, a `git clone --bare`, every ref packed) had lost every empty folder, `refs/heads`,
+`refs/tags`, `refs` and `objects/info`, at 15:05 on 2026-11-24, and git takes a folder without
+`refs` for no repository. In the same minute a test process of the fourth round's fixer lost the
+empty folders of its blank bare template, which is what ruling 103 recorded as phase 7a's part A
+failing once in its set-up. **The cause:** the laptop's C: drive had 4.7 GB free of 350 GB (1.3 %),
+Windows' Storage Sense is on with "delete temporary files that my apps aren't using" and runs when
+the disk is low, and it removes empty folders under `%TEMP%` whatever their age; no command of the
+session or of an agent deleted anything there (the transcripts of that quarter of an hour were
+read). CI is not touched by it. **Under way** (2026-11-25, from 00:05): (a) run `wf_bcea0192-4f1`, a
+package that makes the test support code independent of that cleaner, with its tests first, two
+independent readers and a fixer, in the worktree `D:/Projects/Personal/vc-wt/p8a-temp-cleaner` on
+`wip/p8a-temp-cleaner`, from `ffff655`: a shared copy of `LargeHistory` is proven usable through git
+before it is used and made again when it is not, and every copy of a blank git folder gets the
+folders `git init` made; the damaged shared copy is left as it is, so that the code's own repair is
+the proof; (b) run `wf_f7ac8e66-ad4`, read only: six inspectors and three verifiers read the 57
+pictures of this run that are not their references' files (wave 3's) and part G's four new ones; the
+comparison is in `…/default-step19/compare/` (1,173 the same files, 57 changed, 4 new, 5 missing:
+checks 13 and 14's). Twenty of the 57 were not among the 54 that varied in the whole run of
+2026-11-23; three of them, phase 4's `c10l-merged`, `c11g-second-stop` and `c11j-rebased`, show a
+focus frame around the graph that no ruling names: the banner's Continue, framed by the app since
+phase 4 when the resolver closes, is clicked, which counts as a press by the keys (ruling 102), so
+the focus goes to the graph with the frame when the banner goes (D462 (4)); a verifier reads the
+code for it, and ruling 103's sentence that Esc in a diff is the one visible change is wrong. (c) A
+probe of the lead's, outside the repository, logs each time an empty folder goes from `%TEMP%`
+(`D:/Projects/Personal/phase8-work/wave4/temp-cleaner-probe.log`). **Next for the lead, in this
+order:** (1) read the package's result, merge it, and run the classes it names; (2) read the
+inspection's result and rule on each picture that is no plain variation; a fault gets a fix before
+anything else; (3) the whole default run again on the merged package (`bash scripts/heavy-run.sh`,
+about 1 h 40 min), with no agent at work, its pictures compared with wave 3's references and with
+this run's, the pictures of checks 13 and 14 read, and the new references for the gate (ruling 102);
+(4) phase 1's check 11 and phase 6's W1 alone in the real window, the owner told, for the folder
+dialog's wait (ruling 106); (5) records: the next ruling (107) and D468 for the harness's
+independence of the cleaner, the report, CLAUDE.md's note on the temp folder; push; CI; (6) the
+owner's answers, asked with the gate's start, which needs the owner present anyway: the dimmed texts
+and the C: drive ("Waiting on the owner"); then step 19 is ticked. The package is reviewed with the
+rest in step 19 and merged last, in that step. The three finished worktrees (`p8a-restore`,
+`p8a-restore-base`, `p8a-guide`) are removed; their `wip/` branches stay local (D396). §11's
+builders got with their briefs: mdBook at
 `D:/Projects/Personal/phase8-work/tools/mdbook-0.5.4/mdbook.exe` and the Linux archive's SHA-256 for
 `guide.yml` (Notes, "Wave 4"); the references `D:/Projects/Personal/phase8-work/references/wave3/`;
 rulings 80 (stop and report if the first-run link's frame touches its ink), 82 (the facts no check
@@ -2173,6 +2209,20 @@ every commit.
 
 - **Phase 8a, from the owner** (2026-11-19; the owner's answers D399 to D415 are below, under "For
   phase 8, before its design"):
+  - **The C: drive is nearly full, and Windows cleans the temp folder under the tests** (found on
+    2026-11-24 at step 19's whole default run; "Next step"). C: had 4.7 GB free of 350 GB (1.3 %);
+    D:, which holds the repository, 17.2 GB of 125 GB. Storage Sense is on, set to run when the disk
+    is low, with "delete temporary files that my apps aren't using"; it removes empty folders under
+    `%TEMP%`, and a git repository whose refs are all packed, or that has no commit yet, is not a
+    repository without its empty `refs` folders. It struck at 15:05 that day: the tests' shared
+    100,000-commit repository and a running test process's template. The test support code is being
+    made independent of it (a shared copy proven before use, a blank copy given its folders), but a
+    repository of a test in flight can still be hit, and a full disk fails a run in other ways. The
+    tests' own temporary root holds 62 MB, the whole temp folder about 1.2 GB, so the space is used
+    elsewhere. **Asked of the owner before the gate:** free some space on C: (some tens of GB would
+    take the disk out of the low state), or switch Storage Sense's temporary-file cleaning off for
+    the gate's days; the lead changes no Windows setting and deletes nothing outside the tests'
+    folders.
   - **To answer before the gate: the texts the app dims on purpose** (the review
     before the gate, colours-1; design 13.1's ruling 99; the figures checked again on 2026-11-24).
     Three older looks draw text under 4.5:1 on rows the user still acts on, in both themes, and
