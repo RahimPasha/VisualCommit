@@ -378,10 +378,15 @@ Wave 4 and the review:
   and the run's 61 changed and new pictures are read: 44 vary from run to run, 17 are expected, none
   is a fault (ruling 107); three of the 17, phase 4's `c10l-merged`, `c11g-second-stop` and
   `c11j-rebased`, show the focus frame around the graph by D462 (4) and ruling 102, which no ruling
-  had named. Still open: the whole default run again on `c1bfaf7` (started at 02:27 on 2026-11-25)
-  with its comparison, three checks alone in the real window (phase 1's check 11 and phase 6's W1
-  for the folder dialog, phase 4's C10 for the frame), CI's run, and the owner's answers: the dimmed
-  texts and the C: drive.
+  had named. **The whole default run again** (02:27 to 04:11 on `c1bfaf7`): 8,903 tests, 8,893
+  passed, 7 skipped, **3 failed**, three checks of phase 7b that were copying their template at
+  03:21:43, the moment the lead's probe logged the cleaner's next strike; every test after it
+  passed, which the package made so, and the three passed alone at 04:12. CI's run 45586070342 on
+  the package failed one phase 3 test in the Windows job and passed on that job's second attempt
+  (the CI section). Still open: the reading of the second run's pictures (under way), three checks
+  alone in the real window (phase 1's check 11 and phase 6's W1 for the folder dialog, phase 4's C10
+  for the frame), the records, and the owner's answers: the dimmed texts and the C: drive, which
+  must be freed before the gate's runs.
 
 Gate:
 
@@ -417,6 +422,32 @@ Phase 8a's runs on `phase/8a-release-readiness`, the newest first. CI has six jo
 `e04762b`: the sixth, "ubuntu 22.04 container, git 2.34 (the floor)", did not fail the run until
 `bba59c7`, which made it required after its first green run.
 
+- [45586070342](https://github.com/RahimPasha/VisualCommit/actions/runs/45586070342), for `b87ec31`
+  (the tests' independence of a temp-folder cleaner, `c1bfaf7`, with D468 and rulings 107 and 108):
+  **attempt 1 failed in `windows-latest` on one test; attempt 2, that job run again, passed, so all
+  six jobs are green on attempt 2.** Attempt 1: `windows-latest` 8,903 tests, 8,895 passed, 1
+  failed, 7 skipped, Test step 44 min 30 s of 70; `macos-latest` 8,900 tests, 8,897 passed, 3
+  skipped, Test step 45 min 58 s of 70; `ubuntu-latest` 8,900 tests, 8,896 passed, 4 skipped, Test
+  step 6 min 0 s; the floor's job (git 2.34.1) 8,900 tests with 4 skipped, Test step 6 min 20 s, the
+  package's 21 new tests at their first run on that git; the two containers 8,900 tests with 4
+  skipped each, Test steps 8 min 24 s with Microsoft's installer and 7 min 31 s with Ubuntu's
+  packages, the Secret Service's test passed in both; the Windows and macOS keychain steps passed.
+  21 tests more than the run before (`TempFolderCleanerTests`). The one failure:
+  `RemoteOperationTests.A_cancelled_fetch_of_all_remotes_stops_the_running_fetch_and_skips_the_rest`,
+  a test of phase 3 unchanged since then, "The condition did not come true in time" at its line 150:
+  the tests' server had engaged its hold of the fetch's pack, and no progress report with a
+  percentage came in 60 s. Two analysts read the server's side and the client's (run
+  `wf_d27b4f7e-ff9`, read only; its result and the job's log in
+  `D:/Projects/Personal/phase8-work/wave4/review/ci-45586070342/`): the merged package has no part
+  in it (it changes neither the server, nor what it serves here, nor the progress parser); the held
+  part of the response held no whole progress line with a percentage, and why is not settled (a
+  progress line of git's cut inside its first percentage would do it, which needs git on the runner
+  to have written that line in two writes; one analyst rates that low, the other medium). Attempt 2:
+  `windows-latest` 8,903 tests, 8,896 passed, 7 skipped, Test step 40 min 25 s. The hardening the
+  analysts propose (a hold with no chosen percentage ends after a whole line with one; the test's
+  failure message carries what git printed) goes to plan.md's Backlog at the close: nine callers of
+  that hold take pictures while it holds. **The guide's workflow** on the same push,
+  [45586070307](https://github.com/RahimPasha/VisualCommit/actions/runs/45586070307): **success**.
 - [45546009890](https://github.com/RahimPasha/VisualCommit/actions/runs/45546009890), for `26b6634`
   (the hardening of the real-window harness's lookups, `640f728`, with ruling 106): **success in all
   six jobs.** `windows-latest`: 8,882 tests, 8,875 passed, 7 skipped, Test step 43 min 30 s of 70;
@@ -1076,34 +1107,50 @@ marked wrong. **The test support code is independent of the cleaner** (runs `wf_
 of a kept scenario template given the folders its source had; `TempFolderCleanerTests`, 21 tests. A
 probe of the lead's, outside the repository, logs each time an empty folder goes from `%TEMP%`
 (`D:/Projects/Personal/phase8-work/wave4/temp-cleaner-probe.log`; armed at 23:54 on 2026-11-24, no
-strike by 02:27). **The whole default run is under way again** (`bash scripts/heavy-run.sh`, started
-at 02:27:02 on `c1bfaf7`, in the background; its log
-`D:/Projects/Personal/phase8-work/wave4/default-step19b/run.log`; no agent works beside it; 8,903
-tests are expected, the 21 new ones among them). **Next for the lead, in this order:** (1) read the
-run's result; copy its scripted pictures beside the first run's; compare them with wave 3's
-references (`python -I scripts/compare-pictures.py D:/Projects/Personal/phase8-work/references/wave3
-<copy> <out>`) and with the first run's (`…/default-step19/visual/`): the same pictures must differ,
-each in its kind, the three of phase 4 must be the same files as in the first run, and checks 13 and
-14's five pictures are read; then the run's pictures become the references for the gate (ruling
-102); (2) three checks alone in the real window, the owner told: phase 1's `Check_11` and phase 6's
-`Check_W1` for the folder dialog's wait (ruling 106), phase 4's C10 for the frame's twin (ruling
-107); (3) the report's section on this comparison, the next ruling, the handoff's notes from D468
-(4); push; read CI's run (the floor's job runs the package's tests on git 2.34 for the first time)
-and record it; (4) the owner's answers, asked with the gate's start, which needs the owner present
-anyway: the dimmed texts and the C: drive ("Waiting on the owner"); then step 19 is ticked. The
-package is reviewed with the rest in step 19 and merged last, in that step. The three finished
-worktrees (`p8a-restore`, `p8a-restore-base`, `p8a-guide`) are removed; their `wip/` branches stay
-local (D396). §11's builders got with their briefs: mdBook at
-`D:/Projects/Personal/phase8-work/tools/mdbook-0.5.4/mdbook.exe` and the Linux archive's SHA-256 for
-`guide.yml` (Notes, "Wave 4"); the references `D:/Projects/Personal/phase8-work/references/wave3/`;
-rulings 80 (stop and report if the first-run link's frame touches its ink), 82 (the facts no check
-shows) and 83 (the rename, the comments); and what part G's open point 103 leaves for it to report.
-What step 16 ended with: the three packages merged, §10 (`86ecb3a`), §8 (`f014b2b`, its fixes after
-the merge `85e2884`) and §9 (`769f459`); the lagged list, the whole default run and the pictures on
-`85e2884`, whose one fault (`a1b-about-link-focus`) is fixed (`fcf8c1e`); the references of the
-later merges, `D:/Projects/Personal/phase8-work/references/wave3/` (1,235 scripted pictures); three
-"before" series, two probes, two panels and **D457** (the bounds `0bfbe92`, two backlog rows, the
-restore order as ruling 76, a change in wave 4); CI's two failures on the link frame's merge fixed
+strike by 02:27). **The second whole default run ended with three failures at the cleaner's next
+strike** (`bash scripts/heavy-run.sh`, 02:27:02 to 04:11:08 on `c1bfaf7`; 1 h 43 min 44 s, 6,246 s
+with the lock; its log `D:/Projects/Personal/phase8-work/wave4/default-step19b/run.log`): 8,903
+tests, 8,893 passed, 7 skipped, 3 failed. The probe logged an empty folder gone from `%TEMP%` at
+03:21:43. The three, all of phase 7b's walk-through
+(`Check_P1_P10_P12_P13_P14_P7_gitlab_rows_badge_menus_and_filter`,
+`Check_A6_azure_dialog_prefilled_from_the_tab`, `Check_A5_A8_A11_gitlab_dialog_links_and_refusals`),
+failed within half a second each in their set-up, in `TempRepo.CopyDirectory`'s walk of the kept
+hosting template: "Access to the path `…\github\octo\web-app.git\objects\info` is denied", an empty
+folder the cleaner was deleting at that instant. Every later copy in every process got its folders
+back and passed: before D468 the strike would have failed the rest of phase 7a's and 7b's
+walk-throughs. Run alone at 04:12 the three passed (3 of 3 in 46 s). That is D468 (4)'s accepted
+case, a test in flight at the strike, and it shows that **the gate's default run cannot be counted
+on while the cleaner runs: the C: drive is the owner's to free before the gate** ("Waiting on the
+owner"). The run's 1,228 scripted pictures and the three checks' 11 are saved in
+`…/default-step19b/visual/` (1,239); against wave 3's references 1,169 are the same files, 66
+changed and part G's four are new (`…/default-step19b/compare/`); the 17 pictures the first run's
+reading found expected are the same files as in the first run but for a caret in one, phase 4's
+three among them; 20 pictures changed that had not in the first run, checks 13 and 14's three among
+them, and seven changed in other boxes: run `wf_6bed5b7d-0a5` reads those 27 (two inspectors, a
+verifier; read only; started at 04:20). **CI's run 45586070342** on the package's push failed one
+phase 3 test in the Windows job and passed on that job's second attempt; the package has no part in
+it (the CI section). **Next for the lead, in this order:** (1) read the inspection's result; a fault
+gets a fix before anything else; then the saved set becomes the references for the gate (ruling
+102); (2) three checks alone in the real window, the owner told, with no agent at work: phase 1's
+`Check_11` and phase 6's `Check_W1` for the folder dialog's wait (ruling 106), phase 4's C10 for the
+frame's twin (ruling 107); the scripted pictures on the laptop are the second run's, but for phase
+7b's folder, which holds the three checks' 11 only; (3) the report's section on this comparison,
+ruling 109, the handoff's notes from D468 (4); push; (4) the owner's answers, asked with the gate's
+start, which needs the owner present anyway: the C: drive first, then the dimmed texts ("Waiting on
+the owner"); then step 19 is ticked. The package is reviewed with the rest in step 19 and merged
+last, in that step. The three finished worktrees (`p8a-restore`, `p8a-restore-base`, `p8a-guide`)
+are removed; their `wip/` branches stay local (D396). §11's builders got with their briefs: mdBook
+at `D:/Projects/Personal/phase8-work/tools/mdbook-0.5.4/mdbook.exe` and the Linux archive's SHA-256
+for `guide.yml` (Notes, "Wave 4"); the references
+`D:/Projects/Personal/phase8-work/references/wave3/`; rulings 80 (stop and report if the first-run
+link's frame touches its ink), 82 (the facts no check shows) and 83 (the rename, the comments); and
+what part G's open point 103 leaves for it to report. What step 16 ended with: the three packages
+merged, §10 (`86ecb3a`), §8 (`f014b2b`, its fixes after the merge `85e2884`) and §9 (`769f459`); the
+lagged list, the whole default run and the pictures on `85e2884`, whose one fault
+(`a1b-about-link-focus`) is fixed (`fcf8c1e`); the references of the later merges,
+`D:/Projects/Personal/phase8-work/references/wave3/` (1,235 scripted pictures); three "before"
+series, two probes, two panels and **D457** (the bounds `0bfbe92`, two backlog rows, the restore
+order as ruling 76, a change in wave 4); CI's two failures on the link frame's merge fixed
 (`70a8fc0`, `809b77f`); and, after a review of the second of those fixes, **the row list's fix,
 merged at `bad98b1`**: CI's run 45133434382 on it is green in all six jobs, the whole default run on
 `c1bc69b`, whose code is the merge's, passed with 8,514 tests and none failed, and each of its 54
