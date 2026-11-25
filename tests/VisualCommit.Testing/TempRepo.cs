@@ -865,34 +865,72 @@ public sealed class TempRepo : IDisposable
         Directory.Delete(path, recursive: true);
     }
 
-    /// <summary>Copies the folder <paramref name="from"/> and everything in it to <paramref name="to"/>, which must not hold any of its files yet.</summary>
-    internal static void CopyDirectory(string from, string to)
-    {
-        Directory.CreateDirectory(to);
-        foreach (var directory in Directory.EnumerateDirectories(from, "*", SearchOption.AllDirectories))
-        {
-            Directory.CreateDirectory(System.IO.Path.Combine(to, System.IO.Path.GetRelativePath(from, directory)));
-        }
-
-        foreach (var file in Directory.EnumerateFiles(from, "*", SearchOption.AllDirectories))
-        {
-            File.Copy(file, System.IO.Path.Combine(to, System.IO.Path.GetRelativePath(from, file)));
-        }
-    }
+    /// <summary>
+    /// The walk of a copy without a record (<see cref="CopyDirectory(string, string)"/>): every folder
+    /// and file, hidden ones among them, as Git for Windows makes <c>.git</c>, and a folder it cannot
+    /// open fails it. These are the options <see cref="SearchOption.AllDirectories"/> stands for.
+    /// </summary>
+    private static readonly EnumerationOptions StrictWalk =
+        new() { RecurseSubdirectories = true, AttributesToSkip = 0, IgnoreInaccessible = false, MatchType = MatchType.Win32 };
 
     /// <summary>
-    /// Copies <paramref name="from"/> as <see cref="CopyDirectory(string, string)"/> does, and then
-    /// makes each of <paramref name="folders"/>, paths relative to <paramref name="to"/>, in the copy:
-    /// the folders <paramref name="from"/> held when they were recorded (<see cref="FoldersIn"/>),
-    /// whatever became of them since. A folder the copy already has costs a look and nothing more.
+    /// The walk of a copy with a record (<see cref="CopyDirectory(string, string, IReadOnlyList{string})"/>):
+    /// as <see cref="StrictWalk"/>, except that it passes over a folder it cannot open.
+    /// </summary>
+    private static readonly EnumerationOptions WalkPastUnopenable =
+        new() { RecurseSubdirectories = true, AttributesToSkip = 0, IgnoreInaccessible = true, MatchType = MatchType.Win32 };
+
+    /// <summary>
+    /// Copies the folder <paramref name="from"/> and everything in it, hidden folders and files among
+    /// them, to <paramref name="to"/>, which must not hold any of its files yet. A folder it cannot
+    /// open fails the copy: nothing would give that folder back.
+    /// </summary>
+    internal static void CopyDirectory(string from, string to) => CopyDirectory(from, to, StrictWalk);
+
+    /// <summary>
+    /// Copies <paramref name="from"/> as <see cref="CopyDirectory(string, string)"/> does, but for a
+    /// folder it cannot open, and then makes each of <paramref name="folders"/>, paths relative to
+    /// <paramref name="to"/>, in the copy: the folders <paramref name="from"/> held when they were
+    /// recorded (<see cref="FoldersIn"/>), whatever became of them since. A folder the copy already
+    /// has costs a look and nothing more. Where the copy without a record fails on a folder it cannot
+    /// open, the walk of a copy with one does not go into it and goes on: the folder is made in the
+    /// copy, as its parent still lists it, and nothing in it is copied. A folder of the tests' own
+    /// temporary files that cannot be opened is one that a cleaner of the temp folder is deleting, as
+    /// phase 7b's walk-through met on 2026-11-25: the cleaner deletes only a folder that holds nothing,
+    /// and Windows marks no folder for deletion while it holds anything, so nothing of it is lost, and
+    /// the record would make it too. Under a folder refused for any other reason, its access rights or
+    /// a sharing violation, everything is passed over, and only the folders the record names come
+    /// back; when that folder is <paramref name="from"/> itself, the copy holds those folders and no
+    /// file. An empty list is no record, as a repository or workspace that was never kept has
+    /// (<see cref="KeptFolders"/>), and the copy is then as strict as
+    /// <see cref="CopyDirectory(string, string)"/>.
     /// </summary>
     internal static void CopyDirectory(string from, string to, IReadOnlyList<string> folders)
     {
         ArgumentNullException.ThrowIfNull(folders);
-        CopyDirectory(from, to);
+        CopyDirectory(from, to, folders.Count > 0 ? WalkPastUnopenable : StrictWalk);
         foreach (var folder in folders)
         {
             Directory.CreateDirectory(System.IO.Path.Combine(to, folder));
+        }
+    }
+
+    /// <summary>
+    /// Copies the folder <paramref name="from"/> and everything that <paramref name="walk"/> finds in
+    /// it to <paramref name="to"/>: the folders first, then the files, each to its path relative to
+    /// <paramref name="from"/>. A file that cannot be read fails the copy, whatever the walk.
+    /// </summary>
+    private static void CopyDirectory(string from, string to, EnumerationOptions walk)
+    {
+        Directory.CreateDirectory(to);
+        foreach (var directory in Directory.EnumerateDirectories(from, "*", walk))
+        {
+            Directory.CreateDirectory(System.IO.Path.Combine(to, System.IO.Path.GetRelativePath(from, directory)));
+        }
+
+        foreach (var file in Directory.EnumerateFiles(from, "*", walk))
+        {
+            File.Copy(file, System.IO.Path.Combine(to, System.IO.Path.GetRelativePath(from, file)));
         }
     }
 

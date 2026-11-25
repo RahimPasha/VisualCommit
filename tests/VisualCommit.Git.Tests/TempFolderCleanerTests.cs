@@ -114,6 +114,126 @@ public class TempFolderCleanerTests
     }
 
     [Fact]
+    public async Task A_copy_of_a_kept_repository_walks_past_a_folder_it_cannot_open_and_has_it()
+    {
+        Assert.SkipWhen(!OperatingSystem.IsWindows() && Environment.IsPrivilegedProcess, NoUnopenableFolderAsRoot);
+
+        // Phase 7b's walk-through on 2026-11-25: the cleaner was deleting the empty objects/info of a
+        // kept template's bare repository while three copies of the template walked it, and none of
+        // the walks could go into the folder.
+        using var template = await RepositoryWithAnEmptyBareAsync();
+        template.RecordFolders();
+        var bare = template.SiblingPath(EmptyBare);
+        var info = Path.Combine(bare, "objects", "info");
+        Assert.Contains(Path.Combine(EmptyBare, "objects", "info"), template.KeptFolders);
+        Assert.Empty(Directory.EnumerateFileSystemEntries(info));
+
+        TempRepo copy;
+        using (Unopenable(info))
+        {
+            // The state is the one meant: a walk that goes into the folder fails.
+            Assert.Throws<UnauthorizedAccessException>(() => Directory.EnumerateDirectories(bare, "*", SearchOption.AllDirectories).ToList());
+            copy = await template.CopyAsync();
+        }
+
+        using (copy)
+        {
+            var copied = copy.SiblingPath(EmptyBare);
+            Assert.True(Directory.Exists(Path.Combine(copied, "objects", "info")));
+            Assert.Equal("true", (await GitInAsync(copy, copied, "rev-parse", "--is-bare-repository")).Trim());
+        }
+    }
+
+    [Fact]
+    public async Task A_copy_without_a_record_fails_on_a_folder_it_cannot_open()
+    {
+        Assert.SkipWhen(!OperatingSystem.IsWindows() && Environment.IsPrivilegedProcess, NoUnopenableFolderAsRoot);
+
+        // A folder that nobody recorded has no way back into the copy, so a copy that cannot walk into
+        // one fails loudly rather than leave it out.
+        using var template = await RepositoryWithAnEmptyBareAsync();
+        var bare = template.SiblingPath(EmptyBare);
+        var info = Path.Combine(bare, "objects", "info");
+        Assert.Empty(Directory.EnumerateFileSystemEntries(info));
+
+        using var root = new TempDirectory("unrecorded");
+        using (Unopenable(info))
+        {
+            // The state is the one meant: a walk that goes into the folder fails.
+            Assert.Throws<UnauthorizedAccessException>(() => Directory.EnumerateDirectories(bare, "*", SearchOption.AllDirectories).ToList());
+            Assert.Throws<UnauthorizedAccessException>(() => TempRepo.CopyDirectory(bare, root.Combine(EmptyBare)));
+        }
+    }
+
+    [Fact]
+    public async Task A_copy_of_a_repository_that_was_never_kept_fails_on_a_folder_it_cannot_open()
+    {
+        Assert.SkipWhen(!OperatingSystem.IsWindows() && Environment.IsPrivilegedProcess, NoUnopenableFolderAsRoot);
+
+        // A repository whose folders were never recorded has no record to give a folder back, as the
+        // templates that VisualCommit.Git.Tests keeps by helpers of its own have none (D468 (4)): its
+        // copy fails loudly, as the copy without a record does.
+        using var template = await RepositoryWithAnEmptyBareAsync();
+        Assert.Empty(template.KeptFolders);
+        var bare = template.SiblingPath(EmptyBare);
+        var info = Path.Combine(bare, "objects", "info");
+        Assert.Empty(Directory.EnumerateFileSystemEntries(info));
+
+        using (Unopenable(info))
+        {
+            // The state is the one meant: a walk that goes into the folder fails.
+            Assert.Throws<UnauthorizedAccessException>(() => Directory.EnumerateDirectories(bare, "*", SearchOption.AllDirectories).ToList());
+            await Assert.ThrowsAsync<UnauthorizedAccessException>(() => template.CopyAsync());
+        }
+    }
+
+    [Fact]
+    public async Task A_whole_repository_is_copied_as_it_is_with_a_record_and_without_its_hidden_folders_and_files_among_them()
+    {
+        // Git for Windows makes a repository's .git hidden, and .NET takes a name that starts with a
+        // dot for hidden on macOS and Linux: a walk that passed over hidden entries would copy no
+        // repository. TempRepo.CreateAsync gives the copy of the blank git folder the blank's
+        // attributes already; the test hides .git itself all the same, so that the fact does not
+        // depend on how the blank was made.
+        using var repo = await TempRepo.CreateAsync("whole");
+        await repo.CommitFileAsync("a.txt", "a\n", "First");
+        var gitFolder = Path.Combine(repo.Path, ".git");
+        var hidden = Path.Combine(repo.Path, ".hidden");
+        await File.WriteAllTextAsync(hidden, "kept\n", TestContext.Current.CancellationToken);
+        if (OperatingSystem.IsWindows())
+        {
+            File.SetAttributes(gitFolder, File.GetAttributes(gitFolder) | FileAttributes.Hidden);
+            File.SetAttributes(hidden, File.GetAttributes(hidden) | FileAttributes.Hidden);
+        }
+
+        var (folders, files) = EntriesIn(repo.Path);
+        Assert.Contains(".git", folders);
+        Assert.Contains(Path.Combine(".git", "objects"), folders);
+        Assert.Contains(".hidden", files);
+        Assert.Contains(Path.Combine(".git", "HEAD"), files);
+        var head = await repo.HeadAsync();
+
+        using var root = new TempDirectory("whole-copies");
+        var withoutRecord = root.Combine("without-record");
+        var withRecord = root.Combine("with-record");
+        TempRepo.CopyDirectory(repo.Path, withoutRecord);
+        TempRepo.CopyDirectory(repo.Path, withRecord, TempRepo.FoldersIn(repo.Path));
+
+        foreach (var copy in new[] { withoutRecord, withRecord })
+        {
+            var (copiedFolders, copiedFiles) = EntriesIn(copy);
+            Assert.Equal(folders, copiedFolders);
+            Assert.Equal(files, copiedFiles);
+            foreach (var file in files)
+            {
+                Assert.Equal(await File.ReadAllBytesAsync(Path.Combine(repo.Path, file), TestContext.Current.CancellationToken), await File.ReadAllBytesAsync(Path.Combine(copy, file), TestContext.Current.CancellationToken));
+            }
+
+            Assert.Equal(head, (await GitInAsync(repo, copy, "rev-parse", "HEAD")).Trim());
+        }
+    }
+
+    [Fact]
     public async Task A_kept_repository_whose_bare_repository_lost_its_refs_before_the_record_is_refused()
     {
         // A cleaner that ran while the template was built, after its bare repository was made and
@@ -371,6 +491,93 @@ public class TempFolderCleanerTests
             root.Dispose();
             throw;
         }
+    }
+
+    /// <summary>Why the facts of a folder that cannot be opened are skipped where they are.</summary>
+    private const string NoUnopenableFolderAsRoot =
+        "No folder can be made that this process cannot open: macOS and Linux have no folder whose delete is pending, and a process running as root opens a folder without permissions all the same. Windows and the macOS and Linux jobs that do not run as root run this.";
+
+    /// <summary>
+    /// Puts the empty folder <paramref name="folder"/> into a state in which its parent lists it and
+    /// nothing can open it, until the result is disposed. On Windows it is the state a cleaner of the
+    /// temp folder leaves a folder in for an instant: a handle that allows the delete is held open and
+    /// the folder is marked for deletion through that handle (its delete disposition), so the delete is
+    /// pending, every open of the folder is refused, and the folder goes when the handle is closed.
+    /// <c>Directory.Delete</c> with the handle held open does not leave that state: on the laptop's
+    /// Windows 11 on 2026-11-25 the folder's name left its parent at once. No folder on macOS or Linux
+    /// is ever in that state; there the folder loses its permissions instead, which an ordinary user's
+    /// process cannot open, and has them again when the result is disposed.
+    /// </summary>
+    private static IDisposable Unopenable(string folder)
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            var mode = File.GetUnixFileMode(folder);
+            File.SetUnixFileMode(folder, UnixFileMode.None);
+            return new ModeRestored(folder, mode);
+        }
+
+        var handle = CreateFileW(folder, DeleteAccess, FileShare.ReadWrite | FileShare.Delete, IntPtr.Zero, FileMode.Open, BackupSemantics, IntPtr.Zero);
+        if (handle.IsInvalid)
+        {
+            var error = System.Runtime.InteropServices.Marshal.GetLastPInvokeError();
+            handle.Dispose();
+            throw new System.ComponentModel.Win32Exception(error, $"CreateFileW could not open {folder}.");
+        }
+
+        try
+        {
+            byte delete = 1;
+            if (!SetFileInformationByHandle(handle, DispositionInfo, ref delete, sizeof(byte)))
+            {
+                throw new System.ComponentModel.Win32Exception(System.Runtime.InteropServices.Marshal.GetLastPInvokeError(), $"SetFileInformationByHandle could not mark {folder} for deletion.");
+            }
+
+            return handle;
+        }
+        catch
+        {
+            handle.Dispose();
+            throw;
+        }
+    }
+
+    /// <summary>Gives a folder back the mode it had (<see cref="Unopenable"/>) when it is disposed.</summary>
+    [System.Runtime.Versioning.UnsupportedOSPlatform("windows")]
+    private sealed class ModeRestored(string folder, UnixFileMode mode) : IDisposable
+    {
+        public void Dispose() => File.SetUnixFileMode(folder, mode);
+    }
+
+    /// <summary>The access right to delete a file or folder (<c>DELETE</c>).</summary>
+    private const uint DeleteAccess = 0x00010000;
+
+    /// <summary>The flag without which <c>CreateFileW</c> opens no folder (<c>FILE_FLAG_BACKUP_SEMANTICS</c>).</summary>
+    private const uint BackupSemantics = 0x02000000;
+
+    /// <summary>
+    /// The class of the information that marks a file or folder for deletion when its last handle is
+    /// closed (<c>FileDispositionInfo</c>), a <c>FILE_DISPOSITION_INFO</c>: one byte, not zero to delete.
+    /// </summary>
+    private const int DispositionInfo = 4;
+
+    [System.Runtime.InteropServices.DllImport("kernel32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode, SetLastError = true)]
+    private static extern Microsoft.Win32.SafeHandles.SafeFileHandle CreateFileW(string fileName, uint desiredAccess, FileShare shareMode, IntPtr securityAttributes, FileMode creationDisposition, uint flagsAndAttributes, IntPtr templateFile);
+
+    [System.Runtime.InteropServices.DllImport("kernel32.dll", SetLastError = true)]
+    [return: System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.Bool)]
+    private static extern bool SetFileInformationByHandle(Microsoft.Win32.SafeHandles.SafeFileHandle file, int informationClass, ref byte information, uint size);
+
+    /// <summary>
+    /// Every folder and every file under <paramref name="folder"/>, hidden ones among them, each by its
+    /// path relative to it, in ordinal order; a folder that cannot be opened fails the listing.
+    /// </summary>
+    private static (List<string> Folders, List<string> Files) EntriesIn(string folder)
+    {
+        var walk = new EnumerationOptions { RecurseSubdirectories = true, AttributesToSkip = 0, IgnoreInaccessible = false };
+        List<string> Relative(IEnumerable<string> paths) =>
+            paths.Select(path => Path.GetRelativePath(folder, path)).Order(StringComparer.Ordinal).ToList();
+        return (Relative(Directory.EnumerateDirectories(folder, "*", walk)), Relative(Directory.EnumerateFiles(folder, "*", walk)));
     }
 
     /// <summary>Every folder named <c>hooks</c> under <paramref name="folder"/>, by its path relative to it, in ordinal order: git's hooks folders.</summary>
