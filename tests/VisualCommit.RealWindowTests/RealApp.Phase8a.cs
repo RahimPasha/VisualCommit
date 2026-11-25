@@ -510,7 +510,7 @@ public sealed partial class RealApp
     /// windows and asked of UI Automation by their handles, never by a search of the desktop's children.
     /// Such a search makes UI Automation ask every program on the desktop, and one that answers slowly
     /// holds the search, and the harness's wait with it, for seconds: launch 6's wait for the main window
-    /// ran out on it in about two runs of five on the owner's desktop, and in none of sixteen by the handle.
+    /// ran out on it in about two runs of five on the owner's desktop, and in none of twenty-two by the handle.
     /// In the order <c>EnumWindows</c> gives. A window whose look fails (<see cref="IsReadFailure"/>) is left
     /// out; the list itself is read whole, here and not when the result is walked, so that a failed
     /// enumeration (<see cref="System.ComponentModel.Win32Exception"/>) leaves the call and never reads as no
