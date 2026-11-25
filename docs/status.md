@@ -388,8 +388,11 @@ Wave 4 and the review:
   three checks passed alone in the real window** (phase 1's check 11, phase 6's W1, phase 4's C10
   with the frame as its twin has it), and **a copy of a recorded template now walks past a folder
   the cleaner is deleting** (D468 (6), ruling 110; merged at `67e1842`), which is what the three
-  failures were. Still open: CI's run of that merge, and the owner's answers: the C: drive, which
-  must be freed before the gate's runs, and the dimmed texts.
+  failures were. CI's run 45617147442 on that merge is green in all six jobs at its first attempt,
+  and the architecture page is brought up to these harness changes (`2b2247c`). Still open: a third
+  whole default run, on the final test support code (started at 06:38 on 2026-11-25), for a run
+  without the cleaner's failures and for the pictures on that code; and the owner's answers: the C:
+  drive, which must be freed before the gate's runs, and the dimmed texts.
 
 Gate:
 
@@ -425,6 +428,21 @@ Phase 8a's runs on `phase/8a-release-readiness`, the newest first. CI has six jo
 `e04762b`: the sixth, "ubuntu 22.04 container, git 2.34 (the floor)", did not fail the run until
 `bba59c7`, which made it required after its first green run.
 
+- [45617147442](https://github.com/RahimPasha/VisualCommit/actions/runs/45617147442), for `58bf64e`
+  (the copy that walks past a folder it cannot open, `67e1842`, with D468 (6) and ruling 110):
+  **success in all six jobs**, at its first attempt. `windows-latest`: 8,907 tests, 8,900 passed, 7
+  skipped, Test step 44 min 6 s of 70. `macos-latest`: 8,904 tests, 8,901 passed, 3 skipped, Test
+  step 46 min 54 s of 70. `ubuntu-latest`: 8,904 tests, 8,900 passed, 4 skipped, Test step 6 min 14
+  s. The floor's job (git 2.34.1): 8,904 tests, 8,897 passed, 7 skipped, Test step 5 min 56 s; the
+  two containers 8,904 tests with 7 skipped each, Test steps 5 min 54 s with Microsoft's installer
+  and 8 min 24 s with Ubuntu's packages, the Secret Service's test passed in both; the Windows and
+  macOS keychain steps passed. Four tests more than the run before, `TempFolderCleanerTests`' four
+  new ones: the three that make a folder nothing can open ran in their Unix form for the first time
+  on macOS and on `ubuntu-latest` and passed, and the three container jobs, whose process is root,
+  count them skipped, 7 where they counted 4, as ruling 110 said. The phase 3 test that failed once
+  in the run before passed in every job. **The guide's workflow** on the same push,
+  [45617147456](https://github.com/RahimPasha/VisualCommit/actions/runs/45617147456): **success**.
+  The push after it, `2b2247c`, changed only docs and started no run.
 - [45586070342](https://github.com/RahimPasha/VisualCommit/actions/runs/45586070342), for `b87ec31`
   (the tests' independence of a temp-folder cleaner, `c1bfaf7`, with D468 and rulings 107 and 108):
   **attempt 1 failed in `windows-latest` on one test; attempt 2, that job run again, passed, so all
@@ -1146,16 +1164,31 @@ cause, pinned by a fact that makes the cleaner's state through a held handle. On
 (ruling 110 has the totals). The whole default run is not made a third time for it: the gate's
 counted run is the whole run on the final code. The probe still runs
 (`D:/Projects/Personal/phase8-work/wave4/temp-cleaner-probe.log`; strikes so far: 2026-11-24 15:05,
-as read from the damage, and 2026-11-25 03:21:43, logged). **No run is under way.** **Next for the
-lead, in this order:** (1) read CI's run of the push that carries `67e1842` and record it: CI's
-three container jobs will count 7 skipped where they counted 4, and the macOS and Linux jobs run the
-Unix form of the three new facts for the first time; (2) the owner's answers, asked with the gate's
-start, which needs the owner present anyway: the C: drive first, then the dimmed texts ("Waiting on
-the owner"); (3) then step 19 is ticked, and step 20 follows: the live command, the owner told, once
-before the gate's pictures (the three tokens: GitHub's expires on 2026-11-29, Azure DevOps' and
-GitLab's on 2026-12-04). The package is reviewed with the rest in step 19 and merged last, in that
-step. The three finished worktrees (`p8a-restore`, `p8a-restore-base`, `p8a-guide`) are removed;
-their `wip/` branches stay local (D396). §11's builders got with their briefs: mdBook at
+as read from the damage, and 2026-11-25 03:21:43, logged). **CI's run 45617147442** on the push that
+carries `67e1842` is green in all six jobs at its first attempt, the Unix form of the three new
+facts at its first run on macOS and Linux among them, and the three root containers count 7 skipped
+(the CI section). **The architecture page is brought up to rulings 105 to 110** (run
+`wf_7e28ef8a-8e1`: a writer, a checker of 52 passages against the code, a fixer; merged at
+`2b2247c`): the Tests table's rows for `TempRepo`, `Scenarios`, `LargeHistory`, `GitIsolation` and
+`TempWorkspace`, and a passage on how the real-window harness finds a window. For the close:
+plan.md's risk 37 names `LargeHistory` among the runners that still see the machine's HOME, which is
+not so; the page has no passage on phase 8a's real-window part yet. **A third whole default run is
+under way** (`bash scripts/heavy-run.sh`, started at 06:38 on `2b2247c`, whose code is `67e1842`'s,
+in the background; its log `D:/Projects/Personal/phase8-work/wave4/default-step19c/run.log`; no
+agent works beside it; 8,907 tests are expected): the two before it each met the cleaner, and this
+one runs on the final test support code. **Next for the lead, in this order:** (1) read the run's
+result and the probe's log; if it passed, copy its scripted pictures to `…/default-step19c/visual/`
+and compare them with `D:/Projects/Personal/phase8-work/references/step19/` (only what varies from
+run to run may differ: carets, random folder names, ports, progress bars, edge pixels; the 17
+expected pictures of ruling 107 must be the references' files but for a caret), then tick step 19;
+if a test failed, read whether the probe logged a strike at that minute before anything else; (2)
+the owner's answers, asked on 2026-11-25 while the run was under way: the C: drive first, then the
+dimmed texts, and when to start the gate ("Waiting on the owner"); (3) step 20 follows: the live
+command, the owner told, once before the gate's pictures, its offline classes first on the same
+commit (the three tokens: GitHub's expires on 2026-11-29, Azure DevOps' and GitLab's on 2026-12-04).
+The package is reviewed with the rest in step 19 and merged last, in that step. The three finished
+worktrees (`p8a-restore`, `p8a-restore-base`, `p8a-guide`) are removed; their `wip/` branches stay
+local (D396). §11's builders got with their briefs: mdBook at
 `D:/Projects/Personal/phase8-work/tools/mdbook-0.5.4/mdbook.exe` and the Linux archive's SHA-256 for
 `guide.yml` (Notes, "Wave 4"); the references `D:/Projects/Personal/phase8-work/references/wave3/`;
 rulings 80 (stop and report if the first-run link's frame touches its ink), 82 (the facts no check
