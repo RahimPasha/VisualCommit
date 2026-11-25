@@ -6779,6 +6779,69 @@ the views and one from the commands; a builder settles each by a fact that press
 with a fix where the focus is lost and a guard where it is kept; a reader checks the fixes and makes
 a third sweep.
 
+**The fourth round as built: one rule for the window (the lead, 2026-11-24; D462 (4)).** 103. Run
+`wf_17596548-fdb` (11:40 to 15:19 on 2026-11-24, five agents, 2.73M tokens): two independent
+read-only sweeps, one by the views and one by the commands, listed 64 and 63 controls whose own
+press hides, removes or disables them, most of them expected to lose the keyboard focus. The builder
+wrote 90 facts, of which 74 failed with the focus on nothing, and built, instead of a return for
+each control, one rule for the window. A reader checked it and made a third sweep (six points, eight
+controls more), and a fixer settled them with 17 facts more, nine of them failing first. The fixer's
+last commit had then been read by nobody else, and the rule acts on every press by the keys, so the
+lead had the final state read again (run `wf_8d736e1c-7f2`, 15:21 to 16:41, ten agents, 2.46M
+tokens): one reader for a focus moved when it should not be and for clashes with the returns that
+were there, one for lifetime, failure, cost, platforms, the tests and the real-window pass; a
+sceptic for each finding; seven confirmed, two of them major, and fixed with 15 facts first. Merged
+at 16:42: `161a801`. The results are
+`D:/Projects/Personal/phase8-work/wave4/review/fourth-result.json` and `…/fourth-second-read.json`.
+
+- The rule as built (`Views/FocusReturn.Presses.cs`, registered once in `MainWindow`; D462 (4)). A
+  Click on a control that is focused and shows the keyboard's frame is followed to the end of its
+  command's run, or to the control's loss of the focus; so are Enter in a dialog's box
+  (`DialogView`), a menu opened by the keys (`MenuLayer`) and a key of the router pressed while the
+  focused element shows the frame (`KeyRouter`). Two rounds at `Loaded` later, so that every view's
+  own return has acted first, a focus that is on nothing, on the window or on something hidden or
+  disabled goes, in this order: to the control itself when it still stands with its data; to the
+  target its view names for it (`FocusReturn.Instead`: the clone form's Clone and Cancel, the diff's
+  Stage lines, Unstage lines and "Show the diff"); to the first stop of the item now at its place in
+  its list; in a dialog to what the dialog focuses as it opens, else to its first stop; else to its
+  region's target as F6 gives it; else to the graph area's target. It comes with the frame when the
+  pressed control had it. The look waits while a dialog stands over the control's place and while
+  the window is not active. A hold ends when the focus moves to another control that stands and at a
+  mouse press on the armed control; a text box given the focus back keeps its caret and selection;
+  nothing of a closed tab is held.
+- What the second read found, each confirmed by its sceptic and fixed with its fact. The window's
+  losing activation counted as a lost focus: a commit summary armed by Ctrl+Enter was focused again
+  by Tab while the user was in another program, its whole text selected, and the next key replaced
+  the draft (A1, major). A press followed to the end of a long run took the focus back when the user
+  had moved it and the user's own mouse action had then lost it (A2). A text box given the focus
+  back had its text selected (A3). A Stage lines that failed left the focus in the text, off its
+  button (A4). A hold was armed again with what it had captured at the press, and the router's holds
+  piled up at a repeated key (A5, B2). A static table held the tab that was active at a press, with
+  its repository, until the same button was pressed by the keys again (B1, major).
+- The lead's rulings. The one rule is accepted in place of a return for each control; the returns
+  the earlier rounds made stay and act first. While a press's own run disables its control, the
+  focus is on nothing until the run ends, unless the view names a target for that time, which the
+  clone form alone does: accepted, a Backlog row (Fetch all and Pull all, the toolbar's Fetch and
+  Pull on a dashboard, the rebase's Start, the resolver's Merge tool, Undo and Redo). D104's return
+  stays without the frame, and so do the graph area's closers (a page's Close, the search's, the
+  comparison's, the rebase's Cancel, the activity log's). Not followed, and recorded: a loss with no
+  press before it (an operation's end hiding the status bar's Cancel, a bulk run's end hiding Cancel
+  all, a refresh replacing focused pull request rows) and a command run from a palette that was
+  opened over an unframed focus. The earlier fact
+  `A_keyboard_Stage_held_while_the_user_goes_to_another_tab_leaves_that_tabs_lists_alone` now
+  expects the other tab's graph, framed, once the stage has ended, where it expected the focus left
+  on nothing: accepted, by D462.
+- The real-window pass and the walk-throughs. The second reader read every step of the pass that
+  presses a key and then relies on the focus, phase 8a's part on its branch included, and found none
+  whose focus changes. The one visible change anywhere is Esc in a diff: the graph then has the
+  focus, without the frame, where nothing had it (phase 5's F12 in the real window, at the launch's
+  end; scripted, phase 2's check 03, phase 3's part A, phase 5's part B and F13). The lead ran those
+  four at the merge: all passed, and check 03's three pictures, `03c-closed` among them, are the
+  same files as wave 3's references. The fixer once saw phase 7a's part A fail all eight checks in
+  its scenario's set-up (`notes.git is not a bare repository`), before any code of the app ran, and
+  pass when run alone; other agents' runs shared the temporary folder then. Watched at the whole
+  default run.
+
 ### 13.2 What the integration settled
 
 Beyond moving the packages' contracts into section 1: the broker's `gitVersion` goes at §3's merge,

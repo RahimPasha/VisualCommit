@@ -353,9 +353,11 @@ Wave 4 and the review:
   test at its first run anywhere; corrected (`e3002ac`, D464 (4)), and the run on it is green in all
   six jobs. **A third round** (one package, `c9c3279`; ruling 102) and the docs for the second round
   (`ba4570e`) are merged too, and CI's run on the second round is green in all six jobs. **A fourth
-  round** sweeps the whole app for controls that hide or disable themselves under the keyboard's
-  focus (run `wf_17596548-fdb`). Still open: its merge, the docs for the third and fourth rounds and
-  CI, the series taken again (launches 2 and 3 of the real-window part ran again on their fixes on
+  round** swept the whole app for controls that their own press hides, removes or disables under the
+  keyboard's focus, found over sixty, and built one rule for the window in place of a return for
+  each; its final state was read a second time (runs `wf_17596548-fdb` and `wf_8d736e1c-7f2`; merged
+  at `161a801`; ruling 103, D462 (4)). Still open: the docs for the third and fourth rounds and CI,
+  the series taken again (launches 2 and 3 of the real-window part ran again on their fixes on
   2026-11-24 and passed), the owner's answer on the dimmed texts, §12's merge, the lagged list, the
   whole default run and CI.
 
@@ -936,39 +938,45 @@ at 11:38 and its classes run on the merged tree; ruling 102 has what was built, 
 and two sentences of ruling 101 corrected; D462 (2) and D463 (3) are amended. The two worktrees are
 removed; `wip/p8a-after-browse` and `wip/p8a-docs-after` stay local (D396). CI's run 45452648787 on
 the second round is green in all six jobs, the scaled link cases at their first run on macOS and
-Linux among them (the CI section). **One run is under way, started at 11:40 on 2026-11-24**
-(`wf_17596548-fdb`, script
-`…/workflows/scripts/phase8a-fourth-round-self-hiding-wf_17596548-fdb.js`): the fourth round, in the
-worktree `D:/Projects/Personal/vc-wt/p8a-after-hide` (`wip/p8a-after-hide`, from `c9c3279`): two
-independent read-only sweeps of the whole app for controls that their own press hides, removes or
-disables, one from the views and one from the commands; a builder who settles each by a fact pressed
-by the keys and fixes every lost focus; a reader who checks the fixes and makes a third sweep; a
-fixer (ruling 102's last paragraph). **Next for the lead, in this order:** (1) read CI's run of the
-third round's push and record it; (2) when the fourth round ends, read its result, rule, and merge
-its branch with its test classes run; then one docs pass for the third and fourth rounds (the
-design, the report, the architecture page), which also settles what the second round's docs writers
+Linux among them (the CI section). **The fourth round is merged** (runs `wf_17596548-fdb`, 11:40 to
+15:19 on 2026-11-24, five agents, 2.73M tokens, and `wf_8d736e1c-7f2`, 15:21 to 16:41, ten agents,
+2.46M tokens; their results `…/wave4/review/fourth-result.json` and
+`…/wave4/review/fourth-second-read.json`): `161a801`, at 16:42, with its classes run on the merged
+tree (the build with 0 warnings, 326 tests of App.Tests, 218 of phase 8a's, the keyboard pass's 187
+among them, phase 2's check 03 with its three pictures the same files, phase 3's part A, phase 5's
+part B and F13). Ruling 103 has the rule as built, what the second read found and the lead's
+rulings; D462 has its (4). The worktree is removed; `wip/p8a-after-hide` stays local (D396). CI's
+run 45462804153 on the third round is green in all six jobs (the CI section). **No run is under
+way.** **Next for the lead, in this order:** (1) read CI's run of the fourth round's push and record
+it: its 122 new facts (`KeyboardPassTests.AfterPress*.cs`) have their first run on macOS and Linux
+there; (2) one docs pass for the third and fourth rounds (the design, the report, the architecture
+page), from `…/wave4/review/third-result.json` (`code.fixed.expectedResults`),
+`…/fourth-result.json` (`fixed.expectedResults`) and `…/fourth-second-read.json`
+(`fixed.expectedResults` and `forTheLead`), which also settles what the second round's docs writers
 left to the lead (`third-result.json`, each file's `written.forTheLead` and `applied.left`: 6.3.9's
 "a file's diff (T, Enter)", the palette named twice in 6.3.4, the report's bullet on step 21 that
 cites `OutcomeAtFocusTests` beside a title the test does not hold, the architecture page's sentence
-on Choose's and Browse's focus after a run); push; read CI; (3) with no agent at work and the owner
-told just before (launches 2 and 3 of the real-window part ran again on their three fixes on
-2026-11-24 at 15:21 and 15:24, the owner told, and passed, their run.txt as the fixes predicted:
-design 12.10): take the restore order's series again as D461 says: the worktrees `p8a-restore-base`
-at `3f67850` and `p8a-restore` on `wip/p8a-restore` stand ready, their Release builds made at 00:24
-and 00:28 on 2026-11-24, `bash D:/Projects/Personal/phase8-work/wave4/restore/series2/run_series2.sh
-1 10`, about an hour and a half, a void pair taken again under its number plus ten, and its outcome
-recorded by D457 (5)'s rule. The machine's state for it: on 2026-11-24 Adobe's Desktop Service was
-found to have used a full core without pause since 2026-11-11 (11.7 days of processor time), so
-through every measure of this phase, the first series among them; the series is taken in that state,
-as the first was, and its record says so; (4) ask the owner about the dimmed texts before the whole
-default run, since a change of those colours changes earlier pictures; (5) merge §12 last, with
-CLAUDE.md's rows and notes for 8a's real-window checks as ruling 99 lists them (S19-34); then the
-lagged list, with the classes the fixes added that start the app (`OutcomeAtFocusTests`,
-`FirstRunFocusTests`, `FirstRunSearchTests`), the whole default run (`bash scripts/heavy-run.sh`),
-the comparison of its pictures with wave 3's references, the push and CI's run; then step 19 is
-ticked. The package is reviewed with the rest in step 19 and merged last, in that step. The three
-finished worktrees (`p8a-restore`, `p8a-restore-base`, `p8a-guide`) are removed; their `wip/`
-branches stay local (D396). §11's builders got with their briefs: mdBook at
+on Choose's and Browse's focus after a run). Its agents only read and write docs, so it may run
+beside the whole default run, but not beside the series; push; read CI; (3) with no agent at work
+and the owner told just before (launches 2 and 3 of the real-window part ran again on their three
+fixes on 2026-11-24 at 15:21 and 15:24, the owner told, and passed, their run.txt as the fixes
+predicted: design 12.10): take the restore order's series again as D461 says: the worktrees
+`p8a-restore-base` at `3f67850` and `p8a-restore` on `wip/p8a-restore` stand ready, their Release
+builds made at 00:24 and 00:28 on 2026-11-24, `bash
+D:/Projects/Personal/phase8-work/wave4/restore/series2/run_series2.sh 1 10`, about an hour and a
+half, a void pair taken again under its number plus ten, and its outcome recorded by D457 (5)'s
+rule. The machine's state for it: on 2026-11-24 Adobe's Desktop Service was found to have used a
+full core without pause since 2026-11-11 (11.7 days of processor time), so through every measure of
+this phase, the first series among them; the series is taken in that state, as the first was, and
+its record says so; (4) ask the owner about the dimmed texts before the whole default run, since a
+change of those colours changes earlier pictures; (5) merge §12 last, with CLAUDE.md's rows and
+notes for 8a's real-window checks as ruling 99 lists them (S19-34); then the lagged list, with the
+classes the fixes added that start the app (`OutcomeAtFocusTests`, `FirstRunFocusTests`,
+`FirstRunSearchTests`), the whole default run (`bash scripts/heavy-run.sh`), the comparison of its
+pictures with wave 3's references, the push and CI's run; then step 19 is ticked. The package is
+reviewed with the rest in step 19 and merged last, in that step. The three finished worktrees
+(`p8a-restore`, `p8a-restore-base`, `p8a-guide`) are removed; their `wip/` branches stay local
+(D396). §11's builders got with their briefs: mdBook at
 `D:/Projects/Personal/phase8-work/tools/mdbook-0.5.4/mdbook.exe` and the Linux archive's SHA-256 for
 `guide.yml` (Notes, "Wave 4"); the references `D:/Projects/Personal/phase8-work/references/wave3/`;
 rulings 80 (stop and report if the first-run link's frame touches its ink), 82 (the facts no check
