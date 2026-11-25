@@ -166,6 +166,28 @@ public class TempFolderCleanerTests
     }
 
     [Fact]
+    public async Task A_copy_of_a_repository_that_was_never_kept_fails_on_a_folder_it_cannot_open()
+    {
+        Assert.SkipWhen(!OperatingSystem.IsWindows() && Environment.IsPrivilegedProcess, NoUnopenableFolderAsRoot);
+
+        // A repository whose folders were never recorded has no record to give a folder back, as the
+        // templates that VisualCommit.Git.Tests keeps by helpers of its own have none (D468 (4)): its
+        // copy fails loudly, as the copy without a record does.
+        using var template = await RepositoryWithAnEmptyBareAsync();
+        Assert.Empty(template.KeptFolders);
+        var bare = template.SiblingPath(EmptyBare);
+        var info = Path.Combine(bare, "objects", "info");
+        Assert.Empty(Directory.EnumerateFileSystemEntries(info));
+
+        using (Unopenable(info))
+        {
+            // The state is the one meant: a walk that goes into the folder fails.
+            Assert.Throws<UnauthorizedAccessException>(() => Directory.EnumerateDirectories(bare, "*", SearchOption.AllDirectories).ToList());
+            await Assert.ThrowsAsync<UnauthorizedAccessException>(() => template.CopyAsync());
+        }
+    }
+
+    [Fact]
     public async Task A_whole_repository_is_copied_as_it_is_with_a_record_and_without_its_hidden_folders_and_files_among_them()
     {
         // Git for Windows makes a repository's .git hidden, and .NET takes a name that starts with a
