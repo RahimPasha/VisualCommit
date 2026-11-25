@@ -1549,8 +1549,8 @@ wave adds to it. What wave 2 tells §12's launches is in 12.3.5.
   older test, seen once (the report has it).
 
 - **Wave 4: the restore order, as built, proven and merged** (the lead, 2026-11-23; section 14 with
-  its 14.10; rulings 86 to 93; D458; merge `aedb12f`). The proof is taken again before the gate
-  (D461, 2026-11-24; 14.10's amendment). What a later package or session must know. A start whose
+  its 14.10; rulings 86 to 93; D458; merge `aedb12f`). The proof was taken again and holds
+  (D467, 2026-11-24; 14.10's amendment). What a later package or session must know. A start whose
   active tab is a restored repository's beside other restored tabs opens them through `RestoreOrder`
   (`ViewModels/RestoreOrder.cs`): the active tab first and alone, the others at its graph's first
   page (`RepositoryViewModel.FirstPage`), at its opening's end without one, at its close or after 5
@@ -5752,24 +5752,25 @@ by a wider tolerance (§2.9 item 6).
    `b2-title-bar-light-with-frame`, `b2-title-bar-icon-light`; then, as built since step 19
    (ruling 100), run.txt notes the display that holds the app's window (`DisplayBounds`:
    `MonitorFromWindow`, then `GetMonitorInfo`'s `rcMonitor`, in screen pixels), and
-   `TaskbarButtons("VisualCommit", 10 s, display)` looks from the desktop root every 100 ms until a
-   look finds a button named so on that display, and gives every such button of that look, on every
-   taskbar (at the limit, the last look's). run.txt notes each with its name, its bounds, its
-   taskbar (`Shell_TrayWnd`, or `Shell_SecondaryTrayWnd` on another display) and whether it lies on
-   the window's display (its centre inside it, `TaskbarEntry.LiesOn`); only those on it count
-   (`SelectTaskbarButton`). Exactly one there: its bounds asserted, and it is captured by its bounds
-   as `b2-taskbar-button` and `b2-taskbar-button-enlarged`. None found: the method does not fail on
-   it, and run.txt says `B2's taskbar button: Not run (no taskbar button named VisualCommit was
-   found within 10 s).`; found, but none on the window's display: the same, with `B2's taskbar
-   button: Not run (taskbar buttons named VisualCommit were found within 10 s, but none on the
-   display that holds the app's window, at {display} (screen pixels); each is noted above).`
-   (`NoTaskbarButtonOnDisplay`); either Not-run line leaves that step to the gate's check by hand,
-   and the report's B2 says "Not run" for it. More than one on the window's display: none is
-   captured, and the method fails at its end, together with B1's problems, by
-   `MoreThanOneTaskbarButtonMessage`, which names each button and says to close every other
-   VisualCommit, or unpin it: a button does not say whose process it is, Windows gives each
-   executable's path a button of its own, and by default it shows one app's button on every
-   display's taskbar, so only the window's display counts.
+   `TaskbarButtons("VisualCommit", 10 s, display)` looks every 100 ms, the taskbars found by their
+   window classes in Windows' list of windows and asked of UI Automation by their handles (ruling
+   105; from UI Automation's desktop root until then), until a look finds a button named so on that
+   display, and gives every such button of that look, on every taskbar (at the limit, the last
+   look's). run.txt notes each with its name, its bounds, its taskbar (`Shell_TrayWnd`, or
+   `Shell_SecondaryTrayWnd` on another display) and whether it lies on the window's display (its
+   centre inside it, `TaskbarEntry.LiesOn`); only those on it count (`SelectTaskbarButton`). Exactly
+   one there: its bounds asserted, and it is captured by its bounds as `b2-taskbar-button` and
+   `b2-taskbar-button-enlarged`. None found: the method does not fail on it, and run.txt says `B2's
+   taskbar button: Not run (no taskbar button named VisualCommit was found within 10 s).`; found,
+   but none on the window's display: the same, with `B2's taskbar button: Not run (taskbar buttons
+   named VisualCommit were found within 10 s, but none on the display that holds the app's window,
+   at {display} (screen pixels); each is noted above).` (`NoTaskbarButtonOnDisplay`); either Not-run
+   line leaves that step to the gate's check by hand, and the report's B2 says "Not run" for it.
+   More than one on the window's display: none is captured, and the method fails at its end,
+   together with B1's problems, by `MoreThanOneTaskbarButtonMessage`, which names each button and
+   says to close every other VisualCommit, or unpin it: a button does not say whose process it is,
+   Windows gives each executable's path a button of its own, and by default it shows one app's
+   button on every display's taskbar, so only the window's display counts.
 4. **`Check_I1_second_start_hands_over`** (data folder D; a session of one empty tab written before the start, `RealApp.Launch(D, session)`). The app `Minimise()`d;
    `session.json`'s and `instance.json`'s bytes read; `StartBeside(D, the same environment)`: the second
    start exits 0 within 10 s; the app is not iconic and is visible within 2 s; `ForegroundIsThis` noted,
@@ -6223,6 +6224,23 @@ holds the window, `{X=0,Y=0,Width=3000,Height=2000}`, and one button, `"VisualCo
 window"` on `Shell_TrayWnd`, on the window's display, found after 0.5 s: the laptop's taskbar gives
 one button per program, which ruling 100 had left open. The enlarged capture of the button shows the
 app's icon.
+
+**Merged, and the look for a window** (the lead, 2026-11-24; ruling 105). The part is merged at
+`b24b44a` (27 commits from `f0b4f8a`, the last `902288e`); 12.8's proof held, and ruling 105 has the
+merged tree's checks. After the merge (`14789f7`) `RealApp.Phase8a.cs` gains `TopLevelElementsOf` (a
+process's visible top-level windows from `Win32.VisibleTopLevelWindowsOf`, Windows' own list by
+`EnumWindows`, each asked of UI Automation by its handle), `IsWindowGone` (`IsWindow` on the handle
+the `RealApp` was made on) and `Win32.VisibleTopLevelWindowsOfClass`. `OtherWindowOfProcess`,
+`FindTaskbarButtons` and the fallbacks of the three dialog helpers (`ChooseFolderInDialog` and
+`ChooseFileInDialog` in `RealApp.cs`, `ChooseFileInDialogGuarded`) use them, and
+`HasWindowOfProcess` reads Windows' list alone. No call in the project searches the desktop's
+children through UI Automation any more: where the first run's note above has the taskbar's button
+"found from the desktop root", the taskbars are now found by their window classes, `Shell_TrayWnd`
+and `Shell_SecondaryTrayWnd`. Launch 6's wait for the main window reads the notice's end from
+Windows and then asks for the main window by its handle (12.3.4's launch 6 is otherwise as written).
+The whole part on `14789f7`, the owner told, at 20:02 on 2026-11-24: 13 of 13 in 4 min 44 s (the
+logs in `D:/Projects/Personal/phase8-work/wave4/realwindow/handles-launch6/`, `handles-part/` and
+`handles-dialogs/`).
 
 ## 13. The lead's rulings, what waits on the owner, and the open points
 
@@ -6957,7 +6975,7 @@ at 16:42: `161a801`. The results are
   own return has acted first, a focus that is on nothing, on the window or on something hidden or
   disabled goes, in this order: to the control itself when it still stands with its data; to the
   target its view names for it (`FocusReturn.Instead`: the clone form's Clone and Cancel, the diff's
-  Stage lines, Unstage lines and "Show the diff"); to the first stop of the item now at its place in
+  Stage lines, Unstage lines and "Show diff"); to the first stop of the item now at its place in
   its list; in a dialog to what the dialog focuses as it opens, else to its first stop; else to its
   region's target as F6 gives it; else to the graph area's target. It comes with the frame when the
   pressed control had it. The look waits while a dialog stands over the control's place and while
@@ -7022,6 +7040,86 @@ tab. The lead's ruling: the fact answers with the tab's own path, the same on ev
 no branch for a machine; that Open does not find a tab through a link's spelling is the app's, older
 than the phase, and goes to the Backlog beside the two tabs on one worktree that D209 accepted. The
 other 121 facts passed on macOS and Linux at their first run there.
+
+**§12's merge, the docs of the third and fourth rounds, and the harness's look for a window (the
+lead, 2026-11-24).** 105. CI's run 45528731262 on `25fb8b0` is green in all six jobs, the fact
+corrected for macOS among them. The docs are brought up to the third and fourth rounds as built (run
+`wf_9d0daf69-6fc`, 18:52 to 19:38: a writer, a checker and a fixer for each of the design, the
+report and the architecture page; 38 passages changed, 46 checked against the code, 18 faults and
+seven passages still old, 22 corrections applied; merged at `25dd908`). **§12 is merged**
+(`b24b44a`, at 18:52: 27 commits from `f0b4f8a`, the last `902288e`). 12.8's proof holds: the diff
+lies under `tests/VisualCommit.RealWindowTests` (ten files) but for part F's three files of the
+walk-through. On the merged tree: the project's Release build and the solution's with 0 warnings;
+`Phase8aOrderTests` 8 of 8; part F's checks with `Phase8aExpectationTests` 39 of 39, part F's
+pictures the same files as wave 3's references; the scripted checks of parts L, A, B, F, G, I, K and
+U 45 of 45, of whose 89 pictures 76 are the same files as the references, part G's four are new and
+nine are changed by step 19's rounds, to be read at the whole run's comparison. The part's first run
+on merged code, the owner told, 18:59 to 19:06: 12 of 13 in 6 min 47 s. Launch 6 failed: its wait of
+15 s for the main window that Try again opens ran out.
+
+- *Launch 6's cause.* Neither the merge nor the app. Alone, the launch failed in 3 of 4 runs on the
+  merged tree and in 2 of 8 on the package's own `902288e`, where the merge changed nothing; it had
+  passed in both rounds of 2026-11-23. The app's log and a temporary trace in the notice (never
+  committed) have `Close` return within 0.13 s each time and the main window shown within about a
+  second and a half. What stood still was the harness's look: `OtherWindowOfProcess` searched the
+  desktop's children through UI Automation by process id, and such a search asks every program on
+  the desktop, so one that answers slowly holds it. With the notice's end read from Windows first
+  and that search kept, 32 runs passed, but the search found the window only after 0.8 to 18.9 s,
+  seven times after more than 5 s. The lead's first two readings were wrong and are in no comment: a
+  read of the closing notice waiting on Avalonia's `WM_DESTROY`, and stale UI Automation state.
+- *The fix* (`14789f7`). The harness finds a window by its handle: `RealApp.TopLevelElementsOf`
+  takes a process's visible top-level windows from Windows' own list (`EnumWindows`) and asks UI
+  Automation for each by its handle. `OtherWindowOfProcess` and the three dialog helpers' fallbacks
+  (`ChooseFolderInDialog`, `ChooseFileInDialog`, `ChooseFileInDialogGuarded`) use it,
+  `HasWindowOfProcess` reads Windows' list alone, `FindTaskbarButtons` finds the taskbars by their
+  window classes, and launch 6 reads the notice's end from Windows (`IsWindowGone`) before it asks
+  for the main window. No call in the project searches the desktop's children any more, and none is
+  to be added: that is the harness's rule from here. No expected result changes. By the handle the
+  main window was found after 0.6 to 1.2 s in 16 runs of 16, and the committed form passed 6 of 6;
+  the whole part, the owner told, 13 of 13 in 4 min 44 s (294 s with the lock) where it had taken 6
+  min 47 s. Of the earlier phases' checks that use the dialog helpers, phase 6's S14 passed through
+  the file dialog and phase 1's check 11 came through the folder dialog twice, then failed at its
+  picture's comparison, as phase 6's W1 did before its dialog: partial runs have emptied those
+  phases' scripted folders on the laptop (3 and 9 pictures left), which the whole default run writes
+  again.
+- *The readers* (run `wf_80e5f4db-840`, two Opus readers, read only, 20:10 to 20:22; its result
+  `D:/Projects/Personal/phase8-work/wave4/review/handles-read.json`). Both found the change sound;
+  one read FlaUI 5.0.0's IL for what its calls throw and probed `FromHandle` on a made-up handle and
+  on a destroyed window (`ElementNotAvailableException` both times, which the new catch skips).
+  Found equal or stricter: the dialogs' fallbacks (Windows' dialogs are owned top-level windows of
+  the app's own process, which `EnumWindows` lists), I1's look (the second start exits before it
+  makes any window, and a failed look can no longer read as "no window"), the taskbars by their
+  classes. Their points, which a hardening package builds before the lagged list (run
+  `wf_1892749d-bf6`: a builder, a reader and a fixer on `wip/p8a-rw-handles`; the ruling after this
+  one has it as built): FlaUI's `Com.Call` throws every COM failure it does not map as a
+  `Win32Exception`, which none of the harness's catches lists; launch 6 tests only the first window
+  in `EnumWindows`' order; the guard before the first key reads the focused element also while
+  another program is in front; the dialog helpers' waits for the dialog's close still ask UI
+  Automation, and are true at once for a dialog found only by the fallback; `EnumWindows`' result is
+  not read; launch 6's wait cannot say which of its three grounds failed; and four comments and two
+  passages of the docs still named the desktop root (the passages are corrected with this ruling:
+  12.3.4's launch 3 and the report's text on B2). Left as they are, by the lead: phase 4's
+  `WaitUntilGone` (older than the phase, no failure seen, and a failed read is no proof that an
+  element has gone), a bound on the walk of the taskbar's own tree (one program, bounded by UI
+  Automation's own time-out), and the focus reads of phases 6 and 7a.
+- *A tool the session may not install.* To see the app's threads during a stalled run the lead tried
+  `dotnet tool install dotnet-stack` into a folder outside the repository; the session's permissions
+  refused it. Nothing was done around the refusal: the cause was found by experiment (the trace, the
+  two commits compared, the look replaced).
+- *Small things left by the docs' writers, settled.* 1.17's sentence on the restore order's proof
+  now says it was taken again and holds (D467). Ruling 103's "Show the diff" is the button's own
+  text, "Show diff", there and in `DiffView.axaml.cs`'s comment. The architecture page's sentence on
+  the clone form after "Choose" says what `WelcomeView` does since D462. The report's Delivers row
+  "Keyboard gaps" had a parenthesis that never closed: it closes where `KeyboardPassTests`' part of
+  the row ends, after ruling 104's sentence. For plan.md's Backlog at the close, beside the limits
+  rulings 99 to 104 accepted: `GitSetupView.GiveFocusBack` takes a focused but hidden `UsePath` for
+  a kept focus when a search ends within the key press, unreachable today (the third round's latent
+  case).
+- *The dimmed texts* (ruling 99's colours-1, the owner's). The lead asks at step 19's end, with the
+  gate's start, where the owner is needed at the machine anyway, and no longer before step 19's
+  whole default run: the owner was not at the keyboard on the evening of 2026-11-24, a change of
+  those colours is a fix package of its own, and the gate's default run takes every picture again
+  after it.
 
 ### 13.2 What the integration settled
 

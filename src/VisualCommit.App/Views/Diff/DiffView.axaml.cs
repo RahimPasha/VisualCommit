@@ -59,7 +59,7 @@ public partial class DiffView : UserControl
         FocusReturn.AfterKeyboardPress(DiscardFileButton);
         FocusReturn.AfterKeyboardPress(DiscardLinesButton, () => DiffText.BodyFocusTarget);
 
-        // Stage lines and Unstage lines go with the lines they took, and "Show the diff" with its
+        // Stage lines and Unstage lines go with the lines they took, and "Show diff" with its
         // message: pressed by the keys, they leave the focus in the text, without a frame, as
         // Discard lines does, once their run has ended; one that failed keeps its lines and has the
         // focus back itself (D462).

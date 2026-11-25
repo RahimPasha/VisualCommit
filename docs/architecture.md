@@ -5806,8 +5806,12 @@ names on every provider (D362).
   provider asked or, without one, the first signed-in provider, starts its load (`Start()`) before
   `DialogHost.ShowAsync`, and on an answer, unless a clone started meanwhile, clears `ErrorText` and
   sets `CloneUrl`, which fills the folder name unless the user typed one; the user then presses Clone
-  as for a typed URL. After "Choose" no control of the form has the keyboard focus (design 17 item 5;
-  left to phase 8's keyboard pass).
+  as for a typed URL. When the browser has closed, by "Choose" or by Cancel, the form's button that
+  opened it (`CloneFromGitHubButton`) takes the keyboard focus again, without the frame, unless the
+  focus is somewhere in the form by then: the browser's run disables that button, so the window
+  cannot give the focus back to it, and `WelcomeView` asks for it at the button's click
+  (`FocusReturn.AfterRun` on `BrowseCommand`; D462). The palette's way to the browser keeps the
+  focus where the window put it.
 - **The browser** (`CloneFromGitHubDialog`, D301; since phase 7b one dialog for the signed-in
   providers, phase 7b's design 11.4), a sibling of `PickDialogViewModel`, which stays as it was.
   `CloneFromGitHubDialogViewModel : DialogViewModel<string?>` takes the signed-in providers, the one

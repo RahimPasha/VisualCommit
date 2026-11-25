@@ -360,9 +360,14 @@ Wave 4 and the review:
   each; its final state was read a second time (runs `wf_17596548-fdb` and `wf_8d736e1c-7f2`; merged
   at `161a801`; ruling 103, D462 (4)). Done on 2026-11-24 besides: launches 2 and 3 of the
   real-window part on their fixes (passed), and the restore order's series taken again (D467:
-  proven). Still open: the docs for the third and fourth rounds, CI's run of the one fact corrected
-  after macOS failed it, the owner's answer on the dimmed texts, §12's merge, the lagged list, the
-  whole default run and CI.
+  proven). Since then: CI's run 45528731262 on the fact corrected for macOS is green in all six
+  jobs; the docs for the third and fourth rounds are merged (`25dd908`); **§12 is merged**
+  (`b24b44a`). Its part's first run on merged code failed launch 6, as about two runs in five then
+  did, on the package's own commit too: the harness searched the whole desktop through UI Automation
+  for the app's window, and it now finds every window by its handle (`14789f7`; ruling 105; the part
+  13 of 13 after it). Two readers found the change sound and asked for hardening, which a package
+  builds. Still open: that package with its runs on the desktop, the push and CI's run, the lagged
+  list, the whole default run with its comparison, and the owner's answer on the dimmed texts.
 
 Gate:
 
@@ -398,6 +403,17 @@ Phase 8a's runs on `phase/8a-release-readiness`, the newest first. CI has six jo
 `e04762b`: the sixth, "ubuntu 22.04 container, git 2.34 (the floor)", did not fail the run until
 `bba59c7`, which made it required after its first green run.
 
+- [45528731262](https://github.com/RahimPasha/VisualCommit/actions/runs/45528731262), for `25fb8b0`
+  (the one fact corrected for macOS, with ruling 104 and D467): **success in all six jobs.**
+  `windows-latest`: 8,882 tests, 8,875 passed, 7 skipped, Test step 43 min 28 s of 70.
+  `macos-latest`: 8,879 tests, 8,876 passed, 3 skipped, Test step 47 min 44 s of 70.
+  `ubuntu-latest`: 8,879 tests, 8,875 passed, 4 skipped, Test step 5 min 53 s. The floor's job (git
+  2.34.1): 8,879 tests with 4 skipped, Test step 8 min 7 s; the two containers 8,879 tests with 4
+  skipped each, Test steps 7 min 10 s with Microsoft's installer and 5 min 47 s with Ubuntu's
+  packages, and the Secret Service's test passed in both. The Windows and macOS keychain steps
+  passed. The fact macOS failed in the run before,
+  `KeyboardPassTests.Open_pressed_by_the_keys_choosing_a_folder_another_tab_shows_gives_the_focus_to_that_tabs_graph`,
+  passed in every job. The push changed no file of the guide, so its workflow did not run.
 - [45515065583](https://github.com/RahimPasha/VisualCommit/actions/runs/45515065583), for `4bba1ba`
   (step 19's fourth round, `161a801`): **failure: `macos-latest` failed one test, the five other
   jobs passed.** `windows-latest`: 8,882 tests, 8,875 passed, 7 skipped, Test step 39 min 4 s of 70.
@@ -970,29 +986,35 @@ tree (the build with 0 warnings, 326 tests of App.Tests, 218 of phase 8a's, the 
 among them, phase 2's check 03 with its three pictures the same files, phase 3's part A, phase 5's
 part B and F13). Ruling 103 has the rule as built, what the second read found and the lead's
 rulings; D462 has its (4). The worktree is removed; `wip/p8a-after-hide` stays local (D396). CI's
-run 45462804153 on the third round is green in all six jobs (the CI section). **No run is under
-way.** **Next for the lead, in this order:** (1) read CI's run of the push that corrects the one
-fact macOS failed, and record it (run 45515065583 on the fourth round passed in five jobs; macOS
-failed one of the 122 new facts on a path's spelling, ruling 104 and the CI section); (2) one docs
-pass for the third and fourth rounds (the design, the report, the architecture page), from
-`…/wave4/review/third-result.json` (`code.fixed.expectedResults`), `…/fourth-result.json`
-(`fixed.expectedResults`) and `…/fourth-second-read.json` (`fixed.expectedResults` and
-`forTheLead`), which also settles what the second round's docs writers left to the lead
-(`third-result.json`, each file's `written.forTheLead` and `applied.left`: 6.3.9's "a file's diff
-(T, Enter)", the palette named twice in 6.3.4, the report's bullet on step 21 that cites
-`OutcomeAtFocusTests` beside a title the test does not hold, the architecture page's sentence on
-Choose's and Browse's focus after a run). Its agents only read and write docs, so it may run beside
-the whole default run, but not beside the series; push; read CI; (3) done on 2026-11-24: launches 2
-and 3 of the real-window part ran again on their three fixes at 15:21 and 15:24 and passed (design
-12.10), and the restore order's series was taken again from 17:10 to 18:45 and proves the order
-(D467, ruling 104; the files in `D:/Projects/Personal/phase8-work/wave4/restore/series2/`; the two
-worktrees of the series are removed, `wip/p8a-restore` stays local); (4) ask the owner about the
-dimmed texts before the whole default run, since a change of those colours changes earlier pictures;
-(5) merge §12 last, with CLAUDE.md's rows and notes for 8a's real-window checks as ruling 99 lists
-them (S19-34); then the lagged list, with the classes the fixes added that start the app
-(`OutcomeAtFocusTests`, `FirstRunFocusTests`, `FirstRunSearchTests`), the whole default run (`bash
-scripts/heavy-run.sh`), the comparison of its pictures with wave 3's references, the push and CI's
-run; then step 19 is ticked. The package is reviewed with the rest in step 19 and merged last, in
+run 45462804153 on the third round is green in all six jobs (the CI section). **CI's run 45528731262
+on `25fb8b0` is green in all six jobs**, the fact corrected for macOS among them (the CI section).
+**The docs for the third and fourth rounds are merged** (run `wf_9d0daf69-6fc`, 18:52 to 19:38 on
+2026-11-24; its result `…/wave4/review/docs34-result.json`; `25dd908`), which also settled what the
+second round's writers had left to the lead. **§12 is merged** (`b24b44a`, 18:52; ruling 105 and
+design 12.10 have its checks), and CLAUDE.md has its row and note for 8a's real-window checks
+(S19-34). The part's first run on merged code failed launch 6. The cause was the harness's search of
+the whole desktop through UI Automation for the app's window, which a slow program on the desktop
+holds for seconds; the harness now finds every window by its handle (`14789f7`; ruling 105): launch
+6 passed 22 of 22 after it and the part 13 of 13 in 4 min 44 s. Two readers found the change sound
+and raised hardening points (run `wf_80e5f4db-840`; its result `…/wave4/review/handles-read.json`;
+ruling 105 lists them). **A package builds them now** (run `wf_1892749d-bf6`, started at 20:24: a
+builder, an independent reader and a fixer, in the worktree
+`D:/Projects/Personal/vc-wt/p8a-rw-handles` on `wip/p8a-rw-handles`, from `14789f7`; no agent runs
+the real-window checks). The worktree `p8a-realwindow` is removed; `wip/p8a-realwindow` and
+`wip/p8a-docs-34` stay local (D396). **Next for the lead, in this order:** (1) read the package's
+result, merge it (`git merge --no-ff`), build the real-window project in Release, and run on the
+desktop, the owner told: launch 6 several times, launches 3, 5 and 7, the whole 8a part
+(`--filter-class "*Phase8aRealWindowPass"`) and phase 6's S14 for the file dialog; record it as the
+ruling after 105, in design 12.10 and in the report; remove the worktree; push; (2) read CI's run of
+this push, or of that one if it cancels this one, and record it; (3) the lagged list (design 0.4;
+phase 8a's project, run whole in it, holds the classes the fixes added that start the app), one
+command at a time through `scripts/heavy-run.sh`, with no agent at work; (4) the whole default run
+(`bash scripts/heavy-run.sh`), which also writes again the scripted pictures that partial runs
+emptied (phase 1's and phase 6's folders hold 3 and 9 on the laptop), the comparison of its pictures
+with wave 3's references, and the new references for the gate (ruling 102); (5) the owner's answer
+on the dimmed texts ("Waiting on the owner"), asked with the gate's start, which needs the owner
+present anyway: the gate's own default run takes the pictures a change of those colours would
+change; then step 19 is ticked. The package is reviewed with the rest in step 19 and merged last, in
 that step. The three finished worktrees (`p8a-restore`, `p8a-restore-base`, `p8a-guide`) are
 removed; their `wip/` branches stay local (D396). §11's builders got with their briefs: mdBook at
 `D:/Projects/Personal/phase8-work/tools/mdbook-0.5.4/mdbook.exe` and the Linux archive's SHA-256 for
@@ -2115,7 +2137,7 @@ every commit.
 
 - **Phase 8a, from the owner** (2026-11-19; the owner's answers D399 to D415 are below, under "For
   phase 8, before its design"):
-  - **To answer before step 19's whole default run: the texts the app dims on purpose** (the review
+  - **To answer before the gate: the texts the app dims on purpose** (the review
     before the gate, colours-1; design 13.1's ruling 99; the figures checked again on 2026-11-24).
     Three older looks draw text under 4.5:1 on rows the user still acts on, in both themes, and
     `ThemeTokensTests`' table does not hold them: a hidden branch's name and, in solo mode, every
@@ -2142,8 +2164,12 @@ every commit.
     a dropped row carry a second mark (solo's left-out branches and the search's dimmed rows do
     not); the looks were inspected and accepted at phase 4's gate (the dropped row) and phase 5's
     (the other two); (1) changes the look of two finished features just before the gate and still
-    leaves the search as an exception. The lead asks when the review's fixes are merged; an answer
-    in the chat before that is taken as it comes.
+    leaves the search as an exception. The lead asks at step 19's end, with the gate's start, which
+    needs the owner at the machine anyway (changed on 2026-11-24 from "when the review's fixes are
+    merged", the owner not being at the keyboard then; ruling 105): step 19's whole default run goes
+    ahead without the answer, because a change of these colours is a fix package of its own and the
+    gate's default run takes every picture again after it. An answer in the chat before that is
+    taken as it comes.
   - **To ask before wave 4: the week's share, with the restore order in it** (D241, D457; the lead
     asks when step 16 is ticked). Wave 4 was the guide (§11), the real-window part (§12) and the
     review before the gate; D457 adds a small package, the restore order (ruling 76): with several
