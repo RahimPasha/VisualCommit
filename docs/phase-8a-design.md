@@ -7420,6 +7420,38 @@ final form (run `wf_63e52e09-2f3`, read only, 0.18M tokens; `copy-walk-final-rea
   `Scenarios.AuthRemoteAsync`'s copy of its bare repository among them, are D468 (4)'s tests in
   flight.
 
+**Step 19's third whole run, and the owner's three answers (the lead, 2026-11-26).** 111. The third
+whole default run, on `2b2247c`, whose code is `67e1842`'s (2026-11-25, 06:38 to 08:15, 1 h 35 min 2
+s, 5,847 s with the lock): **8,907 tests, 8,900 passed, 7 skipped, none failed**, the first of step
+19's whole runs without a failure, and on the final test support code. CI's run 45617147442 on that
+code is green in all six jobs at its first attempt.
+
+- *Its pictures.* 1,239 scripted pictures against the gate's references
+  (`D:/Projects/Personal/phase8-work/references/step19/`; the comparison in
+  `…/wave4/default-step19c/compare/`): 1,188 are the same files, 51 changed, none is new or missing.
+  Each change lies where the readings of rulings 107 and 109 found what varies from run to run: a
+  caret, a temporary folder's random name, a fake's port, a progress bar, edge pixels a few levels
+  apart. One is of a kind not met in those two runs and was read by the lead: in
+  `phase-3/18b-pull-progress` the held pull shows `Counting objects 50%` where the reference shows
+  66%, the hold's percentage, which phase 3's report lists as varying. The 17 expected pictures of
+  ruling 107 are the references' files, but for a caret in `k10a-palette-commands`; phase 4's three
+  with the frame are the same files in all three runs. The references stay the second run's set.
+- *The cleaner.* The probe logged a third strike at 09:31:22 on 2026-11-25, after the run, and ended
+  at 09:54: three strikes in about eighteen hours while C: was low (15:05, 03:21:43, 09:31:22).
+- *The owner's answers* (given on 2026-11-26 to the questions asked on 2026-11-25 with the run under
+  way). **The C: drive: "I'll free space".** On 2026-11-26 at 09:24 C: has 58.5 GB free of 350 GB
+  (16.7 %), where it had 4.7 GB; D:, which holds the repository and the lead's working files, has
+  5.8 GB free of 125 GB, where it had 17.2 GB, which the gate's runs fit in (a whole run's pictures
+  take about 120 MB, the builds are there). Storage Sense is still on; with C: out of its low state
+  it has no cause to run. **The dimmed texts: "Keep, as exceptions".** The three looks stay; a
+  decision names them as accepted exceptions (D469, amending D418), tests pin their ratios and guard
+  the dimmed colour against any other use on an active row, and a Backlog row asks for a de-emphasis
+  that keeps 4.5:1 (the ruling after this one has the package). **The gate: "When step 19's run has
+  passed".** The lead starts the live command and the gate once step 19 is closed, and announces
+  each takeover of the desktop in the chat just before it starts.
+- *Step 19* is closed when the dimmed texts' package is merged, its classes have run on the merged
+  tree and CI's run of it is read.
+
 ### 13.2 What the integration settled
 
 Beyond moving the packages' contracts into section 1: the broker's `gitVersion` goes at §3's merge,

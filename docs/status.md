@@ -389,10 +389,13 @@ Wave 4 and the review:
   with the frame as its twin has it), and **a copy of a recorded template now walks past a folder
   the cleaner is deleting** (D468 (6), ruling 110; merged at `67e1842`), which is what the three
   failures were. CI's run 45617147442 on that merge is green in all six jobs at its first attempt,
-  and the architecture page is brought up to these harness changes (`2b2247c`). Still open: a third
-  whole default run, on the final test support code (started at 06:38 on 2026-11-25), for a run
-  without the cleaner's failures and for the pictures on that code; and the owner's answers: the C:
-  drive, which must be freed before the gate's runs, and the dimmed texts.
+  and the architecture page is brought up to these harness changes (`2b2247c`). **The third whole
+  default run passed** (2026-11-25, 06:38 to 08:15, on the final test support code): 8,907 tests,
+  8,900 passed, 7 skipped, none failed; its pictures differ from the gate's references only by what
+  varies from run to run (ruling 111). **The owner answered on 2026-11-26:** space is freed on C:
+  (58.5 GB free of 350 GB at 09:24, where it had 4.7); the dimmed texts stay, as accepted exceptions
+  (D469); the gate starts when step 19 is closed. Still open: the dimmed texts' package of tests
+  (being built), its merge and CI's run of it; then this step is ticked.
 
 Gate:
 
@@ -1172,20 +1175,32 @@ facts at its first run on macOS and Linux among them, and the three root contain
 `2b2247c`): the Tests table's rows for `TempRepo`, `Scenarios`, `LargeHistory`, `GitIsolation` and
 `TempWorkspace`, and a passage on how the real-window harness finds a window. For the close:
 plan.md's risk 37 names `LargeHistory` among the runners that still see the machine's HOME, which is
-not so; the page has no passage on phase 8a's real-window part yet. **A third whole default run is
-under way** (`bash scripts/heavy-run.sh`, started at 06:38 on `2b2247c`, whose code is `67e1842`'s,
-in the background; its log `D:/Projects/Personal/phase8-work/wave4/default-step19c/run.log`; no
-agent works beside it; 8,907 tests are expected): the two before it each met the cleaner, and this
-one runs on the final test support code. **Next for the lead, in this order:** (1) read the run's
-result and the probe's log; if it passed, copy its scripted pictures to `…/default-step19c/visual/`
-and compare them with `D:/Projects/Personal/phase8-work/references/step19/` (only what varies from
-run to run may differ: carets, random folder names, ports, progress bars, edge pixels; the 17
-expected pictures of ruling 107 must be the references' files but for a caret), then tick step 19;
-if a test failed, read whether the probe logged a strike at that minute before anything else; (2)
-the owner's answers, asked on 2026-11-25 while the run was under way: the C: drive first, then the
-dimmed texts, and when to start the gate ("Waiting on the owner"); (3) step 20 follows: the live
-command, the owner told, once before the gate's pictures, its offline classes first on the same
-commit (the three tokens: GitHub's expires on 2026-11-29, Azure DevOps' and GitLab's on 2026-12-04).
+not so; the page has no passage on phase 8a's real-window part yet. **The third whole default run
+passed** (`bash scripts/heavy-run.sh`, 2026-11-25 06:38:26 to 08:15:53 on `2b2247c`, whose code is
+`67e1842`'s; 1 h 35 min 2 s, 5,847 s with the lock; its log
+`D:/Projects/Personal/phase8-work/wave4/default-step19c/run.log`): 8,907 tests, 8,900 passed, 7
+skipped, none failed. Its 1,239 scripted pictures, saved in `…/default-step19c/visual/`, against the
+gate's references (`D:/Projects/Personal/phase8-work/references/step19/`): 1,188 the same files, 51
+changed, each by what varies from run to run (ruling 111). The probe logged a third strike of the
+cleaner at 09:31:22 on 2026-11-25, after the run, and ended. **The owner answered the three
+questions on 2026-11-26** ("Waiting on the owner"): the C: drive is freed (58.5 GB free of 350 GB at
+09:24; D:, which holds the repository, has 5.8 GB free of 125 GB); the dimmed texts stay as accepted
+exceptions; the gate starts when step 19 is closed, each takeover of the desktop announced in the
+chat just before it starts. **Under way:** run `wf_9b9f1e1d-aa9` (started at 09:31 on 2026-11-26: a
+builder, an independent reader, a fixer, in the worktree `D:/Projects/Personal/vc-wt/p8a-dimmed` on
+`wip/p8a-dimmed`, from `e41fea5`), tests only, nothing under `src/`: the three exceptions' contrast
+ratios pinned in `ThemeTokensTests`, and a guard that fails when the dimmed colour is used for text
+on any other active row. **Next for the lead, in this order:** (1) read the package's result, merge
+it, run its classes on the merged tree; write D469 (amending D418) with the ratios as measured, the
+ruling after 111, and plan.md's Backlog row for a de-emphasis that keeps 4.5:1; push; read CI's run
+and record it; tick step 19; (2) step 20: the live command, the owner told in the chat, once before
+the gate's pictures: its offline classes first on the same commit, then the whole project with the
+six variables given to the command's own process (CLAUDE.md, "What to know"); its corrections to the
+fakes, if any, are committed before any picture of the gate (the three tokens: GitHub's expires on
+2026-11-29, Azure DevOps' and GitLab's on 2026-12-04); (3) step 21, the gate: D246's two runs of
+phase 8a's real-window checks, the whole default run and the real-window pass on one commit, the
+list of pictures, the live command on the counted round, every picture of both passes inspected
+against `references/step19/`, the guide's site, the checks by hand with the Narrator walk-through.
 The package is reviewed with the rest in step 19 and merged last, in that step. The three finished
 worktrees (`p8a-restore`, `p8a-restore-base`, `p8a-guide`) are removed; their `wip/` branches stay
 local (D396). §11's builders got with their briefs: mdBook at
@@ -2322,7 +2337,10 @@ every commit.
     elsewhere. **Asked of the owner before the gate:** free some space on C: (some tens of GB would
     take the disk out of the low state), or switch Storage Sense's temporary-file cleaning off for
     the gate's days; the lead changes no Windows setting and deletes nothing outside the tests'
-    folders.
+    folders. **Answered on 2026-11-26: "I'll free space".** That morning C: has 58.5 GB free of 350
+    GB (16.7 %); D: has 5.8 GB free of 125 GB, where it had 17.2 GB, which the gate's runs fit in.
+    Storage Sense is still on. The cleaner struck three times while C: was low (2026-11-24 15:05;
+    2026-11-25 03:21 and 09:31).
   - **To answer before the gate: the texts the app dims on purpose** (the review
     before the gate, colours-1; design 13.1's ruling 99; the figures checked again on 2026-11-24).
     Three older looks draw text under 4.5:1 on rows the user still acts on, in both themes, and
@@ -2355,7 +2373,8 @@ every commit.
     merged", the owner not being at the keyboard then; ruling 105): step 19's whole default run goes
     ahead without the answer, because a change of these colours is a fix package of its own and the
     gate's default run takes every picture again after it. An answer in the chat before that is
-    taken as it comes.
+    taken as it comes. **Answered on 2026-11-26: "Keep, as exceptions"** (the lead's recommendation,
+    (2)): D469.
   - **To ask before wave 4: the week's share, with the restore order in it** (D241, D457; the lead
     asks when step 16 is ticked). Wave 4 was the guide (§11), the real-window part (§12) and the
     review before the gate; D457 adds a small package, the restore order (ruling 76): with several
