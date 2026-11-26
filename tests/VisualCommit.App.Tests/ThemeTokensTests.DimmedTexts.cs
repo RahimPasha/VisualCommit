@@ -444,10 +444,11 @@ public partial class ThemeTokensTests
             .ToList();
         Assert.True(untied.Count == 0, string.Join('\n', untied));
 
-        // Each exception gives the colour, or the dimming, at one place; what applies it lies in the same file.
-        foreach (var (kind, needle) in new[] { (DimmedUseKind.ExceptionA, DimmedNeedle.Token), (DimmedUseKind.ExceptionB, DimmedNeedle.Token), (DimmedUseKind.ExceptionC, DimmedNeedle.Dimming) })
+        // Each exception gives the colour, or the dimming, at one place, by the token, its colour, the
+        // constant or its value; what applies it lies in the same file.
+        foreach (var kind in new[] { DimmedUseKind.ExceptionA, DimmedUseKind.ExceptionB, DimmedUseKind.ExceptionC })
         {
-            var entry = Assert.Single(accepted, entry => entry.Kind == kind && entry.Needle == needle);
+            var entry = Assert.Single(accepted, entry => entry.Kind == kind && entry.Needle != DimmedNeedle.Class);
             Assert.All(accepted.Where(other => other.Kind == kind), other => Assert.Equal(entry.File, other.File));
         }
     }
