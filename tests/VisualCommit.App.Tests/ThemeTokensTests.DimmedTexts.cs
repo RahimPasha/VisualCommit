@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Xml;
 using System.Xml.Linq;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Markup.Xaml.MarkupExtensions;
@@ -10,8 +11,15 @@ using Avalonia.Media;
 using Avalonia.Styling;
 using Avalonia.Threading;
 using VisualCommit.App.Controls;
+using VisualCommit.App.ViewModels.Graph;
+using VisualCommit.App.Views.Graph;
 using VisualCommit.App.Views.Rebase;
 using VisualCommit.App.Views.Shell;
+using VisualCommit.Core;
+using VisualCommit.Core.Git;
+using VisualCommit.Core.Graph;
+using VisualCommit.Core.Hosting;
+using VisualCommit.Hosting;
 using VisualCommit.Testing;
 using VisualCommit.Testing.Headless;
 using Xunit;
@@ -27,8 +35,9 @@ namespace VisualCommit.App.Tests;
 /// them, and <see cref="TextPairs"/> leaves them out. Each exception is pinned to the figures the
 /// app draws today, computed from its own tokens and styles, on every background its text lies on,
 /// in both themes: a colour that changes, a new state of the row, or a fix that lifts the text to
-/// 4.5:1 fails its fact, to be looked at with D469. A guard keeps the disabled text colour and the
-/// search's dimming to the uses it lists, each with its reason.
+/// 4.5:1 fails its fact, to be looked at with D469. (a) and (b) read the views' styles; the graph
+/// draws in code, so (c)'s tokens stand in tables that a render of the graph holds it to. A guard
+/// keeps the disabled text colour and the search's dimming to the uses it lists, each with its reason.
 /// </summary>
 public partial class ThemeTokensTests
 {
@@ -147,24 +156,25 @@ public partial class ThemeTokensTests
     /// <summary>
     /// D469's exception (c): the graph's rows that a search dims (docs/phase-5-design.md 3.3),
     /// whose texts <c>CommitGraphControl</c> draws at <see cref="CommitGraphControl.SearchDimmedOpacity"/>
-    /// over the row's background: the message in <c>VcTextPrimaryBrush</c> (a stash's in
-    /// <c>VcTextSecondaryBrush</c>), the author, date and SHA in <c>VcTextSecondaryBrush</c>. The
-    /// graph draws its rows in code (<c>RowBackground</c>): <c>VcWindowBackgroundBrush</c> at rest,
+    /// over the row's background, each in the token <see cref="DimmedRowTexts"/> names: the message
+    /// in <c>VcTextPrimaryBrush</c> (a stash's in <c>VcTextSecondaryBrush</c>), the author, date and
+    /// SHA in <c>VcTextSecondaryBrush</c>; a remote branch's label, which has no fill, in
+    /// <c>VcTextPrimaryBrush</c>. The graph draws its rows in code (<c>RowBackground</c>), on the
+    /// backgrounds <see cref="DimmedRowBackgrounds"/> names: <c>VcWindowBackgroundBrush</c> at rest,
     /// <c>VcRowHoverBrush</c> under the pointer and <c>VcSelectionBrush</c> selected, which a search
-    /// leaves as they are; <c>CommitGraphControlTests</c> holds the three by their drawn pixels. Each
-    /// text's colour is blended at that opacity over the background, a channel rounded to the
-    /// nearest step as the graph's other tests fade a colour (a probe of the headless renderer drew
-    /// the blends within one step), and its ratio pinned to two places, under 4.5:1.
+    /// leaves as they are. The render fact below holds the graph to those tables, and this fact's
+    /// pairs to them. Each text's colour is blended at that opacity over the background, a channel
+    /// rounded to the nearest step as the graph's other tests fade a colour (a probe of the headless
+    /// renderer drew the blends within one step), and its ratio pinned to two places, under 4.5:1.
     /// </summary>
     [AvaloniaFact]
     public void Exception_D469_c_the_texts_of_a_row_a_search_dims_keep_their_pinned_figures_under_4_5_to_1()
     {
         var dark = ThemeVariant.Dark;
         var light = ThemeVariant.Light;
-        var failures = new List<string>();
-        foreach (var (text, background, variant, pinned) in new[]
-        {
-            // The message.
+        (string Text, string Background, ThemeVariant Variant, double Pinned)[] pins =
+        [
+            // The message, and a remote branch's label, which has no fill.
             ("VcTextPrimaryBrush", "VcWindowBackgroundBrush", dark, 2.83),
             ("VcTextPrimaryBrush", "VcRowHoverBrush", dark, 2.82),
             ("VcTextPrimaryBrush", "VcSelectionBrush", dark, 2.62),
@@ -179,7 +189,18 @@ public partial class ThemeTokensTests
             ("VcTextSecondaryBrush", "VcWindowBackgroundBrush", light, 1.66),
             ("VcTextSecondaryBrush", "VcRowHoverBrush", light, 1.63),
             ("VcTextSecondaryBrush", "VcSelectionBrush", light, 1.56),
-        })
+        ];
+
+        // The pairs the graph draws, each in both themes: a text of DimmedRowTexts, or a label's
+        // without a fill, on each background of DimmedRowBackgrounds.
+        var drawn = DimmedRowTexts.Select(cell => cell.Token)
+            .Concat(DimmedRowLabels.Where(label => label.Fill is null).Select(label => label.Text))
+            .Distinct()
+            .SelectMany(text => DimmedRowBackgrounds.SelectMany(background => Variants.Select(variant => $"{variant}: {text} on {background.Token}")));
+        Assert.Equal(drawn.Order(StringComparer.Ordinal), pins.Select(pin => $"{pin.Variant}: {pin.Text} on {pin.Background}").Order(StringComparer.Ordinal));
+
+        var failures = new List<string>();
+        foreach (var (text, background, variant, pinned) in pins)
         {
             var behind = Token(background, variant);
             var ratio = Contrast.Ratio(Faded(Token(text, variant), behind), behind);
@@ -193,30 +214,46 @@ public partial class ThemeTokensTests
     /// D469's exception (c), the part the review before the gate did not count: a dimmed row's ref
     /// labels, which <c>CommitGraphControl</c> draws at the same opacity, fill and text alike. The
     /// renderer fades each drawn shape by itself (a probe of the headless renderer showed it), so a
-    /// label's text is blended over its faded fill: <c>VcLabelTextBrush</c> on a local branch's,
-    /// the current branch's or a detached HEAD's fill, the lane's colour (all eight lanes), and
-    /// <c>VcTextPrimaryBrush</c> on a tag's or a "+N" label's <c>VcControlBackgroundBrush</c>; a
-    /// pull request's <c>#n</c> takes its label's colours. A remote branch's label has no fill: its
-    /// text is the message's pair. Each ratio is pinned to two places, under 4.5:1.
+    /// label's text is blended over its faded fill, as <see cref="DimmedRowLabels"/> names them:
+    /// <c>VcLabelTextBrush</c> on a local branch's, the current branch's or a detached HEAD's fill,
+    /// the row's lane (all eight lanes), and <c>VcTextPrimaryBrush</c> on a tag's, a stash's or a
+    /// "+N" label's <c>VcControlBackgroundBrush</c>; a pull request's <c>#n</c> takes its label's
+    /// colours. A remote branch's label has no fill: its text is the message's pair. The render
+    /// fact below holds the graph to the table, and this fact's pairs to it. Each ratio is pinned to
+    /// two places, under 4.5:1.
     /// </summary>
     [AvaloniaFact]
     public void Exception_D469_c_the_labels_of_a_row_a_search_dims_keep_their_pinned_figures_under_4_5_to_1()
     {
         var dark = ThemeVariant.Dark;
         var light = ThemeVariant.Light;
-        var failures = new List<string>();
-        foreach (var (background, variant, pinned) in new (string, ThemeVariant, double[])[]
-        {
-            // Lanes 0 to 7 with VcLabelTextBrush, then a tag's VcControlBackgroundBrush with VcTextPrimaryBrush.
+        (string Background, ThemeVariant Variant, double[] Pinned)[] pins =
+        [
+            // Lanes 0 to 7 with VcLabelTextBrush, then VcControlBackgroundBrush with VcTextPrimaryBrush.
             ("VcWindowBackgroundBrush", dark, [1.29, 1.33, 1.37, 1.26, 1.35, 1.29, 1.31, 1.35, 2.81]),
             ("VcRowHoverBrush", dark, [1.34, 1.37, 1.41, 1.31, 1.39, 1.33, 1.35, 1.40, 2.79]),
             ("VcSelectionBrush", dark, [1.44, 1.49, 1.51, 1.39, 1.50, 1.44, 1.45, 1.49, 2.64]),
             ("VcWindowBackgroundBrush", light, [1.22, 1.19, 1.18, 1.22, 1.19, 1.21, 1.20, 1.18, 2.15]),
             ("VcRowHoverBrush", light, [1.25, 1.22, 1.22, 1.25, 1.22, 1.25, 1.24, 1.22, 2.14]),
             ("VcSelectionBrush", light, [1.32, 1.29, 1.28, 1.32, 1.29, 1.31, 1.30, 1.28, 2.11]),
-        })
+        ];
+
+        // The labels' pairs with a fill, in DimmedRowLabels' order, a fill of the row's lane once for
+        // each lane; each background of DimmedRowBackgrounds in both themes.
+        var labels = DimmedRowLabels.Where(label => label.Fill is not null)
+            .Select(label => (label.Text, Fill: label.Fill!))
+            .Distinct()
+            .SelectMany(label => label.Fill == RowLane ? Lanes.Select(lane => (label.Text, Fill: lane)) : new[] { label })
+            .ToArray();
+        (string Text, string Fill)[] columns = [.. Lanes.Select(lane => ("VcLabelTextBrush", lane)), ("VcTextPrimaryBrush", "VcControlBackgroundBrush")];
+        Assert.Equal(columns, labels);
+        Assert.Equal(
+            DimmedRowBackgrounds.SelectMany(background => Variants.Select(variant => $"{variant}: {background.Token}")).Order(StringComparer.Ordinal),
+            pins.Select(pin => $"{pin.Variant}: {pin.Background}").Order(StringComparer.Ordinal));
+
+        var failures = new List<string>();
+        foreach (var (background, variant, pinned) in pins)
         {
-            var labels = Lanes.Select(lane => ("VcLabelTextBrush", lane)).Append(("VcTextPrimaryBrush", "VcControlBackgroundBrush")).ToArray();
             Assert.Equal(labels.Length, pinned.Length);
             var behind = Token(background, variant);
             for (var i = 0; i < labels.Length; i++)
@@ -229,6 +266,81 @@ public partial class ThemeTokensTests
         }
 
         Assert.True(failures.Count == 0, string.Join('\n', failures));
+    }
+
+    /// <summary>
+    /// D469's exception (c), held to what the graph draws. The pins above compute from three tables,
+    /// <see cref="DimmedRowTexts"/>, <see cref="DimmedRowLabels"/> and
+    /// <see cref="DimmedRowBackgrounds"/>; this fact holds <c>CommitGraphControl</c> to them. The
+    /// graph is drawn with a colour of its own standing in for each token of the tables
+    /// (<see cref="DimmedRowStandIns"/>, put in the control's resources, where it looks its tokens
+    /// up), so that a text drawn in any other token, or in a colour written out, shows. In each
+    /// theme, with HEAD on a branch and detached, each dimmed row is read at rest, under the pointer
+    /// and selected: the row's background is its state's token; in each text's column every pixel
+    /// lies between the background and the text's token faded over it, and the ink
+    /// (<see cref="TextInk"/>'s rule) reaches that colour; in each label the fill is its token faded
+    /// over the background, within a step, every pixel inside the border lies between the fill and
+    /// the text's token faded over the fill, and the ink of the name and of a pull request's number
+    /// reaches that colour. Nothing is drawn outside the six columns, so that a new column under
+    /// the dimming fails here; a new text in the labels' column outside a label, or a mark in the
+    /// graph's column, is not read.
+    /// </summary>
+    [AvaloniaFact]
+    public void Exception_D469_c_the_graph_draws_a_dimmed_rows_texts_and_labels_in_the_tokens_the_pins_name()
+    {
+        var failures = new List<string>();
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var variant in Variants)
+        {
+            foreach (var detachedHead in new[] { false, true })
+            {
+                var data = DimmedRowsHistory(detachedHead);
+                var control = new CommitGraphControl
+                {
+                    Data = data,
+                    Dates = new DateDisplay(TimeZoneInfo.Utc),
+                    Search = new GraphSearchMarks([data.CommitAt(0).Sha], isActive: true),
+                    PullRequests = new Dictionary<string, PullRequest>(StringComparer.Ordinal) { ["refs/heads/topic"] = TopicPullRequest(data.CommitAt(2).Sha) },
+                    SelectedIndex = 0,
+                };
+                foreach (var (token, colour) in DimmedRowStandIns())
+                {
+                    control.Resources[token] = new SolidColorBrush(colour);
+                }
+
+                using var host = CommitGraphControlTests.Host.Show(control, DimmedRowsWidth, data.Count * CommitGraphControl.RowHeight, variant);
+                Assert.Equal(GraphSearchRowState.Marked, control.SearchStateOf(0));
+
+                // Detached, only HEAD's row differs from the history with HEAD on a branch.
+                int[] rows = detachedHead ? [1] : [.. Enumerable.Range(1, data.Count - 1)];
+                Assert.All(rows, row => Assert.Equal(GraphSearchRowState.Dimmed, control.SearchStateOf(row)));
+                var rest = host.Capture();
+                foreach (var row in rows)
+                {
+                    CheckDimmedRow(failures, seen, control, rest, row, "at rest", variant);
+                }
+
+                foreach (var row in rows)
+                {
+                    host.MoveMouse(control, new Point(control.Columns.Message.X + 4, control.RowBounds(row).Center.Y));
+                    CheckDimmedRow(failures, seen, control, host.Capture(), row, "under the pointer", variant);
+                }
+
+                host.MoveMouse(control, new Point(control.Columns.Message.X + 4, control.RowBounds(0).Center.Y));
+                foreach (var row in rows)
+                {
+                    control.SelectedIndex = row;
+                    CheckDimmedRow(failures, seen, control, host.Capture(), row, "selected", variant);
+                }
+            }
+        }
+
+        Assert.True(failures.Count == 0, string.Join('\n', failures));
+
+        // Every text and label of the tables was drawn and read, and a pull request's number.
+        Assert.Equal(
+            DimmedRowTexts.Select(cell => cell.Text).Concat(DimmedRowLabels.Select(label => label.Label)).Append(PullRequestNumber).Order(StringComparer.Ordinal),
+            seen.Order(StringComparer.Ordinal));
     }
 
     /// <summary>
@@ -366,6 +478,58 @@ public partial class ThemeTokensTests
         Assert.Equal(DimmedTextUses.Length, renamed.Count(problem => problem.Contains(": no longer ", StringComparison.Ordinal)));
     }
 
+    /// <summary>A label's fill in <see cref="DimmedRowLabels"/>: the row's lane, <c>VcLane{n}Brush</c> for the row's colour n; all eight lanes in the pins.</summary>
+    private const string RowLane = "the row's lane";
+
+    /// <summary>What the render fact reads besides the tables' texts and labels: a pull request's number, in its label's colours.</summary>
+    private const string PullRequestNumber = "a pull request's number";
+
+    /// <summary>The width the render fact shows the graph at: every column visible.</summary>
+    private const double DimmedRowsWidth = 760;
+
+    /// <summary>
+    /// D469's exception (c): each text of a row a search dims and the token <c>CommitGraphControl</c>
+    /// draws it in (<c>CreateRowVisual</c>, <c>AuthorLayout</c>). The pins compute from it; the
+    /// render fact holds the graph to it.
+    /// </summary>
+    private static readonly (string Text, string Token)[] DimmedRowTexts =
+    [
+        ("the message", "VcTextPrimaryBrush"),
+        ("a stash's message", "VcTextSecondaryBrush"),
+        ("the author", "VcTextSecondaryBrush"),
+        ("the date", "VcTextSecondaryBrush"),
+        ("the SHA", "VcTextSecondaryBrush"),
+    ];
+
+    /// <summary>
+    /// D469's exception (c): each label of a row a search dims, its text's token and its fill's,
+    /// as <c>CommitGraphControl</c> draws them (<c>LabelLayout</c>, <c>LabelColors</c>; null for no
+    /// fill), a pull request's number in its label's. The pins compute from it; the render fact
+    /// holds the graph to it.
+    /// </summary>
+    private static readonly (string Label, string Text, string? Fill)[] DimmedRowLabels =
+    [
+        ("the current branch's label", "VcLabelTextBrush", RowLane),
+        ("a local branch's label", "VcLabelTextBrush", RowLane),
+        ("a detached HEAD's label", "VcLabelTextBrush", RowLane),
+        ("a tag's label", "VcTextPrimaryBrush", "VcControlBackgroundBrush"),
+        ("a stash's label", "VcTextPrimaryBrush", "VcControlBackgroundBrush"),
+        ("the +N label", "VcTextPrimaryBrush", "VcControlBackgroundBrush"),
+        ("a remote branch's label", "VcTextPrimaryBrush", null),
+    ];
+
+    /// <summary>
+    /// D469's exception (c): a graph row's background in each of its states, as
+    /// <c>RowBackground</c> picks it, which a search leaves as it is. The pins compute from it; the
+    /// render fact holds the graph to it.
+    /// </summary>
+    private static readonly (string State, string Token)[] DimmedRowBackgrounds =
+    [
+        ("at rest", "VcWindowBackgroundBrush"),
+        ("under the pointer", "VcRowHoverBrush"),
+        ("selected", "VcSelectionBrush"),
+    ];
+
     /// <summary>
     /// Every use of the disabled text colour and of the search's dimming that D469's guard accepts,
     /// each with its reason. Places are as the scan names them: in a XAML file the enclosing
@@ -477,6 +641,202 @@ public partial class ThemeTokensTests
             (byte)Math.Round((CommitGraphControl.SearchDimmedOpacity * over) + ((1 - CommitGraphControl.SearchDimmedOpacity) * under));
         return Color.FromRgb(Mix(colour.R, behind.R), Mix(colour.G, behind.G), Mix(colour.B, behind.B));
     }
+
+    /// <summary>
+    /// The colours that stand in for the tokens of <see cref="DimmedRowTexts"/>,
+    /// <see cref="DimmedRowLabels"/> and <see cref="DimmedRowBackgrounds"/> in the render fact:
+    /// saturated colours and black, far from each other and from the app's own colours, so that a
+    /// text or a fill drawn in another token shows.
+    /// </summary>
+    private static List<(string Token, Color Colour)> DimmedRowStandIns() =>
+    [
+        ("VcWindowBackgroundBrush", Color.Parse("#000000")),
+        ("VcRowHoverBrush", Color.Parse("#003C50")),
+        ("VcSelectionBrush", Color.Parse("#50003C")),
+        ("VcTextPrimaryBrush", Color.Parse("#FF0000")),
+        ("VcTextSecondaryBrush", Color.Parse("#00FF00")),
+        ("VcLabelTextBrush", Color.Parse("#FFFF00")),
+        ("VcControlBackgroundBrush", Color.Parse("#0000FF")),
+        .. Lanes.Select((lane, i) => (lane, Color.FromRgb(0x60, 0x00, (byte)(0x80 + (0x10 * i))))),
+    ];
+
+    /// <summary>The colour that stands in for <paramref name="token"/> in the render fact.</summary>
+    private static Color StandIn(string token)
+    {
+        var standIns = DimmedRowStandIns().Where(standIn => standIn.Token == token).ToList();
+        Assert.True(standIns.Count == 1, $"{token} has no colour of its own in DimmedRowStandIns: give it one, far from the others and from the app's colours.");
+        return standIns[0].Colour;
+    }
+
+    /// <summary>
+    /// The render fact's history, newest first: a commit the search matches, then a row for each
+    /// label of <see cref="DimmedRowLabels"/> (HEAD's branch, or with <paramref name="detachedHead"/>
+    /// HEAD and that branch as a local one; a local branch with a pull request; a tag; a remote
+    /// branch; a long branch that leaves a "+N" for two tags; a stash), and a root without a label.
+    /// </summary>
+    private static CommitGraphData DimmedRowsHistory(bool detachedHead)
+    {
+        var start = new DateTimeOffset(2026, 1, 1, 12, 0, 0, TimeSpan.Zero);
+        string[] subjects = ["Matches the search", "On main", "On topic", "Tagged", "On origin/main", "Crowded", "On main: Work in progress", "Initial commit"];
+        static string Sha(int row) => (row + 1).ToString("x40", CultureInfo.InvariantCulture);
+
+        // The stash and the commit above it both stand on the root.
+        static string[] Parents(int row) => row switch { 5 or 6 => [Sha(7)], 7 => [], _ => [Sha(row + 1)] };
+        var commits = Enumerable.Range(0, subjects.Length)
+            .Select(row => new CommitInfo(Sha(row), Parents(row), "Test Author", "author@example.com", start.AddMinutes(-row), start.AddMinutes(-row), subjects[row], row == 6 ? CommitKind.Stash : CommitKind.Commit))
+            .ToArray();
+        GitRef[] refs =
+        [
+            new("refs/heads/a-rather-long-branch-name", "a-rather-long-branch-name", RefKind.LocalBranch, Sha(5)),
+            new("refs/heads/main", "main", RefKind.LocalBranch, Sha(1), IsHead: !detachedHead),
+            new("refs/heads/topic", "topic", RefKind.LocalBranch, Sha(2)),
+            new("refs/remotes/origin/main", "origin/main", RefKind.RemoteBranch, Sha(4), RemoteName: "origin"),
+            new("refs/tags/t1", "t1", RefKind.Tag, Sha(5)),
+            new("refs/tags/t2", "t2", RefKind.Tag, Sha(5)),
+            new("refs/tags/v1.0", "v1.0", RefKind.Tag, Sha(3)),
+        ];
+        var stash = new StashEntry(0, Sha(6), Sha(7), subjects[6], "Test Author", "author@example.com", start.AddMinutes(-6), start.AddMinutes(-6));
+        var data = new CommitGraphData(new RepoRefs(new HeadState(detachedHead ? null : "main", Sha(1)), refs, [stash], ["origin"]));
+        var layout = new GraphLayout();
+        data.Append(commits, [.. commits.Select(layout.Add)]);
+        data.Complete();
+        return data;
+    }
+
+    /// <summary>The open pull request of the render fact's branch <c>topic</c>, whose label shows <c>#7</c>.</summary>
+    private static PullRequest TopicPullRequest(string headSha)
+    {
+        var repository = new HostedRepository(HostingProvider.GitHub, "example.com", "demo", "app");
+        return new PullRequest(7, "Topic", "demo", false, new Uri("https://example.com/demo/app/7"), "topic", headSha, repository, "main", repository, new DateTimeOffset(2026, 1, 1, 12, 0, 0, TimeSpan.Zero));
+    }
+
+    /// <summary>
+    /// Adds to <paramref name="failures"/> what is wrong with dimmed row <paramref name="row"/> in
+    /// <paramref name="shot"/>, in <paramref name="state"/> (the render fact's rules), and to
+    /// <paramref name="seen"/> the texts and labels it read.
+    /// </summary>
+    private static void CheckDimmedRow(List<string> failures, HashSet<string> seen, CommitGraphControl control, Screenshot shot, int row, string state, ThemeVariant variant)
+    {
+        var data = control.Data!;
+        var where = string.Create(CultureInfo.InvariantCulture, $"{variant}: row {row} {state}");
+        var backgroundToken = DimmedRowBackgrounds.Single(background => background.State == state).Token;
+        var behind = StandIn(backgroundToken);
+        var bounds = control.RowBounds(row);
+        var columns = control.Columns;
+
+        // The row's background, where nothing is drawn: at the end of the message's column.
+        ExpectPixel(failures, shot, new Point(columns.Message.Right - 2, bounds.Y + 1), behind, 0, $"{where}: the background, {backgroundToken}");
+
+        // The texts, each alone in its column.
+        var message = data.CommitAt(row).Kind == CommitKind.Stash ? "a stash's message" : "the message";
+        foreach (var (text, column) in new[] { (message, columns.Message), ("the author", columns.Author), ("the date", columns.Date), ("the SHA", columns.Sha) })
+        {
+            var token = DimmedRowTexts.Single(cell => cell.Text == text).Token;
+            var area = new Rect(column.X, bounds.Y, column.Width, bounds.Height);
+            var ink = Faded(StandIn(token), behind);
+            var what = $"{where}: {text}, {token} over {backgroundToken}";
+            failures.AddRange(TextInk.Problems(shot, area, ink, behind, what: what));
+            failures.AddRange(BlendProblems(shot, area, behind, ink, what));
+            seen.Add(text);
+        }
+
+        // Nothing outside the six columns.
+        GraphColumn[] all = [columns.Refs, columns.Graph, columns.Message, columns.Author, columns.Date, columns.Sha];
+        for (var x = 0; x < shot.Width; x++)
+        {
+            if (!all.Any(column => x >= column.X && x < column.Right))
+            {
+                failures.AddRange(BlendProblems(shot, new Rect(x, bounds.Y, 1, bounds.Height), behind, behind, $"{where}: outside the columns"));
+            }
+        }
+
+        // The labels: the fill faded over the background; inside the border, the name, its icon and
+        // a pull request's number faded over the fill.
+        var labels = control.LabelsInRow(row);
+        for (var i = 0; i < labels.Count; i++)
+        {
+            var label = labels[i];
+            var name = LabelName(label);
+            var (_, textToken, fillToken) = DimmedRowLabels.Single(entry => entry.Label == name);
+            var fillKey = fillToken == RowLane ? Lanes[((data.RowAt(row).NodeColor % Lanes.Length) + Lanes.Length) % Lanes.Length] : fillToken;
+            var fill = fillKey is null ? behind : Faded(StandIn(fillKey), behind);
+            var ink = Faded(StandIn(textToken), fill);
+            var what = $"{where}: {name}, {textToken} on {fillKey ?? "no fill"} over {backgroundToken}";
+            ExpectPixel(failures, shot, new Point(label.Bounds.Right - 3, label.Bounds.Center.Y), fill, 1, what + ", its fill");
+            var inside = label.Bounds.Deflate(3);
+            failures.AddRange(BlendProblems(shot, inside, fill, ink, what));
+
+            var icon = !label.IsOverflow && label.Kind is RefLabelKind.CurrentBranch or RefLabelKind.Tag
+                ? CommitGraphControl.LabelIconSize + CommitGraphControl.LabelIconGap
+                : 0;
+            var badge = control.BadgeInRow(row, i);
+            var nameArea = badge?.Name ?? new Rect(
+                label.Bounds.X + CommitGraphControl.LabelPadding + icon,
+                label.Bounds.Y,
+                label.Bounds.Width - (2 * CommitGraphControl.LabelPadding) - icon,
+                label.Bounds.Height);
+            failures.AddRange(TextInk.Problems(shot, nameArea.Intersect(inside), ink, fill, what: what + ", its name"));
+            seen.Add(name);
+            if (badge is not null)
+            {
+                failures.AddRange(TextInk.Problems(shot, badge.Number.Intersect(inside), ink, fill, what: what + ", its pull request's number"));
+                seen.Add(PullRequestNumber);
+            }
+        }
+    }
+
+    /// <summary>A label's entry in <see cref="DimmedRowLabels"/>; a kind without one is named so that the lookup fails.</summary>
+    private static string LabelName(PlacedLabel label) => label.IsOverflow ? "the +N label" : label.Kind switch
+    {
+        RefLabelKind.CurrentBranch => "the current branch's label",
+        RefLabelKind.LocalBranch => "a local branch's label",
+        RefLabelKind.DetachedHead => "a detached HEAD's label",
+        RefLabelKind.Tag => "a tag's label",
+        RefLabelKind.Stash => "a stash's label",
+        RefLabelKind.RemoteBranch => "a remote branch's label",
+        _ => $"a label of the kind {label.Kind}",
+    };
+
+    /// <summary>Adds a failure when the pixel at <paramref name="point"/> lies further than <paramref name="tolerance"/> from <paramref name="expected"/> in a channel.</summary>
+    private static void ExpectPixel(List<string> failures, Screenshot shot, Point point, Color expected, int tolerance, string what)
+    {
+        var pixel = shot.PixelAt(point);
+        if (Math.Max(Math.Abs(pixel.R - expected.R), Math.Max(Math.Abs(pixel.G - expected.G), Math.Abs(pixel.B - expected.B))) > tolerance)
+        {
+            failures.Add(string.Create(CultureInfo.InvariantCulture, $"{what}: {Hex(pixel)} at {point}, not within {tolerance} of {Hex(expected)}."));
+        }
+    }
+
+    /// <summary>
+    /// What is wrong with the whole pixels of <paramref name="area"/>: a pixel that lies outside the
+    /// blends of <paramref name="ink"/> over <paramref name="behind"/> by more than 2 in a channel,
+    /// as another colour drawn there does; one line for the area, with the first such pixel.
+    /// </summary>
+    private static IEnumerable<string> BlendProblems(Screenshot shot, Rect area, Color behind, Color ink, string what)
+    {
+        const int Tolerance = 2;
+        static bool Between(byte value, byte a, byte b) => value >= Math.Min(a, b) - Tolerance && value <= Math.Max(a, b) + Tolerance;
+        var outside = 0;
+        var first = (X: 0, Y: 0, Pixel: default(Color));
+        for (var y = (int)Math.Ceiling(area.Top); y < (int)Math.Floor(area.Bottom); y++)
+        {
+            for (var x = (int)Math.Ceiling(area.Left); x < (int)Math.Floor(area.Right); x++)
+            {
+                var pixel = shot.PixelAt(x, y);
+                if (!(Between(pixel.R, behind.R, ink.R) && Between(pixel.G, behind.G, ink.G) && Between(pixel.B, behind.B, ink.B)))
+                {
+                    first = outside == 0 ? (x, y, pixel) : first;
+                    outside++;
+                }
+            }
+        }
+
+        return outside == 0
+            ? []
+            : [string.Create(CultureInfo.InvariantCulture, $"{what}: {outside} pixels lie outside the blends of {Hex(ink)} over {Hex(behind)}, the first {Hex(first.Pixel)} at ({first.X}, {first.Y}): another colour is drawn there.")];
+    }
+
+    private static string Hex(Color colour) => string.Create(CultureInfo.InvariantCulture, $"#{colour.R:X2}{colour.G:X2}{colour.B:X2}");
 
     /// <summary>
     /// The setters of <paramref name="property"/> in <paramref name="styles"/> and their nested
