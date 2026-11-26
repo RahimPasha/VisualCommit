@@ -311,11 +311,13 @@ public partial class AuthRemoteServerTests
     [InlineData("NAK\n", "Counting objects:  2", "0% (1/5)\r")]
     public void Without_a_percentage_the_hold_ends_with_the_pkt_line_in_which_the_first_whole_line_with_one_ends(string section, string before, string after)
     {
-        // upload-pack sends each read of pack-objects' progress as a pkt-line of its own, and Git
-        // for Windows 2.56 was seen to write a progress line of odd length (auth's Counting lines
-        // have 29 bytes) in two writes, its last byte, the \r or \n, apart from the rest: the first
-        // pkt-line with a '%' may end after that '%' and before the line's end. A cut before the
-        // '%' leaves it to the next one.
+        // upload-pack sends each read of pack-objects' progress as a pkt-line of its own, and a
+        // read may end inside a line: upload-pack reads at most 128 bytes at a time, and Git for
+        // Windows 2.56 was seen to write a progress line of odd length (auth's Counting lines have
+        // 29 bytes) in two writes, its last byte, the \r or \n, apart from the rest. So the first
+        // pkt-line with a '%' may end after that '%' and before the line's end: in mid-line, where
+        // a read of 128 bytes ends, or right before its \r. A cut before the '%' leaves it to the
+        // next one.
         var body = CutProgressResponse(section, before, after);
 
         var (hasPack, progressEnd) = AuthRemoteServer.ScanPktLines(body);
@@ -376,63 +378,137 @@ public partial class AuthRemoteServerTests
         await using var other = await AuthRemoteServer.StartAsync();
         var requests = server.Requests.Count;
 
-        // Asked and not begun: a line of its own, in UTC. Asking again adds none, and another
+        // Asked and waiting: a line of its own, in UTC. Asking again adds none, and another
         // server's hold is no part of this one's.
         var held = server.HoldNextFetchPack();
         Assert.Same(held, server.HoldNextFetchPack(45));
         _ = other.HoldNextFetchPack();
         var asked = Assert.Single(server.Holds);
-        Assert.Equal(("remote.git", 0, (AuthRemoteHoldPart?)null), (asked.Repository, asked.AtPercent, asked.Part));
+        Assert.Equal(
+            ("remote.git", 0, (DateTimeOffset?)null, (AuthRemoteHoldPart?)null, (DateTimeOffset?)null),
+            (asked.Repository, asked.AtPercent, asked.Taken, asked.Part, asked.LetGo));
         Assert.Equal(TimeSpan.Zero, asked.Asked.Offset);
-        var askedAt = asked.Asked.ToString("HH:mm:ss.fff", CultureInfo.InvariantCulture);
+        var askedAt = Time(asked.Asked);
         var lines = server.DescribeHoldsAndRequests().Split('\n');
         Assert.Equal(2, lines.Length);
-        Assert.Matches($@"^The server on port {server.Port} \(times in UTC\) had {requests} request\(s\)(: .+)?, and 0 error\(s\); the holds asked of it, oldest first:$", lines[0]);
-        Assert.Equal($"  asked {askedAt} for remote.git at 0%: not begun", lines[1]);
+        Assert.Matches($@"^The server on port {server.Port} \(times in UTC\) had {requests} request\(s\)(: .+)?, 0 error\(s\) and \d+ connection\(s\) open; the holds asked of it, oldest first:$", lines[0]);
+        Assert.Equal($"  asked {askedAt} for remote.git at 0%: waiting for a response with a pack", lines[1]);
 
-        // Begun: when, and what it sent, which holds a whole line with a percentage (auth's fetch
-        // counts 5 objects); the held request is the last one.
+        // Begun: when a response took it, when it began, and what it sent, which holds a whole line
+        // with a percentage (auth's fetch counts 5 objects); the held request is the last one, and
+        // its connection the one open once the others have ended. The wall clock may be stepped
+        // by a second either way meanwhile.
         var fetch = GitAsync(repo, ["fetch", "--progress", "origin"]);
         await held.WaitAsync(StepTimeout, TestCancelled);
         var began = Assert.Single(server.Holds);
         var part = Assert.IsType<AuthRemoteHoldPart>(began.Part);
-        Assert.Equal(asked with { Part = part }, began);
-        Assert.InRange(part.At, asked.Asked, DateTimeOffset.UtcNow);
+        var taken = Assert.NotNull(began.Taken);
+        Assert.Equal(asked with { Taken = taken, Part = part }, began);
+        var step = TimeSpan.FromSeconds(1);
+        Assert.InRange(taken, asked.Asked - step, part.At + step);
+        Assert.InRange(part.At, asked.Asked - step, DateTimeOffset.UtcNow + step);
         Assert.InRange(part.SentBytes, 1, part.BodyBytes - 1);
         Assert.StartsWith("Enumerating objects: 5, done.\n", part.Progress, StringComparison.Ordinal);
         Assert.Matches(@"Counting objects: +\d+% \(\d/5\)\r", part.Progress);
 
-        var description = server.DescribeHoldsAndRequests();
+        var description = await DescriptionWithAsync(server, ", 0 error(s) and 1 connection(s) open;");
         lines = description.Split('\n');
         Assert.Equal(2, lines.Length);
-        Assert.Matches($@"^The server on port {server.Port} \(times in UTC\) had \d+ request\(s\): .*POST /remote\.git/git-upload-pack fetch 200 held, and 0 error\(s\); the holds asked of it, oldest first:$", lines[0]);
+        Assert.Matches($@"^The server on port {server.Port} \(times in UTC\) had \d+ request\(s\): .*POST /remote\.git/git-upload-pack fetch 200 held, 0 error\(s\) and 1 connection\(s\) open; the holds asked of it, oldest first:$", lines[0]);
         Assert.Matches(
-            $@"^  asked {Regex.Escape(askedAt)} for remote\.git at 0%: began \d\d:\d\d:\d\d\.\d{{3}}, sent {part.SentBytes} of {part.BodyBytes} bytes, progress ""Enumerating objects: 5, done\.\\nCounting objects: .*""; last whole line with a percentage ""Counting objects: +\d+% \(\d/5\)""$",
+            $@"^  asked {Regex.Escape(askedAt)} for remote\.git at 0%: began {Regex.Escape(Time(part.At))}, held after {part.SentBytes} of {part.BodyBytes} bytes, progress ""Enumerating objects: 5, done\.\\nCounting objects: .*""; last whole line with a percentage ""Counting objects: +\d+% \(\d/5\)""$",
             lines[1]);
         Assert.DoesNotContain('\r', description);
 
-        // Found by its port, each port once, beside the other server and a port no server runs on.
+        // Found by its port, each port once, beside the other server and a port no server of the
+        // tests runs on.
         Assert.Equal(
-            $"{description}\n{other.DescribeHoldsAndRequests()}\nNo server of this process runs on port 1.",
+            $"{description}\n{other.DescribeHoldsAndRequests()}\nNo AuthRemoteServer of this process runs on port 1.",
             AuthRemoteServer.DescribeServersOn([server.Port, other.Port, server.Port, 1]));
 
+        // Let go by the release: the line ends with its time.
         server.Release();
         Assert.True((await fetch.WaitAsync(StepTimeout, TestCancelled)).Succeeded);
+        var released = Assert.Single(server.Holds);
+        var letGo = Assert.NotNull(released.LetGo);
+        Assert.Equal(began with { LetGo = letGo }, released);
+        Assert.InRange(letGo, part.At - step, DateTimeOffset.UtcNow + step);
+        Assert.Equal($"{lines[1]}; let go {Time(letGo)}", server.DescribeHoldsAndRequests().Split('\n')[1]);
         Assert.Empty(server.Errors);
     }
 
     [Fact]
     public async Task A_disposed_server_is_found_by_its_port_no_more()
     {
-        var server = await AuthRemoteServer.StartAsync();
+        await using var server = await AuthRemoteServer.StartAsync();
         _ = server.HoldNextFetchPack();
-        var description = server.DescribeHoldsAndRequests();
-        Assert.Equal(description, AuthRemoteServer.DescribeServersOn([server.Port]));
+        var waiting = server.DescribeHoldsAndRequests();
+        Assert.Equal(waiting, AuthRemoteServer.DescribeServersOn([server.Port]));
 
         await server.DisposeAsync();
 
+        // The disposal dropped the hold before it began, as the server itself says.
+        var dropped = Assert.Single(server.Holds);
+        var at = Assert.NotNull(dropped.LetGo);
+        Assert.Null(dropped.Taken);
+        Assert.Null(dropped.Part);
+        var line = $"  asked {Time(dropped.Asked)} for remote.git at 0%: dropped {Time(at)} before it began";
+        Assert.Equal($"{waiting.Split('\n')[0]}\n{line}", server.DescribeHoldsAndRequests());
+
         // Its port may serve another test's server by now, which this one's hold is no part of.
-        Assert.DoesNotContain(description.Split('\n')[1], AuthRemoteServer.DescribeServersOn([server.Port]), StringComparison.Ordinal);
+        var found = AuthRemoteServer.DescribeServersOn([server.Port]);
+        Assert.DoesNotContain(waiting.Split('\n')[1], found, StringComparison.Ordinal);
+        Assert.DoesNotContain(line, found, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_folder_server_and_a_host_server_are_found_by_their_ports_and_list_their_holds_oldest_first()
+    {
+        using var copy = await Scenarios.WorkspaceAsync();
+        await using var folder = await AuthRemoteServer.StartForFolderAsync(Path.Combine(copy.Root, "remotes"));
+        using var hostFolder = new TempDirectory("host");
+        var options = new AuthRemoteHostOptions(new PingRoutes(), _ => null, _ => false, (_, _) => false);
+        await using var host = await AuthRemoteServer.StartForHostAsync(hostFolder.Path, options);
+
+        // Two repositories' holds, asked out of their names' order: the first dropped by its
+        // release before it began, the second waiting.
+        _ = folder.HoldNextFetchPack("mobile");
+        _ = folder.HoldNextFetchPack("docs", 45);
+        folder.Release("mobile");
+        var holds = folder.Holds;
+        Assert.Equal(["mobile.git", "docs.git"], holds.Select(hold => hold.Repository));
+        var dropped = Assert.NotNull(holds[0].LetGo);
+        Assert.Null(holds[1].LetGo);
+        var description = folder.DescribeHoldsAndRequests();
+        Assert.Equal(
+            $"The server on port {folder.Port} (times in UTC) had 0 request(s), 0 error(s) and 0 connection(s) open; the holds asked of it, oldest first:\n" +
+            $"  asked {Time(holds[0].Asked)} for mobile.git at 0%: dropped {Time(dropped)} before it began\n" +
+            $"  asked {Time(holds[1].Asked)} for docs.git at 45%: waiting for a response with a pack",
+            description);
+
+        // Each found by its port while it runs, as a server of one repository is.
+        Assert.Equal(
+            $"{description}\nThe server on port {host.Port} (times in UTC) had 0 request(s), 0 error(s) and 0 connection(s) open; no hold was asked of it.",
+            AuthRemoteServer.DescribeServersOn([folder.Port, host.Port]));
+    }
+
+    [Fact]
+    public async Task A_server_with_more_than_20_requests_describes_the_last_20()
+    {
+        await using var server = await AuthRemoteServer.StartAsync();
+        server.RequireAuth = false;
+        using var client = new HttpClient(new SocketsHttpHandler { UseProxy = false });
+        string[] paths = [.. Enumerable.Range(0, 3).Select(i => $"/early-{i}"), .. Enumerable.Range(0, 20).Select(i => $"/late-{i}")];
+        foreach (var path in paths)
+        {
+            using var response = await client.GetAsync(new Uri($"http://127.0.0.1:{server.Port}{path}"), TestCancelled);
+            Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        }
+
+        var last = string.Join("; ", paths.Skip(3).Select(path => $"GET {path} 404"));
+        Assert.Matches(
+            $@"^The server on port {server.Port} \(times in UTC\) had 23 request\(s\), the last 20: {Regex.Escape(last)}, 0 error\(s\) and \d+ connection\(s\) open; no hold was asked of it\.$",
+            server.DescribeHoldsAndRequests());
     }
 
     [Fact]
@@ -1149,6 +1225,34 @@ public partial class AuthRemoteServerTests
     private static string[] Lines(string text) => text.Split('\n', StringSplitOptions.RemoveEmptyEntries);
 
     private static string Subject(GitResult result) => result.StandardOutput.Trim();
+
+    /// <summary>A time as a server's description writes it (<see cref="AuthRemoteServer.DescribeHoldsAndRequests"/>).</summary>
+    private static string Time(DateTimeOffset at) => at.ToString("HH:mm:ss.fff", CultureInfo.InvariantCulture);
+
+    /// <summary>
+    /// The server's description once it holds <paramref name="text"/>, looked at every 20 ms: a
+    /// connection that has ended for git may count as open for a moment more. Fails after
+    /// <see cref="StepTimeout"/> with the last description.
+    /// </summary>
+    private static async Task<string> DescriptionWithAsync(AuthRemoteServer server, string text)
+    {
+        var deadline = DateTime.UtcNow + StepTimeout;
+        while (true)
+        {
+            var description = server.DescribeHoldsAndRequests();
+            if (description.Contains(text, StringComparison.Ordinal))
+            {
+                return description;
+            }
+
+            if (DateTime.UtcNow >= deadline)
+            {
+                Assert.Fail($"The server's description held no \"{text}\" after {StepTimeout.TotalSeconds} s:\n{description}");
+            }
+
+            await Task.Delay(TimeSpan.FromMilliseconds(20), TestCancelled);
+        }
+    }
 
     /// <summary>
     /// Watches git's standard error for the first progress line with a percentage, and keeps every
