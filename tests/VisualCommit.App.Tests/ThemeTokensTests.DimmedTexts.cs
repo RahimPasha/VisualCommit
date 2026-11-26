@@ -444,7 +444,8 @@ public partial class ThemeTokensTests
         var untied = required.Except(listed)
             .Select(use => $"{use.File}: \"{use.Style}\" names the class {use.Class}, which DimmingClasses does not list: list it there, or in NonDimmingClasses with its reason.")
             .Concat(listed.Except(required).Select(dimming => $"{dimming.File}: DimmingClasses lists {dimming.Class} in \"{dimming.Style}\", which no listed style names so: take it out."))
-            .Concat(exempt.Except(named).Select(none => $"{none.File}: NonDimmingClasses lists {none.Class} in \"{none.Style}\", which no listed style names so: take it out."))
+            .Concat(exempt.Except(named).Select(none =>
+                $"{none.File}: NonDimmingClasses lists {none.Class} in \"{none.Style}\", which no listed style names so: take it out."))
             .ToList();
         Assert.True(untied.Count == 0, string.Join('\n', untied));
 
