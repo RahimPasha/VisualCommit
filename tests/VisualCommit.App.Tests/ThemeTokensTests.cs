@@ -15,10 +15,12 @@ namespace VisualCommit.App.Tests;
 /// D198; the contrast round, docs/phase-8a-design.md 1.5, 2.3, 2.4, D410, D418): both themes hold
 /// the same keys; one table says which text lies on which background, and in both themes every
 /// pair of it reaches 4.5:1, with no list of gaps; the round's values, the placeholder's own token
-/// at full opacity, and a label's white text on every lane. Ratios are WCAG 2's
-/// (<see cref="Contrast.Ratio"/>).
+/// at full opacity, and a label's white text on every lane. The three older looks the owner kept
+/// under 4.5:1 lie outside the table: D469's exceptions, each pinned to its figures, with a guard
+/// on where the dimmed colour and the search's dimming are used (ThemeTokensTests.DimmedTexts.cs).
+/// Ratios are WCAG 2's (<see cref="Contrast.Ratio"/>).
 /// </summary>
-public class ThemeTokensTests
+public partial class ThemeTokensTests
 {
     private const double TextContrast = 4.5;
 
@@ -60,7 +62,8 @@ public class ThemeTokensTests
 
     /// <summary>
     /// Which text lies on which background (design 2.4): each text token on each background it is
-    /// drawn on, in both themes. Every pair must reach 4.5:1; there is no list of gaps (D410).
+    /// drawn on, in both themes. Every pair must reach 4.5:1; there is no list of gaps (D410). The
+    /// texts dimmed on purpose that D469 accepts below it are pinned apart, not listed here.
     /// </summary>
     private static IEnumerable<(string Text, string Background)> TextPairs()
     {
