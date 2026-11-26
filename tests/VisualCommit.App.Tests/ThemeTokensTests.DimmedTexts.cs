@@ -300,8 +300,8 @@ public partial class ThemeTokensTests
     /// pull request's number reaches that colour; in the labels' column outside the labels, a pixel
     /// left round each for its edge, every pixel is the row's background, within 2. Nothing is drawn
     /// outside the six columns, so that a new column under the dimming fails here. The graph's column
-    /// is not read: a text or a mark drawn there under the node's dimming is read by neither this
-    /// fact nor the guard.
+    /// is not read: a text or a mark drawn there, under the node's dimming or the texts', is read by
+    /// neither this fact nor the guard.
     /// </summary>
     [AvaloniaFact]
     public void Exception_D469_c_the_graph_draws_a_dimmed_rows_texts_and_labels_in_the_tokens_the_pins_name()
@@ -379,9 +379,8 @@ public partial class ThemeTokensTests
     /// does a scan that finds the token or the constant nowhere, so that a rename cannot leave the
     /// guard looking for nothing. A text that comes under a dimming already listed adds no
     /// reference: the render fact of exception (c) reads a dimmed row's message, author, date and
-    /// SHA columns, the inside of each label and the labels' column outside them, where such a text
-    /// shows; a text or a mark drawn in the graph's column under the node's dimming is read by
-    /// neither fact.
+    /// SHA columns, the inside of each label and the labels' column outside them; a text or a mark
+    /// drawn in the graph's column, under the node's dimming or the texts', is read by neither fact.
     /// </summary>
     [AvaloniaFact]
     public void The_dimmed_colour_and_the_searchs_dimming_are_used_only_where_the_guard_lists_them()
