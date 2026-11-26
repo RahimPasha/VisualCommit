@@ -496,7 +496,7 @@ public partial class ThemeTokensTests
                 $"{Render}:{lines.Value + 5}: a class whose style gives a text the disabled colour in \"label.Classes.Set(\"dropped\", true);\"",
                 $"{Copied}:2: the disabled text colour written out in \"Style TextBlock.copied > Setter Foreground\"",
             ],
-            problems.Select(problem => problem[..problem.IndexOf(", a use the guard does not list", StringComparison.Ordinal)]));
+            problems.Select(problem => problem.IndexOf(", a use the guard does not list", StringComparison.Ordinal) is var at and >= 0 ? problem[..at] : problem));
         Assert.All(problems, problem => Assert.Contains("add it to DimmedTextUses with its reason", problem, StringComparison.Ordinal));
     }
 
