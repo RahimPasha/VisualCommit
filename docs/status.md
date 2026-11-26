@@ -399,8 +399,11 @@ Wave 4 and the review:
   the class on the merged tree; D469; ruling 112), and CI's four Linux jobs of that push are green
   with it. Two independent readers of its final form found every pinned figure and every listed use
   right, one summary that says more than the guard reads, and gaps in what the guard's scan sees: a
-  second fix round, tests only, is under way (run `wf_fec5b4c5-7b1`). Still open: that round's merge
-  and CI's run of it; then this step is ticked.
+  second fix round, tests only, is under way (run `wf_fec5b4c5-7b1`). CI's run of the merge failed
+  in the Windows job alone, on phase 3's check 17 (a held fetch that showed no percentage in 60 s,
+  as once on 2026-11-25): a package hardens the tests' server's hold and adds diagnostics (run
+  `wf_5fc2df5a-3bc`). Still open: both packages' merges and CI's run of them; then this step is
+  ticked.
 
 Gate:
 
@@ -440,6 +443,27 @@ Phase 8a's runs on `phase/8a-release-readiness`, the newest first. CI has six jo
 `e04762b`: the sixth, "ubuntu 22.04 container, git 2.34 (the floor)", did not fail the run until
 `bba59c7`, which made it required after its first green run.
 
+- [45871534398](https://github.com/RahimPasha/VisualCommit/actions/runs/45871534398), for `fab4073`
+  (the tests that pin D469's three dimmed texts and guard the dimmed colour): **attempt 1 failed in
+  `windows-latest`, on one check of phase 3 that the push does not touch; the other five jobs
+  succeeded, and the package's eight facts passed in all six.** `windows-latest`: 8,915 tests, 8,907
+  passed, 1 failed, 7 skipped, Test step 44 min 55 s of 70. The failure:
+  `Phase3ChecksD.Check_17_fetch_progress_and_cancel`, "Timed out after 60 s waiting for the status
+  bar to show a percentage", at its first held fetch (`Phase3Checks.D.cs:75`): the failure of run
+  45586070342 again, in another caller of the hold without a percentage, the second in three Windows
+  runs. `macos-latest`: 8,912 tests, 8,909 passed, 3 skipped, Test step 43 min 4 s of 70.
+  `ubuntu-latest`: 8,912 tests, 8,908 passed, 4 skipped, Test step 5 min 55 s. The floor's job (git
+  2.34.1): 8,912 tests, 8,905 passed, 7 skipped, Test step 8 min 10 s; the two containers 8,912
+  tests with 7 skipped each, Test steps 6 min 49 s with Microsoft's installer and 8 min 30 s with
+  Ubuntu's packages, the Secret Service's test passed in both; the Windows and macOS keychain steps
+  passed. Eight tests more than the run before in every job, the new facts, the render of the graph
+  among them. The failed job is run again (attempt 2, started at 11:44); the next push will cancel
+  it if it has not ended. The lead's ruling of 2026-11-25 on that hold, no change before the gate
+  (ruling 109), is taken back on the second failure: run `wf_5fc2df5a-3bc` probes the cause on the
+  laptop, hardens the hold and adds diagnostics. The log's lines are in
+  `D:/Projects/Personal/phase8-work/wave4/review/ci-45871534398/`. The push started no run of the
+  guide's workflow (it touches nothing that workflow watches), and the push after it, `4cf2420`,
+  changed only docs.
 - [45617147442](https://github.com/RahimPasha/VisualCommit/actions/runs/45617147442), for `58bf64e`
   (the copy that walks past a folder it cannot open, `67e1842`, with D468 (6) and ruling 110):
   **success in all six jobs**, at its first attempt. `windows-latest`: 8,907 tests, 8,900 passed, 7
@@ -1204,34 +1228,50 @@ which the question to the owner had not shown: "Waiting on the owner"); plan.md'
 the exceptions and its Backlog has the de-emphasis that keeps 4.5:1 (ruling 112). **Step 20 is
 done**: the live command ran at 11:00 on `fab4073`, the owner told in the chat: 582 offline tests,
 then 596 tests, none failed; nothing to correct in the fakes; its output and the three `run.txt` are
-in `D:/Projects/Personal/phase8-work/gate/live-before/`. **CI's run 45871534398** on `fab4073` is
-under way: its four Linux jobs are green, Windows and macOS still run. **Under way:** run
-`wf_fec5b4c5-7b1` (started at 11:14 on 2026-11-26: a fixer in the worktree
+in `D:/Projects/Personal/phase8-work/gate/live-before/`. **CI's run 45871534398** on `fab4073`
+failed at its first attempt in `windows-latest` alone, on phase 3's check 17, which the push does
+not touch: no percentage in 60 s while the tests' server held the fetch (the CI section); the
+package's eight facts passed in all six jobs, the render of the graph on macOS among them. It is the
+failure of run 45586070342 again, in another test, so the lead takes back ruling 109's "no change
+before the gate" for that hold. **Two packages are under way, each in its own worktree, tests
+only:** (a) run `wf_fec5b4c5-7b1` (started at 11:14: a fixer in
 `D:/Projects/Personal/vc-wt/p8a-dimmed` on `wip/p8a-dimmed`, brought up to `fab4073`; then two
 independent verifiers of the fix, read only; then a correcting pass if they find a defect or a
-risk), tests only, the one file above: it answers the findings of the final form's two readers
+risk): it answers the findings of the final form's two readers of the D469 tests
 (`D:/Projects/Personal/phase8-work/wave4/review/dimmed-final-read.json`; ruling 112), none of which
-questions a pinned figure or a listed use. **Next for the lead, in this order:** (1) read CI's run
-45871534398 and record it; (2) read the round's result and its diff, merge `wip/p8a-dimmed` with
-`--no-ff`, build, run `ThemeTokensTests` on the merged tree, write the ruling after 112, push, read
-CI's run of it and record it, tick step 19; (3) step 21, the gate, each takeover of the desktop
-announced in the chat just before it starts: D246's two runs of phase 8a's real-window checks, the
-whole default run and the real-window pass on one commit, the list of pictures, the live command on
-the counted round (by 2026-11-28, while GitHub's token serves), every picture of both passes
-inspected against `references/step19/`, the guide's site, the checks by hand with the Narrator
-walk-through. The package is reviewed with the rest in step 19 and merged last, in that step. The
-three finished worktrees (`p8a-restore`, `p8a-restore-base`, `p8a-guide`) are removed; their `wip/`
-branches stay local (D396). §11's builders got with their briefs: mdBook at
-`D:/Projects/Personal/phase8-work/tools/mdbook-0.5.4/mdbook.exe` and the Linux archive's SHA-256 for
-`guide.yml` (Notes, "Wave 4"); the references `D:/Projects/Personal/phase8-work/references/wave3/`;
-rulings 80 (stop and report if the first-run link's frame touches its ink), 82 (the facts no check
-shows) and 83 (the rename, the comments); and what part G's open point 103 leaves for it to report.
-What step 16 ended with: the three packages merged, §10 (`86ecb3a`), §8 (`f014b2b`, its fixes after
-the merge `85e2884`) and §9 (`769f459`); the lagged list, the whole default run and the pictures on
-`85e2884`, whose one fault (`a1b-about-link-focus`) is fixed (`fcf8c1e`); the references of the
-later merges, `D:/Projects/Personal/phase8-work/references/wave3/` (1,235 scripted pictures); three
-"before" series, two probes, two panels and **D457** (the bounds `0bfbe92`, two backlog rows, the
-restore order as ruling 76, a change in wave 4); CI's two failures on the link frame's merge fixed
+questions a pinned figure or a listed use; (b) run `wf_5fc2df5a-3bc` (started at 11:48: a builder in
+`D:/Projects/Personal/vc-wt/p8a-fetch-hold` on `wip/p8a-fetch-hold`, from `4cf2420`; then two
+independent readers, of the change and of the cause; then a correcting pass): it first measures on
+the laptop how git's progress lines reach the tests' server on Windows (the lead's point: the C
+runtime writes an `fprintf` to a piped stderr in many small writes, so under load the hold can cut
+inside the first line with a percentage, which the analysts of 2026-11-25 had ruled unlikely on the
+belief that a line is one write), then makes the hold without a percentage end only after a whole
+line with one (`tests/VisualCommit.Testing/AuthRemoteServer.cs`), and makes a wait for a percentage
+that times out say what the server sent and what git reported. **Next for the lead, in this order:**
+(1) read attempt 2 of run 45871534398's Windows job and record it; (2) read each package's result
+and its diff, merge `wip/p8a-dimmed` and `wip/p8a-fetch-hold` with `--no-ff`, build, and run on the
+merged tree `ThemeTokensTests`, `AuthRemoteServerTests`, `RemoteOperationTests`, the fetch, pull and
+queue classes of `VisualCommit.App.Tests` and phase 3's part D; compare part D's pictures taken
+while a fetch is held with `references/step19/` (only the hold's percentage may differ); write the
+ruling after 112; push both merges together, read CI's run and record it; tick step 19; (3) step 21,
+the gate, each takeover of the desktop announced in the chat just before it starts: D246's two runs
+of phase 8a's real-window checks, the whole default run and the real-window pass on one commit, the
+list of pictures, the live command on the counted round (by 2026-11-28, while GitHub's token
+serves), every picture of both passes inspected against `references/step19/`, the guide's site, the
+checks by hand with the Narrator walk-through. The package is reviewed with the rest in step 19 and
+merged last, in that step. The three finished worktrees (`p8a-restore`, `p8a-restore-base`,
+`p8a-guide`) are removed; their `wip/` branches stay local (D396). §11's builders got with their
+briefs: mdBook at `D:/Projects/Personal/phase8-work/tools/mdbook-0.5.4/mdbook.exe` and the Linux
+archive's SHA-256 for `guide.yml` (Notes, "Wave 4"); the references
+`D:/Projects/Personal/phase8-work/references/wave3/`; rulings 80 (stop and report if the first-run
+link's frame touches its ink), 82 (the facts no check shows) and 83 (the rename, the comments); and
+what part G's open point 103 leaves for it to report. What step 16 ended with: the three packages
+merged, §10 (`86ecb3a`), §8 (`f014b2b`, its fixes after the merge `85e2884`) and §9 (`769f459`); the
+lagged list, the whole default run and the pictures on `85e2884`, whose one fault
+(`a1b-about-link-focus`) is fixed (`fcf8c1e`); the references of the later merges,
+`D:/Projects/Personal/phase8-work/references/wave3/` (1,235 scripted pictures); three "before"
+series, two probes, two panels and **D457** (the bounds `0bfbe92`, two backlog rows, the restore
+order as ruling 76, a change in wave 4); CI's two failures on the link frame's merge fixed
 (`70a8fc0`, `809b77f`); and, after a review of the second of those fixes, **the row list's fix,
 merged at `bad98b1`**: CI's run 45133434382 on it is green in all six jobs, the whole default run on
 `c1bc69b`, whose code is the merge's, passed with 8,514 tests and none failed, and each of its 54
