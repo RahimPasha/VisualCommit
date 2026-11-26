@@ -471,7 +471,9 @@ public partial class ThemeTokensTests
             {
                 selectors.Add(part["Style ".Length..]);
             }
-            else if (selectors.Count > 0 && !part.StartsWith("ControlTheme ", StringComparison.Ordinal) && !part.StartsWith("ResourceDictionary ", StringComparison.Ordinal))
+            else if (selectors.Count > 0
+                && !part.StartsWith("ControlTheme ", StringComparison.Ordinal)
+                && !part.StartsWith("ResourceDictionary ", StringComparison.Ordinal))
             {
                 selectors[^1] += " > " + part;
             }
@@ -1268,7 +1270,8 @@ public partial class ThemeTokensTests
 
             foreach (var node in element.Nodes().OfType<XText>())
             {
-                AddMatches(uses, file, ((IXmlLineInfo)node).LineNumber, node.Value, PlaceOf(element, " text"), needles, pathData: IsPathData(element.Name.LocalName));
+                var line = ((IXmlLineInfo)node).LineNumber;
+                AddMatches(uses, file, line, node.Value, PlaceOf(element, " text"), needles, pathData: IsPathData(element.Name.LocalName));
             }
         }
 
@@ -1308,7 +1311,8 @@ public partial class ThemeTokensTests
     /// The matches of every needle but the dimming classes' in <paramref name="text"/>; in a
     /// geometry's path data (<paramref name="pathData"/>) the opacity's value is not looked for.
     /// </summary>
-    private static void AddMatches(List<DimmedUse> uses, string file, int line, string text, string place, IReadOnlyList<(DimmedNeedle Needle, Regex Pattern)> needles, bool pathData = false)
+    private static void AddMatches(
+        List<DimmedUse> uses, string file, int line, string text, string place, IReadOnlyList<(DimmedNeedle Needle, Regex Pattern)> needles, bool pathData = false)
     {
         var looked = needles.Where(needle => needle.Needle != DimmedNeedle.Class && !(pathData && needle.Needle == DimmedNeedle.DimmingValue));
         foreach (var (needle, pattern) in looked)
