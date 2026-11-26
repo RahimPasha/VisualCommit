@@ -263,8 +263,9 @@ public partial class ThemeTokensTests
     /// <summary>
     /// The guard's scan reports a use it does not list with its file and line (made-up uses in copies
     /// of the app's own texts; src/ is never changed): a style that dims a new text, an element's
-    /// colour written out, a pushed opacity at the search's constant and its value written out. A
-    /// mention in a comment is no use.
+    /// colour written out, a pushed opacity at the search's constant and its value written out, the
+    /// colour in code by each of the ways <see cref="DimmedNeedles"/> knows, and a <c>.xaml</c> file.
+    /// A mention in a comment is no use.
     /// </summary>
     [AvaloniaFact]
     public void The_guard_reports_a_use_it_does_not_list_with_its_file_and_line()
@@ -290,20 +291,35 @@ public partial class ThemeTokensTests
         ];
         var changedPanel = string.Join('\n', panel[..head].Concat(insertedXaml).Concat(panel[head..]));
 
-        // A pushed opacity at the constant, its value written out, and both in comments.
+        // A pushed opacity at the constant, its value written out, and both in comments; the colour
+        // in code, packed with another alpha, and by its channels, hexadecimal and decimal; the value
+        // with a trailing zero.
         var drawTexts = Array.FindIndex(render, line => line.Contains("DrawTextCells(context, GetRowVisual(data, index)", StringComparison.Ordinal));
         Assert.True(drawTexts > 0, "CommitGraphControl.Render.cs has no call of DrawTextCells to insert before.");
+        var dark = Token(DimmedToken, ThemeVariant.Dark);
+        var packed = string.Create(CultureInfo.InvariantCulture, $"var packed = Color.FromUInt32(0xCC{dark.R:X2}{dark.G:X2}{dark.B:X2});");
+        var channels = string.Create(CultureInfo.InvariantCulture, $"var channels = Color.FromRgb(0x{dark.R:X2}, 0x{dark.G:x2}, 0x{dark.B:X2});");
+        var decimals = string.Create(CultureInfo.InvariantCulture, $"var decimals = new Color(255, {colour.R}, {colour.G}, {colour.B});");
         string[] insertedCode =
         [
             "                // SearchDimmedOpacity and 0.35 in a comment are no use.",
             "                using var again = context.PushOpacity(SearchDimmedOpacity); /* 0.35 */",
             "                using var fixedValue = context.PushOpacity(0.35); // SearchDimmedOpacity",
+            "                " + packed,
+            "                " + channels,
+            "                " + decimals,
+            "                var trailing = .350;",
         ];
         var changedRender = string.Join('\n', render[..drawTexts].Concat(insertedCode).Concat(render[drawTexts..]));
+
+        // A XAML file named .xaml, which Avalonia builds too, is read as XAML.
+        const string Copied = AppSource + "/Views/Shell/Copied.xaml";
+        var copied = $"<Styles xmlns=\"https://github.com/avaloniaui\">\n  <Style Selector=\"TextBlock.copied\"><Setter Property=\"Foreground\" Value=\"#FF{hex[1..]}\" /></Style>\n</Styles>";
 
         var uses = ScanAppSource(needles).Where(use => use.File is not (Panel or Render)).ToList();
         uses.AddRange(ScanText(Panel, changedPanel, needles));
         uses.AddRange(ScanText(Render, changedRender, needles));
+        uses.AddRange(ScanText(Copied, copied, needles));
         var problems = GuardProblems(uses, DimmedTextUses);
 
         var lines = (Xaml: head + 3, Hex: head + 5, Constant: drawTexts + 2, Value: drawTexts + 3);
@@ -313,6 +329,11 @@ public partial class ThemeTokensTests
                 $"{Panel}:{lines.Hex}: the disabled text colour written out in \"Style TextBlock.refName.gone > Setter Foreground\"",
                 $"{Render}:{lines.Constant}: the search's dimming in \"using var again = context.PushOpacity(SearchDimmedOpacity);\"",
                 $"{Render}:{lines.Value}: the search's dimming's value written out in \"using var fixedValue = context.PushOpacity(0.35);\"",
+                $"{Render}:{lines.Value + 1}: the disabled text colour written out in \"{packed}\"",
+                $"{Render}:{lines.Value + 2}: the disabled text colour written out in \"{channels}\"",
+                $"{Render}:{lines.Value + 3}: the disabled text colour written out in \"{decimals}\"",
+                $"{Render}:{lines.Value + 4}: the search's dimming's value written out in \"var trailing = .350;\"",
+                $"{Copied}:2: the disabled text colour written out in \"Style TextBlock.copied > Setter Foreground\"",
             ],
             problems.Select(problem => problem[..problem.IndexOf(", a use the guard does not list", StringComparison.Ordinal)]));
         Assert.All(problems, problem => Assert.Contains("add it to DimmedTextUses with its reason", problem, StringComparison.Ordinal));
@@ -397,7 +418,7 @@ public partial class ThemeTokensTests
         /// <summary><c>VcTextDisabledBrush</c>, the disabled text colour's token.</summary>
         Token,
 
-        /// <summary>The token's colour in either theme written out, with or without an opaque alpha.</summary>
+        /// <summary>The token's colour in either theme written out, with any alpha (<see cref="DimmedNeedles"/> says how).</summary>
         Colour,
 
         /// <summary><see cref="CommitGraphControl.SearchDimmedOpacity"/>, the opacity a search dims a row to.</summary>
@@ -521,8 +542,12 @@ public partial class ThemeTokensTests
 
     /// <summary>
     /// The guard's needles: the token by its name, which must stand in both themes; its colours in
-    /// both themes as the app resolves them, written <c>#RRGGBB</c> or <c>#FFRRGGBB</c> in either
-    /// case; the constant by its name; and its value written out, with or without its leading 0.
+    /// both themes as the app resolves them, in either case and with any alpha, written
+    /// <c>#RRGGBB</c> or <c>#AARRGGBB</c> (XAML, or a string to parse), as a <c>0x</c> literal
+    /// (<c>Color.FromUInt32</c>), or as its three channels, hexadecimal or decimal, to
+    /// <c>Color.FromRgb</c>, <c>Color.FromArgb</c> or <c>new Color</c>; the constant by its name;
+    /// and its value written out, with or without its leading 0 and with trailing zeros. A colour
+    /// mixed by other means, or the value computed, is beyond a reading of the text.
     /// </summary>
     private static List<(DimmedNeedle Needle, Regex Pattern)> DimmedNeedles()
     {
@@ -531,23 +556,36 @@ public partial class ThemeTokensTests
         {
             Assert.True(TryToken(DimmedToken, variant, out var colour), $"The {variant} theme has no {DimmedToken}: if it was renamed, give the guard and the pins the new name.");
             var hex = string.Create(CultureInfo.InvariantCulture, $"{colour.R:X2}{colour.G:X2}{colour.B:X2}");
-            needles.Add((DimmedNeedle.Colour, new Regex("#(?:FF)?" + hex + @"\b", RegexOptions.IgnoreCase)));
+            needles.Add((DimmedNeedle.Colour, new Regex("(?:#|\\b0x)(?:[0-9A-F]{2})?" + hex + "(?![0-9A-F])", RegexOptions.IgnoreCase)));
+
+            // The three channels after the alpha, when one is given.
+            needles.Add((DimmedNeedle.Colour, new Regex(
+                @"(?:\bColor\.From(?:Rgb|Argb)|\bnew\s+Color)\(\s*(?:[^,()]+,\s*)?" + ChannelPattern(colour.R) + @"\s*,\s*" + ChannelPattern(colour.G) + @"\s*,\s*" + ChannelPattern(colour.B) + @"\s*\)",
+                RegexOptions.IgnoreCase)));
         }
 
         needles.Add((DimmedNeedle.Dimming, new Regex(@"\b" + nameof(CommitGraphControl.SearchDimmedOpacity) + @"\b")));
         var value = CommitGraphControl.SearchDimmedOpacity.ToString(CultureInfo.InvariantCulture);
         Assert.StartsWith("0.", value, StringComparison.Ordinal);
-        needles.Add((DimmedNeedle.DimmingValue, new Regex(@"(?<![\w.])0?" + Regex.Escape(value[1..]) + @"(?!\d)")));
+        needles.Add((DimmedNeedle.DimmingValue, new Regex(@"(?<![\w.])0*" + Regex.Escape(value[1..]) + @"0*(?!\d)")));
         return needles;
     }
 
-    /// <summary>Every use of the needles in the files the app is built from: each .axaml and .cs under src/VisualCommit.App, bin and obj left out.</summary>
+    /// <summary>One channel of a colour as code writes a byte: hexadecimal or decimal, perhaps cast.</summary>
+    private static string ChannelPattern(byte value) =>
+        string.Create(CultureInfo.InvariantCulture, $@"(?:\(byte\)\s*)?(?:0x0*{value:X2}|0*{value})(?![0-9A-F])");
+
+    /// <summary>A XAML file, which the guard reads by its elements: Avalonia builds <c>.axaml</c> and <c>.xaml</c> alike.</summary>
+    private static bool IsXaml(string file) =>
+        file.EndsWith(".axaml", StringComparison.Ordinal) || file.EndsWith(".xaml", StringComparison.Ordinal);
+
+    /// <summary>Every use of the needles in the files the app is built from: each XAML and C# file under src/VisualCommit.App, bin and obj left out.</summary>
     private static List<DimmedUse> ScanAppSource(IReadOnlyList<(DimmedNeedle Needle, Regex Pattern)> needles)
     {
         var root = RepositoryFile(AppSource);
         Assert.True(Directory.Exists(root), $"The app's source is not at {root}.");
         var files = Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories)
-            .Where(path => path.EndsWith(".axaml", StringComparison.Ordinal) || path.EndsWith(".cs", StringComparison.Ordinal))
+            .Where(path => IsXaml(path) || path.EndsWith(".cs", StringComparison.Ordinal))
             .Where(path => !Path.GetRelativePath(root, path).Split(Path.DirectorySeparatorChar).Any(part => part is "bin" or "obj"))
             .Select(path => AppSource + "/" + Path.GetRelativePath(root, path).Replace(Path.DirectorySeparatorChar, '/'))
             .Order(StringComparer.Ordinal)
@@ -559,7 +597,7 @@ public partial class ThemeTokensTests
 
     /// <summary>The uses of the needles in one file's text, <paramref name="file"/> naming it: a XAML file by its elements and attributes, a C# file by its lines.</summary>
     private static List<DimmedUse> ScanText(string file, string text, IReadOnlyList<(DimmedNeedle Needle, Regex Pattern)> needles) =>
-        file.EndsWith(".axaml", StringComparison.Ordinal) ? ScanXaml(file, text, needles) : ScanCode(file, text, needles);
+        IsXaml(file) ? ScanXaml(file, text, needles) : ScanCode(file, text, needles);
 
     /// <summary>
     /// The uses in a XAML file: each match in an attribute's value or an element's text, comments
