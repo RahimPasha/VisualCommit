@@ -470,21 +470,22 @@ public partial class ThemeTokensTests
         ];
 
         // The colour by its channels after an alpha in parentheses, a computed cast and a call, to a
-        // constructor named in full and to one typed by its target; a channel one off, and the
-        // channels to another method, are no use.
-        string[] channelForms =
+        // constructor named in full and to one typed by its target, and in CSS's form to parse; a
+        // channel one off, and the channels to another method, are no use.
+        string[] colourForms =
         [
             string.Create(CultureInfo.InvariantCulture, $"var computed = Color.FromArgb((byte)(255 * share), {dark.R}, {dark.G}, {dark.B});"),
             string.Create(CultureInfo.InvariantCulture, $"var capped = Color.FromArgb(Math.Min(alpha, 255), 0x{dark.R:X2}, 0x{dark.G:X2}, 0x{dark.B:X2});"),
             string.Create(CultureInfo.InvariantCulture, $"var qualified = new Avalonia.Media.Color(255, {colour.R}, {colour.G}, {colour.B});"),
             string.Create(CultureInfo.InvariantCulture, $"Color targeted = new(255, {colour.R}, {colour.G}, {colour.B});"),
+            string.Create(CultureInfo.InvariantCulture, $"var css = Color.Parse(\"rgba({colour.R}, {colour.G}, {colour.B}, 0.5)\");"),
         ];
         string[] noUses =
         [
             string.Create(CultureInfo.InvariantCulture, $"var oneOff = Color.FromArgb((byte)204, {dark.R}, {dark.G}, {dark.B + 1});"),
             string.Create(CultureInfo.InvariantCulture, $"var other = Mix((byte)204, {dark.R}, {dark.G}, {dark.B});"),
         ];
-        insertedCode = [.. insertedCode, .. channelForms.Concat(noUses).Select(line => "                " + line)];
+        insertedCode = [.. insertedCode, .. colourForms.Concat(noUses).Select(line => "                " + line)];
         var changedRender = string.Join('\n', render[..drawTexts].Concat(insertedCode).Concat(render[drawTexts..]));
 
         // A XAML file named .xaml, which Avalonia builds too, is read as XAML.
@@ -511,7 +512,7 @@ public partial class ThemeTokensTests
                 $"{Render}:{lines.Value + 3}: the disabled text colour written out in \"{decimals}\"",
                 $"{Render}:{lines.Value + 4}: the search's dimming's value written out in \"var trailing = .350;\"",
                 $"{Render}:{lines.Value + 5}: a class whose style gives a text the disabled colour in \"label.Classes.Set(\"dropped\", true);\"",
-                .. channelForms.Select((form, i) => $"{Render}:{lines.Value + 6 + i}: the disabled text colour written out in \"{form}\""),
+                .. colourForms.Select((form, i) => $"{Render}:{lines.Value + 6 + i}: the disabled text colour written out in \"{form}\""),
                 $"{Copied}:2: the disabled text colour written out in \"Style TextBlock.copied > Setter Foreground\"",
             ],
             problems.Select(problem => problem.IndexOf(", a use the guard does not list", StringComparison.Ordinal) is var at and >= 0 ? problem[..at] : problem));
@@ -1071,11 +1072,13 @@ public partial class ThemeTokensTests
     /// (<c>Color.FromUInt32</c>), or as its three channels, hexadecimal or decimal and each perhaps
     /// cast, after an alpha that nests parentheses at most two deep, to <c>Color.FromRgb</c>,
     /// <c>Color.FromArgb</c>, a constructor of <c>Color</c>, its name qualified or not, or one typed
-    /// by its target (<c>new(</c>); the constant by its name;
-    /// its value written out, with or without its leading 0 and with trailing zeros; and a class of
+    /// by its target (<c>new(</c>), or in CSS's <c>rgb(</c> or <c>rgba(</c> with its three channels
+    /// in decimal (XAML, or a string to parse); the constant by its name; its value written out,
+    /// with or without its leading 0 and with trailing zeros; and a class of
     /// <see cref="DimmingClasses"/> by its whole name, which <see cref="ScanXaml"/> looks for where
     /// XAML applies a class and <see cref="ScanCode"/> in a string of code. A colour mixed by other
-    /// means, the value computed, or a class's name put together, is beyond a reading of the text.
+    /// means or computed, as CSS's <c>hsl(</c> is, the value computed, or a class's name put
+    /// together, is beyond a reading of the text.
     /// </summary>
     private static List<(DimmedNeedle Needle, Regex Pattern)> DimmedNeedles()
     {
@@ -1091,6 +1094,11 @@ public partial class ThemeTokensTests
             needles.Add((DimmedNeedle.Colour, new Regex(
                 @"(?:\bColor\.From(?:Rgb|Argb)|\bnew\s+(?:[\w.:]+\.)?Color|\bnew)\s*\(\s*(?:(?:[^,()]|\((?:[^()]|\([^()]*\))*\))+,\s*)?"
                     + ChannelPattern(colour.R) + @"\s*,\s*" + ChannelPattern(colour.G) + @"\s*,\s*" + ChannelPattern(colour.B) + @"\s*\)",
+                RegexOptions.IgnoreCase)));
+
+            // CSS's form, which Avalonia parses too: rgb( or rgba( and the three channels in decimal.
+            needles.Add((DimmedNeedle.Colour, new Regex(
+                string.Create(CultureInfo.InvariantCulture, $@"\brgba?\(\s*0*{colour.R}\s*,\s*0*{colour.G}\s*,\s*0*{colour.B}\s*[,)]"),
                 RegexOptions.IgnoreCase)));
         }
 
