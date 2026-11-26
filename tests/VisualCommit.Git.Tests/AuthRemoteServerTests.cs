@@ -301,6 +301,41 @@ public partial class AuthRemoteServerTests
         Assert.Equal((true, -1), AuthRemoteServer.ScanPktLines(quiet));
     }
 
+    [Theory]
+    [InlineData("packfile\n", "Counting objects:  20% (1", "/5)\r")]
+    [InlineData("NAK\n", "Counting objects:  20% (1", "/5)\r")]
+    [InlineData("packfile\n", "Counting objects:  20% (1/5)", "\r")]
+    [InlineData("NAK\n", "Counting objects:  20% (1/5)", "\r")]
+    [InlineData("packfile\n", "Counting objects:  2", "0% (1/5)\r")]
+    [InlineData("NAK\n", "Counting objects:  2", "0% (1/5)\r")]
+    public void Without_a_percentage_the_hold_ends_with_the_pkt_line_in_which_the_first_whole_line_with_one_ends(string section, string before, string after)
+    {
+        // upload-pack sends each read of pack-objects' progress as a pkt-line of its own, and on
+        // Windows a line's \r comes in a write of its own: the first pkt-line with a '%' may end
+        // after that '%' and before the line's end. A cut before the '%' leaves it to the next one.
+        var body = CutProgressResponse(section, before, after);
+
+        var (hasPack, progressEnd) = AuthRemoteServer.ScanPktLines(body);
+
+        // The first part ends with that pkt-line, never inside one, and holds the 20% line whole.
+        Assert.True(hasPack);
+        Assert.Contains(PktLinesOf(body), pktLine => pktLine.Offset == progressEnd);
+        Assert.EndsWith("Counting objects:  20% (1/5)\rCounting objects:  40% (2/5)\r", BandText(body[..progressEnd], 2), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Without_a_whole_line_with_a_percentage_the_hold_ends_with_the_first_progress_pkt_line_that_holds_a_percent_sign()
+    {
+        // A line with a '%' that no \r or \n ends before the body's end: the end of the first
+        // pkt-line that holds a '%', as before.
+        byte[] body = [.. Pkt("packfile\n"), .. Band(2, "Enumerating objects: 5, done.\n"), .. Band(2, "Counting objects:  20% (1"), .. Band(1, "PACK...."), .. "0000"u8];
+
+        var (hasPack, progressEnd) = AuthRemoteServer.ScanPktLines(body);
+
+        Assert.True(hasPack);
+        Assert.EndsWith("Counting objects:  20% (1", Encoding.Latin1.GetString(body, 0, progressEnd), StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task A_held_fetch_without_progress_is_held_too()
     {
@@ -988,6 +1023,25 @@ public partial class AuthRemoteServerTests
         .. Band(2, "Counting objects: 100% (4/4)\rCounting objects: 100% (4/4), done.\n"),
         .. Band(1, "PACK...."),
         .. Band(2, "Total 4 (delta 0), reused 0 (delta 0), pack-reused 0\n"),
+        .. "0000"u8,
+    ];
+
+    /// <summary>
+    /// A fetch's response for five objects that begins with <paramref name="section"/>
+    /// (<c>packfile</c> under protocol v2, <c>NAK</c> under v0), whose 20% line is cut between two
+    /// pkt-lines, <paramref name="before"/> and <paramref name="after"/>, the 40% line whole after
+    /// it; then the rest of the progress, the pack and a flush.
+    /// </summary>
+    private static byte[] CutProgressResponse(string section, string before, string after) =>
+    [
+        .. Pkt(section),
+        .. Band(2, "Enumerating objects: 5, done.\n"),
+        .. Band(2, before),
+        .. Band(2, after + "Counting objects:  40% (2/5)\r"),
+        .. Band(2, "Counting objects:  60% (3/5)\rCounting objects:  80% (4/5)\r"),
+        .. Band(2, "Counting objects: 100% (5/5)\rCounting objects: 100% (5/5), done.\n"),
+        .. Band(1, "PACK...."),
+        .. Band(2, "Total 5 (delta 0), reused 0 (delta 0), pack-reused 0\n"),
         .. "0000"u8,
     ];
 
