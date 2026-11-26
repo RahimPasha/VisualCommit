@@ -47,26 +47,33 @@ public partial class ThemeTokensTests
     /// <c>LeftPanelView</c>'s style <c>TextBlock.refName.dimmed</c>, which only HEAD's branch overrides.
     /// The row (<c>RefRowButton</c>) is transparent at rest over the panel's
     /// <c>VcPanelBackgroundBrush</c>, <c>VcHoverBackgroundBrush</c> under the pointer and
-    /// <c>VcSelectionBrush</c> selected, also under the pointer: the view's own styles are read for
-    /// those states, and the name's ratio on each is pinned to two places, under 4.5:1.
+    /// <c>VcSelectionBrush</c> selected, also under the pointer: every colour setter of the view's
+    /// styles and control theme is read for those states, and the name's ratio on each is pinned to
+    /// two places, under 4.5:1.
     /// </summary>
     [AvaloniaFact]
     public void Exception_D469_a_a_hidden_or_left_out_branchs_name_keeps_its_pinned_figures_under_4_5_to_1()
     {
-        // The view's own styles: the name's colours, and the row's background in each of its states.
-        // A style that recolours the dimmed name or a new state of the row fails here first.
+        // The view's own styles and control themes: every setter of a colour, whatever it selects, so
+        // that a style that recolours the dimmed name or the row, or a new state of the row, fails
+        // here first. The chevrons and the counts' arrows are icons; the control theme's own
+        // foreground is the one the name's style overrides.
         var view = new LeftPanelView();
+        Assert.IsType<ControlTheme>(view.Resources["RefRowButton"]);
+        var styles = ViewStyles(view);
         Assert.Equal(
             [
+                "Icon.chevron: VcTextSecondaryBrush",
+                "Icon.aheadBehind: VcTextSecondaryBrush",
                 "TextBlock.refName.dimmed: VcTextDisabledBrush",
                 "TextBlock.refName.head: VcAccentBrush",
                 "Button:pointerover TextBlock.refName.head, Button.selected TextBlock.refName.head: VcAccentOnRowBrush",
+                "Button: VcTextPrimaryBrush",
             ],
-            Setters(view.Styles, "Foreground", selector => selector.Contains("refName", StringComparison.Ordinal)));
-        var row = Assert.IsType<ControlTheme>(view.Resources["RefRowButton"]);
+            Setters(styles, "Foreground"));
         Assert.Equal(
             ["Button: transparent", "^:pointerover: VcHoverBackgroundBrush", "^.selected: VcSelectionBrush"],
-            Setters([row], "Background", _ => true));
+            Setters(styles, "Background"));
         AssertBackgroundIs(view, () => Assert.IsType<Border>(view.Content).Background, "VcPanelBackgroundBrush");
 
         var dark = ThemeVariant.Dark;
@@ -94,20 +101,28 @@ public partial class ThemeTokensTests
     /// <c>InteractiveRebaseView</c>'s style <c>TextBlock.dropped</c>. The row
     /// (<c>RebaseListRow.commit</c>) is transparent at rest over the list's
     /// <c>VcWindowBackgroundBrush</c>, <c>VcRowHoverBrush</c> under the pointer and
-    /// <c>VcSelectionBrush</c> selected: the view's own styles are read for those states, and the
-    /// text's ratio on each is pinned to two places, under 4.5:1.
+    /// <c>VcSelectionBrush</c> selected: every colour setter of the view's styles is read for those
+    /// states, and the text's ratio on each is pinned to two places, under 4.5:1.
     /// </summary>
     [AvaloniaFact]
     public void Exception_D469_b_a_dropped_rebase_rows_sha_and_subject_keep_their_pinned_figures_under_4_5_to_1()
     {
-        // The view's own styles, as for (a): a dropped text's colour, and the row's background in each of its states.
+        // The view's own styles, as for (a): every setter of a colour, whatever it selects. A dropped
+        // text's style comes after the SHA's and the subject's, so that it wins; the join line is a
+        // mark at the row's left, not its background.
         var view = new InteractiveRebaseView();
+        var styles = ViewStyles(view);
         Assert.Equal(
-            ["TextBlock.dropped: VcTextDisabledBrush"],
-            Setters(view.Styles, "Foreground", selector => selector.Contains("dropped", StringComparison.Ordinal)));
+            ["TextBlock.sha: VcTextSecondaryBrush", "TextBlock.subject: VcTextPrimaryBrush", "TextBlock.dropped: VcTextDisabledBrush"],
+            Setters(styles, "Foreground"));
         Assert.Equal(
-            ["RebaseListRow.commit: transparent", "RebaseListRow.commit:pointerover: VcRowHoverBrush", "RebaseListRow.commit.selected: VcSelectionBrush"],
-            Setters(view.Styles, "Background", selector => selector.StartsWith("RebaseListRow", StringComparison.Ordinal)));
+            [
+                "RebaseListRow.commit: transparent",
+                "RebaseListRow.commit:pointerover: VcRowHoverBrush",
+                "RebaseListRow.commit.selected: VcSelectionBrush",
+                "Border.joinLine: VcLane0Brush",
+            ],
+            Setters(styles, "Background"));
         AssertBackgroundIs(view, () => Assert.IsType<DockPanel>(view.Content).Background, "VcWindowBackgroundBrush");
 
         var dark = ThemeVariant.Dark;
@@ -444,10 +459,10 @@ public partial class ThemeTokensTests
 
     /// <summary>
     /// The setters of <paramref name="property"/> in <paramref name="styles"/> and their nested
-    /// styles, as <c>selector: value</c>, for the styles whose selector <paramref name="selects"/>
-    /// takes; a control theme's own setters under its target type's name.
+    /// styles, in their order, as <c>selector: value</c>; a control theme's own setters under its
+    /// target type's name.
     /// </summary>
-    private static List<string> Setters(IEnumerable<IStyle> styles, string property, Func<string, bool> selects)
+    private static List<string> Setters(IEnumerable<IStyle> styles, string property)
     {
         var found = new List<string>();
         foreach (var style in styles.OfType<StyleBase>())
@@ -458,16 +473,16 @@ public partial class ThemeTokensTests
                 ControlTheme theme => theme.TargetType?.Name ?? string.Empty,
                 _ => string.Empty,
             };
-            if (selects(selector))
-            {
-                found.AddRange(style.Setters.OfType<Setter>().Where(setter => setter.Property?.Name == property).Select(setter => selector + ": " + ValueOf(setter.Value)));
-            }
-
-            found.AddRange(Setters(style.Children, property, selects));
+            found.AddRange(style.Setters.OfType<Setter>().Where(setter => setter.Property?.Name == property).Select(setter => selector + ": " + ValueOf(setter.Value)));
+            found.AddRange(Setters(style.Children, property));
         }
 
         return found;
     }
+
+    /// <summary>A view's own styles, then the control themes of its resources, which <see cref="Setters"/> reads.</summary>
+    private static List<IStyle> ViewStyles(UserControl view) =>
+        [.. view.Styles, .. view.Resources.Values.OfType<ControlTheme>()];
 
     /// <summary>A setter's value as <see cref="Setters"/> writes it: a dynamic resource's key, "transparent", or the value.</summary>
     private static string ValueOf(object? value) => value switch
