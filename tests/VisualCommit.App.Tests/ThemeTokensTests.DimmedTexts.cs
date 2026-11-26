@@ -60,9 +60,10 @@ public partial class ThemeTokensTests
     /// The row (<c>RefRowButton</c>) is transparent at rest over the panel's
     /// <c>VcPanelBackgroundBrush</c>, <c>VcHoverBackgroundBrush</c> under the pointer and
     /// <c>VcSelectionBrush</c> selected, also under the pointer: every colour and opacity setter of
-    /// the view's styles and control theme is read for those states, the name's element is held to
-    /// set no foreground and no opacity of its own (an ancestor's own opacity is not read), and the
-    /// name's ratio on each is pinned to two places, under 4.5:1.
+    /// the view's styles and control theme is read for those states, and the name's element is held
+    /// to set no foreground and no opacity of its own. A background or styles that the name's element
+    /// or an ancestor, the row among them, sets of its own, and an ancestor's own opacity, are not
+    /// read. The name's ratio on each is pinned to two places, under 4.5:1.
     /// </summary>
     [AvaloniaFact]
     public void Exception_D469_a_a_hidden_or_left_out_branchs_name_keeps_its_pinned_figures_under_4_5_to_1()
@@ -116,9 +117,10 @@ public partial class ThemeTokensTests
     /// (<c>RebaseListRow.commit</c>) is transparent at rest over the list's
     /// <c>VcWindowBackgroundBrush</c>, <c>VcRowHoverBrush</c> under the pointer and
     /// <c>VcSelectionBrush</c> selected: every colour and opacity setter of the view's styles is read
-    /// for those states, the SHA's and the subject's elements are held to set no foreground and no
-    /// opacity of their own (an ancestor's own opacity is not read), and the text's ratio on each is
-    /// pinned to two places, under 4.5:1.
+    /// for those states, and the SHA's and the subject's elements are held to set no foreground and
+    /// no opacity of their own. A background or styles that those elements or an ancestor, the row
+    /// among them, set of their own, and an ancestor's own opacity, are not read. The text's ratio on
+    /// each is pinned to two places, under 4.5:1.
     /// </summary>
     [AvaloniaFact]
     public void Exception_D469_b_a_dropped_rebase_rows_sha_and_subject_keep_their_pinned_figures_under_4_5_to_1()
