@@ -32,9 +32,10 @@ namespace VisualCommit.App.Tests;
 /// colours-1): (a) a hidden branch's name in the left panel, and in solo mode the name of every
 /// branch left out; (b) a dropped row of the interactive rebase's list; (c) the graph's rows that a
 /// search dims. The rows are not disabled, so WCAG's exemption of disabled controls does not cover
-/// them, and <see cref="TextPairs"/> leaves them out. Each exception is pinned to the figures the
-/// app draws today, computed from its own tokens and styles, on every background its text lies on,
-/// in both themes: a colour that changes, a new state of the row, or a fix that lifts the text to
+/// them, and <see cref="TextPairs"/> leaves them out. Each exception is pinned to the figures of
+/// what the app draws today, computed from its own tokens and styles (for (c), the colours blended
+/// at the search's opacity, within a step of the drawn pixels), on every background its text lies
+/// on, in both themes: a colour that changes, a new state of the row, or a fix that lifts the text to
 /// 4.5:1 fails its fact, to be looked at with D469. (a) and (b) read the views' styles; the graph
 /// draws in code, so (c)'s tokens stand in tables that a render of the graph holds it to. A guard
 /// keeps the disabled text colour and the search's dimming to the uses it lists, each with its reason.
@@ -164,8 +165,10 @@ public partial class ThemeTokensTests
     /// <c>VcRowHoverBrush</c> under the pointer and <c>VcSelectionBrush</c> selected, which a search
     /// leaves as they are. The render fact below holds the graph to those tables, and this fact's
     /// pairs to them. Each text's colour is blended at that opacity over the background, a channel
-    /// rounded to the nearest step as the graph's other tests fade a colour (a probe of the headless
-    /// renderer drew the blends within one step), and its ratio pinned to two places, under 4.5:1.
+    /// rounded to the nearest step as the graph's other tests fade a colour, and its ratio pinned to
+    /// two places, under 4.5:1. The pins are the blend's figures, not figures read from pixels: the
+    /// renderer draws within a step of the blend, as the render fact finds for the labels' fills, so
+    /// a drawn figure may differ from its pin by about 0.01.
     /// </summary>
     [AvaloniaFact]
     public void Exception_D469_c_the_texts_of_a_row_a_search_dims_keep_their_pinned_figures_under_4_5_to_1()
@@ -204,7 +207,7 @@ public partial class ThemeTokensTests
         {
             var behind = Token(background, variant);
             var ratio = Contrast.Ratio(Faded(Token(text, variant), behind), behind);
-            ExpectPinned(failures, $"(c) a dimmed row's {text} on {background}", variant, ratio, pinned);
+            ExpectPinned(failures, $"(c) a dimmed row's {text} on {background}", variant, ratio, pinned, faded: true);
         }
 
         Assert.True(failures.Count == 0, string.Join('\n', failures));
@@ -213,14 +216,15 @@ public partial class ThemeTokensTests
     /// <summary>
     /// D469's exception (c), the part the review before the gate did not count: a dimmed row's ref
     /// labels, which <c>CommitGraphControl</c> draws at the same opacity, fill and text alike. The
-    /// renderer fades each drawn shape by itself (a probe of the headless renderer showed it), so a
-    /// label's text is blended over its faded fill, as <see cref="DimmedRowLabels"/> names them:
+    /// renderer fades each drawn shape by itself (the render fact finds the fill faded over the row,
+    /// and the text's ink at the text faded over that fill), so a label's text is blended over its
+    /// faded fill, as <see cref="DimmedRowLabels"/> names them:
     /// <c>VcLabelTextBrush</c> on a local branch's, the current branch's or a detached HEAD's fill,
     /// the row's lane (all eight lanes), and <c>VcTextPrimaryBrush</c> on a tag's, a stash's or a
     /// "+N" label's <c>VcControlBackgroundBrush</c>; a pull request's <c>#n</c> takes its label's
     /// colours. A remote branch's label has no fill: its text is the message's pair. The render
     /// fact below holds the graph to the table, and this fact's pairs to it. Each ratio is pinned to
-    /// two places, under 4.5:1.
+    /// two places, under 4.5:1, the blend's figures as for the texts.
     /// </summary>
     [AvaloniaFact]
     public void Exception_D469_c_the_labels_of_a_row_a_search_dims_keep_their_pinned_figures_under_4_5_to_1()
@@ -261,7 +265,7 @@ public partial class ThemeTokensTests
                 var (text, fill) = labels[i];
                 var faded = Faded(Token(fill, variant), behind);
                 var ratio = Contrast.Ratio(Faded(Token(text, variant), faded), faded);
-                ExpectPinned(failures, $"(c) a dimmed row's label, {text} on {fill} over {background}", variant, ratio, pinned[i]);
+                ExpectPinned(failures, $"(c) a dimmed row's label, {text} on {fill} over {background}", variant, ratio, pinned[i], faded: true);
             }
         }
 
@@ -671,8 +675,12 @@ public partial class ThemeTokensTests
     /// <summary>A use the guard accepts, <paramref name="Count"/> times at its place, with its reason.</summary>
     private sealed record AcceptedUse(string File, DimmedNeedle Needle, string Place, DimmedUseKind Kind, string Reason, int Count = 1);
 
-    /// <summary>Adds a failure when <paramref name="ratio"/>, to two places, is not <paramref name="pinned"/>, or when it reaches 4.5:1.</summary>
-    private static void ExpectPinned(List<string> failures, string what, ThemeVariant variant, double ratio, double pinned)
+    /// <summary>
+    /// Adds a failure when <paramref name="ratio"/>, to two places, is not <paramref name="pinned"/>,
+    /// or when it reaches 4.5:1; <paramref name="faded"/> for a pair of exception (c), drawn at the
+    /// search's opacity, which <see cref="TextPairs"/> cannot hold.
+    /// </summary>
+    private static void ExpectPinned(List<string> failures, string what, ThemeVariant variant, double ratio, double pinned, bool faded = false)
     {
         if (Math.Round(ratio, 2) != pinned)
         {
@@ -681,7 +689,10 @@ public partial class ThemeTokensTests
 
         if (ratio >= TextContrast)
         {
-            failures.Add(string.Create(CultureInfo.InvariantCulture, $"{variant}: {what} is {ratio:0.00}:1 and reaches {TextContrast}:1: the exception is no longer needed. Put the pair in TextPairs and take it out of D469's pins."));
+            var next = faded
+                ? "Take the pin out with the decision, D469: TextPairs holds tokens at full opacity, not a faded pair."
+                : "Put the pair in TextPairs and take it out of D469's pins.";
+            failures.Add(string.Create(CultureInfo.InvariantCulture, $"{variant}: {what} is {ratio:0.00}:1 and reaches {TextContrast}:1: the exception is no longer needed. {next}"));
         }
     }
 
