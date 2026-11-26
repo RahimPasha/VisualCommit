@@ -182,7 +182,7 @@ public partial class ThemeTokensTests
     /// rounded to the nearest step as the graph's other tests fade a colour, and its ratio pinned to
     /// two places, under 4.5:1. The pins are the blend's figures, not figures read from pixels: the
     /// render fact holds the labels' fills within a step of the blend, and a drawn figure may differ
-    /// from its pin by up to about 0.04 (a step in every channel).
+    /// from its pin by up to about 0.05 (a step in every channel).
     /// </summary>
     [AvaloniaFact]
     public void Exception_D469_c_the_texts_of_a_row_a_search_dims_keep_their_pinned_figures_under_4_5_to_1()
