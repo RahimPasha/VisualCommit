@@ -57,17 +57,18 @@ public partial class ThemeTokensTests
     /// <c>LeftPanelView</c>'s style <c>TextBlock.refName.dimmed</c>, which only HEAD's branch overrides.
     /// The row (<c>RefRowButton</c>) is transparent at rest over the panel's
     /// <c>VcPanelBackgroundBrush</c>, <c>VcHoverBackgroundBrush</c> under the pointer and
-    /// <c>VcSelectionBrush</c> selected, also under the pointer: every colour setter of the view's
-    /// styles and control theme is read for those states, and the name's ratio on each is pinned to
-    /// two places, under 4.5:1.
+    /// <c>VcSelectionBrush</c> selected, also under the pointer: every colour and opacity setter of
+    /// the view's styles and control theme is read for those states, the name's element is held to
+    /// set no foreground and no opacity of its own (an ancestor's own opacity is not read), and the
+    /// name's ratio on each is pinned to two places, under 4.5:1.
     /// </summary>
     [AvaloniaFact]
     public void Exception_D469_a_a_hidden_or_left_out_branchs_name_keeps_its_pinned_figures_under_4_5_to_1()
     {
-        // The view's own styles and control themes: every setter of a colour, whatever it selects, so
-        // that a style that recolours the dimmed name or the row, or a new state of the row, fails
-        // here first. The chevrons and the counts' arrows are icons; the control theme's own
-        // foreground is the one the name's style overrides.
+        // The view's own styles and control themes: every setter of a colour or an opacity, whatever
+        // it selects, so that a style that recolours or fades the dimmed name or the row, or a new
+        // state of the row, fails here first. The chevrons and the counts' arrows are icons; the
+        // control theme's own foreground is the one the name's style overrides.
         var view = new LeftPanelView();
         var styles = ViewStyles(view);
         Assert.Equal(
@@ -83,6 +84,8 @@ public partial class ThemeTokensTests
         Assert.Equal(
             ["Button: transparent", "^:pointerover: VcHoverBackgroundBrush", "^.selected: VcSelectionBrush"],
             Setters(styles, "Background"));
+        Assert.Empty(Setters(styles, "Opacity"));
+        Assert.Equal(["TextBlock RefName"], DimmedElements(AppSource + "/Views/Shell/LeftPanelView.axaml", "dimmed"));
         AssertBackgroundIs(view, () => Assert.IsType<Border>(view.Content).Background, "VcPanelBackgroundBrush");
 
         var dark = ThemeVariant.Dark;
@@ -110,15 +113,17 @@ public partial class ThemeTokensTests
     /// <c>InteractiveRebaseView</c>'s style <c>TextBlock.dropped</c>. The row
     /// (<c>RebaseListRow.commit</c>) is transparent at rest over the list's
     /// <c>VcWindowBackgroundBrush</c>, <c>VcRowHoverBrush</c> under the pointer and
-    /// <c>VcSelectionBrush</c> selected: every colour setter of the view's styles is read for those
-    /// states, and the text's ratio on each is pinned to two places, under 4.5:1.
+    /// <c>VcSelectionBrush</c> selected: every colour and opacity setter of the view's styles is read
+    /// for those states, the SHA's and the subject's elements are held to set no foreground and no
+    /// opacity of their own (an ancestor's own opacity is not read), and the text's ratio on each is
+    /// pinned to two places, under 4.5:1.
     /// </summary>
     [AvaloniaFact]
     public void Exception_D469_b_a_dropped_rebase_rows_sha_and_subject_keep_their_pinned_figures_under_4_5_to_1()
     {
-        // The view's own styles, as for (a): every setter of a colour, whatever it selects. A dropped
-        // text's style comes after the SHA's and the subject's, so that it wins; the join line is a
-        // mark at the row's left, not its background.
+        // The view's own styles, as for (a): every setter of a colour or an opacity, whatever it
+        // selects. A dropped text's style comes after the SHA's and the subject's, so that it wins;
+        // the join line is a mark at the row's left, not its background.
         var view = new InteractiveRebaseView();
         var styles = ViewStyles(view);
         Assert.Equal(
@@ -132,6 +137,12 @@ public partial class ThemeTokensTests
                 "Border.joinLine: VcLane0Brush",
             ],
             Setters(styles, "Background"));
+
+        // The row being dragged, at half opacity while the drag lasts: a state of the drag, dropped or not.
+        Assert.Equal(["StackPanel.dragged: 0.5"], Setters(styles, "Opacity"));
+        Assert.Equal(
+            ["TextBlock RebaseRowSha", "TrimmedTextBlock RebaseRowSubject"],
+            DimmedElements(AppSource + "/Views/Rebase/InteractiveRebaseView.axaml", "dropped"));
         AssertBackgroundIs(view, () => Assert.IsType<DockPanel>(view.Content).Background, "VcWindowBackgroundBrush");
 
         var dark = ThemeVariant.Dark;
@@ -944,14 +955,47 @@ public partial class ThemeTokensTests
         return [.. view.Styles, .. resources.Keys.ToList().Select(key => resources[key]).OfType<ControlTheme>()];
     }
 
-    /// <summary>A setter's value as <see cref="Setters"/> writes it: a dynamic resource's key, "transparent", or the value.</summary>
+    /// <summary>A setter's value as <see cref="Setters"/> writes it: a dynamic resource's key, "transparent", or the value, a number invariant.</summary>
     private static string ValueOf(object? value) => value switch
     {
         DynamicResourceExtension resource => resource.ResourceKey?.ToString() ?? "a resource without a key",
         ISolidColorBrush { Color.A: 0 } => "transparent",
         ISolidColorBrush brush => brush.Color.ToString(),
+        IFormattable formattable => formattable.ToString(null, CultureInfo.InvariantCulture),
         _ => value?.ToString() ?? "null",
     };
+
+    /// <summary>
+    /// The elements of a view's XAML (<paramref name="file"/>, or <paramref name="text"/> as its
+    /// text) that take the class <paramref name="dimming"/>, by type and name. Each is held to set no
+    /// foreground and no opacity of its own, by an attribute or a property element, which would
+    /// outrank or add to the styles the fact reads.
+    /// </summary>
+    private static List<string> DimmedElements(string file, string dimming, string? text = null)
+    {
+        static bool TakesClass(XAttribute attribute, string dimming) =>
+            attribute.Name.LocalName == "Classes." + dimming
+            || (attribute.Name.LocalName == "Classes" && attribute.Value.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries).Contains(dimming));
+        static bool IsOwnColour(string property) =>
+            property is "Foreground" or "Opacity"
+            || property.EndsWith(".Foreground", StringComparison.Ordinal) || property.EndsWith(".Opacity", StringComparison.Ordinal);
+
+        var found = new List<string>();
+        var document = XDocument.Parse(text ?? File.ReadAllText(RepositoryFile(file)));
+        foreach (var element in document.Descendants().Where(element => element.Attributes().Any(attribute => TakesClass(attribute, dimming))))
+        {
+            var own = element.Attributes().Select(attribute => attribute.Name.LocalName)
+                .Concat(element.Elements().Select(child => child.Name.LocalName))
+                .Where(IsOwnColour)
+                .ToList();
+            Assert.True(
+                own.Count == 0,
+                $"{file}: {Describe(element)} sets {string.Join(" and ", own)} of its own, which outranks or adds to the styles the fact reads: give it by a style, or read it here.");
+            found.Add(Describe(element));
+        }
+
+        return found;
+    }
 
     /// <summary>
     /// The colour that <paramref name="background"/> resolves to in <paramref name="view"/>, shown in
