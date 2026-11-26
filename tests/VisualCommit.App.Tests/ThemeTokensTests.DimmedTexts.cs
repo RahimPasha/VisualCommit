@@ -34,13 +34,13 @@ namespace VisualCommit.App.Tests;
 /// search dims. The rows are not disabled, so WCAG's exemption of disabled controls does not cover
 /// them, and <see cref="TextPairs"/> leaves them out. Each exception is pinned to the figures of
 /// what the app draws today, computed from its own tokens and styles (for (c), the colours blended
-/// at the search's opacity, within a step of the drawn pixels), on every background its text lies
-/// on, in both themes: a colour that changes, a new state of the row, or a fix that lifts the text to
-/// 4.5:1 fails its fact, to be looked at with D469. (a) and (b) read the views' styles; the graph
-/// draws in code, so (c)'s tokens stand in tables that a render of the graph holds it to, in its text
-/// columns and its labels' column (its graph's column, where the node is dimmed, is not read). A
-/// guard keeps the disabled text colour and the search's dimming to the uses it lists, each with its
-/// reason.
+/// at the search's opacity; the render fact holds the labels' fills within a step of the blend), on
+/// every background its text lies on, in both themes: a colour that changes, a new state of the
+/// row, or a fix that lifts the text to 4.5:1 fails its fact, to be looked at with D469. (a) and
+/// (b) read the views' styles; the graph draws in code, so (c)'s tokens stand in tables that a
+/// render of the graph holds it to, in its text columns and its labels' column (its graph's column,
+/// where the node is dimmed, is not read). A guard keeps the disabled text colour and the search's
+/// dimming to the uses it lists, each with its reason.
 /// </summary>
 public partial class ThemeTokensTests
 {
@@ -179,8 +179,8 @@ public partial class ThemeTokensTests
     /// pairs to them. Each text's colour is blended at that opacity over the background, a channel
     /// rounded to the nearest step as the graph's other tests fade a colour, and its ratio pinned to
     /// two places, under 4.5:1. The pins are the blend's figures, not figures read from pixels: the
-    /// renderer draws within a step of the blend, as the render fact finds for the labels' fills, so
-    /// a drawn figure may differ from its pin by about 0.01.
+    /// render fact holds the labels' fills within a step of the blend, and a drawn figure may differ
+    /// from its pin by up to about 0.04 (a step in every channel).
     /// </summary>
     [AvaloniaFact]
     public void Exception_D469_c_the_texts_of_a_row_a_search_dims_keep_their_pinned_figures_under_4_5_to_1()
@@ -291,16 +291,17 @@ public partial class ThemeTokensTests
     /// graph is drawn with a colour of its own standing in for each token of the tables
     /// (<see cref="DimmedRowStandIns"/>, put in the control's resources, where it looks its tokens
     /// up), so that a text drawn in any other token, or in a colour written out, shows. In each
-    /// theme, with HEAD on a branch and detached, each dimmed row is read at rest, under the pointer
-    /// and selected: the row's background is its state's token; in each text's column every pixel
-    /// lies between the background and the text's token faded over it, and the ink
-    /// (<see cref="TextInk"/>'s rule) reaches that colour; in each label the fill is its token faded
-    /// over the background, within a step, every pixel inside the border lies between the fill and
-    /// the text's token faded over the fill, and the ink of the name and of a pull request's number
-    /// reaches that colour; in the labels' column outside the labels, a pixel left round each for
-    /// its edge, every pixel is the row's background, within 2. Nothing is drawn outside the six
-    /// columns, so that a new column under the dimming fails here. The graph's column is not read: a
-    /// text or a mark drawn there under the node's dimming is read by neither this fact nor the guard.
+    /// theme, with HEAD on a branch each dimmed row, and with HEAD detached HEAD's row, is read at
+    /// rest, under the pointer and selected: the row's background is its state's token; in each
+    /// text's column every pixel lies between the background and the text's token faded over it, and
+    /// the ink (<see cref="TextInk"/>'s rule) reaches that colour; in each label the fill is its token
+    /// faded over the background, within a step, every pixel 3 px inside the label's edge lies
+    /// between the fill and the text's token faded over the fill, and the ink of the name and of a
+    /// pull request's number reaches that colour; in the labels' column outside the labels, a pixel
+    /// left round each for its edge, every pixel is the row's background, within 2. Nothing is drawn
+    /// outside the six columns, so that a new column under the dimming fails here. The graph's column
+    /// is not read: a text or a mark drawn there under the node's dimming is read by neither this
+    /// fact nor the guard.
     /// </summary>
     [AvaloniaFact]
     public void Exception_D469_c_the_graph_draws_a_dimmed_rows_texts_and_labels_in_the_tokens_the_pins_name()
