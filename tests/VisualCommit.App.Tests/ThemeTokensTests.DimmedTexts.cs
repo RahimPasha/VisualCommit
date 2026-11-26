@@ -395,9 +395,10 @@ public partial class ThemeTokensTests
     /// The rules the guard's table (<paramref name="accepted"/>) keeps: every use has its reason, and
     /// only a class's name is listed as applying no dimming; a use under a disabled state names it,
     /// a class set in code by <c>IsEnabled</c> in its line; every class that a listed style in XAML
-    /// names outside a disabled state is a dimming class (<see cref="DimmingClasses"/>) or one of
-    /// <see cref="NonDimmingClasses"/>, and each of those is named so; each exception gives the
-    /// colour, or the dimming, at one place, and what applies it lies in the same file.
+    /// names outside a disabled state is, with that style, a dimming class
+    /// (<see cref="DimmingClasses"/>) or one of <see cref="NonDimmingClasses"/>, and each of those is
+    /// named so by its style; each exception gives the colour, or the dimming, at one place, and what
+    /// applies it lies in the same file.
     /// </summary>
     private static void AssertGuardTable(IReadOnlyList<AcceptedUse> accepted)
     {
@@ -436,13 +437,13 @@ public partial class ThemeTokensTests
             .Where(entry => entry.Needle is DimmedNeedle.Token or DimmedNeedle.Colour && IsXaml(entry.File))
             .SelectMany(entry => StyleClassesOf(entry.Place).Select(name => (Class: name, entry.File, Style: entry.Place)))
             .ToList();
-        var required = named.Where(use => !NonDimmingClasses.Any(none => (none.Class, none.File) == (use.Class, use.File))).ToList();
+        var exempt = NonDimmingClasses.Select(none => (none.Class, none.File, none.Style)).ToList();
+        var required = named.Except(exempt).ToList();
         var listed = DimmingClasses.Select(dimming => (dimming.Class, dimming.File, dimming.Style)).ToList();
         var untied = required.Except(listed)
             .Select(use => $"{use.File}: \"{use.Style}\" names the class {use.Class}, which DimmingClasses does not list: list it there, or in NonDimmingClasses with its reason.")
             .Concat(listed.Except(required).Select(dimming => $"{dimming.File}: DimmingClasses lists {dimming.Class} in \"{dimming.Style}\", which no listed style names so: take it out."))
-            .Concat(NonDimmingClasses.Where(none => !named.Any(use => (use.Class, use.File) == (none.Class, none.File)))
-                .Select(none => $"{none.File}: NonDimmingClasses lists {none.Class}, which no listed style names: take it out."))
+            .Concat(exempt.Except(named).Select(none => $"{none.File}: NonDimmingClasses lists {none.Class} in \"{none.Style}\", which no listed style names so: take it out."))
             .ToList();
         Assert.True(untied.Count == 0, string.Join('\n', untied));
 
@@ -756,7 +757,8 @@ public partial class ThemeTokensTests
     /// The classes whose own style gives a text the disabled colour, each style a listed use, with
     /// that style's file and place: where the app applies one, a text takes the colour without
     /// naming it, so each place it is applied is a use the guard lists too. Every class a listed
-    /// style names outside a disabled state is one of these or of <see cref="NonDimmingClasses"/>.
+    /// style names outside a disabled state is, with that style, one of these or of
+    /// <see cref="NonDimmingClasses"/>.
     /// </summary>
     private static readonly (string Class, string File, string Style)[] DimmingClasses =
     [
@@ -766,12 +768,18 @@ public partial class ThemeTokensTests
     ];
 
     /// <summary>
-    /// The classes a listed style in XAML names outside a disabled state that are no dimming class,
-    /// each with its file and its reason: where the app applies one alone, no text takes the colour.
+    /// The classes a listed style in XAML names outside a disabled state that are no dimming class
+    /// in that style, each with the style's file and place and its reason: where the app applies one
+    /// alone, no text takes the colour from that style. The same class in another listed style is
+    /// tied anew.
     /// </summary>
-    private static readonly (string Class, string File, string Reason)[] NonDimmingClasses =
+    private static readonly (string Class, string File, string Style, string Reason)[] NonDimmingClasses =
     [
-        ("refName", AppSource + "/Views/Shell/LeftPanelView.axaml", "every ref row's name takes it; its style gives the colour only with dimmed beside it"),
+        (
+            "refName",
+            AppSource + "/Views/Shell/LeftPanelView.axaml",
+            "Style TextBlock.refName.dimmed > Setter Foreground",
+            "every ref row's name takes it; this style gives the colour only with dimmed beside it"),
     ];
 
     /// <summary>Why D469's guard accepts a use; the exceptions last, in their order.</summary>
