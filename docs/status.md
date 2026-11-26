@@ -460,6 +460,21 @@ Phase 8a's runs on `phase/8a-release-readiness`, the newest first. CI has six jo
 `e04762b`: the sixth, "ubuntu 22.04 container, git 2.34 (the floor)", did not fail the run until
 `bba59c7`, which made it required after its first green run.
 
+- [45901582611](https://github.com/RahimPasha/VisualCommit/actions/runs/45901582611), for `ff6bf53`
+  (the second fix round of the D469 tests, `15beabd`, and the hold that ends with a whole line of
+  progress with what a wait says, `4370039`): **success in all six jobs**, at its first attempt.
+  `windows-latest`: 8,924 tests, 8,917 passed, 7 skipped, Test step 43 min 35 s of 70 (git
+  2.56.1.windows.1); every held fetch showed its percentage. `macos-latest`: 8,921 tests, 8,918
+  passed, 3 skipped, Test step 38 min 36 s of 70; the render of the dimmed rows passed there in its
+  second form too. `ubuntu-latest`: 8,921 tests, 8,917 passed, 4 skipped, Test step 5 min 58 s. The
+  floor's job (git 2.34.1): 8,921 tests, 8,914 passed, 7 skipped, Test step 6 min 58 s; the two
+  containers 8,921 tests with 7 skipped each, Test steps 6 min 10 s with Microsoft's installer and 8
+  min 42 s with Ubuntu's packages, the Secret Service's test passed in both; the Windows and macOS
+  keychain steps passed. Nine tests more than the run before in every job: the test server's six
+  rows of a progress line cut between two packets, its hold that falls back to the first packet with
+  a `%`, and its two tests of a server's description. **The guide's workflow** on the same push,
+  [45901582550](https://github.com/RahimPasha/VisualCommit/actions/runs/45901582550): **success**.
+  The jobs' logs are in `D:/Projects/Personal/phase8-work/wave4/review/ci-45901582611/`.
 - [45871534398](https://github.com/RahimPasha/VisualCommit/actions/runs/45871534398), for `fab4073`
   (the tests that pin D469's three dimmed texts and guard the dimmed colour): **attempt 1 failed in
   `windows-latest`, on one check of phase 3 that the push does not touch; the other five jobs
@@ -1265,22 +1280,22 @@ way, tests only** (run `wf_2ffd22ff-0bc`: a fixer in `D:/Projects/Personal/vc-wt
 `wip/p8a-hold-notes`, from `4370039`; then a reader and a mutation runner; then a correcting pass if
 they find a defect or a risk): a server's description says how each hold ended and how many
 connections are open, its words are made true in every state, phase 3's part D waits for its hold
-before it waits for the percentage, and the messages get a committed test. **Next for the lead, in
-this order:** (1) read CI's run of this push (the two merges) and record it; (2) read the round's
-result and its diff, merge `wip/p8a-hold-notes` with `--no-ff`, build, and run on the merged tree
-`AuthRemoteServerTests`, `RemoteOperationTests`, the fetch, pull and queue classes and
-`ShellDriverCheckSupportTests` of `VisualCommit.App.Tests` and phase 3's part D, its pictures
-compared with `references/step19/` (only what differs from run to run may differ); write the ruling
-after 112 and the decision on the hold's rule (D470), with a note in phase 3's report
-("Percentages") and in `docs/architecture.md`'s row of `AuthRemoteServer`; push, read CI's run and
-record it; tick step 19; (3) step 21, the gate, each takeover of the desktop announced in the chat
-just before it starts: D246's two runs of phase 8a's real-window checks, the whole default run and
-the real-window pass on one commit, the list of pictures, the live command on the counted round (by
-2026-11-28, while GitHub's token serves), every picture of both passes inspected against
-`references/step19/`, the guide's site, the checks by hand with the Narrator walk-through. The
-package is reviewed with the rest in step 19 and merged last, in that step. The three finished
-worktrees (`p8a-restore`, `p8a-restore-base`, `p8a-guide`) are removed; their `wip/` branches stay
-local (D396). §11's builders got with their briefs: mdBook at
+before it waits for the percentage, and the messages get a committed test. CI's run of the two
+merges is green in all six jobs at its first attempt (45901582611; the CI section). **Next for the
+lead, in this order:** (1) read the round's result and its diff, merge `wip/p8a-hold-notes` with
+`--no-ff`, build, and run on the merged tree `AuthRemoteServerTests`, `RemoteOperationTests`, the
+fetch, pull and queue classes and `ShellDriverCheckSupportTests` of `VisualCommit.App.Tests` and
+phase 3's part D, its pictures compared with `references/step19/` (only what differs from run to run
+may differ); write the ruling after 112 and the decision on the hold's rule (D470), with a note in
+phase 3's report ("Percentages") and in `docs/architecture.md`'s row of `AuthRemoteServer`; push,
+read CI's run and record it; tick step 19; (2) step 21, the gate, each takeover of the desktop
+announced in the chat just before it starts: D246's two runs of phase 8a's real-window checks, the
+whole default run and the real-window pass on one commit, the list of pictures, the live command on
+the counted round (by 2026-11-28, while GitHub's token serves), every picture of both passes
+inspected against `references/step19/`, the guide's site, the checks by hand with the Narrator
+walk-through. The package is reviewed with the rest in step 19 and merged last, in that step. The
+three finished worktrees (`p8a-restore`, `p8a-restore-base`, `p8a-guide`) are removed; their `wip/`
+branches stay local (D396). §11's builders got with their briefs: mdBook at
 `D:/Projects/Personal/phase8-work/tools/mdbook-0.5.4/mdbook.exe` and the Linux archive's SHA-256 for
 `guide.yml` (Notes, "Wave 4"); the references `D:/Projects/Personal/phase8-work/references/wave3/`;
 rulings 80 (stop and report if the first-run link's frame touches its ink), 82 (the facts no check
