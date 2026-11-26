@@ -167,6 +167,27 @@ internal static class RepositoryOperationsTestSupport
     public static async Task<string> ShowAsync(TempRepo repo, string commit, string path) =>
         (await repo.GitAsync("show", $"{commit}:{path}")).StandardOutput;
 
+    /// <summary>
+    /// Waits, as <see cref="WaitUntilAsync"/> does, until the status bar's text ends with a
+    /// percentage, for a fetch the server holds (<see cref="AuthRemoteServer.HoldNextFetchPack(int)"/>).
+    /// A timeout's message adds the texts the status bar showed from the wait's start and the
+    /// server's last holds (<see cref="AuthRemoteServer.DescribeRecentHolds"/>).
+    /// </summary>
+    public static async Task WaitForStatusPercentageAsync(OperationsHarness app, string what)
+    {
+        var first = app.StatusText;
+        using var texts = new StatusTextRecorder(app.Repository.OperationStatus);
+        try
+        {
+            await WaitUntilAsync(() => app.StatusText.EndsWith('%'), what);
+        }
+        catch (TimeoutException timedOut)
+        {
+            var shown = string.Join(", ", new[] { first }.Concat(texts.Texts).Select(text => $"\"{text}\""));
+            throw new TimeoutException($"{timedOut.Message} The status bar showed {shown}.\n{AuthRemoteServer.DescribeRecentHolds()}", timedOut);
+        }
+    }
+
     /// <summary>Waits, checking every 10 ms, until <paramref name="condition"/> holds; fails after <see cref="NetworkTimeout"/>.</summary>
     public static async Task WaitUntilAsync(Func<bool> condition, string what)
     {

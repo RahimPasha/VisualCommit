@@ -174,7 +174,7 @@ public partial class AuthRemoteServerTests
         var held = server.HoldNextFetchPack();
         var fetch = GitAsync(repo, ["-c", $"protocol.version={protocolVersion}", "fetch", "--progress", "origin"], onError: progress.Add);
         await held.WaitAsync(StepTimeout, TestCancelled);
-        var percentage = await progress.FirstPercentage.WaitAsync(StepTimeout, TestCancelled);
+        var percentage = await progress.WaitForFirstPercentageAsync(StepTimeout);
 
         // git shows the percentage and waits for the rest of the pack.
         Assert.Matches(@"\d+% \(\d+/\d+\)", percentage);
@@ -241,7 +241,7 @@ public partial class AuthRemoteServerTests
         Assert.Same(held, server.HoldNextFetchPack(45));
         var clone = GitAsync(repo, ["clone", "--progress", server.Url, destination], onError: progress.Add);
         await held.WaitAsync(StepTimeout, TestCancelled);
-        var percentage = await progress.FirstPercentage.WaitAsync(StepTimeout, TestCancelled);
+        var percentage = await progress.WaitForFirstPercentageAsync(StepTimeout);
         await Task.Delay(TimeSpan.FromMilliseconds(300), TestCancelled);
 
         Assert.Matches($@"^remote: Counting objects: +0% \(\d+/{ProgressObjects}\)$", percentage.TrimEnd());
@@ -361,6 +361,40 @@ public partial class AuthRemoteServerTests
         await GitOkAsync(repo, "fetch", "--quiet", "origin");
         Assert.Equal("More remote work", Subject(await repo.GitAsync("log", "-1", "--format=%s", "refs/remotes/origin/main")));
         Assert.Single(server.Requests, request => request.Held);
+        Assert.Empty(server.Errors);
+    }
+
+    [Fact]
+    public async Task A_held_fetch_is_kept_among_the_recent_holds_with_the_progress_it_sent()
+    {
+        await using var server = await AuthRemoteServer.StartAsync();
+        using var repo = await Scenarios.AuthRemoteAsync(server);
+        server.RequireAuth = false;
+        var started = DateTimeOffset.UtcNow;
+
+        var held = server.HoldNextFetchPack();
+        var fetch = GitAsync(repo, ["fetch", "--progress", "origin"]);
+        await held.WaitAsync(StepTimeout, TestCancelled);
+
+        // The journal is the process's: other tests' holds may stand beside this one. What this
+        // one sent ends with the pkt-line that completes a line with a percentage (auth's fetch
+        // counts 5 objects).
+        var part = Assert.Single(AuthRemoteServer.RecentHolds, hold => hold.Port == server.Port && hold.At >= started);
+        Assert.Equal(("remote.git", 0), (part.Repository, part.AtPercent));
+        Assert.InRange(part.SentBytes, 1, part.BodyBytes - 1);
+        Assert.StartsWith("Enumerating objects: 5, done.\n", part.Progress, StringComparison.Ordinal);
+        Assert.Matches(@"Counting objects: +\d+% \(\d/5\)\r", part.Progress);
+
+        // Described in a line of its own, with \r and \n written out, and the last line git can show.
+        var description = AuthRemoteServer.DescribeRecentHolds();
+        var line = Assert.Single(description.Split('\n'), text => text.Contains($" port {server.Port} ", StringComparison.Ordinal));
+        Assert.Matches(
+            $@"^  \d\d:\d\d:\d\d\.\d{{3}} port {server.Port} remote\.git at 0%: sent {part.SentBytes} of {part.BodyBytes} bytes, progress ""Enumerating objects: 5, done\.\\nCounting objects: .*""; last whole line with a percentage ""Counting objects: +\d+% \(\d/5\)""$",
+            line);
+        Assert.DoesNotContain('\r', description);
+
+        server.Release();
+        Assert.True((await fetch.WaitAsync(StepTimeout, TestCancelled)).Succeeded);
         Assert.Empty(server.Errors);
     }
 
@@ -1102,13 +1136,35 @@ public partial class AuthRemoteServerTests
             }
         }
 
-        /// <summary>Waits until a line holds <paramref name="text"/>; fails after <paramref name="timeout"/>.</summary>
+        /// <summary>
+        /// Waits for the first line with a percentage and returns it; after <paramref name="timeout"/>
+        /// throws <see cref="TimeoutException"/> with every line so far and the server's last holds
+        /// (<see cref="AuthRemoteServer.DescribeRecentHolds"/>).
+        /// </summary>
+        public async Task<string> WaitForFirstPercentageAsync(TimeSpan timeout)
+        {
+            try
+            {
+                return await FirstPercentage.WaitAsync(timeout, TestCancelled);
+            }
+            catch (TimeoutException timedOut)
+            {
+                var lines = _lines.IsEmpty ? "(git wrote no line)" : ToString();
+                throw new TimeoutException($"No line of git's held a percentage after {timeout.TotalSeconds} s:\n{lines}\n{AuthRemoteServer.DescribeRecentHolds()}", timedOut);
+            }
+        }
+
+        /// <summary>Waits until a line holds <paramref name="text"/>; fails after <paramref name="timeout"/> with every line so far and the server's last holds.</summary>
         public async Task WaitForLineAsync(string text, TimeSpan timeout)
         {
             var deadline = DateTime.UtcNow + timeout;
             while (!_lines.Any(line => line.Contains(text, StringComparison.Ordinal)))
             {
-                Assert.True(DateTime.UtcNow < deadline, $"No line of git's holds \"{text}\" after {timeout.TotalSeconds} s:\n{this}");
+                if (DateTime.UtcNow >= deadline)
+                {
+                    Assert.Fail($"No line of git's holds \"{text}\" after {timeout.TotalSeconds} s:\n{this}\n{AuthRemoteServer.DescribeRecentHolds()}");
+                }
+
                 await Task.Delay(TimeSpan.FromMilliseconds(20), TestCancelled);
             }
         }

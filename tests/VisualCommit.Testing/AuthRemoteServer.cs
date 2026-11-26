@@ -27,7 +27,9 @@ namespace VisualCommit.Testing;
 /// <see cref="HoldNextFetchPack(int)"/> holds back part of the next response that carries a pack, so
 /// that a test sees a fetch in progress, with a percentage (one it chose, if it likes), for as
 /// long as it likes: the part sent first ends after a whole line of git's progress with a
-/// percentage, when the response has one.
+/// percentage, when the response has one. The last holds of the process are kept with what each
+/// sent (<see cref="RecentHolds"/>, <see cref="DescribeRecentHolds"/>), for the message of a test
+/// that waited in vain for what git shows while held.
 /// </para>
 /// <para>
 /// Since phase 6 (docs/phase-6-design.md 17.2, amending D97 as D150 did) a server can serve a
@@ -108,8 +110,19 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
     /// <summary>The most a request's line and headers may take.</summary>
     private const int MaxHeaderBytes = 64 * 1024;
 
+    /// <summary>How many holds <see cref="RecentHolds"/> keeps.</summary>
+    private const int RecentHoldsKept = 8;
+
+    /// <summary>The most characters of a hold's progress <see cref="DescribeRecentHolds"/> writes: its first and last ones, the middle left out.</summary>
+    private const int DescribedProgressLength = 480;
+
     /// <summary>How long disposing waits for connections to end once they were told to.</summary>
     private static readonly TimeSpan DisposeTimeout = TimeSpan.FromSeconds(15);
+
+    /// <summary>The holds of this process that began, by every server, oldest first; under <see cref="HoldJournalGate"/>.</summary>
+    private static readonly Queue<AuthRemoteHeldPart> HoldJournal = new();
+
+    private static readonly Lock HoldJournalGate = new();
 
     private readonly TempDirectory _root;
 
@@ -268,6 +281,48 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
                 return [.. _errors];
             }
         }
+    }
+
+    /// <summary>
+    /// The last holds that began in this process, by every server, oldest first (at most eight):
+    /// what each sent before it held (<see cref="HoldNextFetchPack(string, int)"/>), recorded
+    /// before the task of <see cref="HoldNextFetchPack(string, int)"/> completes.
+    /// </summary>
+    public static IReadOnlyList<AuthRemoteHeldPart> RecentHolds
+    {
+        get
+        {
+            lock (HoldJournalGate)
+            {
+                return [.. HoldJournal];
+            }
+        }
+    }
+
+    /// <summary>
+    /// <see cref="RecentHolds"/> in a few lines, for the message of a test that waited in vain for
+    /// what git shows while a fetch is held: for each hold, its time (UTC), port, repository and
+    /// percentage, the bytes it sent of the body's, its progress with <c>\r</c> and <c>\n</c>
+    /// written out (the first and last characters of a long one), and the last whole line with a
+    /// percentage in it, which is the last such line git can show, or that it has none.
+    /// </summary>
+    public static string DescribeRecentHolds()
+    {
+        var holds = RecentHolds;
+        if (holds.Count == 0)
+        {
+            return "No hold of a fetch's pack has begun in this process.";
+        }
+
+        var text = new StringBuilder("The last holds of a fetch's pack in this process, oldest first:");
+        foreach (var hold in holds)
+        {
+            var lastWhole = LastWholeLineWithPercent(hold.Progress);
+            text.Append(CultureInfo.InvariantCulture, $"\n  {hold.At:HH:mm:ss.fff} port {hold.Port} {hold.Repository} at {hold.AtPercent}%: sent {hold.SentBytes} of {hold.BodyBytes} bytes, progress \"{Visible(hold.Progress)}\"; ")
+                .Append(lastWhole is null ? "no whole line with a percentage" : $"last whole line with a percentage \"{lastWhole}\"");
+        }
+
+        return text.ToString();
     }
 
     /// <summary>
@@ -698,8 +753,9 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
     /// When git asked for no progress (<c>no-progress</c>, a fetch without <c>--progress</c> and
     /// without a terminal), or no line reaches the percentage, only the headers go first. At 0,
     /// when a progress pkt-line holds a <c>%</c> but no line with a percentage ends before the
-    /// response does, the first part ends with the first such pkt-line. Calling it again before
-    /// a response was held changes nothing, the percentage included.
+    /// response does, the first part ends with the first such pkt-line. Each hold that begins is
+    /// kept with what it sent among <see cref="RecentHolds"/>. Calling it again before a response
+    /// was held changes nothing, the percentage included.
     /// </para>
     /// </summary>
     /// <param name="atPercent">0, or the percentage, 1 to 100, of the progress line to hold at.</param>
@@ -1103,6 +1159,7 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
         {
             await stream.WriteAsync(sent.AsMemory(0, holdAt), stopping).ConfigureAwait(false);
             await stream.FlushAsync(stopping).ConfigureAwait(false);
+            Journal(new AuthRemoteHeldPart(DateTimeOffset.UtcNow, Port, hold.Folder, hold.AtPercent, holdAt, sent.Length, ProgressOf(sent[..holdAt])));
             hold.Engaged.TrySetResult();
             await hold.Released.Task.WaitAsync(stopping).ConfigureAwait(false);
         }
@@ -1782,6 +1839,73 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
     private static void WritePktLength(Span<byte> target, int length) =>
         Encoding.ASCII.GetBytes(length.ToString("x4", CultureInfo.InvariantCulture), target);
 
+    /// <summary>Keeps <paramref name="part"/> among <see cref="RecentHolds"/>, dropping the oldest beyond <see cref="RecentHoldsKept"/>.</summary>
+    private static void Journal(AuthRemoteHeldPart part)
+    {
+        lock (HoldJournalGate)
+        {
+            HoldJournal.Enqueue(part);
+            while (HoldJournal.Count > RecentHoldsKept)
+            {
+                HoldJournal.Dequeue();
+            }
+        }
+    }
+
+    /// <summary>The progress (side band 2) that the pkt-lines of <paramref name="part"/> carry, joined, each byte a character.</summary>
+    private static string ProgressOf(byte[] part) =>
+        string.Concat(PktLines(part).Where(payload => payload.Length > 0 && payload[0] == 2).Select(payload => Encoding.Latin1.GetString(payload, 1, payload.Length - 1)));
+
+    /// <summary>The last line of <paramref name="progress"/> that a <c>\r</c> or <c>\n</c> ends and that holds a percentage; null when none does.</summary>
+    private static string? LastWholeLineWithPercent(string progress)
+    {
+        string? last = null;
+        var start = 0;
+        for (var i = 0; i < progress.Length; i++)
+        {
+            if (progress[i] is '\r' or '\n')
+            {
+                var line = progress[start..i];
+                if (PercentOf(line) >= 0)
+                {
+                    last = line;
+                }
+
+                start = i + 1;
+            }
+        }
+
+        return last;
+    }
+
+    /// <summary>
+    /// <paramref name="text"/> with <c>\r</c>, <c>\n</c> and other control characters written out
+    /// (<c>\x1b</c>); beyond <see cref="DescribedProgressLength"/> characters, its first quarter and
+    /// last three quarters of that with <c> … </c> between.
+    /// </summary>
+    private static string Visible(string text)
+    {
+        if (text.Length > DescribedProgressLength)
+        {
+            var head = DescribedProgressLength / 4;
+            text = string.Concat(text.AsSpan(0, head), " … ", text.AsSpan(text.Length - (DescribedProgressLength - head)));
+        }
+
+        var visible = new StringBuilder(text.Length);
+        foreach (var c in text)
+        {
+            _ = c switch
+            {
+                '\r' => visible.Append("\\r"),
+                '\n' => visible.Append("\\n"),
+                _ when char.IsControl(c) => visible.Append(CultureInfo.InvariantCulture, $"\\x{(int)c:x2}"),
+                _ => visible.Append(c),
+            };
+        }
+
+        return visible.ToString();
+    }
+
     /// <summary>The first percentage in a line of git's progress (45 for <c>Counting objects:  45% (45/100)</c>); -1 when it has none.</summary>
     private static int PercentOf(string line)
     {
@@ -2070,6 +2194,16 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
         }
     }
 }
+
+/// <summary>What a held response sent before it held (<see cref="AuthRemoteServer.RecentHolds"/>).</summary>
+/// <param name="At">When its first part had been sent, in UTC.</param>
+/// <param name="Port">The port of the server that held it.</param>
+/// <param name="Repository">The served repository's folder name (<c>remote.git</c>).</param>
+/// <param name="AtPercent">0, or the percentage the hold was asked for (<see cref="AuthRemoteServer.HoldNextFetchPack(string, int)"/>).</param>
+/// <param name="SentBytes">How many bytes of the body went before the hold.</param>
+/// <param name="BodyBytes">The length of the body sent.</param>
+/// <param name="Progress">The progress (side band 2) of the part sent, joined, as git received it.</param>
+public sealed record AuthRemoteHeldPart(DateTimeOffset At, int Port, string Repository, int AtPercent, int SentBytes, int BodyBytes, string Progress);
 
 /// <summary>One request <see cref="AuthRemoteServer"/> served.</summary>
 /// <param name="Method"><c>GET</c> or <c>POST</c>.</param>

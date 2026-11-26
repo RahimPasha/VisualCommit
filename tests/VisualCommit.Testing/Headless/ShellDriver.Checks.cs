@@ -294,13 +294,26 @@ public sealed partial class ShellDriver
     /// "N%" and the bar is determinate) and returns N: "wait until the status bar shows a
     /// percentage" (checks 17, 18 and 31, with the server holding the fetch).
     /// </summary>
+    /// <exception cref="TimeoutException">No percentage showed in time; the message adds what the
+    /// status bar showed then and the server's last holds (<see cref="AuthRemoteServer.DescribeRecentHolds"/>).</exception>
     public async Task<int> WaitForProgressPercentAsync(TimeSpan? timeout = null)
     {
         var status = Session.Shell.ActiveTab.OperationStatus;
-        await WaitForAsync(
-            () => status.IsRunning && status.Percent is not null && PercentAtEnd().IsMatch(status.Text),
-            "the status bar to show a percentage",
-            timeout);
+        try
+        {
+            await WaitForAsync(
+                () => status.IsRunning && status.Percent is not null && PercentAtEnd().IsMatch(status.Text),
+                "the status bar to show a percentage",
+                timeout);
+        }
+        catch (TimeoutException timedOut)
+        {
+            var percent = status.Percent is { } shown ? shown.ToString(CultureInfo.InvariantCulture) : "none";
+            throw new TimeoutException(
+                $"{timedOut.Message} The status bar read \"{status.Text}\" (running: {status.IsRunning}, percentage: {percent}).\n{AuthRemoteServer.DescribeRecentHolds()}",
+                timedOut);
+        }
+
         return status.Percent!.Value;
     }
 
