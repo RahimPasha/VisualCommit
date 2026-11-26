@@ -37,8 +37,10 @@ namespace VisualCommit.App.Tests;
 /// at the search's opacity, within a step of the drawn pixels), on every background its text lies
 /// on, in both themes: a colour that changes, a new state of the row, or a fix that lifts the text to
 /// 4.5:1 fails its fact, to be looked at with D469. (a) and (b) read the views' styles; the graph
-/// draws in code, so (c)'s tokens stand in tables that a render of the graph holds it to. A guard
-/// keeps the disabled text colour and the search's dimming to the uses it lists, each with its reason.
+/// draws in code, so (c)'s tokens stand in tables that a render of the graph holds it to, in its text
+/// columns and its labels' column (its graph's column, where the node is dimmed, is not read). A
+/// guard keeps the disabled text colour and the search's dimming to the uses it lists, each with its
+/// reason.
 /// </summary>
 public partial class ThemeTokensTests
 {
@@ -295,9 +297,10 @@ public partial class ThemeTokensTests
     /// (<see cref="TextInk"/>'s rule) reaches that colour; in each label the fill is its token faded
     /// over the background, within a step, every pixel inside the border lies between the fill and
     /// the text's token faded over the fill, and the ink of the name and of a pull request's number
-    /// reaches that colour. Nothing is drawn outside the six columns, so that a new column under
-    /// the dimming fails here; a new text in the labels' column outside a label, or a mark in the
-    /// graph's column, is not read.
+    /// reaches that colour; in the labels' column outside the labels, a pixel left round each for
+    /// its edge, every pixel is the row's background, within 2. Nothing is drawn outside the six
+    /// columns, so that a new column under the dimming fails here. The graph's column is not read: a
+    /// text or a mark drawn there under the node's dimming is read by neither this fact nor the guard.
     /// </summary>
     [AvaloniaFact]
     public void Exception_D469_c_the_graph_draws_a_dimmed_rows_texts_and_labels_in_the_tokens_the_pins_name()
@@ -370,8 +373,10 @@ public partial class ThemeTokensTests
     /// class's place holds its binding), fails with its file and line; a listed use
     /// that is gone fails too, and so does a scan that finds the token or the constant nowhere, so
     /// that a rename cannot leave the guard looking for nothing. A text that comes under a dimming
-    /// already listed, as one drawn inside the graph's dimmed calls, adds no reference: the render
-    /// fact of exception (c) reads the graph's row for it.
+    /// already listed adds no reference: the render fact of exception (c) reads a dimmed row's
+    /// message, author, date and SHA columns, the inside of each label and the labels' column
+    /// outside them, where such a text shows; a text or a mark drawn in the graph's column under the
+    /// node's dimming is read by neither fact.
     /// </summary>
     [AvaloniaFact]
     public void The_dimmed_colour_and_the_searchs_dimming_are_used_only_where_the_guard_lists_them()
@@ -855,6 +860,17 @@ public partial class ThemeTokensTests
                 seen.Add(PullRequestNumber);
             }
         }
+
+        // The labels' column outside the labels, each with a pixel round it for its edge: the
+        // background alone, as nothing else is drawn there on a dimmed row.
+        var drawn = labels.Select(label => label.Bounds.Inflate(1)).ToList();
+        failures.AddRange(BlendProblems(
+            shot,
+            new Rect(columns.Refs.X, bounds.Y, columns.Refs.Width, bounds.Height),
+            behind,
+            behind,
+            $"{where}: the labels' column outside the labels, {backgroundToken}",
+            (x, y) => drawn.Any(box => box.Intersects(new Rect(x, y, 1, 1)))));
     }
 
     /// <summary>A label's entry in <see cref="DimmedRowLabels"/>; a kind without one is named so that the lookup fails.</summary>
@@ -880,11 +896,12 @@ public partial class ThemeTokensTests
     }
 
     /// <summary>
-    /// What is wrong with the whole pixels of <paramref name="area"/>: a pixel that lies outside the
-    /// blends of <paramref name="ink"/> over <paramref name="behind"/> by more than 2 in a channel,
-    /// as another colour drawn there does; one line for the area, with the first such pixel.
+    /// What is wrong with the whole pixels of <paramref name="area"/>, but those
+    /// <paramref name="skip"/> names: a pixel that lies outside the blends of <paramref name="ink"/>
+    /// over <paramref name="behind"/> by more than 2 in a channel, as another colour drawn there
+    /// does; one line for the area, with the first such pixel.
     /// </summary>
-    private static IEnumerable<string> BlendProblems(Screenshot shot, Rect area, Color behind, Color ink, string what)
+    private static IEnumerable<string> BlendProblems(Screenshot shot, Rect area, Color behind, Color ink, string what, Func<int, int, bool>? skip = null)
     {
         const int Tolerance = 2;
         static bool Between(byte value, byte a, byte b) => value >= Math.Min(a, b) - Tolerance && value <= Math.Max(a, b) + Tolerance;
@@ -894,6 +911,11 @@ public partial class ThemeTokensTests
         {
             for (var x = (int)Math.Ceiling(area.Left); x < (int)Math.Floor(area.Right); x++)
             {
+                if (skip?.Invoke(x, y) == true)
+                {
+                    continue;
+                }
+
                 var pixel = shot.PixelAt(x, y);
                 if (!(Between(pixel.R, behind.R, ink.R) && Between(pixel.G, behind.G, ink.G) && Between(pixel.B, behind.B, ink.B)))
                 {
