@@ -3,6 +3,7 @@ using System.Globalization;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
+using System.Text.RegularExpressions;
 using VisualCommit.Core.Git;
 using VisualCommit.Testing;
 using Xunit;
@@ -169,12 +170,12 @@ public partial class AuthRemoteServerTests
         await using var server = await AuthRemoteServer.StartAsync();
         using var repo = await Scenarios.AuthRemoteAsync(server);
         server.RequireAuth = false;
-        var progress = new ProgressWatch();
+        var progress = new ProgressWatch(server);
 
         var held = server.HoldNextFetchPack();
         var fetch = GitAsync(repo, ["-c", $"protocol.version={protocolVersion}", "fetch", "--progress", "origin"], onError: progress.Add);
         await held.WaitAsync(StepTimeout, TestCancelled);
-        var percentage = await progress.FirstPercentage.WaitAsync(StepTimeout, TestCancelled);
+        var percentage = await progress.WaitForFirstPercentageAsync(StepTimeout);
 
         // git shows the percentage and waits for the rest of the pack.
         Assert.Matches(@"\d+% \(\d+/\d+\)", percentage);
@@ -203,7 +204,7 @@ public partial class AuthRemoteServerTests
         await using var server = await AuthRemoteServer.StartAsync();
         server.RequireAuth = false;
         using var repo = await ProgressRepositoryAsync(server);
-        var progress = new ProgressWatch();
+        var progress = new ProgressWatch(server);
         var destination = repo.SiblingPath("clone");
 
         var held = server.HoldNextFetchPack(atPercent);
@@ -229,19 +230,19 @@ public partial class AuthRemoteServerTests
     }
 
     [Fact]
-    public async Task A_clone_held_at_0_is_held_after_the_first_progress_packet_as_before()
+    public async Task A_clone_held_at_0_shows_the_0_percent_line_and_waits_until_released()
     {
         await using var server = await AuthRemoteServer.StartAsync();
         server.RequireAuth = false;
         using var repo = await ProgressRepositoryAsync(server);
-        var progress = new ProgressWatch();
+        var progress = new ProgressWatch(server);
         var destination = repo.SiblingPath("clone");
 
         var held = server.HoldNextFetchPack(0);
         Assert.Same(held, server.HoldNextFetchPack(45));
         var clone = GitAsync(repo, ["clone", "--progress", server.Url, destination], onError: progress.Add);
         await held.WaitAsync(StepTimeout, TestCancelled);
-        var percentage = await progress.FirstPercentage.WaitAsync(StepTimeout, TestCancelled);
+        var percentage = await progress.WaitForFirstPercentageAsync(StepTimeout);
         await Task.Delay(TimeSpan.FromMilliseconds(300), TestCancelled);
 
         Assert.Matches($@"^remote: Counting objects: +0% \(\d+/{ProgressObjects}\)$", percentage.TrimEnd());
@@ -286,7 +287,7 @@ public partial class AuthRemoteServerTests
     }
 
     [Fact]
-    public void Without_a_percentage_the_hold_ends_with_the_first_progress_pkt_line_that_holds_one_as_before()
+    public void Without_a_percentage_the_hold_ends_with_the_first_progress_pkt_line_with_one_when_a_line_with_one_ends_in_it()
     {
         var body = ProgressResponse();
 
@@ -299,6 +300,43 @@ public partial class AuthRemoteServerTests
         byte[] quiet = [.. Pkt("packfile\n"), .. Band(1, "PACK...."), .. "0000"u8];
         Assert.Equal((quiet, -1), AuthRemoteServer.SplitAtProgress(quiet, 45));
         Assert.Equal((true, -1), AuthRemoteServer.ScanPktLines(quiet));
+    }
+
+    [Theory]
+    [InlineData("packfile\n", "Counting objects:  20% (1", "/5)\r")]
+    [InlineData("NAK\n", "Counting objects:  20% (1", "/5)\r")]
+    [InlineData("packfile\n", "Counting objects:  20% (1/5)", "\r")]
+    [InlineData("NAK\n", "Counting objects:  20% (1/5)", "\r")]
+    [InlineData("packfile\n", "Counting objects:  2", "0% (1/5)\r")]
+    [InlineData("NAK\n", "Counting objects:  2", "0% (1/5)\r")]
+    public void Without_a_percentage_the_hold_ends_with_the_pkt_line_in_which_the_first_whole_line_with_one_ends(string section, string before, string after)
+    {
+        // upload-pack sends each read of pack-objects' progress as a pkt-line of its own, and Git
+        // for Windows 2.56 was seen to write a progress line of odd length (auth's Counting lines
+        // have 29 bytes) in two writes, its last byte, the \r or \n, apart from the rest: the first
+        // pkt-line with a '%' may end after that '%' and before the line's end. A cut before the
+        // '%' leaves it to the next one.
+        var body = CutProgressResponse(section, before, after);
+
+        var (hasPack, progressEnd) = AuthRemoteServer.ScanPktLines(body);
+
+        // The first part ends with that pkt-line, never inside one, and holds the 20% line whole.
+        Assert.True(hasPack);
+        Assert.Contains(PktLinesOf(body), pktLine => pktLine.Offset == progressEnd);
+        Assert.EndsWith("Counting objects:  20% (1/5)\rCounting objects:  40% (2/5)\r", BandText(body[..progressEnd], 2), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Without_a_whole_line_with_a_percentage_the_hold_ends_with_the_first_progress_pkt_line_that_holds_a_percent_sign()
+    {
+        // A line with a '%' that no \r or \n ends before the body's end: the end of the first
+        // pkt-line that holds a '%', as before.
+        byte[] body = [.. Pkt("packfile\n"), .. Band(2, "Enumerating objects: 5, done.\n"), .. Band(2, "Counting objects:  20% (1"), .. Band(1, "PACK...."), .. "0000"u8];
+
+        var (hasPack, progressEnd) = AuthRemoteServer.ScanPktLines(body);
+
+        Assert.True(hasPack);
+        Assert.EndsWith("Counting objects:  20% (1", Encoding.Latin1.GetString(body, 0, progressEnd), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -327,6 +365,74 @@ public partial class AuthRemoteServerTests
         Assert.Equal("More remote work", Subject(await repo.GitAsync("log", "-1", "--format=%s", "refs/remotes/origin/main")));
         Assert.Single(server.Requests, request => request.Held);
         Assert.Empty(server.Errors);
+    }
+
+    [Fact]
+    public async Task A_server_describes_its_requests_and_each_hold_asked_of_it_before_and_after_it_began()
+    {
+        await using var server = await AuthRemoteServer.StartAsync();
+        using var repo = await Scenarios.AuthRemoteAsync(server);
+        server.RequireAuth = false;
+        await using var other = await AuthRemoteServer.StartAsync();
+        var requests = server.Requests.Count;
+
+        // Asked and not begun: a line of its own, in UTC. Asking again adds none, and another
+        // server's hold is no part of this one's.
+        var held = server.HoldNextFetchPack();
+        Assert.Same(held, server.HoldNextFetchPack(45));
+        _ = other.HoldNextFetchPack();
+        var asked = Assert.Single(server.Holds);
+        Assert.Equal(("remote.git", 0, (AuthRemoteHoldPart?)null), (asked.Repository, asked.AtPercent, asked.Part));
+        Assert.Equal(TimeSpan.Zero, asked.Asked.Offset);
+        var askedAt = asked.Asked.ToString("HH:mm:ss.fff", CultureInfo.InvariantCulture);
+        var lines = server.DescribeHoldsAndRequests().Split('\n');
+        Assert.Equal(2, lines.Length);
+        Assert.Matches($@"^The server on port {server.Port} \(times in UTC\) had {requests} request\(s\)(: .+)?, and 0 error\(s\); the holds asked of it, oldest first:$", lines[0]);
+        Assert.Equal($"  asked {askedAt} for remote.git at 0%: not begun", lines[1]);
+
+        // Begun: when, and what it sent, which holds a whole line with a percentage (auth's fetch
+        // counts 5 objects); the held request is the last one.
+        var fetch = GitAsync(repo, ["fetch", "--progress", "origin"]);
+        await held.WaitAsync(StepTimeout, TestCancelled);
+        var began = Assert.Single(server.Holds);
+        var part = Assert.IsType<AuthRemoteHoldPart>(began.Part);
+        Assert.Equal(asked with { Part = part }, began);
+        Assert.InRange(part.At, asked.Asked, DateTimeOffset.UtcNow);
+        Assert.InRange(part.SentBytes, 1, part.BodyBytes - 1);
+        Assert.StartsWith("Enumerating objects: 5, done.\n", part.Progress, StringComparison.Ordinal);
+        Assert.Matches(@"Counting objects: +\d+% \(\d/5\)\r", part.Progress);
+
+        var description = server.DescribeHoldsAndRequests();
+        lines = description.Split('\n');
+        Assert.Equal(2, lines.Length);
+        Assert.Matches($@"^The server on port {server.Port} \(times in UTC\) had \d+ request\(s\): .*POST /remote\.git/git-upload-pack fetch 200 held, and 0 error\(s\); the holds asked of it, oldest first:$", lines[0]);
+        Assert.Matches(
+            $@"^  asked {Regex.Escape(askedAt)} for remote\.git at 0%: began \d\d:\d\d:\d\d\.\d{{3}}, sent {part.SentBytes} of {part.BodyBytes} bytes, progress ""Enumerating objects: 5, done\.\\nCounting objects: .*""; last whole line with a percentage ""Counting objects: +\d+% \(\d/5\)""$",
+            lines[1]);
+        Assert.DoesNotContain('\r', description);
+
+        // Found by its port, each port once, beside the other server and a port no server runs on.
+        Assert.Equal(
+            $"{description}\n{other.DescribeHoldsAndRequests()}\nNo server of this process runs on port 1.",
+            AuthRemoteServer.DescribeServersOn([server.Port, other.Port, server.Port, 1]));
+
+        server.Release();
+        Assert.True((await fetch.WaitAsync(StepTimeout, TestCancelled)).Succeeded);
+        Assert.Empty(server.Errors);
+    }
+
+    [Fact]
+    public async Task A_disposed_server_is_found_by_its_port_no_more()
+    {
+        var server = await AuthRemoteServer.StartAsync();
+        _ = server.HoldNextFetchPack();
+        var description = server.DescribeHoldsAndRequests();
+        Assert.Equal(description, AuthRemoteServer.DescribeServersOn([server.Port]));
+
+        await server.DisposeAsync();
+
+        // Its port may serve another test's server by now, which this one's hold is no part of.
+        Assert.DoesNotContain(description.Split('\n')[1], AuthRemoteServer.DescribeServersOn([server.Port]), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -758,8 +864,8 @@ public partial class AuthRemoteServerTests
         var design = copy.Repo("design-system");
         await docs.GitAsync("remote", "set-url", "origin", server.UrlOf("docs"));
         await design.GitAsync("remote", "set-url", "origin", server.UrlOf("design-system"));
-        var docsProgress = new ProgressWatch();
-        var designProgress = new ProgressWatch();
+        var docsProgress = new ProgressWatch(server);
+        var designProgress = new ProgressWatch(server);
 
         // docs counts 4 objects, design-system 11 (0.10): held at 25 and 45, each shows exactly that.
         var docsHeld = server.HoldNextFetchPack("docs", 25);
@@ -991,6 +1097,25 @@ public partial class AuthRemoteServerTests
         .. "0000"u8,
     ];
 
+    /// <summary>
+    /// A fetch's response for five objects that begins with <paramref name="section"/>
+    /// (<c>packfile</c> under protocol v2, <c>NAK</c> under v0), whose 20% line is cut between two
+    /// pkt-lines, <paramref name="before"/> and <paramref name="after"/>, the 40% line whole after
+    /// it; then the rest of the progress, the pack and a flush.
+    /// </summary>
+    private static byte[] CutProgressResponse(string section, string before, string after) =>
+    [
+        .. Pkt(section),
+        .. Band(2, "Enumerating objects: 5, done.\n"),
+        .. Band(2, before),
+        .. Band(2, after + "Counting objects:  40% (2/5)\r"),
+        .. Band(2, "Counting objects:  60% (3/5)\rCounting objects:  80% (4/5)\r"),
+        .. Band(2, "Counting objects: 100% (5/5)\rCounting objects: 100% (5/5), done.\n"),
+        .. Band(1, "PACK...."),
+        .. Band(2, "Total 5 (delta 0), reused 0 (delta 0), pack-reused 0\n"),
+        .. "0000"u8,
+    ];
+
     private static byte[] Pkt(string payload) => Pkt(Encoding.Latin1.GetBytes(payload));
 
     private static byte[] Pkt(byte[] payload) =>
@@ -1025,8 +1150,13 @@ public partial class AuthRemoteServerTests
 
     private static string Subject(GitResult result) => result.StandardOutput.Trim();
 
-    /// <summary>Watches git's standard error for the first progress line with a percentage, and keeps every line.</summary>
-    private sealed class ProgressWatch
+    /// <summary>
+    /// Watches git's standard error for the first progress line with a percentage, and keeps every
+    /// line; a wait that times out says them with what the server git fetches from had
+    /// (<see cref="AuthRemoteServer.DescribeHoldsAndRequests"/>).
+    /// </summary>
+    /// <param name="server">The server git fetches from.</param>
+    private sealed class ProgressWatch(AuthRemoteServer server)
     {
         private readonly TaskCompletionSource<string> _first = new(TaskCreationOptions.RunContinuationsAsynchronously);
         private readonly ConcurrentQueue<string> _lines = new();
@@ -1048,13 +1178,35 @@ public partial class AuthRemoteServerTests
             }
         }
 
-        /// <summary>Waits until a line holds <paramref name="text"/>; fails after <paramref name="timeout"/>.</summary>
+        /// <summary>
+        /// Waits for the first line with a percentage and returns it; after <paramref name="timeout"/>
+        /// throws <see cref="TimeoutException"/> with every line so far and the server's requests
+        /// and holds (<see cref="AuthRemoteServer.DescribeHoldsAndRequests"/>).
+        /// </summary>
+        public async Task<string> WaitForFirstPercentageAsync(TimeSpan timeout)
+        {
+            try
+            {
+                return await FirstPercentage.WaitAsync(timeout, TestCancelled);
+            }
+            catch (TimeoutException timedOut)
+            {
+                var lines = _lines.IsEmpty ? "(git wrote no line)" : ToString();
+                throw new TimeoutException($"No line of git's held a percentage after {timeout.TotalSeconds} s:\n{lines}\n{server.DescribeHoldsAndRequests()}", timedOut);
+            }
+        }
+
+        /// <summary>Waits until a line holds <paramref name="text"/>; fails after <paramref name="timeout"/> with every line so far and the server's requests and holds.</summary>
         public async Task WaitForLineAsync(string text, TimeSpan timeout)
         {
             var deadline = DateTime.UtcNow + timeout;
             while (!_lines.Any(line => line.Contains(text, StringComparison.Ordinal)))
             {
-                Assert.True(DateTime.UtcNow < deadline, $"No line of git's holds \"{text}\" after {timeout.TotalSeconds} s:\n{this}");
+                if (DateTime.UtcNow >= deadline)
+                {
+                    Assert.Fail($"No line of git's holds \"{text}\" after {timeout.TotalSeconds} s:\n{this}\n{server.DescribeHoldsAndRequests()}");
+                }
+
                 await Task.Delay(TimeSpan.FromMilliseconds(20), TestCancelled);
             }
         }

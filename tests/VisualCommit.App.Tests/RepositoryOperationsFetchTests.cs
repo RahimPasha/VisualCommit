@@ -277,7 +277,7 @@ public class RepositoryOperationsFetchTests
         var held = server.HoldNextFetchPack();
         var fetch = app.Operations.FetchAsync("origin");
         await held.WaitAsync(NetworkTimeout, TestContext.Current.CancellationToken);
-        await WaitUntilAsync(() => app.StatusText.EndsWith('%'), "the fetch's percentage");
+        await WaitForStatusPercentageAsync(app, server, "the fetch's percentage");
 
         Assert.Matches(@"^Fetching from origin… Counting objects \d{1,3}%$", app.StatusText);
         Assert.True(app.Repository.Queue.Current?.CanCancel);
@@ -307,7 +307,7 @@ public class RepositoryOperationsFetchTests
         IToolbarActions toolbar = app.Operations;
         var first = toolbar.FetchAllAsync();
         await held.WaitAsync(NetworkTimeout, TestContext.Current.CancellationToken);
-        await WaitUntilAsync(() => app.StatusText.EndsWith('%'), "the fetch's percentage");
+        await WaitForStatusPercentageAsync(app, server, "the fetch's percentage");
 
         // A running fetch has already asked for what the remote has: a click now waits behind it
         // and fetches again; more clicks while that one waits add nothing (1.2).
@@ -535,19 +535,23 @@ public class RepositoryOperationsFetchTests
 
     /// <summary>
     /// Waits until the server holds the fetch and the status bar shows a percentage. A timeout says
-    /// what was there instead: whether the response was held, what the status bar read and how many
-    /// requests the server had, so that a failure under load can be told from a fault of the app.
+    /// what was there instead: whether the response was held, what the status bar read, the texts it
+    /// showed from the wait's start, and the server's requests and holds
+    /// (<see cref="AuthRemoteServer.DescribeHoldsAndRequests"/>), so that a failure under load can be
+    /// told from a fault of the app.
     /// </summary>
     private static async Task WaitForPercentageAsync(ShellDriver app, AuthRemoteServer server, Task held, TextBlock status, string what)
     {
+        using var texts = app.RecordStatusTexts();
         try
         {
             await app.WaitForAsync(() => held.IsCompleted && status.Text?.EndsWith('%') == true, what, NetworkTimeout);
         }
         catch (TimeoutException ex)
         {
+            var shown = texts.Texts.Count == 0 ? "no other text" : string.Join(", ", texts.Texts.Select(text => $"\"{text}\""));
             throw new TimeoutException(
-                $"{ex.Message} The response was {(held.IsCompleted ? "held" : "not held")}; the status bar read \"{status.Text}\"; the server had {server.Requests.Count} request(s).",
+                $"{ex.Message} The response was {(held.IsCompleted ? "held" : "not held")}; the status bar read \"{status.Text}\" and showed {shown} from the wait's start.\n{server.DescribeHoldsAndRequests()}",
                 ex);
         }
     }

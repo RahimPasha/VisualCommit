@@ -147,7 +147,9 @@ public class RemoteOperationTests
         await held.WaitAsync(StepTimeout, TestCancelled);
 
         // The server held the pack after its first progress line with a percentage.
-        await WaitUntilAsync(() => progress.Reports.Any(report => report.Percent is not null));
+        await WaitUntilAsync(
+            () => progress.Reports.Any(report => report.Percent is not null),
+            () => $"The progress reported so far: {Described(progress.Reports)}.\n{server.DescribeHoldsAndRequests()}");
         await cancellation.CancelAsync();
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => fetch.WaitAsync(StepTimeout, TestCancelled));
         server.Release();
@@ -602,13 +604,22 @@ public class RemoteOperationTests
         Assert.Equal(kind, GitFailureClassifier.Classify(failure.StandardError, failure.StandardOutput, failure.ExitCode));
     }
 
-    private static async Task WaitUntilAsync(Func<bool> condition)
+    /// <summary>Waits until <paramref name="condition"/> holds; fails after <see cref="StepTimeout"/>, saying what <paramref name="describe"/> gives then.</summary>
+    private static async Task WaitUntilAsync(Func<bool> condition, Func<string> describe)
     {
         var deadline = DateTime.UtcNow + StepTimeout;
         while (!condition())
         {
-            Assert.True(DateTime.UtcNow < deadline, "The condition did not come true in time.");
+            if (DateTime.UtcNow >= deadline)
+            {
+                Assert.Fail($"The condition did not come true in time. {describe()}");
+            }
+
             await Task.Delay(20, TestCancelled);
         }
     }
+
+    /// <summary>Progress reports in a line: each one's text and percentage, or "none".</summary>
+    private static string Described(IReadOnlyList<OperationProgress> reports) =>
+        reports.Count == 0 ? "none" : string.Join("; ", reports.Select(report => $"\"{report.Text}\" ({(report.Percent is { } percent ? $"{percent}%" : "no percentage")})"));
 }

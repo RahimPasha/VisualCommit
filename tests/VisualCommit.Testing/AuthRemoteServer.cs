@@ -26,7 +26,12 @@ namespace VisualCommit.Testing;
 /// <para>
 /// <see cref="HoldNextFetchPack(int)"/> holds back part of the next response that carries a pack, so
 /// that a test sees a fetch in progress, with a percentage (one it chose, if it likes), for as
-/// long as it likes.
+/// long as it likes: the part sent first ends after a whole line of git's progress with a
+/// percentage, when the response has one. The server keeps every hold asked of it, with what it
+/// sent once it began (<see cref="Holds"/>), and describes them with its requests
+/// (<see cref="DescribeHoldsAndRequests"/>), for the message of a test that waited in vain for what
+/// git shows while held; a test that knows the server only by its port, from a remote's URL, finds
+/// that description through <see cref="DescribeServersOn"/>.
 /// </para>
 /// <para>
 /// Since phase 6 (docs/phase-6-design.md 17.2, amending D97 as D150 did) a server can serve a
@@ -107,8 +112,19 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
     /// <summary>The most a request's line and headers may take.</summary>
     private const int MaxHeaderBytes = 64 * 1024;
 
+    /// <summary>The most characters of a hold's progress <see cref="DescribeHoldsAndRequests"/> writes: its first and last ones, the middle left out.</summary>
+    private const int DescribedProgressLength = 480;
+
+    /// <summary>The most requests, the last ones, <see cref="DescribeHoldsAndRequests"/> writes.</summary>
+    private const int DescribedRequests = 20;
+
     /// <summary>How long disposing waits for connections to end once they were told to.</summary>
     private static readonly TimeSpan DisposeTimeout = TimeSpan.FromSeconds(15);
+
+    /// <summary>The servers of this process that accept connections and are not being disposed, oldest first; under <see cref="RunningServersGate"/>.</summary>
+    private static readonly List<AuthRemoteServer> RunningServers = [];
+
+    private static readonly Lock RunningServersGate = new();
 
     private readonly TempDirectory _root;
 
@@ -145,6 +161,9 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
 
     /// <summary>The holds asked for and not begun yet, by the served folder name they wait for.</summary>
     private readonly Dictionary<string, Hold> _pendingHolds = new(StringComparer.Ordinal);
+
+    /// <summary>Every hold asked of the server, in the order asked (<see cref="Holds"/>).</summary>
+    private readonly List<Hold> _askedHolds = [];
 
     /// <summary>The gates on a repository's next request (<see cref="HoldNextRequest"/>) that no request has reached yet, by folder name.</summary>
     private readonly Dictionary<string, RequestGate> _pendingGates = new(StringComparer.Ordinal);
@@ -270,6 +289,86 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
     }
 
     /// <summary>
+    /// Every hold asked of this server (<see cref="HoldNextFetchPack(string, int)"/>), in the order
+    /// asked, with what it sent once it began; asking again before a response was held adds none.
+    /// </summary>
+    public IReadOnlyList<AuthRemoteHold> Holds
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return [.. _askedHolds.Select(hold => new AuthRemoteHold(hold.Asked, hold.Folder, hold.AtPercent, hold.Part))];
+            }
+        }
+    }
+
+    /// <summary>
+    /// This server's requests and holds in a few lines, for the message of a test that waited in
+    /// vain for what git shows while a fetch is held, times in UTC: its port; its requests (the last
+    /// <see cref="DescribedRequests"/>), each with its method, path, protocol v2 command, status and
+    /// whether it was held; how many errors it had (<see cref="Errors"/>); and each hold asked of it
+    /// (<see cref="Holds"/>), in a line of its own: when it was asked, its repository and
+    /// percentage, and that it has not begun, or when it began, the bytes it sent of the body's,
+    /// its progress with <c>\r</c> and <c>\n</c> written out (the first and last characters of a
+    /// long one) and the last whole line with a percentage in it, which is the last such line git
+    /// can show, or that it has none.
+    /// </summary>
+    public string DescribeHoldsAndRequests()
+    {
+        var requests = Requests;
+        var holds = Holds;
+        var text = new StringBuilder().Append(CultureInfo.InvariantCulture, $"The server on port {Port} (times in UTC) had {requests.Count} request(s)");
+        if (requests.Count > 0)
+        {
+            text.Append(requests.Count > DescribedRequests ? $", the last {DescribedRequests}: " : ": ")
+                .AppendJoin("; ", requests.Skip(requests.Count - Math.Min(requests.Count, DescribedRequests)).Select(Described));
+        }
+
+        text.Append(CultureInfo.InvariantCulture, $", and {Errors.Count} error(s); ")
+            .Append(holds.Count == 0 ? "no hold was asked of it." : "the holds asked of it, oldest first:");
+        foreach (var hold in holds)
+        {
+            text.Append(CultureInfo.InvariantCulture, $"\n  asked {hold.Asked:HH:mm:ss.fff} for {hold.Repository} at {hold.AtPercent}%: ");
+            if (hold.Part is not { } part)
+            {
+                text.Append("not begun");
+                continue;
+            }
+
+            var lastWhole = LastWholeLineWithPercent(part.Progress);
+            text.Append(CultureInfo.InvariantCulture, $"began {part.At:HH:mm:ss.fff}, sent {part.SentBytes} of {part.BodyBytes} bytes, progress \"{Visible(part.Progress)}\"; ")
+                .Append(lastWhole is null ? "no whole line with a percentage" : $"last whole line with a percentage \"{lastWhole}\"");
+        }
+
+        return text.ToString();
+
+        static string Described(AuthRemoteRequest request) =>
+            string.Create(CultureInfo.InvariantCulture, $"{request.Method} {request.Path}{(request.Command is null ? string.Empty : " " + request.Command)} {request.Status}{(request.Held ? " held" : string.Empty)}");
+    }
+
+    /// <summary>
+    /// <see cref="DescribeHoldsAndRequests"/> of the server of this process that runs on each of
+    /// <paramref name="ports"/>, each port once in the order given, one after another on lines of
+    /// their own; for a port no server of this process runs on, a line that says so. A server runs
+    /// from its start until it is disposed. For a test that knows the server only by its port, from
+    /// a remote's URL (<c>http://127.0.0.1:47391/remote.git</c>).
+    /// </summary>
+    public static string DescribeServersOn(IEnumerable<int> ports)
+    {
+        ArgumentNullException.ThrowIfNull(ports);
+        AuthRemoteServer[] running;
+        lock (RunningServersGate)
+        {
+            running = [.. RunningServers];
+        }
+
+        return string.Join('\n', ports.Distinct().Select(port =>
+            running.LastOrDefault(server => server.Port == port)?.DescribeHoldsAndRequests()
+            ?? string.Create(CultureInfo.InvariantCulture, $"No server of this process runs on port {port}.")));
+    }
+
+    /// <summary>
     /// Starts listening on 127.0.0.1: on <paramref name="port"/>, or on a port the system picks
     /// when it is 0. With <paramref name="fallBackToFreePort"/>, a port that is taken gives way to
     /// one the system picks (<see cref="PortWasTaken"/>); without it, it throws
@@ -316,7 +415,7 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
                 await server.CreateRepositoryAsync().ConfigureAwait(false);
             }
 
-            server._acceptLoop = Task.Run(server.AcceptLoopAsync);
+            server.StartAccepting();
             return server;
         }
         catch
@@ -380,7 +479,7 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
             }
 
             var server = new AuthRemoteServer(root, listener, portWasTaken, full, served, folderServer: true);
-            server._acceptLoop = Task.Run(server.AcceptLoopAsync);
+            server.StartAccepting();
             return server;
         }
         catch
@@ -445,7 +544,7 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
             }
 
             var server = new AuthRemoteServer(root, listener, portWasTaken, full, [], folderServer: true, options);
-            server._acceptLoop = Task.Run(server.AcceptLoopAsync);
+            server.StartAccepting();
             return server;
         }
         catch
@@ -679,19 +778,28 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
     /// sends the headers and the first part of the response, then waits for
     /// <see cref="Release"/>; git meanwhile shows the progress it got and waits for the rest.
     /// <para>
-    /// With <paramref name="atPercent"/> 0 the first part ends with the first progress line
-    /// (side band 2) that holds a <c>%</c>: a pkt-line, which may hold several of git's lines
-    /// (<c>Counting objects:   0%</c> to <c>3%</c> for the 100k-commit repo). With a percentage
-    /// it ends right after the first whole line of git's (up to its <c>\r</c> or <c>\n</c>)
-    /// whose percentage is at least that one; when more follows that line in its pkt-line, the
-    /// pkt-line is split in two there and the response sent with the length of the rebuilt body
-    /// (<see cref="SplitAtProgress"/>). Git shows a line only once it is whole, so the last line
-    /// it shows while held is that one: <c>Counting objects:  45% (…)</c> for 45 (D150).
+    /// With <paramref name="atPercent"/> 0 the first part ends with the progress pkt-line (side
+    /// band 2) in which the first whole line of git's with a percentage ends, at its <c>\r</c>
+    /// or <c>\n</c> (<see cref="ScanPktLines"/>). A pkt-line carries what upload-pack read of
+    /// pack-objects' progress at once: several of git's lines (<c>Counting objects:   0%</c> to
+    /// <c>3%</c> for the 100k-commit repo), or part of one, since a read may end inside a line
+    /// (Git for Windows 2.56 was seen to write a progress line of odd length in two writes, its
+    /// last byte, the <c>\r</c> or <c>\n</c>, apart from the rest). The pkt-line is never split,
+    /// so git shows the last whole line with a percentage that it carries. With a percentage
+    /// the first part ends right after the first whole line of git's (up to its <c>\r</c> or
+    /// <c>\n</c>) whose percentage is at least that one; when more follows that line in its
+    /// pkt-line, the pkt-line is split in two there and the response sent with the length of
+    /// the rebuilt body (<see cref="SplitAtProgress"/>). Git shows a line only once it is whole,
+    /// so the last line it shows while held is that one: <c>Counting objects:  45% (…)</c> for
+    /// 45 (D150).
     /// </para>
     /// <para>
     /// When git asked for no progress (<c>no-progress</c>, a fetch without <c>--progress</c> and
-    /// without a terminal), or no line reaches the percentage, only the headers go first.
-    /// Calling it again before a response was held changes nothing, the percentage included.
+    /// without a terminal), or no line reaches the percentage, only the headers go first. At 0,
+    /// when a progress pkt-line holds a <c>%</c> but no line with a percentage ends before the
+    /// response does, the first part ends with the first such pkt-line. Each hold asked is kept,
+    /// with what it sent once it began, among <see cref="Holds"/>. Calling it again before a
+    /// response was held changes nothing, the percentage included.
     /// </para>
     /// </summary>
     /// <param name="atPercent">0, or the percentage, 1 to 100, of the progress line to hold at.</param>
@@ -722,6 +830,7 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
             {
                 hold = new Hold(folder, atPercent);
                 _pendingHolds.Add(folder, hold);
+                _askedHolds.Add(hold);
             }
 
             return hold.Engaged.Task;
@@ -816,6 +925,11 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
             return;
         }
 
+        lock (RunningServersGate)
+        {
+            RunningServers.Remove(this);
+        }
+
         List<Hold> holds;
         Task[] connections;
         lock (_gate)
@@ -865,6 +979,17 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
     }
 
     public void Dispose() => DisposeAsync().AsTask().GetAwaiter().GetResult();
+
+    /// <summary>Starts accepting connections and counts the server among those that run (<see cref="DescribeServersOn"/>) until it is disposed.</summary>
+    private void StartAccepting()
+    {
+        lock (RunningServersGate)
+        {
+            RunningServers.Add(this);
+        }
+
+        _acceptLoop = Task.Run(AcceptLoopAsync);
+    }
 
     private static TcpListener Listen(int port)
     {
@@ -1095,6 +1220,12 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
         {
             await stream.WriteAsync(sent.AsMemory(0, holdAt), stopping).ConfigureAwait(false);
             await stream.FlushAsync(stopping).ConfigureAwait(false);
+            var part = new AuthRemoteHoldPart(DateTimeOffset.UtcNow, holdAt, sent.Length, ProgressOf(sent[..holdAt]));
+            lock (_gate)
+            {
+                hold.Part = part;
+            }
+
             hold.Engaged.TrySetResult();
             await hold.Released.Task.WaitAsync(stopping).ConfigureAwait(false);
         }
@@ -1615,17 +1746,23 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
 
     /// <summary>
     /// Reads a response body as pkt-lines (protocol v0's and v2's upload-pack responses are
-    /// nothing else). Returns whether a line carries pack data (side band 1), and the end of
-    /// the first progress line (side band 2) that holds a <c>%</c>, or -1. Lines that are not
+    /// nothing else). Returns whether a line carries pack data (side band 1), and where a hold
+    /// at 0 ends its first part (<see cref="HoldNextFetchPack(int)"/>): the end of the progress
+    /// pkt-line (side band 2) in which the first whole line of git's with a percentage ends, at
+    /// its <c>\r</c> or <c>\n</c> (a line may run over several pkt-lines, as in
+    /// <see cref="SplitAtProgress"/>); when no such line ends before the body does, the end of
+    /// the first progress pkt-line that holds a <c>%</c>; -1 when none does. Lines that are not
     /// on a side band (<c>ACK</c>, <c>NAK</c>, <c>packfile</c>) start with a letter, never with
     /// the band's byte 1, 2 or 3.
     /// </summary>
     internal static (bool HasPack, int ProgressEnd) ScanPktLines(byte[] body)
     {
         var hasPack = false;
-        var progressEnd = -1;
+        var firstPercentEnd = -1;
+        var wholeLineEnd = -1;
+        var line = new StringBuilder();
         var offset = 0;
-        while (offset + 4 <= body.Length && !(hasPack && progressEnd >= 0))
+        while (offset + 4 <= body.Length && !(hasPack && wholeLineEnd >= 0))
         {
             if (!int.TryParse(Encoding.ASCII.GetString(body, offset, 4), NumberStyles.AllowHexSpecifier, CultureInfo.InvariantCulture, out var length))
             {
@@ -1639,7 +1776,8 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
                 continue;
             }
 
-            if (offset + length > body.Length)
+            var end = offset + length;
+            if (end > body.Length)
             {
                 break;
             }
@@ -1649,15 +1787,38 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
             {
                 hasPack = true;
             }
-            else if (payload.Length > 0 && payload[0] == 2 && progressEnd < 0 && payload.Contains((byte)'%'))
+            else if (payload.Length > 0 && payload[0] == 2 && wholeLineEnd < 0)
             {
-                progressEnd = offset + length;
+                if (firstPercentEnd < 0 && payload.Contains((byte)'%'))
+                {
+                    firstPercentEnd = end;
+                }
+
+                // Git shows a line only once its \r or \n has come, which may be in a later
+                // pkt-line than its '%' (upload-pack sends what each read of pack-objects'
+                // progress brought, and the read may end inside a line).
+                foreach (var b in payload[1..])
+                {
+                    if (b is not ((byte)'\r' or (byte)'\n'))
+                    {
+                        line.Append((char)b);
+                    }
+                    else if (PercentOf(line.ToString()) >= 0)
+                    {
+                        wholeLineEnd = end;
+                        break;
+                    }
+                    else
+                    {
+                        line.Clear();
+                    }
+                }
             }
 
-            offset += length;
+            offset = end;
         }
 
-        return (hasPack, progressEnd);
+        return (hasPack, wholeLineEnd >= 0 ? wholeLineEnd : firstPercentEnd);
     }
 
     /// <summary>
@@ -1743,6 +1904,60 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
 
     private static void WritePktLength(Span<byte> target, int length) =>
         Encoding.ASCII.GetBytes(length.ToString("x4", CultureInfo.InvariantCulture), target);
+
+    /// <summary>The progress (side band 2) that the pkt-lines of <paramref name="part"/> carry, joined, each byte a character.</summary>
+    private static string ProgressOf(byte[] part) =>
+        string.Concat(PktLines(part).Where(payload => payload.Length > 0 && payload[0] == 2).Select(payload => Encoding.Latin1.GetString(payload, 1, payload.Length - 1)));
+
+    /// <summary>The last line of <paramref name="progress"/> that a <c>\r</c> or <c>\n</c> ends and that holds a percentage; null when none does.</summary>
+    private static string? LastWholeLineWithPercent(string progress)
+    {
+        string? last = null;
+        var start = 0;
+        for (var i = 0; i < progress.Length; i++)
+        {
+            if (progress[i] is '\r' or '\n')
+            {
+                var line = progress[start..i];
+                if (PercentOf(line) >= 0)
+                {
+                    last = line;
+                }
+
+                start = i + 1;
+            }
+        }
+
+        return last;
+    }
+
+    /// <summary>
+    /// <paramref name="text"/> with <c>\r</c>, <c>\n</c> and other control characters written out
+    /// (<c>\x1b</c>); beyond <see cref="DescribedProgressLength"/> characters, its first quarter and
+    /// last three quarters of that with <c> … </c> between.
+    /// </summary>
+    private static string Visible(string text)
+    {
+        if (text.Length > DescribedProgressLength)
+        {
+            var head = DescribedProgressLength / 4;
+            text = string.Concat(text.AsSpan(0, head), " … ", text.AsSpan(text.Length - (DescribedProgressLength - head)));
+        }
+
+        var visible = new StringBuilder(text.Length);
+        foreach (var c in text)
+        {
+            _ = c switch
+            {
+                '\r' => visible.Append("\\r"),
+                '\n' => visible.Append("\\n"),
+                _ when char.IsControl(c) => visible.Append(CultureInfo.InvariantCulture, $"\\x{(int)c:x2}"),
+                _ => visible.Append(c),
+            };
+        }
+
+        return visible.ToString();
+    }
 
     /// <summary>The first percentage in a line of git's progress (45 for <c>Counting objects:  45% (45/100)</c>); -1 when it has none.</summary>
     private static int PercentOf(string line)
@@ -1855,6 +2070,12 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
 
         /// <summary>0, or the percentage of the progress line the hold begins after (<see cref="HoldNextFetchPack(string, int)"/>).</summary>
         public int AtPercent { get; } = atPercent;
+
+        /// <summary>When it was asked for, in UTC.</summary>
+        public DateTimeOffset Asked { get; } = DateTimeOffset.UtcNow;
+
+        /// <summary>What it sent once it began; null before. Under the server's gate.</summary>
+        public AuthRemoteHoldPart? Part { get; set; }
 
         public TaskCompletionSource Engaged { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -2032,6 +2253,20 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
         }
     }
 }
+
+/// <summary>A hold asked of a server (<see cref="AuthRemoteServer.Holds"/>).</summary>
+/// <param name="Asked">When it was asked for (<see cref="AuthRemoteServer.HoldNextFetchPack(string, int)"/>), in UTC.</param>
+/// <param name="Repository">The served repository's folder name (<c>remote.git</c>).</param>
+/// <param name="AtPercent">0, or the percentage it was asked for.</param>
+/// <param name="Part">What it sent once it began; null when it has not begun.</param>
+public sealed record AuthRemoteHold(DateTimeOffset Asked, string Repository, int AtPercent, AuthRemoteHoldPart? Part);
+
+/// <summary>What a held response sent before it held (<see cref="AuthRemoteHold.Part"/>).</summary>
+/// <param name="At">When its first part had been sent, in UTC.</param>
+/// <param name="SentBytes">How many bytes of the body went before the hold.</param>
+/// <param name="BodyBytes">The length of the body sent.</param>
+/// <param name="Progress">The progress (side band 2) of the part sent, joined, as git received it.</param>
+public sealed record AuthRemoteHoldPart(DateTimeOffset At, int SentBytes, int BodyBytes, string Progress);
 
 /// <summary>One request <see cref="AuthRemoteServer"/> served.</summary>
 /// <param name="Method"><c>GET</c> or <c>POST</c>.</param>

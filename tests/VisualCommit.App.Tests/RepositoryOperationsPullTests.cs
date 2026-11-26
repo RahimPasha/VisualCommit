@@ -449,7 +449,7 @@ public class RepositoryOperationsPullTests
         var held = server.HoldNextFetchPack();
         var pull = app.Operations.PullAsync();
         await held.WaitAsync(NetworkTimeout, TestContext.Current.CancellationToken);
-        await WaitUntilAsync(() => app.StatusText.EndsWith('%'), "the pull's percentage");
+        await WaitForStatusPercentageAsync(app, server, "the pull's percentage");
         Assert.Matches(@"^Pulling origin/main into main… Counting objects \d{1,3}%$", app.StatusText);
 
         app.Repository.Queue.CancelCurrent();

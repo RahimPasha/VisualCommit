@@ -294,14 +294,50 @@ public sealed partial class ShellDriver
     /// "N%" and the bar is determinate) and returns N: "wait until the status bar shows a
     /// percentage" (checks 17, 18 and 31, with the server holding the fetch).
     /// </summary>
+    /// <exception cref="TimeoutException">No percentage showed in time; the message adds what the
+    /// status bar showed then and, for each server of the tests that the active tab's remotes reach
+    /// on 127.0.0.1, its requests and holds (<see cref="AuthRemoteServer.DescribeServersOn"/>):
+    /// whether the hold began, and what it sent.</exception>
     public async Task<int> WaitForProgressPercentAsync(TimeSpan? timeout = null)
     {
         var status = Session.Shell.ActiveTab.OperationStatus;
-        await WaitForAsync(
-            () => status.IsRunning && status.Percent is not null && PercentAtEnd().IsMatch(status.Text),
-            "the status bar to show a percentage",
-            timeout);
+        try
+        {
+            await WaitForAsync(
+                () => status.IsRunning && status.Percent is not null && PercentAtEnd().IsMatch(status.Text),
+                "the status bar to show a percentage",
+                timeout);
+        }
+        catch (TimeoutException timedOut)
+        {
+            var percent = status.Percent is { } shown ? shown.ToString(CultureInfo.InvariantCulture) : "none";
+            throw new TimeoutException(
+                $"{timedOut.Message} The status bar read \"{status.Text}\" (running: {status.IsRunning}, percentage: {percent}).\n{DescribeRemoteServers()}",
+                timedOut);
+        }
+
         return status.Percent!.Value;
+    }
+
+    /// <summary>
+    /// The servers of the tests (<see cref="AuthRemoteServer"/>) that the active tab's remotes reach
+    /// on 127.0.0.1, by the ports of their URLs as the repository's refs read them: which remote
+    /// names which port, then each port's server with its requests and holds
+    /// (<see cref="AuthRemoteServer.DescribeServersOn"/>); or that no remote names such a port.
+    /// </summary>
+    private string DescribeRemoteServers()
+    {
+        var remotes = (Session.Shell.ActiveTab.Repository?.Refs?.RemoteUrls ?? [])
+            .Select(url => (url.Remote, Port: Uri.TryCreate(url.Url, UriKind.Absolute, out var uri) && uri.IsLoopback && uri.Scheme == Uri.UriSchemeHttp ? uri.Port : 0))
+            .Where(remote => remote.Port > 0)
+            .ToList();
+        if (remotes.Count == 0)
+        {
+            return "No remote of the active tab names a port on 127.0.0.1.";
+        }
+
+        var named = string.Join(", ", remotes.Distinct().Select(remote => string.Create(CultureInfo.InvariantCulture, $"{remote.Remote} port {remote.Port}")));
+        return $"The active tab's remotes on 127.0.0.1: {named}.\n{AuthRemoteServer.DescribeServersOn(remotes.Select(remote => remote.Port))}";
     }
 
     /// <summary>
