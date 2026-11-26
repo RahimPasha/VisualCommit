@@ -372,14 +372,16 @@ public partial class ThemeTokensTests
     /// <c>IsEnabled</c>), a mark that is no text, a class's name that applies no dimming there, or
     /// one of D469's three exceptions by its place. The table keeps the rules
     /// <see cref="AssertGuardTable"/> names. A new reference to the dimmed colour or to the search's
-    /// dimming, or a new application of such a class (or a listed one bound otherwise, since a
-    /// class's place holds its binding), fails with its file and line; a listed use
-    /// that is gone fails too, and so does a scan that finds the token or the constant nowhere, so
-    /// that a rename cannot leave the guard looking for nothing. A text that comes under a dimming
-    /// already listed adds no reference: the render fact of exception (c) reads a dimmed row's
-    /// message, author, date and SHA columns, the inside of each label and the labels' column
-    /// outside them, where such a text shows; a text or a mark drawn in the graph's column under the
-    /// node's dimming is read by neither fact.
+    /// dimming, or a new application of such a class by its name (or a listed one bound otherwise,
+    /// since a class's place holds its binding), fails with its file and line, as far as a reading
+    /// of the text sees it (<see cref="DimmedNeedles"/>: a class applied through a constant, for
+    /// one, is seen only where the constant is defined); a listed use that is gone fails too, and so
+    /// does a scan that finds the token or the constant nowhere, so that a rename cannot leave the
+    /// guard looking for nothing. A text that comes under a dimming already listed adds no
+    /// reference: the render fact of exception (c) reads a dimmed row's message, author, date and
+    /// SHA columns, the inside of each label and the labels' column outside them, where such a text
+    /// shows; a text or a mark drawn in the graph's column under the node's dimming is read by
+    /// neither fact.
     /// </summary>
     [AvaloniaFact]
     public void The_dimmed_colour_and_the_searchs_dimming_are_used_only_where_the_guard_lists_them()
@@ -1176,7 +1178,8 @@ public partial class ThemeTokensTests
     /// <see cref="DimmingClasses"/> by its whole name, which <see cref="ScanXaml"/> looks for where
     /// XAML applies a class and <see cref="ScanCode"/> in a string of code. A colour mixed by other
     /// means or computed, as CSS's <c>hsl(</c> is, the value computed, or a class's name put
-    /// together, is beyond a reading of the text.
+    /// together, is beyond a reading of the text; a class held in a constant, or the colour behind
+    /// a resource alias, is seen where it is defined, not where it is used.
     /// </summary>
     private static List<(DimmedNeedle Needle, Regex Pattern)> DimmedNeedles()
     {
@@ -1283,6 +1286,8 @@ public partial class ThemeTokensTests
     /// <summary>
     /// The uses in a C# file: each match in a line's code, comments left out, its place the line's
     /// code; and each dimming class a string of the code names whole, as <c>Classes.Set("dropped", …)</c> does.
+    /// The strings are taken from the code by a pattern that does not know character literals: after
+    /// <c>'"'</c> on a line, a class a later string names is missed.
     /// </summary>
     private static List<DimmedUse> ScanCode(string file, string text, IReadOnlyList<(DimmedNeedle Needle, Regex Pattern)> needles)
     {
@@ -1324,7 +1329,9 @@ public partial class ThemeTokensTests
     /// <summary>
     /// A line of C# without its comments: <c>//</c> to the line's end, and <c>/*</c> to <c>*/</c> also across
     /// lines (<paramref name="inComment"/>), outside string and character literals. A plain reading,
-    /// not a compiler's: a verbatim or raw string that holds a quote may hide a comment's start.
+    /// not a compiler's: a verbatim string that ends in a backslash, or a raw string with an odd
+    /// number of quotes, can keep a comment as code; and a raw or verbatim string over several lines
+    /// is read as code, where a <c>/*</c> in it drops the lines after it until a <c>*/</c>.
     /// </summary>
     private static string CodeOf(string line, ref bool inComment)
     {
