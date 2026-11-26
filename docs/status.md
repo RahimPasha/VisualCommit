@@ -457,10 +457,11 @@ Phase 8a's runs on `phase/8a-release-readiness`, the newest first. CI has six jo
   tests with 7 skipped each, Test steps 6 min 49 s with Microsoft's installer and 8 min 30 s with
   Ubuntu's packages, the Secret Service's test passed in both; the Windows and macOS keychain steps
   passed. Eight tests more than the run before in every job, the new facts, the render of the graph
-  among them. The failed job is run again (attempt 2, started at 11:44); the next push will cancel
-  it if it has not ended. The lead's ruling of 2026-11-25 on that hold, no change before the gate
-  (ruling 109), is taken back on the second failure: run `wf_5fc2df5a-3bc` probes the cause on the
-  laptop, hardens the hold and adds diagnostics. The log's lines are in
+  among them. **The failed job run again passed** (attempt 2, 11:44 to 12:26: 8,915 tests, 8,908
+  passed, 7 skipped, Test step 39 min 37 s; git 2.56.1.windows.1), so the run is green on its second
+  attempt. The lead's ruling of 2026-11-25 on that hold, no change before the gate (ruling 109), is
+  taken back on the second failure: run `wf_5fc2df5a-3bc` probes the cause on the laptop, hardens
+  the hold and adds diagnostics. The log's lines are in
   `D:/Projects/Personal/phase8-work/wave4/review/ci-45871534398/`. The push started no run of the
   guide's workflow (it touches nothing that workflow watches), and the push after it, `4cf2420`,
   changed only docs.
@@ -1247,13 +1248,13 @@ runtime writes an `fprintf` to a piped stderr in many small writes, so under loa
 inside the first line with a percentage, which the analysts of 2026-11-25 had ruled unlikely on the
 belief that a line is one write), then makes the hold without a percentage end only after a whole
 line with one (`tests/VisualCommit.Testing/AuthRemoteServer.cs`), and makes a wait for a percentage
-that times out say what the server sent and what git reported. **Next for the lead, in this order:**
-(1) read attempt 2 of run 45871534398's Windows job and record it; (2) read each package's result
-and its diff, merge `wip/p8a-dimmed` and `wip/p8a-fetch-hold` with `--no-ff`, build, and run on the
+that times out say what the server sent and what git reported. Attempt 2 of the run's Windows job
+passed (the CI section). **Next for the lead, in this order:** (1) read each package's result and
+its diff, merge `wip/p8a-dimmed` and `wip/p8a-fetch-hold` with `--no-ff`, build, and run on the
 merged tree `ThemeTokensTests`, `AuthRemoteServerTests`, `RemoteOperationTests`, the fetch, pull and
 queue classes of `VisualCommit.App.Tests` and phase 3's part D; compare part D's pictures taken
 while a fetch is held with `references/step19/` (only the hold's percentage may differ); write the
-ruling after 112; push both merges together, read CI's run and record it; tick step 19; (3) step 21,
+ruling after 112; push both merges together, read CI's run and record it; tick step 19; (2) step 21,
 the gate, each takeover of the desktop announced in the chat just before it starts: D246's two runs
 of phase 8a's real-window checks, the whole default run and the real-window pass on one commit, the
 list of pictures, the live command on the counted round (by 2026-11-28, while GitHub's token
