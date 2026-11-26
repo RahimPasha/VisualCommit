@@ -1296,7 +1296,9 @@ public partial class AuthRemoteServerTests
             catch (TimeoutException timedOut)
             {
                 var lines = _lines.IsEmpty ? "(git wrote no line)" : ToString();
-                throw new TimeoutException($"No line of git's held a percentage after {timeout.TotalSeconds} s:\n{lines}\n{server.DescribeHoldsAndRequests()}", timedOut);
+                throw new TimeoutException(
+                    $"No line of git's held a percentage within {timeout.TotalSeconds} s; its lines when this was written:\n{lines}\n{server.DescribeHoldsAndRequests()}",
+                    timedOut);
             }
         }
 
