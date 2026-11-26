@@ -368,8 +368,10 @@ public partial class ThemeTokensTests
     /// (<see cref="DimmingClasses"/>), where it is applied, and the search's dimming, by its
     /// constant and by its value written out, are used only where <see cref="DimmedTextUses"/>
     /// lists them, each with its reason: a definition, a disabled state (a <c>:disabled</c>
-    /// selector, or a class bound to a disabled command), a mark that is no text, or one of D469's
-    /// three exceptions by its place. A new reference to the dimmed colour or to the search's
+    /// selector, a class bound to a disabled command, or one set in code by a line that names
+    /// <c>IsEnabled</c>), a mark that is no text, a class's name that applies no dimming there, or
+    /// one of D469's three exceptions by its place. The table keeps the rules
+    /// <see cref="AssertGuardTable"/> names. A new reference to the dimmed colour or to the search's
     /// dimming, or a new application of such a class (or a listed one bound otherwise, since a
     /// class's place holds its binding), fails with its file and line; a listed use
     /// that is gone fails too, and so does a scan that finds the token or the constant nowhere, so
@@ -388,16 +390,34 @@ public partial class ThemeTokensTests
     }
 
     /// <summary>
-    /// The rules the guard's table (<paramref name="accepted"/>) keeps: a use under a disabled state
-    /// names it; every class that a listed style in XAML names outside a disabled state is a
-    /// dimming class (<see cref="DimmingClasses"/>) or one of <see cref="NonDimmingClasses"/>, and
-    /// each of those is named so; each exception gives the colour, or the dimming, at one place, and
-    /// what applies it lies in the same file.
+    /// The rules the guard's table (<paramref name="accepted"/>) keeps: every use has its reason, and
+    /// only a class's name is listed as applying no dimming; a use under a disabled state names it,
+    /// a class set in code by <c>IsEnabled</c> in its line; every class that a listed style in XAML
+    /// names outside a disabled state is a dimming class (<see cref="DimmingClasses"/>) or one of
+    /// <see cref="NonDimmingClasses"/>, and each of those is named so; each exception gives the
+    /// colour, or the dimming, at one place, and what applies it lies in the same file.
     /// </summary>
     private static void AssertGuardTable(IReadOnlyList<AcceptedUse> accepted)
     {
+        foreach (var entry in accepted)
+        {
+            Assert.False(string.IsNullOrWhiteSpace(entry.Reason), $"{entry.File}: \"{entry.Place}\" is listed without its reason.");
+            Assert.True(
+                entry.Kind != DimmedUseKind.NotDimming || entry.Needle == DimmedNeedle.Class,
+                $"{entry.File}: \"{entry.Place}\" is listed as applying no dimming, which only a class's name can be.");
+        }
+
         foreach (var entry in accepted.Where(entry => entry.Kind == DimmedUseKind.Disabled))
         {
+            // A class set in code under a disabled state names that state in its line.
+            if (entry.Needle == DimmedNeedle.Class && !IsXaml(entry.File))
+            {
+                Assert.True(
+                    entry.Place.Contains("IsEnabled", StringComparison.Ordinal),
+                    $"{entry.File}: \"{entry.Place}\" is listed under a disabled state, but its line names no IsEnabled.");
+                continue;
+            }
+
             Assert.True(
                 entry.Place.Contains(":disabled", StringComparison.Ordinal) || entry.Place.Contains(".disabled", StringComparison.Ordinal),
                 $"{entry.File}: \"{entry.Place}\" is listed under a disabled state, but its place names none.");
@@ -755,11 +775,20 @@ public partial class ThemeTokensTests
         /// <summary>Where the token, its colour or the constant is defined.</summary>
         Definition,
 
-        /// <summary>Under a disabled state, which WCAG exempts: a <c>:disabled</c> selector, or a class bound to a disabled command.</summary>
+        /// <summary>
+        /// Under a disabled state, which WCAG exempts: a <c>:disabled</c> selector, a class bound to a
+        /// disabled command, or a class set in code by a line that names <c>IsEnabled</c>.
+        /// </summary>
         Disabled,
 
         /// <summary>A mark that is no text: a border, a node.</summary>
         NotText,
+
+        /// <summary>
+        /// A dimming class's name that applies no dimming here: a string of code that is no class, or
+        /// a class on an element that no listed style giving it the colour reaches.
+        /// </summary>
+        NotDimming,
 
         /// <summary>D469's exception (a): a hidden or left-out branch's name in the left panel.</summary>
         ExceptionA,
@@ -1422,7 +1451,7 @@ public partial class ThemeTokensTests
                 problems.Add(
                     $"{group.Key.File}:{lines}: {NeedleName(group.Key.Needle)} in \"{group.Key.Place}\", a use the guard does not list. "
                     + "If it dims a text on a row the user acts on, draw the text in another colour (VcTextSecondaryBrush reaches 4.5:1 on every row) or leave the class off; "
-                    + "if it lies under a disabled state, is no text, or belongs to one of D469's exceptions, add it to DimmedTextUses with its reason.");
+                    + "if it lies under a disabled state, is no text, applies no dimming here, or belongs to one of D469's exceptions, add it to DimmedTextUses with its reason.");
             }
             else if (group.Count() != entry.Count)
             {
