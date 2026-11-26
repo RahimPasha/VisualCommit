@@ -26,7 +26,8 @@ namespace VisualCommit.Testing;
 /// <para>
 /// <see cref="HoldNextFetchPack(int)"/> holds back part of the next response that carries a pack, so
 /// that a test sees a fetch in progress, with a percentage (one it chose, if it likes), for as
-/// long as it likes.
+/// long as it likes: the part sent first ends after a whole line of git's progress with a
+/// percentage, when the response has one.
 /// </para>
 /// <para>
 /// Since phase 6 (docs/phase-6-design.md 17.2, amending D97 as D150 did) a server can serve a
@@ -679,19 +680,26 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
     /// sends the headers and the first part of the response, then waits for
     /// <see cref="Release"/>; git meanwhile shows the progress it got and waits for the rest.
     /// <para>
-    /// With <paramref name="atPercent"/> 0 the first part ends with the first progress line
-    /// (side band 2) that holds a <c>%</c>: a pkt-line, which may hold several of git's lines
-    /// (<c>Counting objects:   0%</c> to <c>3%</c> for the 100k-commit repo). With a percentage
-    /// it ends right after the first whole line of git's (up to its <c>\r</c> or <c>\n</c>)
-    /// whose percentage is at least that one; when more follows that line in its pkt-line, the
-    /// pkt-line is split in two there and the response sent with the length of the rebuilt body
-    /// (<see cref="SplitAtProgress"/>). Git shows a line only once it is whole, so the last line
-    /// it shows while held is that one: <c>Counting objects:  45% (…)</c> for 45 (D150).
+    /// With <paramref name="atPercent"/> 0 the first part ends with the progress pkt-line (side
+    /// band 2) in which the first whole line of git's with a percentage ends, at its <c>\r</c>
+    /// or <c>\n</c> (<see cref="ScanPktLines"/>). A pkt-line carries what upload-pack read of
+    /// pack-objects' progress at once: several of git's lines (<c>Counting objects:   0%</c> to
+    /// <c>3%</c> for the 100k-commit repo), or part of one, since a read may end inside a line
+    /// (on Windows a line's <c>\r</c> comes in a write of its own). The pkt-line is never split,
+    /// so git shows the last whole line with a percentage that it carries. With a percentage
+    /// the first part ends right after the first whole line of git's (up to its <c>\r</c> or
+    /// <c>\n</c>) whose percentage is at least that one; when more follows that line in its
+    /// pkt-line, the pkt-line is split in two there and the response sent with the length of
+    /// the rebuilt body (<see cref="SplitAtProgress"/>). Git shows a line only once it is whole,
+    /// so the last line it shows while held is that one: <c>Counting objects:  45% (…)</c> for
+    /// 45 (D150).
     /// </para>
     /// <para>
     /// When git asked for no progress (<c>no-progress</c>, a fetch without <c>--progress</c> and
-    /// without a terminal), or no line reaches the percentage, only the headers go first.
-    /// Calling it again before a response was held changes nothing, the percentage included.
+    /// without a terminal), or no line reaches the percentage, only the headers go first. At 0,
+    /// when a progress pkt-line holds a <c>%</c> but no line with a percentage ends before the
+    /// response does, the first part ends with the first such pkt-line. Calling it again before
+    /// a response was held changes nothing, the percentage included.
     /// </para>
     /// </summary>
     /// <param name="atPercent">0, or the percentage, 1 to 100, of the progress line to hold at.</param>
@@ -1615,17 +1623,23 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
 
     /// <summary>
     /// Reads a response body as pkt-lines (protocol v0's and v2's upload-pack responses are
-    /// nothing else). Returns whether a line carries pack data (side band 1), and the end of
-    /// the first progress line (side band 2) that holds a <c>%</c>, or -1. Lines that are not
+    /// nothing else). Returns whether a line carries pack data (side band 1), and where a hold
+    /// at 0 ends its first part (<see cref="HoldNextFetchPack(int)"/>): the end of the progress
+    /// pkt-line (side band 2) in which the first whole line of git's with a percentage ends, at
+    /// its <c>\r</c> or <c>\n</c> (a line may run over several pkt-lines, as in
+    /// <see cref="SplitAtProgress"/>); when no such line ends before the body does, the end of
+    /// the first progress pkt-line that holds a <c>%</c>; -1 when none does. Lines that are not
     /// on a side band (<c>ACK</c>, <c>NAK</c>, <c>packfile</c>) start with a letter, never with
     /// the band's byte 1, 2 or 3.
     /// </summary>
     internal static (bool HasPack, int ProgressEnd) ScanPktLines(byte[] body)
     {
         var hasPack = false;
-        var progressEnd = -1;
+        var firstPercentEnd = -1;
+        var wholeLineEnd = -1;
+        var line = new StringBuilder();
         var offset = 0;
-        while (offset + 4 <= body.Length && !(hasPack && progressEnd >= 0))
+        while (offset + 4 <= body.Length && !(hasPack && wholeLineEnd >= 0))
         {
             if (!int.TryParse(Encoding.ASCII.GetString(body, offset, 4), NumberStyles.AllowHexSpecifier, CultureInfo.InvariantCulture, out var length))
             {
@@ -1639,7 +1653,8 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
                 continue;
             }
 
-            if (offset + length > body.Length)
+            var end = offset + length;
+            if (end > body.Length)
             {
                 break;
             }
@@ -1649,15 +1664,38 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
             {
                 hasPack = true;
             }
-            else if (payload.Length > 0 && payload[0] == 2 && progressEnd < 0 && payload.Contains((byte)'%'))
+            else if (payload.Length > 0 && payload[0] == 2 && wholeLineEnd < 0)
             {
-                progressEnd = offset + length;
+                if (firstPercentEnd < 0 && payload.Contains((byte)'%'))
+                {
+                    firstPercentEnd = end;
+                }
+
+                // Git shows a line only once its \r or \n has come, which may be in a later
+                // pkt-line than its '%' (upload-pack sends what each read of pack-objects'
+                // progress brought, and the read may end inside a line).
+                foreach (var b in payload[1..])
+                {
+                    if (b is not ((byte)'\r' or (byte)'\n'))
+                    {
+                        line.Append((char)b);
+                    }
+                    else if (PercentOf(line.ToString()) >= 0)
+                    {
+                        wholeLineEnd = end;
+                        break;
+                    }
+                    else
+                    {
+                        line.Clear();
+                    }
+                }
             }
 
-            offset += length;
+            offset = end;
         }
 
-        return (hasPack, progressEnd);
+        return (hasPack, wholeLineEnd >= 0 ? wholeLineEnd : firstPercentEnd);
     }
 
     /// <summary>

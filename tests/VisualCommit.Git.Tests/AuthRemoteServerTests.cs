@@ -229,7 +229,7 @@ public partial class AuthRemoteServerTests
     }
 
     [Fact]
-    public async Task A_clone_held_at_0_is_held_after_the_first_progress_packet_as_before()
+    public async Task A_clone_held_at_0_is_held_after_the_progress_packet_that_ends_its_first_line_with_a_percentage()
     {
         await using var server = await AuthRemoteServer.StartAsync();
         server.RequireAuth = false;
@@ -286,7 +286,7 @@ public partial class AuthRemoteServerTests
     }
 
     [Fact]
-    public void Without_a_percentage_the_hold_ends_with_the_first_progress_pkt_line_that_holds_one_as_before()
+    public void Without_a_percentage_the_hold_ends_with_the_first_progress_pkt_line_with_one_when_a_line_with_one_ends_in_it()
     {
         var body = ProgressResponse();
 
