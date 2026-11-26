@@ -69,7 +69,6 @@ public partial class ThemeTokensTests
         // here first. The chevrons and the counts' arrows are icons; the control theme's own
         // foreground is the one the name's style overrides.
         var view = new LeftPanelView();
-        Assert.IsType<ControlTheme>(view.Resources["RefRowButton"]);
         var styles = ViewStyles(view);
         Assert.Equal(
             [
@@ -901,31 +900,49 @@ public partial class ThemeTokensTests
     private static string Hex(Color colour) => string.Create(CultureInfo.InvariantCulture, $"#{colour.R:X2}{colour.G:X2}{colour.B:X2}");
 
     /// <summary>
-    /// The setters of <paramref name="property"/> in <paramref name="styles"/> and their nested
-    /// styles, in their order, as <c>selector: value</c>; a control theme's own setters under its
-    /// target type's name.
+    /// The setters of <paramref name="property"/> in <paramref name="styles"/>, their nested styles
+    /// and the styles of a nested <c>Styles</c>, in their order, as <c>selector: value</c>; a control
+    /// theme's own setters under its target type's name. Any other kind of style, as a
+    /// <c>StyleInclude</c>, fails the fact by its type, since its setters are not read.
     /// </summary>
     private static List<string> Setters(IEnumerable<IStyle> styles, string property)
     {
         var found = new List<string>();
-        foreach (var style in styles.OfType<StyleBase>())
+        foreach (var style in styles)
         {
-            var selector = style switch
+            if (style is Styles nested)
             {
-                Style plain => plain.Selector?.ToString() ?? string.Empty,
-                ControlTheme theme => theme.TargetType?.Name ?? string.Empty,
-                _ => string.Empty,
+                found.AddRange(Setters(nested, property));
+                continue;
+            }
+
+            var (selector, rule) = style switch
+            {
+                Style plain => (plain.Selector?.ToString() ?? string.Empty, (StyleBase)plain),
+                ControlTheme theme => (theme.TargetType?.Name ?? string.Empty, theme),
+                _ => throw new InvalidOperationException($"The view's styles hold a {style.GetType().Name}, whose setters the fact does not read: read them here."),
             };
-            found.AddRange(style.Setters.OfType<Setter>().Where(setter => setter.Property?.Name == property).Select(setter => selector + ": " + ValueOf(setter.Value)));
-            found.AddRange(Setters(style.Children, property));
+            found.AddRange(rule.Setters.OfType<Setter>().Where(setter => setter.Property?.Name == property).Select(setter => selector + ": " + ValueOf(setter.Value)));
+            found.AddRange(Setters(rule.Children, property));
         }
 
         return found;
     }
 
-    /// <summary>A view's own styles, then the control themes of its resources, which <see cref="Setters"/> reads.</summary>
-    private static List<IStyle> ViewStyles(UserControl view) =>
-        [.. view.Styles, .. view.Resources.Values.OfType<ControlTheme>()];
+    /// <summary>
+    /// A view's own styles, then the control themes of its resources, which <see cref="Setters"/>
+    /// reads. Each key is looked up first: XAML defers a resource until its key is, and until then
+    /// the dictionary's values hold the deferred content, not the control theme. Merged or theme
+    /// dictionaries in the view's resources fail the fact, since their control themes are not read.
+    /// </summary>
+    private static List<IStyle> ViewStyles(UserControl view)
+    {
+        var resources = view.Resources;
+        Assert.True(
+            resources.MergedDictionaries.Count == 0 && resources.ThemeDictionaries.Count == 0,
+            $"{view.GetType().Name}'s resources merge or hold theme dictionaries, whose control themes the fact does not read: read them here.");
+        return [.. view.Styles, .. resources.Keys.ToList().Select(key => resources[key]).OfType<ControlTheme>()];
+    }
 
     /// <summary>A setter's value as <see cref="Setters"/> writes it: a dynamic resource's key, "transparent", or the value.</summary>
     private static string ValueOf(object? value) => value switch
