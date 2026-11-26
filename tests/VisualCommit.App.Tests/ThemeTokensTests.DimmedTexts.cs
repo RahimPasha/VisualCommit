@@ -419,7 +419,7 @@ public partial class ThemeTokensTests
     /// colour written out, a pushed opacity at the search's constant and its value written out, the
     /// colour in code by each of the ways <see cref="DimmedNeedles"/> knows, a dimming class applied
     /// in XAML, by a list and by a binding, and in code, and a <c>.xaml</c> file. A mention in a
-    /// comment is no use.
+    /// comment is no use, nor are channels one off or given to another method.
     /// </summary>
     [AvaloniaFact]
     public void The_guard_reports_a_use_it_does_not_list_with_its_file_and_line()
@@ -468,6 +468,23 @@ public partial class ThemeTokensTests
             "                var trailing = .350;",
             "                label.Classes.Set(\"dropped\", true); // \"dimmed\"",
         ];
+
+        // The colour by its channels after an alpha in parentheses, a computed cast and a call, to a
+        // constructor named in full and to one typed by its target; a channel one off, and the
+        // channels to another method, are no use.
+        string[] channelForms =
+        [
+            string.Create(CultureInfo.InvariantCulture, $"var computed = Color.FromArgb((byte)(255 * share), {dark.R}, {dark.G}, {dark.B});"),
+            string.Create(CultureInfo.InvariantCulture, $"var capped = Color.FromArgb(Math.Min(alpha, 255), 0x{dark.R:X2}, 0x{dark.G:X2}, 0x{dark.B:X2});"),
+            string.Create(CultureInfo.InvariantCulture, $"var qualified = new Avalonia.Media.Color(255, {colour.R}, {colour.G}, {colour.B});"),
+            string.Create(CultureInfo.InvariantCulture, $"Color targeted = new(255, {colour.R}, {colour.G}, {colour.B});"),
+        ];
+        string[] noUses =
+        [
+            string.Create(CultureInfo.InvariantCulture, $"var oneOff = Color.FromArgb((byte)204, {dark.R}, {dark.G}, {dark.B + 1});"),
+            string.Create(CultureInfo.InvariantCulture, $"var other = Mix((byte)204, {dark.R}, {dark.G}, {dark.B});"),
+        ];
+        insertedCode = [.. insertedCode, .. channelForms.Concat(noUses).Select(line => "                " + line)];
         var changedRender = string.Join('\n', render[..drawTexts].Concat(insertedCode).Concat(render[drawTexts..]));
 
         // A XAML file named .xaml, which Avalonia builds too, is read as XAML.
@@ -494,6 +511,7 @@ public partial class ThemeTokensTests
                 $"{Render}:{lines.Value + 3}: the disabled text colour written out in \"{decimals}\"",
                 $"{Render}:{lines.Value + 4}: the search's dimming's value written out in \"var trailing = .350;\"",
                 $"{Render}:{lines.Value + 5}: a class whose style gives a text the disabled colour in \"label.Classes.Set(\"dropped\", true);\"",
+                .. channelForms.Select((form, i) => $"{Render}:{lines.Value + 6 + i}: the disabled text colour written out in \"{form}\""),
                 $"{Copied}:2: the disabled text colour written out in \"Style TextBlock.copied > Setter Foreground\"",
             ],
             problems.Select(problem => problem.IndexOf(", a use the guard does not list", StringComparison.Ordinal) is var at and >= 0 ? problem[..at] : problem));
@@ -1050,8 +1068,10 @@ public partial class ThemeTokensTests
     /// The guard's needles: the token by its name, which must stand in both themes; its colours in
     /// both themes as the app resolves them, in either case and with any alpha, written
     /// <c>#RRGGBB</c> or <c>#AARRGGBB</c> (XAML, or a string to parse), as a <c>0x</c> literal
-    /// (<c>Color.FromUInt32</c>), or as its three channels, hexadecimal or decimal, to
-    /// <c>Color.FromRgb</c>, <c>Color.FromArgb</c> or <c>new Color</c>; the constant by its name;
+    /// (<c>Color.FromUInt32</c>), or as its three channels, hexadecimal or decimal and each perhaps
+    /// cast, after an alpha that nests parentheses at most two deep, to <c>Color.FromRgb</c>,
+    /// <c>Color.FromArgb</c>, a constructor of <c>Color</c>, its name qualified or not, or one typed
+    /// by its target (<c>new(</c>); the constant by its name;
     /// its value written out, with or without its leading 0 and with trailing zeros; and a class of
     /// <see cref="DimmingClasses"/> by its whole name, which <see cref="ScanXaml"/> looks for where
     /// XAML applies a class and <see cref="ScanCode"/> in a string of code. A colour mixed by other
@@ -1066,9 +1086,11 @@ public partial class ThemeTokensTests
             var hex = string.Create(CultureInfo.InvariantCulture, $"{colour.R:X2}{colour.G:X2}{colour.B:X2}");
             needles.Add((DimmedNeedle.Colour, new Regex("(?:#|\\b0x)(?:[0-9A-F]{2})?" + hex + "(?![0-9A-F])", RegexOptions.IgnoreCase)));
 
-            // The three channels after the alpha, when one is given.
+            // The three channels after the alpha, when one is given: any argument without a comma
+            // outside its parentheses, nested at most two deep, as a cast, a product or a call.
             needles.Add((DimmedNeedle.Colour, new Regex(
-                @"(?:\bColor\.From(?:Rgb|Argb)|\bnew\s+Color)\(\s*(?:[^,()]+,\s*)?" + ChannelPattern(colour.R) + @"\s*,\s*" + ChannelPattern(colour.G) + @"\s*,\s*" + ChannelPattern(colour.B) + @"\s*\)",
+                @"(?:\bColor\.From(?:Rgb|Argb)|\bnew\s+(?:[\w.:]+\.)?Color|\bnew)\s*\(\s*(?:(?:[^,()]|\((?:[^()]|\([^()]*\))*\))+,\s*)?"
+                    + ChannelPattern(colour.R) + @"\s*,\s*" + ChannelPattern(colour.G) + @"\s*,\s*" + ChannelPattern(colour.B) + @"\s*\)",
                 RegexOptions.IgnoreCase)));
         }
 
