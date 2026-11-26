@@ -459,8 +459,10 @@ public partial class ThemeTokensTests
     /// <summary>
     /// The classes that the styles of a place in XAML name (<see cref="DimmedTextUses"/> says how a
     /// place is named) outside a disabled state: in each style's selector the alternatives that name
-    /// no <c>:disabled</c>, property matches in brackets left out; none when a style of the place
-    /// applies under <c>:disabled</c> alone. A control theme's key is no selector.
+    /// no <c>:disabled</c>, property matches in brackets and negated parts (<c>:not(...)</c>, whose
+    /// classes the style does not need and whose <c>:disabled</c> is no disabled state) left out;
+    /// none when a style of the place applies under <c>:disabled</c> alone. A control theme's key is
+    /// no selector.
     /// </summary>
     private static List<string> StyleClassesOf(string place)
     {
@@ -480,14 +482,41 @@ public partial class ThemeTokensTests
             }
         }
 
-        var disabled = new Regex(@"(?<!not\():disabled\b");
-        var alternatives = selectors.Select(selector => Regex.Replace(selector, @"\[[^\]]*\]", string.Empty).Split(',')).ToList();
+        var disabled = new Regex(@":disabled\b");
+        var alternatives = selectors
+            .Select(selector => WithoutNegations(Regex.Replace(selector, @"\[[^\]]*\]", string.Empty)).Split(','))
+            .ToList();
         return alternatives.Any(each => each.All(disabled.IsMatch))
             ? []
             : [.. alternatives.SelectMany(each => each)
                 .Where(alternative => !disabled.IsMatch(alternative))
                 .SelectMany(alternative => Regex.Matches(alternative, @"\.([\w-]+)").Select(match => match.Groups[1].Value))
                 .Distinct()];
+
+        // The selector without each ":not(" and what it holds up to its own closing parenthesis.
+        static string WithoutNegations(string selector)
+        {
+            var kept = new StringBuilder();
+            for (var i = 0; i < selector.Length; i++)
+            {
+                if (string.CompareOrdinal(selector, i, ":not(", 0, ":not(".Length) != 0)
+                {
+                    kept.Append(selector[i]);
+                    continue;
+                }
+
+                for (var depth = 0; i < selector.Length; i++)
+                {
+                    depth += selector[i] switch { '(' => 1, ')' => -1, _ => 0 };
+                    if (depth == 0 && selector[i] == ')')
+                    {
+                        break;
+                    }
+                }
+            }
+
+            return kept.ToString();
+        }
     }
 
     /// <summary>
