@@ -419,7 +419,8 @@ public partial class ThemeTokensTests
     /// colour written out, a pushed opacity at the search's constant and its value written out, the
     /// colour in code by each of the ways <see cref="DimmedNeedles"/> knows, a dimming class applied
     /// in XAML, by a list and by a binding, and in code, and a <c>.xaml</c> file. A mention in a
-    /// comment is no use, nor are channels one off or given to another method.
+    /// comment is no use, nor are channels one off or given to another method, nor the opacity's
+    /// value in a geometry's path data.
     /// </summary>
     [AvaloniaFact]
     public void The_guard_reports_a_use_it_does_not_list_with_its_file_and_line()
@@ -431,7 +432,8 @@ public partial class ThemeTokensTests
         var render = SourceLines(Render);
 
         // A style for a new dimmed text, an element in the colour written out, two elements that take
-        // the dimming class, by a list and by a binding, and a comment.
+        // the dimming class, by a list and by a binding, and a comment; the opacity's value in path
+        // data, which is no use, and on an element.
         var head = Array.FindIndex(panel, line => line.Contains("<Style Selector=\"TextBlock.refName.head\">", StringComparison.Ordinal));
         Assert.True(head > 0, "LeftPanelView.axaml has no style TextBlock.refName.head to insert before.");
         var colour = Token(DimmedToken, ThemeVariant.Light);
@@ -445,6 +447,9 @@ public partial class ThemeTokensTests
             $"    <Style Selector=\"TextBlock.refName.gone\"><Setter Property=\"Foreground\" Value=\"{hex}\" /></Style>",
             "    <TextBlock Name=\"ListedCopy\" Classes=\"refName dimmed\" />",
             "    <TextBlock Name=\"BoundCopy\" Classes.dimmed=\"{Binding IsDimmed}\" />",
+            "    <Path Data=\"M1 .35 2\" />",
+            "    <StreamGeometry x:Key=\"Probe\">M1 .35 2</StreamGeometry>",
+            "    <Border Name=\"Faded\" Opacity=\"0.35\" />",
         ];
         var changedPanel = string.Join('\n', panel[..head].Concat(insertedXaml).Concat(panel[head..]));
 
@@ -505,6 +510,7 @@ public partial class ThemeTokensTests
                 $"{Panel}:{lines.Hex}: the disabled text colour written out in \"Style TextBlock.refName.gone > Setter Foreground\"",
                 $"{Panel}:{lines.Hex + 1}: a class whose style gives a text the disabled colour in \"TextBlock ListedCopy @Classes=refName dimmed\"",
                 $"{Panel}:{lines.Hex + 2}: a class whose style gives a text the disabled colour in \"TextBlock BoundCopy @Classes.dimmed={{Binding IsDimmed}}\"",
+                $"{Panel}:{lines.Hex + 5}: the search's dimming's value written out in \"Border Faded @Opacity\"",
                 $"{Render}:{lines.Constant}: the search's dimming in \"using var again = context.PushOpacity(SearchDimmedOpacity);\"",
                 $"{Render}:{lines.Value}: the search's dimming's value written out in \"using var fixedValue = context.PushOpacity(0.35);\"",
                 $"{Render}:{lines.Value + 1}: the disabled text colour written out in \"{packed}\"",
@@ -1074,7 +1080,8 @@ public partial class ThemeTokensTests
     /// <c>Color.FromArgb</c>, a constructor of <c>Color</c>, its name qualified or not, or one typed
     /// by its target (<c>new(</c>), or in CSS's <c>rgb(</c> or <c>rgba(</c> with its three channels
     /// in decimal (XAML, or a string to parse); the constant by its name; its value written out,
-    /// with or without its leading 0 and with trailing zeros; and a class of
+    /// with or without its leading 0 and with trailing zeros, but not in a geometry's path data
+    /// (<see cref="IsPathData"/>); and a class of
     /// <see cref="DimmingClasses"/> by its whole name, which <see cref="ScanXaml"/> looks for where
     /// XAML applies a class and <see cref="ScanCode"/> in a string of code. A colour mixed by other
     /// means or computed, as CSS's <c>hsl(</c> is, the value computed, or a class's name put
@@ -1141,8 +1148,9 @@ public partial class ThemeTokensTests
     /// <summary>
     /// The uses in a XAML file: each match in an attribute's value or an element's text, comments
     /// left out, at its place (the enclosing control themes, styles and theme dictionaries, then the
-    /// setter's property, or the element and its attribute); and each dimming class the element
-    /// takes, by <c>Classes.dropped="…"</c> or in the list of <c>Classes="…"</c>.
+    /// setter's property, or the element and its attribute), the opacity's value not looked for in a
+    /// geometry's path data (<see cref="IsPathData"/>); and each dimming class the element takes, by
+    /// <c>Classes.dropped="…"</c> or in the list of <c>Classes="…"</c>.
     /// </summary>
     private static List<DimmedUse> ScanXaml(string file, string text, IReadOnlyList<(DimmedNeedle Needle, Regex Pattern)> needles)
     {
@@ -1155,7 +1163,7 @@ public partial class ThemeTokensTests
                 var name = AttributeName(element, attribute);
                 var line = ((IXmlLineInfo)attribute).LineNumber;
                 var place = PlaceOf(element, element.Name.LocalName == "Setter" && name == "Value" ? string.Empty : " @" + name);
-                AddMatches(uses, file, line, attribute.Value, place, needles);
+                AddMatches(uses, file, line, attribute.Value, place, needles, pathData: IsPathData(name));
 
                 // A class applied is named with what applies it, so that a changed binding is a new use.
                 string[] classes = name.StartsWith("Classes.", StringComparison.Ordinal) ? [name["Classes.".Length..]]
@@ -1166,12 +1174,20 @@ public partial class ThemeTokensTests
 
             foreach (var node in element.Nodes().OfType<XText>())
             {
-                AddMatches(uses, file, ((IXmlLineInfo)node).LineNumber, node.Value, PlaceOf(element, " text"), needles);
+                AddMatches(uses, file, ((IXmlLineInfo)node).LineNumber, node.Value, PlaceOf(element, " text"), needles, pathData: IsPathData(element.Name.LocalName));
             }
         }
 
         return uses;
     }
+
+    /// <summary>
+    /// A geometry's path data, whose numbers are no opacity, by the name of the attribute or the
+    /// element that holds it: <c>Data</c> or <c>Geometry</c>, a property element as <c>Path.Data</c>,
+    /// or a <c>StreamGeometry</c>.
+    /// </summary>
+    private static bool IsPathData(string name) =>
+        name is "Data" or "Geometry" or "StreamGeometry" || name.EndsWith(".Data", StringComparison.Ordinal);
 
     /// <summary>
     /// The uses in a C# file: each match in a line's code, comments left out, its place the line's
@@ -1192,10 +1208,14 @@ public partial class ThemeTokensTests
         return uses;
     }
 
-    /// <summary>The matches of every needle but the dimming classes' in <paramref name="text"/>.</summary>
-    private static void AddMatches(List<DimmedUse> uses, string file, int line, string text, string place, IReadOnlyList<(DimmedNeedle Needle, Regex Pattern)> needles)
+    /// <summary>
+    /// The matches of every needle but the dimming classes' in <paramref name="text"/>; in a
+    /// geometry's path data (<paramref name="pathData"/>) the opacity's value is not looked for.
+    /// </summary>
+    private static void AddMatches(List<DimmedUse> uses, string file, int line, string text, string place, IReadOnlyList<(DimmedNeedle Needle, Regex Pattern)> needles, bool pathData = false)
     {
-        foreach (var (needle, pattern) in needles.Where(needle => needle.Needle != DimmedNeedle.Class))
+        var looked = needles.Where(needle => needle.Needle != DimmedNeedle.Class && !(pathData && needle.Needle == DimmedNeedle.DimmingValue));
+        foreach (var (needle, pattern) in looked)
         {
             uses.AddRange(pattern.Matches(text).Select(_ => new DimmedUse(file, line, needle, place)));
         }
