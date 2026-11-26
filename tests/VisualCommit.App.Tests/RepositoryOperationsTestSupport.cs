@@ -169,11 +169,11 @@ internal static class RepositoryOperationsTestSupport
 
     /// <summary>
     /// Waits, as <see cref="WaitUntilAsync"/> does, until the status bar's text ends with a
-    /// percentage, for a fetch the server holds (<see cref="AuthRemoteServer.HoldNextFetchPack(int)"/>).
+    /// percentage, for a fetch <paramref name="server"/> holds (<see cref="AuthRemoteServer.HoldNextFetchPack(int)"/>).
     /// A timeout's message adds the texts the status bar showed from the wait's start and the
-    /// server's last holds (<see cref="AuthRemoteServer.DescribeRecentHolds"/>).
+    /// server's requests and holds (<see cref="AuthRemoteServer.DescribeHoldsAndRequests"/>).
     /// </summary>
-    public static async Task WaitForStatusPercentageAsync(OperationsHarness app, string what)
+    public static async Task WaitForStatusPercentageAsync(OperationsHarness app, AuthRemoteServer server, string what)
     {
         var first = app.StatusText;
         using var texts = new StatusTextRecorder(app.Repository.OperationStatus);
@@ -184,7 +184,7 @@ internal static class RepositoryOperationsTestSupport
         catch (TimeoutException timedOut)
         {
             var shown = string.Join(", ", new[] { first }.Concat(texts.Texts).Select(text => $"\"{text}\""));
-            throw new TimeoutException($"{timedOut.Message} The status bar showed {shown}.\n{AuthRemoteServer.DescribeRecentHolds()}", timedOut);
+            throw new TimeoutException($"{timedOut.Message} The status bar showed {shown}.\n{server.DescribeHoldsAndRequests()}", timedOut);
         }
     }
 

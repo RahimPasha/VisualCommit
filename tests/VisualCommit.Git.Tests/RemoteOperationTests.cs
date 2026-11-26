@@ -149,7 +149,7 @@ public class RemoteOperationTests
         // The server held the pack after its first progress line with a percentage.
         await WaitUntilAsync(
             () => progress.Reports.Any(report => report.Percent is not null),
-            () => $"The progress reported so far: {Described(progress.Reports)}.\n{AuthRemoteServer.DescribeRecentHolds()}");
+            () => $"The progress reported so far: {Described(progress.Reports)}.\n{server.DescribeHoldsAndRequests()}");
         await cancellation.CancelAsync();
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => fetch.WaitAsync(StepTimeout, TestCancelled));
         server.Release();
