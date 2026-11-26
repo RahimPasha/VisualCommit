@@ -377,7 +377,7 @@ public partial class ThemeTokensTests
         new(AppSource + "/Theme/Dialogs.axaml", DimmedNeedle.Token, "ControlTheme VcRadioButton > Style ^:disabled > Setter Foreground", DimmedUseKind.Disabled, "a disabled radio button's text"),
         new(AppSource + "/Theme/Menus.axaml", DimmedNeedle.Token, "Style MenuFlyoutPresenter.vcContextMenu MenuItem:disabled TextBlock.vcMenuKey > Setter Foreground", DimmedUseKind.Disabled, "a disabled menu item's key"),
         new(AppSource + "/Theme/Menus.axaml", DimmedNeedle.Token, "Style MenuFlyoutPresenter.vcContextMenu MenuItem:disabled /template/ ContentPresenter#PART_HeaderPresenter > Setter Foreground", DimmedUseKind.Disabled, "a disabled menu item's words"),
-        new(AppSource + "/Views/Commands/CommandPaletteView.axaml", DimmedNeedle.Token, "Style TextBlock.disabled > Setter Foreground", DimmedUseKind.Disabled, "a palette entry whose command is disabled (the class is bound to !IsEnabled): it runs nothing"),
+        new(AppSource + "/Views/Commands/CommandPaletteView.axaml", DimmedNeedle.Token, "Style TextBlock.disabled > Setter Foreground", DimmedUseKind.Disabled, "a palette entry whose command is disabled, its label, key and the reason shown in its detail's place (the class is bound to !IsEnabled): the entry can be highlighted, but it runs nothing, and its tooltip repeats the reason"),
         new(AppSource + "/Views/Shell/CompareView.axaml", DimmedNeedle.Token, "ControlTheme CompareLinkButton > Style ^:disabled > Setter Foreground", DimmedUseKind.Disabled, "a disabled From or To link: no row in the graph"),
 
         // D469's exceptions (a) and (b), pinned above.
