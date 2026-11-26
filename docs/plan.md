@@ -785,7 +785,7 @@ Visual checks, written per part by the design (D244):
 - The contrast fixes in both themes, with the earlier pictures they change compared against phase 7b's references.
 - The keyboard paths the pass adds, and the accessible names read through UI Automation in the real window.
 
-Done when: a user whose git is missing, too old or broken is led to a working git by the app's own guidance; every main action is reached by keyboard and every control has an accessible name; no text pair of either theme is left below 4.5:1 in `ThemeTokensTests`; the About screen, the icon, the complete notices and the user guide exist; and the visual gate passes.
+Done when: a user whose git is missing, too old or broken is led to a working git by the app's own guidance; every main action is reached by keyboard and every control has an accessible name; no text pair of either theme is left below 4.5:1 in `ThemeTokensTests`, but for the three texts the app dims on purpose, which the owner kept as recorded exceptions with their figures pinned there (D469); the About screen, the icon, the complete notices and the user guide exist; and the visual gate passes.
 
 ### Phase 8b — Packaging and public beta (M)
 
@@ -860,6 +860,18 @@ with several restored tabs (ruling 76 orders the openings instead): it would als
 background histories' memory (about 800 MB of working set with ten 100,000-commit tabs, against 286
 MB with one), but it breaks `InitializeAsync`'s contract and the checks that wait for every restored
 tab's load, puts a whole load on the first switch to such a tab and moves D289's reads.
+
+Kept as they are in phase 8a by the owner's answer of 2026-11-26 (D469), their contrast figures
+pinned in `ThemeTokensTests`: the three texts the app dims on purpose below 4.5:1 on rows the user
+still acts on. A de-emphasis that keeps 4.5:1 would retire the exceptions and their pins. For a
+hidden branch's name, solo's left-out branches and a dropped rebase row, the secondary text colour
+reaches 4.54:1 or more on every row state in both themes: a hidden branch is still marked by its eye
+and a dropped row by its strikethrough, solo's left-out branches are then told from the soloed one
+by that colour and the soloed branch's mark alone, and every earlier picture with a hidden branch, a
+solo or a dropped row changes. For the rows a search dims no opacity that still dims does it (the
+message would need about 65 %, the date, SHA and author about 90 % in light), and such a row's
+branch labels read 1.2 to 1.5:1 on their lane's colour, so the search needs a form of its own: the
+matches marked, the other rows left at full contrast.
 
 Left out of phase 7a by the owner's answers of 2026-10-28: GitHub Enterprise Server and GHE.com
 (D258); several GitHub accounts at once (D263); GitHub's device flow, which needs a registered

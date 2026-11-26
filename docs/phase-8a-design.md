@@ -7452,6 +7452,97 @@ code is green in all six jobs at its first attempt.
 - *Step 19* is closed when the dimmed texts' package is merged, its classes have run on the merged
   tree and CI's run of it is read.
 
+**The dimmed texts' tests, D469, and the live command before the gate's pictures (the lead,
+2026-11-26).** 112. The package for the owner's answer "Keep, as exceptions" is built, read and
+merged (run `wf_9b9f1e1d-aa9`, 09:31 to 10:49, three Opus agents, 0.95M tokens; its result
+`D:/Projects/Personal/phase8-work/wave4/review/dimmed-result.json`; `wip/p8a-dimmed`, seven commits
+from `e41fea5`, the last `9150ee4`; merged at `fab4073`, 10:52). Two files, both tests:
+`tests/VisualCommit.App.Tests/ThemeTokensTests.DimmedTexts.cs`, new, and `ThemeTokensTests.cs`, made
+partial. Nothing under `src/` changes and no picture changes. D469 is the decision.
+
+- *As built.* Eight new facts, 14 in the class. Four pin the figures: (a) and (b) on their three row
+  backgrounds, (c)'s four texts and (c)'s labels, 78 values in both themes, each held to two places
+  and under 4.5:1. (a) and (b) list every `Foreground` and `Background` setter of their view's
+  styles and control themes, so a new state or a recoloured name changes the list before the
+  figures. (c) computes from three tables of tokens (`DimmedRowTexts`, `DimmedRowLabels`,
+  `DimmedRowBackgrounds`), and a fifth fact renders the graph with a stand-in colour for each of
+  those tokens, HEAD on a branch and detached, each dimmed row at rest, under the pointer and
+  selected, and holds every text column, label fill and label text to its token faded over what lies
+  behind it, with nothing drawn outside the six columns. The guard scans every XAML and C# file
+  under `src/VisualCommit.App` and fails on a use its table, `DimmedTextUses`, does not list; two
+  more facts prove on copies of the app's own files that it reports an unlisted use with its file
+  and line, a listed use that is gone, and a token it finds nowhere.
+- *What the build found beyond the question.* The review's figures for (c), which the owner was
+  shown, are those of the row at rest and of its four texts. A dimmed row can be selected, and its
+  texts then read lower (the message 2.62 and 2.08:1, the author, date and SHA 1.83 and 1.56:1); and
+  the same 35 % is pushed around the row's labels, whose fill fades with the text: a branch's name
+  on its lane's colour reads 1.26 to 1.51:1 in dark and 1.18 to 1.32:1 in light, the lowest of the
+  three looks. **The lead's ruling:** both belong to look (c), the look the owner kept, so D469
+  names them with their figures and the owner is told in the chat and under "Waiting on the owner";
+  the labels' pins stand in a fact of their own, to be dropped with a word if the owner wants the
+  labels treated otherwise. The disabled colour's two values are also those of
+  `TextControlBorderBrushPointerOver`, a text box's border under the pointer: the guard lists it as
+  a mark that is no text, with the check box's border and the dimmed row's node.
+- *The reading.* The independent reader reproduced all 78 pinned values to four places from
+  `Tokens.axaml` and found one risk and six notes, no defect. The risk: (c)'s pins named the graph's
+  tokens in the test, and nothing held the graph to them. The fixer answered each in a commit of its
+  own: the render fact; every colour setter of the two views read, not a chosen few; the needles
+  widened to any alpha, `0x` literals, the channel forms of `Color.FromRgb` and its kin, trailing
+  zeros and `.xaml` files; the places a dimming class is applied counted, each with its binding; the
+  (c) summaries saying that the pins are the blend's figures, within a step of the drawn pixels, and
+  the 4.5:1 message of a faded pair saying to take the pin out with the decision; the palette's
+  reason written out. Mutations were run and restored for each: a pinned value changed in each pin
+  fact (those four fail, ten pass), the message, the author and a stash's label drawn in other
+  tokens, the hover state in the selection's colour, a class's entry taken out of the table. Not
+  built: a count of the draw calls inside `DrawTextCells` and `DrawLabels`, brittle to any refactor;
+  the render fact reads the row's pixels for the same risk.
+- *The final form's read.* The fixer's six commits had no independent reader, so the lead had the
+  final form read by two (run `wf_6e4e9585-d6b`, 10:55 to 11:10, read only, 0.50M tokens;
+  `D:/Projects/Personal/phase8-work/wave4/review/dimmed-final-read.json`). Both recomputed the
+  pinned figures from `Tokens.axaml` and matched all 78; every entry of the guard's table matches
+  the source; and every opacity in the app was listed with what it dims: drag states and buttons
+  hidden until focus, none a text on a row at rest. One reader's verdict is "sound with notes", the
+  other's "has defects". The one defect is a summary: the guard's says the render fact reads a
+  dimmed row for any text that comes under a listed dimming, where it reads the four text columns
+  and the inside of each label, not the graph's column and not the labels' column outside a label.
+  Four risks: the two views' control themes are found only because an earlier line had looked one up
+  by its key; the colour written channel by channel is missed with a cast alpha, with a qualified
+  `new Avalonia.Media.Color(` and with the target-typed `new(` the code base writes; the tie between
+  the classes' table and the listed styles sees one shape of selector; and the render fact's
+  tolerances are stricter than the graph's own tests', which only CI's macOS job can judge (the four
+  Linux jobs passed it). Twelve notes, on wording and on limits to name. **The lead's ruling:** no
+  pinned figure and no listed use is in question, so D469 stands as written. The findings are
+  answered in a second fix round, tests only, with two independent verifiers of the fix and one
+  correcting pass if they find a defect or a risk (run `wf_fec5b4c5-7b1`, started at 11:14, in the
+  same worktree and branch, brought up to `fab4073`); step 19 is ticked when that round is merged
+  and CI's run of it is read. The ruling after this one has its outcome.
+- *The live command, step 20* (the owner told in the chat; it ran while CI's run of the merge was
+  under way, on `fab4073`; the second fix round changes one test file of `VisualCommit.App.Tests`,
+  nothing the live command builds). The offline classes first: 582 tests passed (10:58 to 11:00, 1
+  min 36 s). Then the whole project through the script: **596 tests, none failed** (11:00:21 to
+  11:04:00, 3 min 31 s, 218 s with the lock; its output
+  `D:/Projects/Personal/phase8-work/gate/live-before/run.log`, the three `run.txt` beside it). The
+  lead searched each `run.txt` for the three tokens, whole, in halves and as a Basic header, for the
+  Azure DevOps organization and for GitLab's namespace, raw, percent-decoded until nothing changed
+  and in every base64 run: nothing found. Against phase 7b's gate runs, with request ids, times,
+  branch stamps and SHAs taken out: GitHub's 47 lines, GitLab's 68 and Azure DevOps' 650 are the
+  same lines but for the made-up organization's random name and the dates in Azure DevOps' own
+  pages, and for two GitHub lines that read "the fake: same" where the run before 7b's pictures had
+  found the fake's 500 for a 404 (corrected then, D394, `affc0e4`). The differences from the fakes
+  that remain are 7b's, accepted there: GitHub's empty repository is not tried, GitLab's own words
+  for a second open request, and Azure DevOps' four sign-in answers in HTML. **Nothing to correct in
+  the fakes**, so no commit comes of it. Each service closed and deleted what the command made. The
+  live project has no commit in phase 8a.
+- *The lead's other rulings.* plan.md's "Done when" for the contrast now names D469's exceptions,
+  and its Backlog has the de-emphasis that keeps 4.5:1. A disabled entry of the command palette, its
+  reason included, counts as a disabled state (D469 (2)). A row while it is dragged is outside the
+  exceptions (D469 (3)). Accepted as the guard's and the render's limits, named in their summaries,
+  for the handoff: a colour computed at run time, a class name built at run time, a new text in the
+  labels' column outside a label, and a mark in the graph's column. The GitHub token expires on
+  2026-11-29 and the other two on 2026-12-04: the gate's counted round needs the live command once
+  more, which the tokens still serve if it runs by 2026-11-28; the owner makes them again before
+  8b's gate in any case.
+
 ### 13.2 What the integration settled
 
 Beyond moving the packages' contracts into section 1: the broker's `gitVersion` goes at §3's merge,

@@ -394,14 +394,23 @@ Wave 4 and the review:
   8,900 passed, 7 skipped, none failed; its pictures differ from the gate's references only by what
   varies from run to run (ruling 111). **The owner answered on 2026-11-26:** space is freed on C:
   (58.5 GB free of 350 GB at 09:24, where it had 4.7); the dimmed texts stay, as accepted exceptions
-  (D469); the gate starts when step 19 is closed. Still open: the dimmed texts' package of tests
-  (being built), its merge and CI's run of it; then this step is ticked.
+  (D469); the gate starts when step 19 is closed. **The dimmed texts' package is merged**
+  (`fab4073`, 10:52 on 2026-11-26: eight new facts in `ThemeTokensTests.DimmedTexts.cs`, 14 of 14 in
+  the class on the merged tree; D469; ruling 112), and CI's four Linux jobs of that push are green
+  with it. Two independent readers of its final form found every pinned figure and every listed use
+  right, one summary that says more than the guard reads, and gaps in what the guard's scan sees: a
+  second fix round, tests only, is under way (run `wf_fec5b4c5-7b1`). Still open: that round's merge
+  and CI's run of it; then this step is ticked.
 
 Gate:
 
-- [ ] 20. The live command once before the gate's pictures, the owner told (D335). It needs the
-  three tokens made again first: GitHub's expires on 2026-11-29, Azure DevOps' and GitLab's on
-  2026-12-04 ("Waiting on the owner").
+- [x] 20. The live command once before the gate's pictures, the owner told (D335). Run on
+  2026-11-26, 11:00 to 11:04, on `fab4073`, the owner told in the chat: its offline classes first
+  (582 tests passed), then the whole project, 596 tests, none failed. The three `run.txt` hold no
+  token, organization or namespace and show no difference from the fakes beyond those phase 7b
+  accepted, so nothing is corrected (ruling 112). The tokens were not made again: they serve until
+  GitHub's expires on 2026-11-29 (Azure DevOps' and GitLab's on 2026-12-04), and the counted round's
+  run must come before that.
 - [ ] 21. The visual test gate: D246's two runs of 8a's real-window checks on their own, the
   owner present; `dotnet test` and the real-window pass on one commit; the list of pictures; the
   live command on the counted round; every picture of both passes inspected, the changed earlier
@@ -1186,24 +1195,33 @@ cleaner at 09:31:22 on 2026-11-25, after the run, and ended. **The owner answere
 questions on 2026-11-26** ("Waiting on the owner"): the C: drive is freed (58.5 GB free of 350 GB at
 09:24; D:, which holds the repository, has 5.8 GB free of 125 GB); the dimmed texts stay as accepted
 exceptions; the gate starts when step 19 is closed, each takeover of the desktop announced in the
-chat just before it starts. **Under way:** run `wf_9b9f1e1d-aa9` (started at 09:31 on 2026-11-26: a
-builder, an independent reader, a fixer, in the worktree `D:/Projects/Personal/vc-wt/p8a-dimmed` on
-`wip/p8a-dimmed`, from `e41fea5`), tests only, nothing under `src/`: the three exceptions' contrast
-ratios pinned in `ThemeTokensTests`, and a guard that fails when the dimmed colour is used for text
-on any other active row. **Next for the lead, in this order:** (1) read the package's result, merge
-it, run its classes on the merged tree; write D469 (amending D418) with the ratios as measured, the
-ruling after 111, and plan.md's Backlog row for a de-emphasis that keeps 4.5:1; push; read CI's run
-and record it; tick step 19; (2) step 20: the live command, the owner told in the chat, once before
-the gate's pictures: its offline classes first on the same commit, then the whole project with the
-six variables given to the command's own process (CLAUDE.md, "What to know"); its corrections to the
-fakes, if any, are committed before any picture of the gate (the three tokens: GitHub's expires on
-2026-11-29, Azure DevOps' and GitLab's on 2026-12-04); (3) step 21, the gate: D246's two runs of
-phase 8a's real-window checks, the whole default run and the real-window pass on one commit, the
-list of pictures, the live command on the counted round, every picture of both passes inspected
-against `references/step19/`, the guide's site, the checks by hand with the Narrator walk-through.
-The package is reviewed with the rest in step 19 and merged last, in that step. The three finished
-worktrees (`p8a-restore`, `p8a-restore-base`, `p8a-guide`) are removed; their `wip/` branches stay
-local (D396). §11's builders got with their briefs: mdBook at
+chat just before it starts. **The dimmed texts' package is merged** (run `wf_9b9f1e1d-aa9`, 09:31 to
+10:49; `wip/p8a-dimmed`, seven commits from `e41fea5`; merged at `fab4073`, pushed at 10:53): tests
+only, eight new facts in `tests/VisualCommit.App.Tests/ThemeTokensTests.DimmedTexts.cs`; on the
+merged tree the build has 0 warnings and `ThemeTokensTests` passes 14 of 14. **D469 is written**
+(amending D418; the figures as measured, a dimmed row's labels and its selected state among them,
+which the question to the owner had not shown: "Waiting on the owner"); plan.md's "Done when" names
+the exceptions and its Backlog has the de-emphasis that keeps 4.5:1 (ruling 112). **Step 20 is
+done**: the live command ran at 11:00 on `fab4073`, the owner told in the chat: 582 offline tests,
+then 596 tests, none failed; nothing to correct in the fakes; its output and the three `run.txt` are
+in `D:/Projects/Personal/phase8-work/gate/live-before/`. **CI's run 45871534398** on `fab4073` is
+under way: its four Linux jobs are green, Windows and macOS still run. **Under way:** run
+`wf_fec5b4c5-7b1` (started at 11:14 on 2026-11-26: a fixer in the worktree
+`D:/Projects/Personal/vc-wt/p8a-dimmed` on `wip/p8a-dimmed`, brought up to `fab4073`; then two
+independent verifiers of the fix, read only; then a correcting pass if they find a defect or a
+risk), tests only, the one file above: it answers the findings of the final form's two readers
+(`D:/Projects/Personal/phase8-work/wave4/review/dimmed-final-read.json`; ruling 112), none of which
+questions a pinned figure or a listed use. **Next for the lead, in this order:** (1) read CI's run
+45871534398 and record it; (2) read the round's result and its diff, merge `wip/p8a-dimmed` with
+`--no-ff`, build, run `ThemeTokensTests` on the merged tree, write the ruling after 112, push, read
+CI's run of it and record it, tick step 19; (3) step 21, the gate, each takeover of the desktop
+announced in the chat just before it starts: D246's two runs of phase 8a's real-window checks, the
+whole default run and the real-window pass on one commit, the list of pictures, the live command on
+the counted round (by 2026-11-28, while GitHub's token serves), every picture of both passes
+inspected against `references/step19/`, the guide's site, the checks by hand with the Narrator
+walk-through. The package is reviewed with the rest in step 19 and merged last, in that step. The
+three finished worktrees (`p8a-restore`, `p8a-restore-base`, `p8a-guide`) are removed; their `wip/`
+branches stay local (D396). §11's builders got with their briefs: mdBook at
 `D:/Projects/Personal/phase8-work/tools/mdbook-0.5.4/mdbook.exe` and the Linux archive's SHA-256 for
 `guide.yml` (Notes, "Wave 4"); the references `D:/Projects/Personal/phase8-work/references/wave3/`;
 rulings 80 (stop and report if the first-run link's frame touches its ink), 82 (the facts no check
@@ -2374,7 +2392,13 @@ every commit.
     ahead without the answer, because a change of these colours is a fix package of its own and the
     gate's default run takes every picture again after it. An answer in the chat before that is
     taken as it comes. **Answered on 2026-11-26: "Keep, as exceptions"** (the lead's recommendation,
-    (2)): D469.
+    (2)): D469. **For the owner to know:** the figures in the question were those of a dimmed row at
+    rest and of its four texts. Measuring for the pins found two lower sets in the same look, which
+    D469 names: a dimmed row that is selected (the message 2.62:1 in dark and 2.08:1 in light; the
+    date, SHA and author 1.83:1 and 1.56:1), and the row's labels, whose fill fades with their text
+    (a branch's name on its lane's colour 1.26 to 1.51:1 in dark and 1.18 to 1.32:1 in light; a
+    tag's 2.64 to 2.81:1 and 2.11 to 2.15:1). The lead took both as part of the look that was kept;
+    a word from the owner changes that, and the labels' pins stand in a fact of their own for it.
   - **To ask before wave 4: the week's share, with the restore order in it** (D241, D457; the lead
     asks when step 16 is ticked). Wave 4 was the guide (§11), the real-window part (§12) and the
     review before the gate; D457 adds a small package, the restore order (ruling 76): with several
@@ -2430,7 +2454,10 @@ every commit.
   - **The three live tokens expire before 8a's gate can run**: GitHub's on 2026-11-29, Azure
     DevOps' and GitLab's on 2026-12-04, and a gate runs the live command twice (D335). Before 8a's
     gate the owner makes each again, with an expiry that also covers 8b's gate, as phase 7a's
-    design 14.6 and phase 7b's design 15.8 say, through the script that never shows a token.
+    design 14.6 and phase 7b's design 15.8 say, through the script that never shows a token. On
+    2026-11-26 the live command ran before the gate's pictures with the tokens as they are (step
+    20); the counted round's run needs them once more, by 2026-11-28 for GitHub's. So the tokens are
+    made again only if 8a's counted round slips past that day, and before 8b's gate in any case.
   - **The icon** (D407, D447): settled on 2026-11-20. The owner chose A, Lens, and said yes to
     round 2's masters with the outlined eye at the small sizes; the blue stays `#4C5BE0`. Nothing
     more is asked unless the owner wants a change after seeing it in the app.
