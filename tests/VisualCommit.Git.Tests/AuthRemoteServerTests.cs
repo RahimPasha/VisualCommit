@@ -229,7 +229,7 @@ public partial class AuthRemoteServerTests
     }
 
     [Fact]
-    public async Task A_clone_held_at_0_is_held_after_the_progress_packet_that_ends_its_first_line_with_a_percentage()
+    public async Task A_clone_held_at_0_shows_the_0_percent_line_and_waits_until_released()
     {
         await using var server = await AuthRemoteServer.StartAsync();
         server.RequireAuth = false;
@@ -310,9 +310,11 @@ public partial class AuthRemoteServerTests
     [InlineData("NAK\n", "Counting objects:  2", "0% (1/5)\r")]
     public void Without_a_percentage_the_hold_ends_with_the_pkt_line_in_which_the_first_whole_line_with_one_ends(string section, string before, string after)
     {
-        // upload-pack sends each read of pack-objects' progress as a pkt-line of its own, and on
-        // Windows a line's \r comes in a write of its own: the first pkt-line with a '%' may end
-        // after that '%' and before the line's end. A cut before the '%' leaves it to the next one.
+        // upload-pack sends each read of pack-objects' progress as a pkt-line of its own, and Git
+        // for Windows 2.56 was seen to write a progress line of odd length (auth's Counting lines
+        // have 29 bytes) in two writes, its last byte, the \r or \n, apart from the rest: the first
+        // pkt-line with a '%' may end after that '%' and before the line's end. A cut before the
+        // '%' leaves it to the next one.
         var body = CutProgressResponse(section, before, after);
 
         var (hasPack, progressEnd) = AuthRemoteServer.ScanPktLines(body);

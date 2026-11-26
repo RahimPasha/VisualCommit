@@ -740,7 +740,8 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
     /// or <c>\n</c> (<see cref="ScanPktLines"/>). A pkt-line carries what upload-pack read of
     /// pack-objects' progress at once: several of git's lines (<c>Counting objects:   0%</c> to
     /// <c>3%</c> for the 100k-commit repo), or part of one, since a read may end inside a line
-    /// (on Windows a line's <c>\r</c> comes in a write of its own). The pkt-line is never split,
+    /// (Git for Windows 2.56 was seen to write a progress line of odd length in two writes, its
+    /// last byte, the <c>\r</c> or <c>\n</c>, apart from the rest). The pkt-line is never split,
     /// so git shows the last whole line with a percentage that it carries. With a percentage
     /// the first part ends right after the first whole line of git's (up to its <c>\r</c> or
     /// <c>\n</c>) whose percentage is at least that one; when more follows that line in its
