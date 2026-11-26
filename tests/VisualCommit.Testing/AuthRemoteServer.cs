@@ -32,6 +32,12 @@ namespace VisualCommit.Testing;
 /// that waited in vain for what git shows while held.
 /// </para>
 /// <para>
+/// Each server also keeps every hold asked of it, with what it sent once it began
+/// (<see cref="Holds"/>), and describes them with its requests
+/// (<see cref="DescribeHoldsAndRequests"/>); a test that knows the server only by its port, from a
+/// remote's URL, finds that description through <see cref="DescribeServersOn"/>.
+/// </para>
+/// <para>
 /// Since phase 6 (docs/phase-6-design.md 17.2, amending D97 as D150 did) a server can serve a
 /// folder of bare repositories (<see cref="StartForFolderAsync"/>), each at its own URL
 /// (<see cref="UrlOf"/>), with a hold of its own per repository
@@ -113,8 +119,11 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
     /// <summary>How many holds <see cref="RecentHolds"/> keeps.</summary>
     private const int RecentHoldsKept = 8;
 
-    /// <summary>The most characters of a hold's progress <see cref="DescribeRecentHolds"/> writes: its first and last ones, the middle left out.</summary>
+    /// <summary>The most characters of a hold's progress <see cref="DescribeRecentHolds"/> and <see cref="DescribeHoldsAndRequests"/> write: its first and last ones, the middle left out.</summary>
     private const int DescribedProgressLength = 480;
+
+    /// <summary>The most requests, the last ones, <see cref="DescribeHoldsAndRequests"/> writes.</summary>
+    private const int DescribedRequests = 20;
 
     /// <summary>How long disposing waits for connections to end once they were told to.</summary>
     private static readonly TimeSpan DisposeTimeout = TimeSpan.FromSeconds(15);
@@ -123,6 +132,11 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
     private static readonly Queue<AuthRemoteHeldPart> HoldJournal = new();
 
     private static readonly Lock HoldJournalGate = new();
+
+    /// <summary>The servers of this process that accept connections and are not being disposed, oldest first; under <see cref="RunningServersGate"/>.</summary>
+    private static readonly List<AuthRemoteServer> RunningServers = [];
+
+    private static readonly Lock RunningServersGate = new();
 
     private readonly TempDirectory _root;
 
@@ -159,6 +173,9 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
 
     /// <summary>The holds asked for and not begun yet, by the served folder name they wait for.</summary>
     private readonly Dictionary<string, Hold> _pendingHolds = new(StringComparer.Ordinal);
+
+    /// <summary>Every hold asked of the server, in the order asked (<see cref="Holds"/>).</summary>
+    private readonly List<Hold> _askedHolds = [];
 
     /// <summary>The gates on a repository's next request (<see cref="HoldNextRequest"/>) that no request has reached yet, by folder name.</summary>
     private readonly Dictionary<string, RequestGate> _pendingGates = new(StringComparer.Ordinal);
@@ -326,6 +343,86 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
     }
 
     /// <summary>
+    /// Every hold asked of this server (<see cref="HoldNextFetchPack(string, int)"/>), in the order
+    /// asked, with what it sent once it began; asking again before a response was held adds none.
+    /// </summary>
+    public IReadOnlyList<AuthRemoteHold> Holds
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return [.. _askedHolds.Select(hold => new AuthRemoteHold(hold.Asked, hold.Folder, hold.AtPercent, hold.Part))];
+            }
+        }
+    }
+
+    /// <summary>
+    /// This server's requests and holds in a few lines, for the message of a test that waited in
+    /// vain for what git shows while a fetch is held, times in UTC: its port; its requests (the last
+    /// <see cref="DescribedRequests"/>), each with its method, path, protocol v2 command, status and
+    /// whether it was held; how many errors it had (<see cref="Errors"/>); and each hold asked of it
+    /// (<see cref="Holds"/>), in a line of its own: when it was asked, its repository and
+    /// percentage, and that it has not begun, or when it began, the bytes it sent of the body's,
+    /// its progress with <c>\r</c> and <c>\n</c> written out (the first and last characters of a
+    /// long one) and the last whole line with a percentage in it, which is the last such line git
+    /// can show, or that it has none.
+    /// </summary>
+    public string DescribeHoldsAndRequests()
+    {
+        var requests = Requests;
+        var holds = Holds;
+        var text = new StringBuilder().Append(CultureInfo.InvariantCulture, $"The server on port {Port} (times in UTC) had {requests.Count} request(s)");
+        if (requests.Count > 0)
+        {
+            text.Append(requests.Count > DescribedRequests ? $", the last {DescribedRequests}: " : ": ")
+                .AppendJoin("; ", requests.Skip(requests.Count - Math.Min(requests.Count, DescribedRequests)).Select(Described));
+        }
+
+        text.Append(CultureInfo.InvariantCulture, $", and {Errors.Count} error(s); ")
+            .Append(holds.Count == 0 ? "no hold was asked of it." : "the holds asked of it, oldest first:");
+        foreach (var hold in holds)
+        {
+            text.Append(CultureInfo.InvariantCulture, $"\n  asked {hold.Asked:HH:mm:ss.fff} for {hold.Repository} at {hold.AtPercent}%: ");
+            if (hold.Part is not { } part)
+            {
+                text.Append("not begun");
+                continue;
+            }
+
+            var lastWhole = LastWholeLineWithPercent(part.Progress);
+            text.Append(CultureInfo.InvariantCulture, $"began {part.At:HH:mm:ss.fff}, sent {part.SentBytes} of {part.BodyBytes} bytes, progress \"{Visible(part.Progress)}\"; ")
+                .Append(lastWhole is null ? "no whole line with a percentage" : $"last whole line with a percentage \"{lastWhole}\"");
+        }
+
+        return text.ToString();
+
+        static string Described(AuthRemoteRequest request) =>
+            string.Create(CultureInfo.InvariantCulture, $"{request.Method} {request.Path}{(request.Command is null ? string.Empty : " " + request.Command)} {request.Status}{(request.Held ? " held" : string.Empty)}");
+    }
+
+    /// <summary>
+    /// <see cref="DescribeHoldsAndRequests"/> of the server of this process that runs on each of
+    /// <paramref name="ports"/>, each port once in the order given, one after another on lines of
+    /// their own; for a port no server of this process runs on, a line that says so. A server runs
+    /// from its start until it is disposed. For a test that knows the server only by its port, from
+    /// a remote's URL (<c>http://127.0.0.1:47391/remote.git</c>).
+    /// </summary>
+    public static string DescribeServersOn(IEnumerable<int> ports)
+    {
+        ArgumentNullException.ThrowIfNull(ports);
+        AuthRemoteServer[] running;
+        lock (RunningServersGate)
+        {
+            running = [.. RunningServers];
+        }
+
+        return string.Join('\n', ports.Distinct().Select(port =>
+            running.LastOrDefault(server => server.Port == port)?.DescribeHoldsAndRequests()
+            ?? string.Create(CultureInfo.InvariantCulture, $"No server of this process runs on port {port}.")));
+    }
+
+    /// <summary>
     /// Starts listening on 127.0.0.1: on <paramref name="port"/>, or on a port the system picks
     /// when it is 0. With <paramref name="fallBackToFreePort"/>, a port that is taken gives way to
     /// one the system picks (<see cref="PortWasTaken"/>); without it, it throws
@@ -372,7 +469,7 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
                 await server.CreateRepositoryAsync().ConfigureAwait(false);
             }
 
-            server._acceptLoop = Task.Run(server.AcceptLoopAsync);
+            server.StartAccepting();
             return server;
         }
         catch
@@ -436,7 +533,7 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
             }
 
             var server = new AuthRemoteServer(root, listener, portWasTaken, full, served, folderServer: true);
-            server._acceptLoop = Task.Run(server.AcceptLoopAsync);
+            server.StartAccepting();
             return server;
         }
         catch
@@ -501,7 +598,7 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
             }
 
             var server = new AuthRemoteServer(root, listener, portWasTaken, full, [], folderServer: true, options);
-            server._acceptLoop = Task.Run(server.AcceptLoopAsync);
+            server.StartAccepting();
             return server;
         }
         catch
@@ -755,8 +852,9 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
     /// without a terminal), or no line reaches the percentage, only the headers go first. At 0,
     /// when a progress pkt-line holds a <c>%</c> but no line with a percentage ends before the
     /// response does, the first part ends with the first such pkt-line. Each hold that begins is
-    /// kept with what it sent among <see cref="RecentHolds"/>. Calling it again before a response
-    /// was held changes nothing, the percentage included.
+    /// kept with what it sent among <see cref="RecentHolds"/>, and each hold asked, with what it
+    /// sent once it began, among <see cref="Holds"/>. Calling it again before a response was held
+    /// changes nothing, the percentage included.
     /// </para>
     /// </summary>
     /// <param name="atPercent">0, or the percentage, 1 to 100, of the progress line to hold at.</param>
@@ -787,6 +885,7 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
             {
                 hold = new Hold(folder, atPercent);
                 _pendingHolds.Add(folder, hold);
+                _askedHolds.Add(hold);
             }
 
             return hold.Engaged.Task;
@@ -881,6 +980,11 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
             return;
         }
 
+        lock (RunningServersGate)
+        {
+            RunningServers.Remove(this);
+        }
+
         List<Hold> holds;
         Task[] connections;
         lock (_gate)
@@ -930,6 +1034,17 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
     }
 
     public void Dispose() => DisposeAsync().AsTask().GetAwaiter().GetResult();
+
+    /// <summary>Starts accepting connections and counts the server among those that run (<see cref="DescribeServersOn"/>) until it is disposed.</summary>
+    private void StartAccepting()
+    {
+        lock (RunningServersGate)
+        {
+            RunningServers.Add(this);
+        }
+
+        _acceptLoop = Task.Run(AcceptLoopAsync);
+    }
 
     private static TcpListener Listen(int port)
     {
@@ -1160,7 +1275,14 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
         {
             await stream.WriteAsync(sent.AsMemory(0, holdAt), stopping).ConfigureAwait(false);
             await stream.FlushAsync(stopping).ConfigureAwait(false);
-            Journal(new AuthRemoteHeldPart(DateTimeOffset.UtcNow, Port, hold.Folder, hold.AtPercent, holdAt, sent.Length, ProgressOf(sent[..holdAt])));
+            var progress = ProgressOf(sent[..holdAt]);
+            var began = DateTimeOffset.UtcNow;
+            Journal(new AuthRemoteHeldPart(began, Port, hold.Folder, hold.AtPercent, holdAt, sent.Length, progress));
+            lock (_gate)
+            {
+                hold.Part = new AuthRemoteHoldPart(began, holdAt, sent.Length, progress);
+            }
+
             hold.Engaged.TrySetResult();
             await hold.Released.Task.WaitAsync(stopping).ConfigureAwait(false);
         }
@@ -2019,6 +2141,12 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
         /// <summary>0, or the percentage of the progress line the hold begins after (<see cref="HoldNextFetchPack(string, int)"/>).</summary>
         public int AtPercent { get; } = atPercent;
 
+        /// <summary>When it was asked for, in UTC.</summary>
+        public DateTimeOffset Asked { get; } = DateTimeOffset.UtcNow;
+
+        /// <summary>What it sent once it began; null before. Under the server's gate.</summary>
+        public AuthRemoteHoldPart? Part { get; set; }
+
         public TaskCompletionSource Engaged { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         public TaskCompletionSource Released { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -2205,6 +2333,20 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
 /// <param name="BodyBytes">The length of the body sent.</param>
 /// <param name="Progress">The progress (side band 2) of the part sent, joined, as git received it.</param>
 public sealed record AuthRemoteHeldPart(DateTimeOffset At, int Port, string Repository, int AtPercent, int SentBytes, int BodyBytes, string Progress);
+
+/// <summary>A hold asked of a server (<see cref="AuthRemoteServer.Holds"/>).</summary>
+/// <param name="Asked">When it was asked for (<see cref="AuthRemoteServer.HoldNextFetchPack(string, int)"/>), in UTC.</param>
+/// <param name="Repository">The served repository's folder name (<c>remote.git</c>).</param>
+/// <param name="AtPercent">0, or the percentage it was asked for.</param>
+/// <param name="Part">What it sent once it began; null when it has not begun.</param>
+public sealed record AuthRemoteHold(DateTimeOffset Asked, string Repository, int AtPercent, AuthRemoteHoldPart? Part);
+
+/// <summary>What a held response sent before it held (<see cref="AuthRemoteHold.Part"/>).</summary>
+/// <param name="At">When its first part had been sent, in UTC.</param>
+/// <param name="SentBytes">How many bytes of the body went before the hold.</param>
+/// <param name="BodyBytes">The length of the body sent.</param>
+/// <param name="Progress">The progress (side band 2) of the part sent, joined, as git received it.</param>
+public sealed record AuthRemoteHoldPart(DateTimeOffset At, int SentBytes, int BodyBytes, string Progress);
 
 /// <summary>One request <see cref="AuthRemoteServer"/> served.</summary>
 /// <param name="Method"><c>GET</c> or <c>POST</c>.</param>
