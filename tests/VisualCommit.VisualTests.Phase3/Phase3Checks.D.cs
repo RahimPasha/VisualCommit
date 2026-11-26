@@ -64,7 +64,7 @@ public sealed partial class Phase3ChecksD : Phase3Checks
         var refsBefore = await RefsAsync(repo);
 
         // Step 2: the server holds the next pack; "Fetch origin" from the remote's menu.
-        _ = scenario.Server.HoldNextFetchPack();
+        var held = scenario.Server.HoldNextFetchPack();
         var (menu, pointer) = await RightClickRowAsync(app, "Remotes", "origin");
         AssertMenu(menu, PartD.OriginMenu);
         AssertHighlighted(menu, "Fetch origin");
@@ -72,6 +72,7 @@ public sealed partial class Phase3ChecksD : Phase3Checks
         AssertMenuPlaced(app, menu, pointer);
         AssertNothingSelected(app);
         app.ClickMenuItem("Fetch origin");
+        await app.WaitForHeldFetchAsync(held, NetworkTimeout);
         await app.WaitForProgressPercentAsync(NetworkTimeout);
         Shot(app, "17b-fetch-progress");
         AssertHeldProgress(app, PartD.FetchingFromOrigin);
@@ -96,9 +97,10 @@ public sealed partial class Phase3ChecksD : Phase3Checks
         Assert.Contains(app.LogLinesSince(mark), line => line.Contains("] auth: Fetch origin: Cancelled after ", StringComparison.Ordinal));
 
         // Step 4: the toolbar's Fetch, held, then let go.
-        _ = scenario.Server.HoldNextFetchPack();
+        held = scenario.Server.HoldNextFetchPack();
         var calls = app.GitCalls().Count;
         app.Click(ToolbarButton(app, "FetchButton"));
+        await app.WaitForHeldFetchAsync(held, NetworkTimeout);
         await app.WaitForProgressPercentAsync(NetworkTimeout);
         Shot(app, "17d-fetch-all-progress");
         AssertHeldProgress(app, PartD.FetchingFromAll);
@@ -127,9 +129,10 @@ public sealed partial class Phase3ChecksD : Phase3Checks
         using var app = await OpenAsync(data, repo);
 
         // Step 1: as check 17, steps 1 and 2.
-        _ = scenario.Server.HoldNextFetchPack();
+        var held = scenario.Server.HoldNextFetchPack();
         await RightClickRowAsync(app, "Remotes", "origin");
         app.ClickMenuItem("Fetch origin");
+        await app.WaitForHeldFetchAsync(held, NetworkTimeout);
         await app.WaitForProgressPercentAsync(NetworkTimeout);
 
         // Step 2: the lock file a git stopped while it updates the ref would leave, then Cancel.
@@ -244,9 +247,10 @@ public sealed partial class Phase3ChecksD : Phase3Checks
     /// <summary>Check 31 step 1: the server holds the next pack, "Fetch origin" from the remote's menu runs to a percentage, and the toolbar's Fetch waits behind it.</summary>
     private static async Task HoldFetchAndQueueAnotherAsync(ShellDriver app, ServerScenario scenario)
     {
-        _ = scenario.Server.HoldNextFetchPack();
+        var held = scenario.Server.HoldNextFetchPack();
         await RightClickRowAsync(app, "Remotes", "origin");
         app.ClickMenuItem("Fetch origin");
+        await app.WaitForHeldFetchAsync(held, NetworkTimeout);
         await app.WaitForProgressPercentAsync(NetworkTimeout);
         app.Click(ToolbarButton(app, "FetchButton"));
         await app.WaitForAsync(() => app.Session.Shell.ActiveTab.OperationStatus.Waiting == 1, "the toolbar's Fetch to wait");

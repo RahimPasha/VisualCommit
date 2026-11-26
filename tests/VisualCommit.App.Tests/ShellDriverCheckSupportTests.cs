@@ -1,3 +1,5 @@
+using System.Globalization;
+using System.Text.RegularExpressions;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
@@ -378,6 +380,58 @@ public class ShellDriverCheckSupportTests
         Assert.Equal("Fetched from all remotes", texts.Texts[^1]);
         texts.Dispose();
         Assert.Equal("Fetched from all remotes", app.Session.Shell.ActiveTab.OperationStatus.Text);
+    }
+
+    [AvaloniaFact]
+    public async Task A_wait_for_a_held_fetch_or_its_percentage_that_times_out_says_what_the_status_bar_and_the_tabs_servers_had()
+    {
+        await using var server = await AuthRemoteServer.StartAsync();
+        server.RequireAuth = false;
+        using var repo = await Scenarios.AuthRemoteAsync(server);
+
+        // Two remotes that reach no server of the tests: another host name, and https.
+        await repo.GitAsync("remote", "add", "mirror", $"http://localhost:{server.Port}/remote.git");
+        await repo.GitAsync("remote", "add", "secure", $"https://127.0.0.1:{server.Port}/remote.git");
+        using var data = new TempDirectory("data");
+        using var app = ShellDriver.StartWithTabs(data.Path, [repo.Path]);
+        var repository = await app.WaitForRepositoryAsync();
+        var shortWait = TimeSpan.FromSeconds(2);
+        var remotes = $"The active tab's remotes on 127.0.0.1: origin port {server.Port}.";
+
+        // A hold asked and no fetch started: the hold waits, and both waits say so.
+        var held = server.HoldNextFetchPack();
+        var asked = Assert.Single(server.Holds).Asked.ToString("HH:mm:ss.fff", CultureInfo.InvariantCulture);
+        var waiting = $"The status bar read \"Ready\" (running: False, percentage: none).\n{remotes}\n" +
+            $"The server on port {server.Port} (times in UTC) had 0 request(s), 0 error(s) and 0 connection(s) open; " +
+            $"the holds asked of it, oldest first:\n  asked {asked} for remote.git at 0%: waiting for a response with a pack";
+        Assert.Equal(
+            $"Timed out after 2 s waiting for the server to hold the fetch. {waiting}",
+            (await Assert.ThrowsAsync<TimeoutException>(() => app.WaitForHeldFetchAsync(held, shortWait))).Message);
+        Assert.Equal(
+            $"Timed out after 2 s waiting for the status bar to show a percentage. {waiting}",
+            (await Assert.ThrowsAsync<TimeoutException>(() => app.WaitForProgressPercentAsync(shortWait))).Message);
+
+        // The fetch held with its percentage, then cancelled: the hold began, and the server holds
+        // it still, as it hears of git's going only when it sends the rest.
+        var fetch = repository.Operations.FetchAsync("origin");
+        await app.WaitForHeldFetchAsync(held, NetworkTimeout);
+        await app.WaitForProgressPercentAsync(NetworkTimeout);
+        repository.Queue.CancelCurrent();
+        await fetch.WaitAsync(NetworkTimeout, TestContext.Current.CancellationToken);
+        await app.WaitForIdleAsync(timeout: NetworkTimeout);
+        var begun = (await Assert.ThrowsAsync<TimeoutException>(() => app.WaitForProgressPercentAsync(shortWait))).Message;
+        Assert.Matches(
+            $@"\n{Regex.Escape(remotes)}\nThe server on port {server.Port} \(times in UTC\) had \d+ request\(s\): .*; POST /remote\.git/git-upload-pack fetch 200 held, 0 error\(s\) and [1-9]\d* connection\(s\) open; the holds asked of it, oldest first:\n",
+            begun);
+        Assert.Matches(
+            $@"\n  asked {Regex.Escape(asked)} for remote\.git at 0%: began \d\d:\d\d:\d\d\.\d{{3}}, held after \d+ of \d+ bytes, progress "".*""; last whole line with a percentage ""Counting objects: +\d+% \(\d/5\)""$",
+            begun);
+        server.Release();
+
+        // The server disposed while the tab's remote still names its port.
+        await server.DisposeAsync();
+        var disposed = (await Assert.ThrowsAsync<TimeoutException>(() => app.WaitForProgressPercentAsync(shortWait))).Message;
+        Assert.EndsWith($"\n{remotes}\nNo AuthRemoteServer of this process runs on port {server.Port}.", disposed, StringComparison.Ordinal);
     }
 
     [AvaloniaFact]
