@@ -1210,16 +1210,18 @@ public partial class ThemeTokensTests
     /// <c>#RRGGBB</c> or <c>#AARRGGBB</c> (XAML, or a string to parse), as a <c>0x</c> literal
     /// (<c>Color.FromUInt32</c>), or as its three channels, hexadecimal or decimal and each perhaps
     /// cast, after an alpha that nests parentheses at most two deep, to <c>Color.FromRgb</c>,
-    /// <c>Color.FromArgb</c>, a constructor of <c>Color</c>, its name qualified or not, or one typed
-    /// by its target (<c>new(</c>), or in CSS's <c>rgb(</c> or <c>rgba(</c> with its three channels
-    /// in decimal (XAML, or a string to parse); the constant by its name; its value written out,
-    /// with or without its leading 0 and with trailing zeros, but not in a geometry's path data
-    /// (<see cref="IsPathData"/>); and a class of
-    /// <see cref="DimmingClasses"/> by its whole name, which <see cref="ScanXaml"/> looks for where
-    /// XAML applies a class and <see cref="ScanCode"/> in a string of code. A colour mixed by other
-    /// means or computed, as CSS's <c>hsl(</c> is, the value computed, or a class's name put
-    /// together, is beyond a reading of the text; a class held in a constant, or the colour behind
-    /// a resource alias, is seen where it is defined, not where it is used.
+    /// <c>Color.FromArgb</c>, a constructor of <c>Color</c>, its name qualified or not, or any
+    /// constructor typed by its target (<c>new(</c>), whatever its type, or in CSS's <c>rgb(</c> or
+    /// <c>rgba(</c> with its three channels as whole numbers in decimal (XAML, or a string to parse);
+    /// the constant by its name; its value written out, with or without its leading 0 and with
+    /// trailing zeros, but not where <see cref="IsPathData"/> takes an attribute or an element, by
+    /// its name alone, for a geometry's path data; and a class of <see cref="DimmingClasses"/> by its
+    /// whole name, which <see cref="ScanXaml"/> looks for where XAML applies a class and
+    /// <see cref="ScanCode"/> in a string of code. A colour mixed by other means or computed, as
+    /// CSS's <c>hsl(</c> is, a CSS channel given as a percentage or with a decimal point, which
+    /// Avalonia parses too, the value computed, or a class's name put together, is beyond a reading
+    /// of the text; a class held in a constant, or the colour behind a resource alias, is seen where
+    /// it is defined, not where it is used.
     /// </summary>
     private static List<(DimmedNeedle Needle, Regex Pattern)> DimmedNeedles()
     {
@@ -1237,7 +1239,7 @@ public partial class ThemeTokensTests
                     + ChannelPattern(colour.R) + @"\s*,\s*" + ChannelPattern(colour.G) + @"\s*,\s*" + ChannelPattern(colour.B) + @"\s*\)",
                 RegexOptions.IgnoreCase)));
 
-            // CSS's form, which Avalonia parses too: rgb( or rgba( and the three channels in decimal.
+            // CSS's form, which Avalonia parses too: rgb( or rgba( and the three channels as whole numbers in decimal.
             needles.Add((DimmedNeedle.Colour, new Regex(
                 string.Create(CultureInfo.InvariantCulture, $@"\brgba?\(\s*0*{colour.R}\s*,\s*0*{colour.G}\s*,\s*0*{colour.B}\s*[,)]"),
                 RegexOptions.IgnoreCase)));
@@ -1282,8 +1284,8 @@ public partial class ThemeTokensTests
     /// <summary>
     /// The uses in a XAML file: each match in an attribute's value or an element's text, comments
     /// left out, at its place (the enclosing control themes, styles and theme dictionaries, then the
-    /// setter's property, or the element and its attribute), the opacity's value not looked for in a
-    /// geometry's path data (<see cref="IsPathData"/>); and each dimming class the element takes, by
+    /// setter's property, or the element and its attribute), the opacity's value not looked for in
+    /// what <see cref="IsPathData"/> takes for path data; and each dimming class the element takes, by
     /// <c>Classes.dropped="…"</c> or in the list of <c>Classes="…"</c>.
     /// </summary>
     private static List<DimmedUse> ScanXaml(string file, string text, IReadOnlyList<(DimmedNeedle Needle, Regex Pattern)> needles)
@@ -1317,9 +1319,10 @@ public partial class ThemeTokensTests
     }
 
     /// <summary>
-    /// A geometry's path data, whose numbers are no opacity, by the name of the attribute or the
-    /// element that holds it: <c>Data</c> or <c>Geometry</c>, a property element as <c>Path.Data</c>,
-    /// or a <c>StreamGeometry</c>.
+    /// What the scan takes for a geometry's path data, whose numbers are no opacity, by the name
+    /// alone of the attribute or the element that holds it: any <c>Data</c> or <c>Geometry</c>, also
+    /// one that holds no geometry, as the graph's own <c>Data</c> binding, a property element as
+    /// <c>Path.Data</c>, or a <c>StreamGeometry</c>.
     /// </summary>
     private static bool IsPathData(string name) =>
         name is "Data" or "Geometry" or "StreamGeometry" || name.EndsWith(".Data", StringComparison.Ordinal);
