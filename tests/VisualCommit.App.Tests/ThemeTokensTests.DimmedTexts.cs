@@ -34,11 +34,13 @@ namespace VisualCommit.App.Tests;
 /// search dims. The rows are not disabled, so WCAG's exemption of disabled controls does not cover
 /// them, and <see cref="TextPairs"/> leaves them out. Each exception is pinned to the figures of
 /// what the app draws today, computed from its own tokens and styles (for (c), the colours blended
-/// at the search's opacity, within a step of the drawn pixels), on every background its text lies
-/// on, in both themes: a colour that changes, a new state of the row, or a fix that lifts the text to
-/// 4.5:1 fails its fact, to be looked at with D469. (a) and (b) read the views' styles; the graph
-/// draws in code, so (c)'s tokens stand in tables that a render of the graph holds it to. A guard
-/// keeps the disabled text colour and the search's dimming to the uses it lists, each with its reason.
+/// at the search's opacity; the render fact holds the labels' fills within a step of the blend), on
+/// every background its text lies on, in both themes: a colour that changes, a new state of the
+/// row, or a fix that lifts the text to 4.5:1 fails its fact, to be looked at with D469. (a) and
+/// (b) read the views' styles; the graph draws in code, so (c)'s tokens stand in tables that a
+/// render of the graph holds it to, in its text columns and its labels' column (its graph's column,
+/// where the node is dimmed, is not read). A guard keeps the disabled text colour and the search's
+/// dimming to the uses it lists, each with its reason.
 /// </summary>
 public partial class ThemeTokensTests
 {
@@ -57,19 +59,20 @@ public partial class ThemeTokensTests
     /// <c>LeftPanelView</c>'s style <c>TextBlock.refName.dimmed</c>, which only HEAD's branch overrides.
     /// The row (<c>RefRowButton</c>) is transparent at rest over the panel's
     /// <c>VcPanelBackgroundBrush</c>, <c>VcHoverBackgroundBrush</c> under the pointer and
-    /// <c>VcSelectionBrush</c> selected, also under the pointer: every colour setter of the view's
-    /// styles and control theme is read for those states, and the name's ratio on each is pinned to
-    /// two places, under 4.5:1.
+    /// <c>VcSelectionBrush</c> selected, also under the pointer: every colour and opacity setter of
+    /// the view's styles and control theme is read for those states, and the name's element is held
+    /// to set no foreground and no opacity of its own. A background or styles that the name's element
+    /// or an ancestor, the row among them, sets of its own, and an ancestor's own opacity, are not
+    /// read. The name's ratio on each is pinned to two places, under 4.5:1.
     /// </summary>
     [AvaloniaFact]
     public void Exception_D469_a_a_hidden_or_left_out_branchs_name_keeps_its_pinned_figures_under_4_5_to_1()
     {
-        // The view's own styles and control themes: every setter of a colour, whatever it selects, so
-        // that a style that recolours the dimmed name or the row, or a new state of the row, fails
-        // here first. The chevrons and the counts' arrows are icons; the control theme's own
-        // foreground is the one the name's style overrides.
+        // The view's own styles and control themes: every setter of a colour or an opacity, whatever
+        // it selects, so that a style that recolours or fades the dimmed name or the row, or a new
+        // state of the row, fails here first. The chevrons and the counts' arrows are icons; the
+        // control theme's own foreground is the one the name's style overrides.
         var view = new LeftPanelView();
-        Assert.IsType<ControlTheme>(view.Resources["RefRowButton"]);
         var styles = ViewStyles(view);
         Assert.Equal(
             [
@@ -84,6 +87,8 @@ public partial class ThemeTokensTests
         Assert.Equal(
             ["Button: transparent", "^:pointerover: VcHoverBackgroundBrush", "^.selected: VcSelectionBrush"],
             Setters(styles, "Background"));
+        Assert.Empty(Setters(styles, "Opacity"));
+        Assert.Equal(["TextBlock RefName"], DimmedElements(AppSource + "/Views/Shell/LeftPanelView.axaml", "dimmed"));
         AssertBackgroundIs(view, () => Assert.IsType<Border>(view.Content).Background, "VcPanelBackgroundBrush");
 
         var dark = ThemeVariant.Dark;
@@ -111,15 +116,18 @@ public partial class ThemeTokensTests
     /// <c>InteractiveRebaseView</c>'s style <c>TextBlock.dropped</c>. The row
     /// (<c>RebaseListRow.commit</c>) is transparent at rest over the list's
     /// <c>VcWindowBackgroundBrush</c>, <c>VcRowHoverBrush</c> under the pointer and
-    /// <c>VcSelectionBrush</c> selected: every colour setter of the view's styles is read for those
-    /// states, and the text's ratio on each is pinned to two places, under 4.5:1.
+    /// <c>VcSelectionBrush</c> selected: every colour and opacity setter of the view's styles is read
+    /// for those states, and the SHA's and the subject's elements are held to set no foreground and
+    /// no opacity of their own. A background or styles that those elements or an ancestor, the row
+    /// among them, set of their own, and an ancestor's own opacity, are not read. The text's ratio on
+    /// each is pinned to two places, under 4.5:1.
     /// </summary>
     [AvaloniaFact]
     public void Exception_D469_b_a_dropped_rebase_rows_sha_and_subject_keep_their_pinned_figures_under_4_5_to_1()
     {
-        // The view's own styles, as for (a): every setter of a colour, whatever it selects. A dropped
-        // text's style comes after the SHA's and the subject's, so that it wins; the join line is a
-        // mark at the row's left, not its background.
+        // The view's own styles, as for (a): every setter of a colour or an opacity, whatever it
+        // selects. A dropped text's style comes after the SHA's and the subject's, so that it wins;
+        // the join line is a mark at the row's left, not its background.
         var view = new InteractiveRebaseView();
         var styles = ViewStyles(view);
         Assert.Equal(
@@ -133,6 +141,12 @@ public partial class ThemeTokensTests
                 "Border.joinLine: VcLane0Brush",
             ],
             Setters(styles, "Background"));
+
+        // The row being dragged, at half opacity while the drag lasts: a state of the drag, dropped or not.
+        Assert.Equal(["StackPanel.dragged: 0.5"], Setters(styles, "Opacity"));
+        Assert.Equal(
+            ["TextBlock RebaseRowSha", "TrimmedTextBlock RebaseRowSubject"],
+            DimmedElements(AppSource + "/Views/Rebase/InteractiveRebaseView.axaml", "dropped"));
         AssertBackgroundIs(view, () => Assert.IsType<DockPanel>(view.Content).Background, "VcWindowBackgroundBrush");
 
         var dark = ThemeVariant.Dark;
@@ -167,8 +181,8 @@ public partial class ThemeTokensTests
     /// pairs to them. Each text's colour is blended at that opacity over the background, a channel
     /// rounded to the nearest step as the graph's other tests fade a colour, and its ratio pinned to
     /// two places, under 4.5:1. The pins are the blend's figures, not figures read from pixels: the
-    /// renderer draws within a step of the blend, as the render fact finds for the labels' fills, so
-    /// a drawn figure may differ from its pin by about 0.01.
+    /// render fact holds the labels' fills within a step of the blend, and a drawn figure may differ
+    /// from its pin by up to about 0.05 (a step in every channel).
     /// </summary>
     [AvaloniaFact]
     public void Exception_D469_c_the_texts_of_a_row_a_search_dims_keep_their_pinned_figures_under_4_5_to_1()
@@ -279,15 +293,17 @@ public partial class ThemeTokensTests
     /// graph is drawn with a colour of its own standing in for each token of the tables
     /// (<see cref="DimmedRowStandIns"/>, put in the control's resources, where it looks its tokens
     /// up), so that a text drawn in any other token, or in a colour written out, shows. In each
-    /// theme, with HEAD on a branch and detached, each dimmed row is read at rest, under the pointer
-    /// and selected: the row's background is its state's token; in each text's column every pixel
-    /// lies between the background and the text's token faded over it, and the ink
-    /// (<see cref="TextInk"/>'s rule) reaches that colour; in each label the fill is its token faded
-    /// over the background, within a step, every pixel inside the border lies between the fill and
-    /// the text's token faded over the fill, and the ink of the name and of a pull request's number
-    /// reaches that colour. Nothing is drawn outside the six columns, so that a new column under
-    /// the dimming fails here; a new text in the labels' column outside a label, or a mark in the
-    /// graph's column, is not read.
+    /// theme, with HEAD on a branch each dimmed row, and with HEAD detached HEAD's row, is read at
+    /// rest, under the pointer and selected: the row's background is its state's token; in each
+    /// text's column every pixel lies between the background and the text's token faded over it, and
+    /// the ink (<see cref="TextInk"/>'s rule) reaches that colour; in each label the fill is its token
+    /// faded over the background, within a step, every pixel 3 px inside the label's edge lies
+    /// between the fill and the text's token faded over the fill, and the ink of the name and of a
+    /// pull request's number reaches that colour; in the labels' column outside the labels, a pixel
+    /// left round each for its edge, every pixel is the row's background, within 2. Nothing is drawn
+    /// outside the six columns, so that a new column under the dimming fails here. The graph's column
+    /// is not read: a text or a mark drawn there, under the node's dimming or the texts', is read by
+    /// neither this fact nor the guard.
     /// </summary>
     [AvaloniaFact]
     public void Exception_D469_c_the_graph_draws_a_dimmed_rows_texts_and_labels_in_the_tokens_the_pins_name()
@@ -354,23 +370,58 @@ public partial class ThemeTokensTests
     /// (<see cref="DimmingClasses"/>), where it is applied, and the search's dimming, by its
     /// constant and by its value written out, are used only where <see cref="DimmedTextUses"/>
     /// lists them, each with its reason: a definition, a disabled state (a <c>:disabled</c>
-    /// selector, or a class bound to a disabled command), a mark that is no text, or one of D469's
-    /// three exceptions by its place. A new reference to the dimmed colour or to the search's
-    /// dimming, or a new application of such a class (or a listed one bound otherwise, since a
-    /// class's place holds its binding), fails with its file and line; a listed use
-    /// that is gone fails too, and so does a scan that finds the token or the constant nowhere, so
-    /// that a rename cannot leave the guard looking for nothing. A text that comes under a dimming
-    /// already listed, as one drawn inside the graph's dimmed calls, adds no reference: the render
-    /// fact of exception (c) reads the graph's row for it.
+    /// selector, a class bound to a disabled command, or one set in code by a line that names
+    /// <c>IsEnabled</c>), a mark that is no text, a class's name that applies no dimming there, or
+    /// one of D469's three exceptions by its place. The table keeps the rules
+    /// <see cref="AssertGuardTable"/> names. A new reference to the dimmed colour or to the search's
+    /// dimming, or a new application of such a class by its name (or a listed one bound otherwise,
+    /// since a class's place holds its binding), fails with its file and line, as far as a reading
+    /// of the text sees it (<see cref="DimmedNeedles"/>: a class applied through a constant, for
+    /// one, is seen only where the constant is defined); a listed use that is gone fails too, and so
+    /// does a scan that finds the token or the constant nowhere, so that a rename cannot leave the
+    /// guard looking for nothing. A text that comes under a dimming already listed adds no
+    /// reference: the render fact of exception (c) reads a dimmed row's message, author, date and
+    /// SHA columns, the inside of each label and the labels' column outside them; a text or a mark
+    /// drawn in the graph's column, under the node's dimming or the texts', is read by neither fact.
     /// </summary>
     [AvaloniaFact]
     public void The_dimmed_colour_and_the_searchs_dimming_are_used_only_where_the_guard_lists_them()
     {
         var problems = GuardProblems(ScanAppSource(DimmedNeedles()), DimmedTextUses);
         Assert.True(problems.Count == 0, "Uses of the dimmed text colour or of the search's dimming (D469's guard):\n" + string.Join('\n', problems));
+        AssertGuardTable(DimmedTextUses);
+    }
 
-        foreach (var entry in DimmedTextUses.Where(entry => entry.Kind == DimmedUseKind.Disabled))
+    /// <summary>
+    /// The rules the guard's table (<paramref name="accepted"/>) keeps: every use has its reason, and
+    /// only a class's name is listed as applying no dimming; a use under a disabled state names it,
+    /// a class set in code by <c>IsEnabled</c> in its line; every class that a listed style in XAML
+    /// names outside a disabled state is, with that style, a dimming class
+    /// (<see cref="DimmingClasses"/>) or one of <see cref="NonDimmingClasses"/>, and each of those is
+    /// named so by its style; each exception gives the colour, or the dimming, at one place, and what
+    /// applies it lies in the same file.
+    /// </summary>
+    private static void AssertGuardTable(IReadOnlyList<AcceptedUse> accepted)
+    {
+        foreach (var entry in accepted)
         {
+            Assert.False(string.IsNullOrWhiteSpace(entry.Reason), $"{entry.File}: \"{entry.Place}\" is listed without its reason.");
+            Assert.True(
+                entry.Kind != DimmedUseKind.NotDimming || entry.Needle == DimmedNeedle.Class,
+                $"{entry.File}: \"{entry.Place}\" is listed as applying no dimming, which only a class's name can be.");
+        }
+
+        foreach (var entry in accepted.Where(entry => entry.Kind == DimmedUseKind.Disabled))
+        {
+            // A class set in code under a disabled state names that state in its line.
+            if (entry.Needle == DimmedNeedle.Class && !IsXaml(entry.File))
+            {
+                Assert.True(
+                    entry.Place.Contains("IsEnabled", StringComparison.Ordinal),
+                    $"{entry.File}: \"{entry.Place}\" is listed under a disabled state, but its line names no IsEnabled.");
+                continue;
+            }
+
             Assert.True(
                 entry.Place.Contains(":disabled", StringComparison.Ordinal) || entry.Place.Contains(".disabled", StringComparison.Ordinal),
                 $"{entry.File}: \"{entry.Place}\" is listed under a disabled state, but its place names none.");
@@ -381,19 +432,92 @@ public partial class ThemeTokensTests
                 $"{entry.File}: \"{entry.Place}\" is listed under a disabled state, but the class is not bound to !IsEnabled.");
         }
 
-        // The dimming classes are those of the listed styles that give the colour by a class alone.
-        Assert.Equal(
-            DimmedTextUses
-                .Where(entry => entry.Needle == DimmedNeedle.Token && Regex.IsMatch(entry.Place, @"^Style \w+(\.\w+)+ > Setter Foreground$"))
-                .Select(entry => $"{entry.File}: {entry.Place}")
-                .Order(StringComparer.Ordinal),
-            DimmingClasses.Select(dimming => $"{dimming.File}: {dimming.Style}").Order(StringComparer.Ordinal));
+        // A class a listed style names gives a text the colour where it is applied, unless the style
+        // applies under a disabled state alone or the class needs another beside it.
+        var named = accepted
+            .Where(entry => entry.Needle is DimmedNeedle.Token or DimmedNeedle.Colour && IsXaml(entry.File))
+            .SelectMany(entry => StyleClassesOf(entry.Place).Select(name => (Class: name, entry.File, Style: entry.Place)))
+            .ToList();
+        var exempt = NonDimmingClasses.Select(none => (none.Class, none.File, none.Style)).ToList();
+        var required = named.Except(exempt).ToList();
+        var listed = DimmingClasses.Select(dimming => (dimming.Class, dimming.File, dimming.Style)).ToList();
+        var untied = required.Except(listed)
+            .Select(use => $"{use.File}: \"{use.Style}\" names the class {use.Class}, which DimmingClasses does not list: list it there, or in NonDimmingClasses with its reason.")
+            .Concat(listed.Except(required).Select(dimming => $"{dimming.File}: DimmingClasses lists {dimming.Class} in \"{dimming.Style}\", which no listed style names so: take it out."))
+            .Concat(exempt.Except(named).Select(none =>
+                $"{none.File}: NonDimmingClasses lists {none.Class} in \"{none.Style}\", which no listed style names so: take it out."))
+            .ToList();
+        Assert.True(untied.Count == 0, string.Join('\n', untied));
 
-        // Each exception gives the colour, or the dimming, at one place; what applies it lies in the same file.
-        foreach (var (kind, needle) in new[] { (DimmedUseKind.ExceptionA, DimmedNeedle.Token), (DimmedUseKind.ExceptionB, DimmedNeedle.Token), (DimmedUseKind.ExceptionC, DimmedNeedle.Dimming) })
+        // Each exception gives the colour, or the dimming, at one place, by the token, its colour, the
+        // constant or its value; what applies it lies in the same file.
+        foreach (var kind in new[] { DimmedUseKind.ExceptionA, DimmedUseKind.ExceptionB, DimmedUseKind.ExceptionC })
         {
-            var entry = Assert.Single(DimmedTextUses, entry => entry.Kind == kind && entry.Needle == needle);
-            Assert.All(DimmedTextUses.Where(other => other.Kind == kind), other => Assert.Equal(entry.File, other.File));
+            var entry = Assert.Single(accepted, entry => entry.Kind == kind && entry.Needle != DimmedNeedle.Class);
+            Assert.All(accepted.Where(other => other.Kind == kind), other => Assert.Equal(entry.File, other.File));
+        }
+    }
+
+    /// <summary>
+    /// The classes that the styles of a place in XAML name (<see cref="DimmedTextUses"/> says how a
+    /// place is named) outside a disabled state: in each style's selector the alternatives that name
+    /// no <c>:disabled</c>, property matches in brackets and negated parts (<c>:not(...)</c>, whose
+    /// classes the style does not need and whose <c>:disabled</c> is no disabled state) left out;
+    /// none when a style of the place applies under <c>:disabled</c> alone. A control theme's key is
+    /// no selector.
+    /// </summary>
+    private static List<string> StyleClassesOf(string place)
+    {
+        // A selector's child combinator, " > ", is also what joins a place's scopes.
+        var selectors = new List<string>();
+        foreach (var part in place.Split(" > ")[..^1])
+        {
+            if (part.StartsWith("Style ", StringComparison.Ordinal))
+            {
+                selectors.Add(part["Style ".Length..]);
+            }
+            else if (selectors.Count > 0
+                && !part.StartsWith("ControlTheme ", StringComparison.Ordinal)
+                && !part.StartsWith("ResourceDictionary ", StringComparison.Ordinal))
+            {
+                selectors[^1] += " > " + part;
+            }
+        }
+
+        var disabled = new Regex(@":disabled\b");
+        var alternatives = selectors
+            .Select(selector => WithoutNegations(Regex.Replace(selector, @"\[[^\]]*\]", string.Empty)).Split(','))
+            .ToList();
+        return alternatives.Any(each => each.All(disabled.IsMatch))
+            ? []
+            : [.. alternatives.SelectMany(each => each)
+                .Where(alternative => !disabled.IsMatch(alternative))
+                .SelectMany(alternative => Regex.Matches(alternative, @"\.([\w-]+)").Select(match => match.Groups[1].Value))
+                .Distinct()];
+
+        // The selector without each ":not(" and what it holds up to its own closing parenthesis.
+        static string WithoutNegations(string selector)
+        {
+            var kept = new StringBuilder();
+            for (var i = 0; i < selector.Length; i++)
+            {
+                if (string.CompareOrdinal(selector, i, ":not(", 0, ":not(".Length) != 0)
+                {
+                    kept.Append(selector[i]);
+                    continue;
+                }
+
+                for (var depth = 0; i < selector.Length; i++)
+                {
+                    depth += selector[i] switch { '(' => 1, ')' => -1, _ => 0 };
+                    if (depth == 0 && selector[i] == ')')
+                    {
+                        break;
+                    }
+                }
+            }
+
+            return kept.ToString();
         }
     }
 
@@ -403,7 +527,8 @@ public partial class ThemeTokensTests
     /// colour written out, a pushed opacity at the search's constant and its value written out, the
     /// colour in code by each of the ways <see cref="DimmedNeedles"/> knows, a dimming class applied
     /// in XAML, by a list and by a binding, and in code, and a <c>.xaml</c> file. A mention in a
-    /// comment is no use.
+    /// comment is no use, nor are channels one off or given to another method, nor the opacity's
+    /// value in a geometry's path data.
     /// </summary>
     [AvaloniaFact]
     public void The_guard_reports_a_use_it_does_not_list_with_its_file_and_line()
@@ -415,7 +540,8 @@ public partial class ThemeTokensTests
         var render = SourceLines(Render);
 
         // A style for a new dimmed text, an element in the colour written out, two elements that take
-        // the dimming class, by a list and by a binding, and a comment.
+        // the dimming class, by a list and by a binding, and a comment; the opacity's value in path
+        // data, which is no use, and on an element.
         var head = Array.FindIndex(panel, line => line.Contains("<Style Selector=\"TextBlock.refName.head\">", StringComparison.Ordinal));
         Assert.True(head > 0, "LeftPanelView.axaml has no style TextBlock.refName.head to insert before.");
         var colour = Token(DimmedToken, ThemeVariant.Light);
@@ -429,6 +555,9 @@ public partial class ThemeTokensTests
             $"    <Style Selector=\"TextBlock.refName.gone\"><Setter Property=\"Foreground\" Value=\"{hex}\" /></Style>",
             "    <TextBlock Name=\"ListedCopy\" Classes=\"refName dimmed\" />",
             "    <TextBlock Name=\"BoundCopy\" Classes.dimmed=\"{Binding IsDimmed}\" />",
+            "    <Path Data=\"M1 .35 2\" />",
+            "    <StreamGeometry x:Key=\"Probe\">M1 .35 2</StreamGeometry>",
+            "    <Border Name=\"Faded\" Opacity=\"0.35\" />",
         ];
         var changedPanel = string.Join('\n', panel[..head].Concat(insertedXaml).Concat(panel[head..]));
 
@@ -452,6 +581,24 @@ public partial class ThemeTokensTests
             "                var trailing = .350;",
             "                label.Classes.Set(\"dropped\", true); // \"dimmed\"",
         ];
+
+        // The colour by its channels after an alpha in parentheses, a computed cast and a call, to a
+        // constructor named in full and to one typed by its target, and in CSS's form to parse; a
+        // channel one off, and the channels to another method, are no use.
+        string[] colourForms =
+        [
+            string.Create(CultureInfo.InvariantCulture, $"var computed = Color.FromArgb((byte)(255 * share), {dark.R}, {dark.G}, {dark.B});"),
+            string.Create(CultureInfo.InvariantCulture, $"var capped = Color.FromArgb(Math.Min(alpha, 255), 0x{dark.R:X2}, 0x{dark.G:X2}, 0x{dark.B:X2});"),
+            string.Create(CultureInfo.InvariantCulture, $"var qualified = new Avalonia.Media.Color(255, {colour.R}, {colour.G}, {colour.B});"),
+            string.Create(CultureInfo.InvariantCulture, $"Color targeted = new(255, {colour.R}, {colour.G}, {colour.B});"),
+            string.Create(CultureInfo.InvariantCulture, $"var css = Color.Parse(\"rgba({colour.R}, {colour.G}, {colour.B}, 0.5)\");"),
+        ];
+        string[] noUses =
+        [
+            string.Create(CultureInfo.InvariantCulture, $"var oneOff = Color.FromArgb((byte)204, {dark.R}, {dark.G}, {dark.B + 1});"),
+            string.Create(CultureInfo.InvariantCulture, $"var other = Mix((byte)204, {dark.R}, {dark.G}, {dark.B});"),
+        ];
+        insertedCode = [.. insertedCode, .. colourForms.Concat(noUses).Select(line => "                " + line)];
         var changedRender = string.Join('\n', render[..drawTexts].Concat(insertedCode).Concat(render[drawTexts..]));
 
         // A XAML file named .xaml, which Avalonia builds too, is read as XAML.
@@ -471,6 +618,7 @@ public partial class ThemeTokensTests
                 $"{Panel}:{lines.Hex}: the disabled text colour written out in \"Style TextBlock.refName.gone > Setter Foreground\"",
                 $"{Panel}:{lines.Hex + 1}: a class whose style gives a text the disabled colour in \"TextBlock ListedCopy @Classes=refName dimmed\"",
                 $"{Panel}:{lines.Hex + 2}: a class whose style gives a text the disabled colour in \"TextBlock BoundCopy @Classes.dimmed={{Binding IsDimmed}}\"",
+                $"{Panel}:{lines.Hex + 5}: the search's dimming's value written out in \"Border Faded @Opacity\"",
                 $"{Render}:{lines.Constant}: the search's dimming in \"using var again = context.PushOpacity(SearchDimmedOpacity);\"",
                 $"{Render}:{lines.Value}: the search's dimming's value written out in \"using var fixedValue = context.PushOpacity(0.35);\"",
                 $"{Render}:{lines.Value + 1}: the disabled text colour written out in \"{packed}\"",
@@ -478,9 +626,10 @@ public partial class ThemeTokensTests
                 $"{Render}:{lines.Value + 3}: the disabled text colour written out in \"{decimals}\"",
                 $"{Render}:{lines.Value + 4}: the search's dimming's value written out in \"var trailing = .350;\"",
                 $"{Render}:{lines.Value + 5}: a class whose style gives a text the disabled colour in \"label.Classes.Set(\"dropped\", true);\"",
+                .. colourForms.Select((form, i) => $"{Render}:{lines.Value + 6 + i}: the disabled text colour written out in \"{form}\""),
                 $"{Copied}:2: the disabled text colour written out in \"Style TextBlock.copied > Setter Foreground\"",
             ],
-            problems.Select(problem => problem[..problem.IndexOf(", a use the guard does not list", StringComparison.Ordinal)]));
+            problems.Select(problem => problem.IndexOf(", a use the guard does not list", StringComparison.Ordinal) is var at and >= 0 ? problem[..at] : problem));
         Assert.All(problems, problem => Assert.Contains("add it to DimmedTextUses with its reason", problem, StringComparison.Ordinal));
     }
 
@@ -638,7 +787,9 @@ public partial class ThemeTokensTests
     /// <summary>
     /// The classes whose own style gives a text the disabled colour, each style a listed use, with
     /// that style's file and place: where the app applies one, a text takes the colour without
-    /// naming it, so each place it is applied is a use the guard lists too.
+    /// naming it, so each place it is applied is a use the guard lists too. Every class a listed
+    /// style names outside a disabled state is, with that style, one of these or of
+    /// <see cref="NonDimmingClasses"/>.
     /// </summary>
     private static readonly (string Class, string File, string Style)[] DimmingClasses =
     [
@@ -647,17 +798,41 @@ public partial class ThemeTokensTests
         ("dropped", AppSource + "/Views/Rebase/InteractiveRebaseView.axaml", "Style TextBlock.dropped > Setter Foreground"),
     ];
 
+    /// <summary>
+    /// The classes a listed style in XAML names outside a disabled state that are no dimming class
+    /// in that style, each with the style's file and place and its reason: where the app applies one
+    /// alone, no text takes the colour from that style. The same class in another listed style is
+    /// tied anew.
+    /// </summary>
+    private static readonly (string Class, string File, string Style, string Reason)[] NonDimmingClasses =
+    [
+        (
+            "refName",
+            AppSource + "/Views/Shell/LeftPanelView.axaml",
+            "Style TextBlock.refName.dimmed > Setter Foreground",
+            "every ref row's name takes it; this style gives the colour only with dimmed beside it"),
+    ];
+
     /// <summary>Why D469's guard accepts a use; the exceptions last, in their order.</summary>
     private enum DimmedUseKind
     {
         /// <summary>Where the token, its colour or the constant is defined.</summary>
         Definition,
 
-        /// <summary>Under a disabled state, which WCAG exempts: a <c>:disabled</c> selector, or a class bound to a disabled command.</summary>
+        /// <summary>
+        /// Under a disabled state, which WCAG exempts: a <c>:disabled</c> selector, a class bound to a
+        /// disabled command, or a class set in code by a line that names <c>IsEnabled</c>.
+        /// </summary>
         Disabled,
 
         /// <summary>A mark that is no text: a border, a node.</summary>
         NotText,
+
+        /// <summary>
+        /// A dimming class's name that applies no dimming here: a string of code that is no class, or
+        /// a class on an element that no listed style giving it the colour reaches.
+        /// </summary>
+        NotDimming,
 
         /// <summary>D469's exception (a): a hidden or left-out branch's name in the left panel.</summary>
         ExceptionA,
@@ -845,6 +1020,17 @@ public partial class ThemeTokensTests
                 seen.Add(PullRequestNumber);
             }
         }
+
+        // The labels' column outside the labels, each with a pixel round it for its edge: the
+        // background alone, as nothing else is drawn there on a dimmed row.
+        var drawn = labels.Select(label => label.Bounds.Inflate(1)).ToList();
+        failures.AddRange(BlendProblems(
+            shot,
+            new Rect(columns.Refs.X, bounds.Y, columns.Refs.Width, bounds.Height),
+            behind,
+            behind,
+            $"{where}: the labels' column outside the labels, {backgroundToken}",
+            (x, y) => drawn.Any(box => box.Intersects(new Rect(x, y, 1, 1)))));
     }
 
     /// <summary>A label's entry in <see cref="DimmedRowLabels"/>; a kind without one is named so that the lookup fails.</summary>
@@ -870,11 +1056,12 @@ public partial class ThemeTokensTests
     }
 
     /// <summary>
-    /// What is wrong with the whole pixels of <paramref name="area"/>: a pixel that lies outside the
-    /// blends of <paramref name="ink"/> over <paramref name="behind"/> by more than 2 in a channel,
-    /// as another colour drawn there does; one line for the area, with the first such pixel.
+    /// What is wrong with the whole pixels of <paramref name="area"/>, but those
+    /// <paramref name="skip"/> names: a pixel that lies outside the blends of <paramref name="ink"/>
+    /// over <paramref name="behind"/> by more than 2 in a channel, as another colour drawn there
+    /// does; one line for the area, with the first such pixel.
     /// </summary>
-    private static IEnumerable<string> BlendProblems(Screenshot shot, Rect area, Color behind, Color ink, string what)
+    private static IEnumerable<string> BlendProblems(Screenshot shot, Rect area, Color behind, Color ink, string what, Func<int, int, bool>? skip = null)
     {
         const int Tolerance = 2;
         static bool Between(byte value, byte a, byte b) => value >= Math.Min(a, b) - Tolerance && value <= Math.Max(a, b) + Tolerance;
@@ -884,6 +1071,11 @@ public partial class ThemeTokensTests
         {
             for (var x = (int)Math.Ceiling(area.Left); x < (int)Math.Floor(area.Right); x++)
             {
+                if (skip?.Invoke(x, y) == true)
+                {
+                    continue;
+                }
+
                 var pixel = shot.PixelAt(x, y);
                 if (!(Between(pixel.R, behind.R, ink.R) && Between(pixel.G, behind.G, ink.G) && Between(pixel.B, behind.B, ink.B)))
                 {
@@ -901,40 +1093,91 @@ public partial class ThemeTokensTests
     private static string Hex(Color colour) => string.Create(CultureInfo.InvariantCulture, $"#{colour.R:X2}{colour.G:X2}{colour.B:X2}");
 
     /// <summary>
-    /// The setters of <paramref name="property"/> in <paramref name="styles"/> and their nested
-    /// styles, in their order, as <c>selector: value</c>; a control theme's own setters under its
-    /// target type's name.
+    /// The setters of <paramref name="property"/> in <paramref name="styles"/>, their nested styles
+    /// and the styles of a nested <c>Styles</c>, in their order, as <c>selector: value</c>; a control
+    /// theme's own setters under its target type's name. Any other kind of style, as a
+    /// <c>StyleInclude</c>, fails the fact by its type, since its setters are not read.
     /// </summary>
     private static List<string> Setters(IEnumerable<IStyle> styles, string property)
     {
         var found = new List<string>();
-        foreach (var style in styles.OfType<StyleBase>())
+        foreach (var style in styles)
         {
-            var selector = style switch
+            if (style is Styles nested)
             {
-                Style plain => plain.Selector?.ToString() ?? string.Empty,
-                ControlTheme theme => theme.TargetType?.Name ?? string.Empty,
-                _ => string.Empty,
+                found.AddRange(Setters(nested, property));
+                continue;
+            }
+
+            var (selector, rule) = style switch
+            {
+                Style plain => (plain.Selector?.ToString() ?? string.Empty, (StyleBase)plain),
+                ControlTheme theme => (theme.TargetType?.Name ?? string.Empty, theme),
+                _ => throw new InvalidOperationException($"The view's styles hold a {style.GetType().Name}, whose setters the fact does not read: read them here."),
             };
-            found.AddRange(style.Setters.OfType<Setter>().Where(setter => setter.Property?.Name == property).Select(setter => selector + ": " + ValueOf(setter.Value)));
-            found.AddRange(Setters(style.Children, property));
+            found.AddRange(rule.Setters.OfType<Setter>().Where(setter => setter.Property?.Name == property).Select(setter => selector + ": " + ValueOf(setter.Value)));
+            found.AddRange(Setters(rule.Children, property));
         }
 
         return found;
     }
 
-    /// <summary>A view's own styles, then the control themes of its resources, which <see cref="Setters"/> reads.</summary>
-    private static List<IStyle> ViewStyles(UserControl view) =>
-        [.. view.Styles, .. view.Resources.Values.OfType<ControlTheme>()];
+    /// <summary>
+    /// A view's own styles, then the control themes of its resources, which <see cref="Setters"/>
+    /// reads. Each key is looked up first: XAML defers a resource until its key is, and until then
+    /// the dictionary's values hold the deferred content, not the control theme. Merged or theme
+    /// dictionaries in the view's resources fail the fact, since their control themes are not read.
+    /// </summary>
+    private static List<IStyle> ViewStyles(UserControl view)
+    {
+        var resources = view.Resources;
+        Assert.True(
+            resources.MergedDictionaries.Count == 0 && resources.ThemeDictionaries.Count == 0,
+            $"{view.GetType().Name}'s resources merge or hold theme dictionaries, whose control themes the fact does not read: read them here.");
+        return [.. view.Styles, .. resources.Keys.ToList().Select(key => resources[key]).OfType<ControlTheme>()];
+    }
 
-    /// <summary>A setter's value as <see cref="Setters"/> writes it: a dynamic resource's key, "transparent", or the value.</summary>
+    /// <summary>A setter's value as <see cref="Setters"/> writes it: a dynamic resource's key, "transparent", or the value, a number invariant.</summary>
     private static string ValueOf(object? value) => value switch
     {
         DynamicResourceExtension resource => resource.ResourceKey?.ToString() ?? "a resource without a key",
         ISolidColorBrush { Color.A: 0 } => "transparent",
         ISolidColorBrush brush => brush.Color.ToString(),
+        IFormattable formattable => formattable.ToString(null, CultureInfo.InvariantCulture),
         _ => value?.ToString() ?? "null",
     };
+
+    /// <summary>
+    /// The elements of a view's XAML (<paramref name="file"/>, or <paramref name="text"/> as its
+    /// text) that take the class <paramref name="dimming"/>, by type and name. Each is held to set no
+    /// foreground and no opacity of its own, by an attribute or a property element, which would
+    /// outrank or add to the styles the fact reads.
+    /// </summary>
+    private static List<string> DimmedElements(string file, string dimming, string? text = null)
+    {
+        static bool TakesClass(XAttribute attribute, string dimming) =>
+            attribute.Name.LocalName == "Classes." + dimming
+            || (attribute.Name.LocalName == "Classes" && attribute.Value.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries).Contains(dimming));
+        static bool IsOwnColour(string property) =>
+            property is "Foreground" or "Opacity"
+            || property.EndsWith(".Foreground", StringComparison.Ordinal) || property.EndsWith(".Opacity", StringComparison.Ordinal);
+
+        var found = new List<string>();
+        var document = XDocument.Parse(text ?? File.ReadAllText(RepositoryFile(file)));
+        foreach (var element in document.Descendants().Where(element => element.Attributes().Any(attribute => TakesClass(attribute, dimming))))
+        {
+            var own = element.Attributes().Select(attribute => attribute.Name.LocalName)
+                .Concat(element.Elements().Select(child => child.Name.LocalName))
+                .Where(IsOwnColour)
+                .ToList();
+            Assert.True(
+                own.Count == 0,
+                $"{file}: {Describe(element)} sets {string.Join(" and ", own)} of its own, which outranks or adds to the styles the fact reads: give it by a style, or read it here.");
+            found.Add(Describe(element));
+        }
+
+        return found;
+    }
 
     /// <summary>
     /// The colour that <paramref name="background"/> resolves to in <paramref name="view"/>, shown in
@@ -966,12 +1209,20 @@ public partial class ThemeTokensTests
     /// The guard's needles: the token by its name, which must stand in both themes; its colours in
     /// both themes as the app resolves them, in either case and with any alpha, written
     /// <c>#RRGGBB</c> or <c>#AARRGGBB</c> (XAML, or a string to parse), as a <c>0x</c> literal
-    /// (<c>Color.FromUInt32</c>), or as its three channels, hexadecimal or decimal, to
-    /// <c>Color.FromRgb</c>, <c>Color.FromArgb</c> or <c>new Color</c>; the constant by its name;
-    /// its value written out, with or without its leading 0 and with trailing zeros; and a class of
-    /// <see cref="DimmingClasses"/> by its whole name, which <see cref="ScanXaml"/> looks for where
-    /// XAML applies a class and <see cref="ScanCode"/> in a string of code. A colour mixed by other
-    /// means, the value computed, or a class's name put together, is beyond a reading of the text.
+    /// (<c>Color.FromUInt32</c>), or as its three channels, hexadecimal or decimal and each perhaps
+    /// cast, after an alpha that nests parentheses at most two deep, to <c>Color.FromRgb</c>,
+    /// <c>Color.FromArgb</c>, a constructor of <c>Color</c>, its name qualified or not, or any
+    /// constructor typed by its target (<c>new(</c>), whatever its type, or in CSS's <c>rgb(</c> or
+    /// <c>rgba(</c> with its three channels as whole numbers in decimal (XAML, or a string to parse);
+    /// the constant by its name; its value written out, with or without its leading 0 and with
+    /// trailing zeros, but not where <see cref="IsPathData"/> takes an attribute or an element, by
+    /// its name alone, for a geometry's path data; and a class of <see cref="DimmingClasses"/> by its
+    /// whole name, which <see cref="ScanXaml"/> looks for where XAML applies a class and
+    /// <see cref="ScanCode"/> in a string of code. A colour mixed by other means or computed, as
+    /// CSS's <c>hsl(</c> is, a CSS channel given as a percentage or with a decimal point, which
+    /// Avalonia parses too, the value computed, or a class's name put together, is beyond a reading
+    /// of the text; a class held in a constant, or the colour behind a resource alias, is seen where
+    /// it is defined, not where it is used.
     /// </summary>
     private static List<(DimmedNeedle Needle, Regex Pattern)> DimmedNeedles()
     {
@@ -982,9 +1233,16 @@ public partial class ThemeTokensTests
             var hex = string.Create(CultureInfo.InvariantCulture, $"{colour.R:X2}{colour.G:X2}{colour.B:X2}");
             needles.Add((DimmedNeedle.Colour, new Regex("(?:#|\\b0x)(?:[0-9A-F]{2})?" + hex + "(?![0-9A-F])", RegexOptions.IgnoreCase)));
 
-            // The three channels after the alpha, when one is given.
+            // The three channels after the alpha, when one is given: any argument without a comma
+            // outside its parentheses, nested at most two deep, as a cast, a product or a call.
             needles.Add((DimmedNeedle.Colour, new Regex(
-                @"(?:\bColor\.From(?:Rgb|Argb)|\bnew\s+Color)\(\s*(?:[^,()]+,\s*)?" + ChannelPattern(colour.R) + @"\s*,\s*" + ChannelPattern(colour.G) + @"\s*,\s*" + ChannelPattern(colour.B) + @"\s*\)",
+                @"(?:\bColor\.From(?:Rgb|Argb)|\bnew\s+(?:[\w.:]+\.)?Color|\bnew)\s*\(\s*(?:(?:[^,()]|\((?:[^()]|\([^()]*\))*\))+,\s*)?"
+                    + ChannelPattern(colour.R) + @"\s*,\s*" + ChannelPattern(colour.G) + @"\s*,\s*" + ChannelPattern(colour.B) + @"\s*\)",
+                RegexOptions.IgnoreCase)));
+
+            // CSS's form, which Avalonia parses too: rgb( or rgba( and the three channels as whole numbers in decimal.
+            needles.Add((DimmedNeedle.Colour, new Regex(
+                string.Create(CultureInfo.InvariantCulture, $@"\brgba?\(\s*0*{colour.R}\s*,\s*0*{colour.G}\s*,\s*0*{colour.B}\s*[,)]"),
                 RegexOptions.IgnoreCase)));
         }
 
@@ -1027,8 +1285,9 @@ public partial class ThemeTokensTests
     /// <summary>
     /// The uses in a XAML file: each match in an attribute's value or an element's text, comments
     /// left out, at its place (the enclosing control themes, styles and theme dictionaries, then the
-    /// setter's property, or the element and its attribute); and each dimming class the element
-    /// takes, by <c>Classes.dropped="…"</c> or in the list of <c>Classes="…"</c>.
+    /// setter's property, or the element and its attribute), the opacity's value not looked for in
+    /// what <see cref="IsPathData"/> takes for path data; and each dimming class the element takes, by
+    /// <c>Classes.dropped="…"</c> or in the list of <c>Classes="…"</c>.
     /// </summary>
     private static List<DimmedUse> ScanXaml(string file, string text, IReadOnlyList<(DimmedNeedle Needle, Regex Pattern)> needles)
     {
@@ -1041,7 +1300,7 @@ public partial class ThemeTokensTests
                 var name = AttributeName(element, attribute);
                 var line = ((IXmlLineInfo)attribute).LineNumber;
                 var place = PlaceOf(element, element.Name.LocalName == "Setter" && name == "Value" ? string.Empty : " @" + name);
-                AddMatches(uses, file, line, attribute.Value, place, needles);
+                AddMatches(uses, file, line, attribute.Value, place, needles, pathData: IsPathData(name));
 
                 // A class applied is named with what applies it, so that a changed binding is a new use.
                 string[] classes = name.StartsWith("Classes.", StringComparison.Ordinal) ? [name["Classes.".Length..]]
@@ -1052,7 +1311,8 @@ public partial class ThemeTokensTests
 
             foreach (var node in element.Nodes().OfType<XText>())
             {
-                AddMatches(uses, file, ((IXmlLineInfo)node).LineNumber, node.Value, PlaceOf(element, " text"), needles);
+                var line = ((IXmlLineInfo)node).LineNumber;
+                AddMatches(uses, file, line, node.Value, PlaceOf(element, " text"), needles, pathData: IsPathData(element.Name.LocalName));
             }
         }
 
@@ -1060,8 +1320,19 @@ public partial class ThemeTokensTests
     }
 
     /// <summary>
+    /// What the scan takes for a geometry's path data, whose numbers are no opacity, by the name
+    /// alone of the attribute or the element that holds it: any <c>Data</c> or <c>Geometry</c>, also
+    /// one that holds no geometry, as the graph's own <c>Data</c> binding, a property element as
+    /// <c>Path.Data</c>, or a <c>StreamGeometry</c>.
+    /// </summary>
+    private static bool IsPathData(string name) =>
+        name is "Data" or "Geometry" or "StreamGeometry" || name.EndsWith(".Data", StringComparison.Ordinal);
+
+    /// <summary>
     /// The uses in a C# file: each match in a line's code, comments left out, its place the line's
     /// code; and each dimming class a string of the code names whole, as <c>Classes.Set("dropped", …)</c> does.
+    /// The strings are taken from the code by a pattern that does not know character literals: after
+    /// <c>'"'</c> on a line, a class a later string names is missed.
     /// </summary>
     private static List<DimmedUse> ScanCode(string file, string text, IReadOnlyList<(DimmedNeedle Needle, Regex Pattern)> needles)
     {
@@ -1078,10 +1349,15 @@ public partial class ThemeTokensTests
         return uses;
     }
 
-    /// <summary>The matches of every needle but the dimming classes' in <paramref name="text"/>.</summary>
-    private static void AddMatches(List<DimmedUse> uses, string file, int line, string text, string place, IReadOnlyList<(DimmedNeedle Needle, Regex Pattern)> needles)
+    /// <summary>
+    /// The matches of every needle but the dimming classes' in <paramref name="text"/>; in a
+    /// geometry's path data (<paramref name="pathData"/>) the opacity's value is not looked for.
+    /// </summary>
+    private static void AddMatches(
+        List<DimmedUse> uses, string file, int line, string text, string place, IReadOnlyList<(DimmedNeedle Needle, Regex Pattern)> needles, bool pathData = false)
     {
-        foreach (var (needle, pattern) in needles.Where(needle => needle.Needle != DimmedNeedle.Class))
+        var looked = needles.Where(needle => needle.Needle != DimmedNeedle.Class && !(pathData && needle.Needle == DimmedNeedle.DimmingValue));
+        foreach (var (needle, pattern) in looked)
         {
             uses.AddRange(pattern.Matches(text).Select(_ => new DimmedUse(file, line, needle, place)));
         }
@@ -1099,7 +1375,9 @@ public partial class ThemeTokensTests
     /// <summary>
     /// A line of C# without its comments: <c>//</c> to the line's end, and <c>/*</c> to <c>*/</c> also across
     /// lines (<paramref name="inComment"/>), outside string and character literals. A plain reading,
-    /// not a compiler's: a verbatim or raw string that holds a quote may hide a comment's start.
+    /// not a compiler's: a verbatim string that ends in a backslash, or a raw string with an odd
+    /// number of quotes, can keep a comment as code; and a raw or verbatim string over several lines
+    /// is read as code, where a <c>/*</c> in it drops the lines after it until a <c>*/</c>.
     /// </summary>
     private static string CodeOf(string line, ref bool inComment)
     {
@@ -1227,7 +1505,7 @@ public partial class ThemeTokensTests
                 problems.Add(
                     $"{group.Key.File}:{lines}: {NeedleName(group.Key.Needle)} in \"{group.Key.Place}\", a use the guard does not list. "
                     + "If it dims a text on a row the user acts on, draw the text in another colour (VcTextSecondaryBrush reaches 4.5:1 on every row) or leave the class off; "
-                    + "if it lies under a disabled state, is no text, or belongs to one of D469's exceptions, add it to DimmedTextUses with its reason.");
+                    + "if it lies under a disabled state, is no text, applies no dimming here, or belongs to one of D469's exceptions, add it to DimmedTextUses with its reason.");
             }
             else if (group.Count() != entry.Count)
             {
