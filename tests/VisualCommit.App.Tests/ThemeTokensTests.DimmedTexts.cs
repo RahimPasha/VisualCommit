@@ -384,8 +384,19 @@ public partial class ThemeTokensTests
     {
         var problems = GuardProblems(ScanAppSource(DimmedNeedles()), DimmedTextUses);
         Assert.True(problems.Count == 0, "Uses of the dimmed text colour or of the search's dimming (D469's guard):\n" + string.Join('\n', problems));
+        AssertGuardTable(DimmedTextUses);
+    }
 
-        foreach (var entry in DimmedTextUses.Where(entry => entry.Kind == DimmedUseKind.Disabled))
+    /// <summary>
+    /// The rules the guard's table (<paramref name="accepted"/>) keeps: a use under a disabled state
+    /// names it; every class that a listed style in XAML names outside a disabled state is a
+    /// dimming class (<see cref="DimmingClasses"/>) or one of <see cref="NonDimmingClasses"/>, and
+    /// each of those is named so; each exception gives the colour, or the dimming, at one place, and
+    /// what applies it lies in the same file.
+    /// </summary>
+    private static void AssertGuardTable(IReadOnlyList<AcceptedUse> accepted)
+    {
+        foreach (var entry in accepted.Where(entry => entry.Kind == DimmedUseKind.Disabled))
         {
             Assert.True(
                 entry.Place.Contains(":disabled", StringComparison.Ordinal) || entry.Place.Contains(".disabled", StringComparison.Ordinal),
@@ -397,20 +408,60 @@ public partial class ThemeTokensTests
                 $"{entry.File}: \"{entry.Place}\" is listed under a disabled state, but the class is not bound to !IsEnabled.");
         }
 
-        // The dimming classes are those of the listed styles that give the colour by a class alone.
-        Assert.Equal(
-            DimmedTextUses
-                .Where(entry => entry.Needle == DimmedNeedle.Token && Regex.IsMatch(entry.Place, @"^Style \w+(\.\w+)+ > Setter Foreground$"))
-                .Select(entry => $"{entry.File}: {entry.Place}")
-                .Order(StringComparer.Ordinal),
-            DimmingClasses.Select(dimming => $"{dimming.File}: {dimming.Style}").Order(StringComparer.Ordinal));
+        // A class a listed style names gives a text the colour where it is applied, unless the style
+        // applies under a disabled state alone or the class needs another beside it.
+        var named = accepted
+            .Where(entry => entry.Needle is DimmedNeedle.Token or DimmedNeedle.Colour && IsXaml(entry.File))
+            .SelectMany(entry => StyleClassesOf(entry.Place).Select(name => (Class: name, entry.File, Style: entry.Place)))
+            .ToList();
+        var required = named.Where(use => !NonDimmingClasses.Any(none => (none.Class, none.File) == (use.Class, use.File))).ToList();
+        var listed = DimmingClasses.Select(dimming => (dimming.Class, dimming.File, dimming.Style)).ToList();
+        var untied = required.Except(listed)
+            .Select(use => $"{use.File}: \"{use.Style}\" names the class {use.Class}, which DimmingClasses does not list: list it there, or in NonDimmingClasses with its reason.")
+            .Concat(listed.Except(required).Select(dimming => $"{dimming.File}: DimmingClasses lists {dimming.Class} in \"{dimming.Style}\", which no listed style names so: take it out."))
+            .Concat(NonDimmingClasses.Where(none => !named.Any(use => (use.Class, use.File) == (none.Class, none.File)))
+                .Select(none => $"{none.File}: NonDimmingClasses lists {none.Class}, which no listed style names: take it out."))
+            .ToList();
+        Assert.True(untied.Count == 0, string.Join('\n', untied));
 
         // Each exception gives the colour, or the dimming, at one place; what applies it lies in the same file.
         foreach (var (kind, needle) in new[] { (DimmedUseKind.ExceptionA, DimmedNeedle.Token), (DimmedUseKind.ExceptionB, DimmedNeedle.Token), (DimmedUseKind.ExceptionC, DimmedNeedle.Dimming) })
         {
-            var entry = Assert.Single(DimmedTextUses, entry => entry.Kind == kind && entry.Needle == needle);
-            Assert.All(DimmedTextUses.Where(other => other.Kind == kind), other => Assert.Equal(entry.File, other.File));
+            var entry = Assert.Single(accepted, entry => entry.Kind == kind && entry.Needle == needle);
+            Assert.All(accepted.Where(other => other.Kind == kind), other => Assert.Equal(entry.File, other.File));
         }
+    }
+
+    /// <summary>
+    /// The classes that the styles of a place in XAML name (<see cref="DimmedTextUses"/> says how a
+    /// place is named) outside a disabled state: in each style's selector the alternatives that name
+    /// no <c>:disabled</c>, property matches in brackets left out; none when a style of the place
+    /// applies under <c>:disabled</c> alone. A control theme's key is no selector.
+    /// </summary>
+    private static List<string> StyleClassesOf(string place)
+    {
+        // A selector's child combinator, " > ", is also what joins a place's scopes.
+        var selectors = new List<string>();
+        foreach (var part in place.Split(" > ")[..^1])
+        {
+            if (part.StartsWith("Style ", StringComparison.Ordinal))
+            {
+                selectors.Add(part["Style ".Length..]);
+            }
+            else if (selectors.Count > 0 && !part.StartsWith("ControlTheme ", StringComparison.Ordinal) && !part.StartsWith("ResourceDictionary ", StringComparison.Ordinal))
+            {
+                selectors[^1] += " > " + part;
+            }
+        }
+
+        var disabled = new Regex(@"(?<!not\():disabled\b");
+        var alternatives = selectors.Select(selector => Regex.Replace(selector, @"\[[^\]]*\]", string.Empty).Split(',')).ToList();
+        return alternatives.Any(each => each.All(disabled.IsMatch))
+            ? []
+            : [.. alternatives.SelectMany(each => each)
+                .Where(alternative => !disabled.IsMatch(alternative))
+                .SelectMany(alternative => Regex.Matches(alternative, @"\.([\w-]+)").Select(match => match.Groups[1].Value))
+                .Distinct()];
     }
 
     /// <summary>
@@ -679,13 +730,23 @@ public partial class ThemeTokensTests
     /// <summary>
     /// The classes whose own style gives a text the disabled colour, each style a listed use, with
     /// that style's file and place: where the app applies one, a text takes the colour without
-    /// naming it, so each place it is applied is a use the guard lists too.
+    /// naming it, so each place it is applied is a use the guard lists too. Every class a listed
+    /// style names outside a disabled state is one of these or of <see cref="NonDimmingClasses"/>.
     /// </summary>
     private static readonly (string Class, string File, string Style)[] DimmingClasses =
     [
         ("disabled", AppSource + "/Views/Commands/CommandPaletteView.axaml", "Style TextBlock.disabled > Setter Foreground"),
         ("dimmed", AppSource + "/Views/Shell/LeftPanelView.axaml", "Style TextBlock.refName.dimmed > Setter Foreground"),
         ("dropped", AppSource + "/Views/Rebase/InteractiveRebaseView.axaml", "Style TextBlock.dropped > Setter Foreground"),
+    ];
+
+    /// <summary>
+    /// The classes a listed style in XAML names outside a disabled state that are no dimming class,
+    /// each with its file and its reason: where the app applies one alone, no text takes the colour.
+    /// </summary>
+    private static readonly (string Class, string File, string Reason)[] NonDimmingClasses =
+    [
+        ("refName", AppSource + "/Views/Shell/LeftPanelView.axaml", "every ref row's name takes it; its style gives the colour only with dimmed beside it"),
     ];
 
     /// <summary>Why D469's guard accepts a use; the exceptions last, in their order.</summary>
