@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.RegularExpressions;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media.TextFormatting;
 
@@ -21,6 +22,12 @@ namespace VisualCommit.App.Controls;
 /// separator or after the path; only a name longer than the line breaks where it must. Both marks
 /// have no advance in Inter (0.8).
 /// </para>
+/// <para>
+/// A path ends at white space there, as a path inside running text must. Where the text is one
+/// path and nothing else, <see cref="IsOnePath"/> marks all of it, spaces included: phase 8a's
+/// gate saw the first-run screen's path break at the space of <c>Visual Git</c> and after the
+/// hyphen of <c>net10.0-windows</c>.
+/// </para>
 /// </summary>
 public sealed partial class PathTextBlock : TextBlock
 {
@@ -29,6 +36,25 @@ public sealed partial class PathTextBlock : TextBlock
 
     /// <summary>ZERO WIDTH SPACE: a line may break after it, not drawn.</summary>
     public const char BreakAfter = '\u200B';
+
+    /// <summary>Defines the <see cref="IsOnePath"/> property.</summary>
+    public static readonly StyledProperty<bool> IsOnePathProperty =
+        AvaloniaProperty.Register<PathTextBlock, bool>(nameof(IsOnePath));
+
+    /// <summary>
+    /// The whole text is one path and nothing else, such as the first-run screen's
+    /// <c>GitSetupPath</c>: it is marked from its first character to its last
+    /// (<see cref="MarkAsOnePath"/>), so that a line breaks only after a separator, also where the
+    /// path holds a space or a hyphen. False, the default, for running text: each rooted path in it
+    /// is found and marked, and ends before white space (<see cref="BreakOnlyAfterSeparators"/>), so
+    /// that the words around it keep their breaks; a path with a space is then marked only up to the
+    /// space, and its rest breaks as plain text does.
+    /// </summary>
+    public bool IsOnePath
+    {
+        get => GetValue(IsOnePathProperty);
+        set => SetValue(IsOnePathProperty, value);
+    }
 
     protected override Type StyleKeyOverride => typeof(TextBlock);
 
@@ -47,8 +73,33 @@ public sealed partial class PathTextBlock : TextBlock
         return RootedPath().Replace(text, match => Mark(match.Value));
     }
 
+    /// <summary>
+    /// <paramref name="text"/>, all of it taken as one path, marked as
+    /// <see cref="BreakOnlyAfterSeparators"/> marks each rooted path it finds, the spaces and
+    /// hyphens of a name included: a line breaks only after <c>\</c> or <c>/</c> (never between a
+    /// UNC path's two leading backslashes), and only a name longer than the line breaks where it
+    /// must. The text need not be rooted (a name, a relative path). Its own line breaks (CR, LF) get
+    /// no mark beside them, so that CR LF stays one break; each line between them is marked on its own.
+    /// </summary>
+    public static string MarkAsOnePath(string text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        return LineOfText().Replace(text, match => Mark(match.Value));
+    }
+
     protected override TextLayout CreateTextLayout(string? text) =>
-        base.CreateTextLayout(text is null ? null : BreakOnlyAfterSeparators(text));
+        base.CreateTextLayout(text is null ? null : IsOnePath ? MarkAsOnePath(text) : BreakOnlyAfterSeparators(text));
+
+    protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
+    {
+        base.OnPropertyChanged(change);
+
+        // The marks live in the layout alone: the other mode needs a layout of its own.
+        if (change.Property == IsOnePathProperty)
+        {
+            InvalidateTextLayout();
+        }
+    }
 
     private static string Mark(string path)
     {
@@ -73,4 +124,8 @@ public sealed partial class PathTextBlock : TextBlock
 
     [GeneratedRegex(@"(?<![\w])[A-Za-z]:[\\/][^\s""'<>|?*]*|\\\\[^\s""'<>|?*\\]+\\[^\s""'<>|?*]*|(?<=^|[\s""'(\[<])/[^\s""'<>|?*]+", RegexOptions.CultureInvariant)]
     private static partial Regex RootedPath();
+
+    /// <summary>A run of characters between the text's own line breaks.</summary>
+    [GeneratedRegex(@"[^\r\n]+", RegexOptions.CultureInvariant)]
+    private static partial Regex LineOfText();
 }

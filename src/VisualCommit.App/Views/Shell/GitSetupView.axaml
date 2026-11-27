@@ -40,6 +40,7 @@
                  AutomationProperties.AutomationId="GitSetupBody" />
       <c:PathTextBlock Name="GitSetupPath"
                        Text="{Binding PathText}"
+                       IsOnePath="True"
                        IsVisible="{Binding ShowsPath}"
                        TextWrapping="Wrap" TextAlignment="Center"
                        HorizontalAlignment="Center"

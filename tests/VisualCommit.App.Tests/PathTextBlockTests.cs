@@ -13,8 +13,11 @@ namespace VisualCommit.App.Tests;
 /// <summary>
 /// A long folder in the welcome page's errors and the scan's folder line breaks only after a
 /// directory separator or at a space (docs/phase-6-design.md 13.2, 13.5, D227): phase 1's 11a broke
-/// <c>…\VisualCommit.Tests\plain-a373a2259cd0</c> at its hyphen. The text the block holds, its
-/// automation name and what tests read stay as given.
+/// <c>…\VisualCommit.Tests\plain-a373a2259cd0</c> at its hyphen. A text that is one path and
+/// nothing else (<see cref="PathTextBlock.IsOnePath"/>, the first-run screen's path) breaks only
+/// after a separator, also across a space: phase 8a's gate saw the stand-in's path break at the
+/// space of <c>Visual Git</c> and after the hyphen of <c>net10.0-windows</c>. The text the block
+/// holds, its automation name and what tests read stay as given.
 /// </summary>
 public class PathTextBlockTests
 {
@@ -23,6 +26,19 @@ public class PathTextBlockTests
 
     /// <summary>13.5's folder: phase 1's 11a with another user's name.</summary>
     private const string NotARepository = @"C:\Users\someone\AppData\Local\Temp\VisualCommit.Tests\plain-a373a2259cd0 is not a git repository.";
+
+    /// <summary>
+    /// The stand-in's path in phase 8a's real-window pass (launches 8 and 9), which the first-run
+    /// screen's <c>GitSetupPath</c> showed alone: as running text it broke at the space of
+    /// <c>Visual Git</c> and after the hyphen of <c>net10.0-windows</c>.
+    /// </summary>
+    private const string StandInPath = @"D:\Projects\Personal\Visual Git\tests\VisualCommit.RealWindowTests\bin\Release\net10.0-windows\visualcommit-git-stand-in.exe";
+
+    /// <summary>
+    /// The first-run screen's column in the window at 1100 × 700, as in the gate's captures: the
+    /// graph area's 440 less the screen's margins of 24 (under its <c>MaxWidth</c> of 520).
+    /// </summary>
+    private const double FirstRunWidth = 392;
 
     [Fact]
     public void A_drive_path_is_marked_to_break_only_after_its_separators()
@@ -85,6 +101,44 @@ public class PathTextBlockTests
         Assert.All(texts, text => Assert.Equal(text, DrawnLines.WithoutMarks(PathTextBlock.BreakOnlyAfterSeparators(text))));
     }
 
+    [Fact]
+    public void One_path_is_marked_from_its_first_character_to_its_last_where_running_text_ends_it_at_a_space()
+    {
+        // A space and a hyphen inside a name get the marks of any other character.
+        Assert.Equal(
+            "C" + NoBreak + ":" + NoBreak + @"\" + BreakAfter + "a" + NoBreak + " " + NoBreak + "b" + NoBreak + @"\" + BreakAfter + "c" + NoBreak + "-" + NoBreak + "d",
+            PathTextBlock.MarkAsOnePath(@"C:\a b\c-d"));
+        Assert.Equal("C" + NoBreak + ":" + NoBreak + @"\" + BreakAfter + @"a b\c-d", PathTextBlock.BreakOnlyAfterSeparators(@"C:\a b\c-d"));
+
+        // A Unix path with a space, and a UNC path with one: its two leading backslashes stay together.
+        Assert.Equal("/" + BreakAfter + "a" + NoBreak + " " + NoBreak + "b" + NoBreak + "/" + BreakAfter + "c", PathTextBlock.MarkAsOnePath("/a b/c"));
+        Assert.Equal("/" + BreakAfter + "a b/c", PathTextBlock.BreakOnlyAfterSeparators("/a b/c"));
+        Assert.Equal(
+            @"\" + NoBreak + @"\" + BreakAfter + "s" + NoBreak + @"\" + BreakAfter + "a" + NoBreak + " " + NoBreak + "b",
+            PathTextBlock.MarkAsOnePath(@"\\s\a b"));
+
+        // A text that is no rooted path is still one path: a name, or a relative path.
+        Assert.Equal("g" + NoBreak + "i" + NoBreak + "t", PathTextBlock.MarkAsOnePath("git"));
+        Assert.Equal("a" + NoBreak + "/" + BreakAfter + "b", PathTextBlock.MarkAsOnePath("a/b"));
+    }
+
+    [Fact]
+    public void One_path_keeps_a_surrogate_pair_whole_and_the_texts_own_line_breaks_unmarked()
+    {
+        const string Emoji = "😀";
+        var marked = PathTextBlock.MarkAsOnePath(@"C:\a " + Emoji + @" b\" + Emoji);
+        Assert.Equal(2, marked.Split(Emoji).Length - 1);
+        Assert.Equal(@"C:\a " + Emoji + @" b\" + Emoji, DrawnLines.WithoutMarks(marked));
+
+        // No mark next to a line break, so that CR LF stays one break.
+        Assert.Equal("a" + NoBreak + "b\r\nc" + NoBreak + "d", PathTextBlock.MarkAsOnePath("ab\r\ncd"));
+        Assert.Equal(string.Empty, PathTextBlock.MarkAsOnePath(string.Empty));
+        Assert.Throws<ArgumentNullException>(() => PathTextBlock.MarkAsOnePath(null!));
+
+        var texts = new[] { StandInPath, "/home/jane doe/tools/git", @"\\server\team share\tools\git.exe", "x" };
+        Assert.All(texts, text => Assert.Equal(text, DrawnLines.WithoutMarks(PathTextBlock.MarkAsOnePath(text))));
+    }
+
     [AvaloniaFact]
     public void At_392_pixels_phase_1s_error_breaks_after_the_temporary_folder()
     {
@@ -133,6 +187,110 @@ public class PathTextBlockTests
     }
 
     [AvaloniaFact]
+    public void As_running_text_the_stand_ins_path_breaks_at_its_space_and_after_a_hyphen_as_the_gate_saw()
+    {
+        var (host, block) = Show(StandInPath, FirstRunWidth);
+        using (host)
+        {
+            Assert.False(block.IsOnePath);
+            Assert.Equal(
+                [@"D:\Projects\Personal\Visual ", @"Git\tests\VisualCommit.RealWindowTests\bin\Release\net10.0-", @"windows\visualcommit-git-stand-in.exe"],
+                DrawnLines.Of(block));
+        }
+    }
+
+    [AvaloniaFact]
+    public void As_one_path_the_stand_ins_path_breaks_only_after_a_separator_at_the_first_run_screens_width()
+    {
+        var (host, block) = Show(StandInPath, FirstRunWidth, isOnePath: true);
+        using (host)
+        {
+            var lines = DrawnLines.Of(block);
+            Assert.True(lines.Count > 1, $"Expected the path to need two lines or more: {string.Join(" | ", lines)}");
+            Assert.All(lines.Take(lines.Count - 1), line => Assert.True(line.EndsWith('\\'), $"The line \"{line}\" ends inside a name."));
+            Assert.Equal(StandInPath, string.Concat(lines));
+            Assert.Contains(lines, line => line.Contains("Visual Git", StringComparison.Ordinal));
+            Assert.Contains(lines, line => line.Contains("net10.0-windows", StringComparison.Ordinal));
+
+            // Each line as full as the line allows: a break at an earlier separator would also end
+            // every line with one.
+            Assert.Equal([@"D:\Projects\Personal\Visual Git\tests\", @"VisualCommit.RealWindowTests\bin\Release\net10.0-windows\", "visualcommit-git-stand-in.exe"], lines);
+            Assert.Equal(StandInPath, block.Text);
+            Assert.Equal(StandInPath, ControlAutomationPeer.CreatePeerForElement(block).GetName());
+            TestPictures.Save(host, "path-one-392");
+        }
+    }
+
+    [AvaloniaFact]
+    public void Turning_one_path_on_and_off_lays_the_text_out_again()
+    {
+        var (host, block) = Show(StandInPath, FirstRunWidth);
+        using (host)
+        {
+            var running = DrawnLines.Of(block);
+
+            block.IsOnePath = true;
+            DiffHost.Settle();
+            var whole = DrawnLines.Of(block);
+            Assert.NotEqual(running, whole);
+            Assert.All(whole.Take(whole.Count - 1), line => Assert.True(line.EndsWith('\\'), $"The line \"{line}\" ends inside a name."));
+
+            block.IsOnePath = false;
+            DiffHost.Settle();
+            Assert.Equal(running, DrawnLines.Of(block));
+        }
+    }
+
+    [AvaloniaFact]
+    public void As_one_path_a_unix_path_with_a_space_breaks_only_after_its_slashes_where_running_text_breaks_at_the_space()
+    {
+        const string Text = "/home/jane doe/tools/git";
+        var (host, block) = Show(Text, 80, isOnePath: true);
+        using (host)
+        {
+            Assert.Equal(["/home/", "jane doe/", "tools/git"], DrawnLines.Of(block));
+        }
+
+        (host, block) = Show(Text, 80);
+        using (host)
+        {
+            Assert.Equal(["/home/jane ", "doe/tools/git"], DrawnLines.Of(block));
+        }
+    }
+
+    [AvaloniaFact]
+    public void As_one_path_a_name_longer_than_the_line_breaks_where_it_must_and_stays_within_the_block()
+    {
+        var longName = string.Concat(Enumerable.Repeat("very long-folder name ", 6));
+        foreach (var text in new[] { $@"C:\src\{longName}end\git.exe", longName + "end" })
+        {
+            var (host, block) = Show(text, 292, isOnePath: true);
+            using (host)
+            {
+                var lines = DrawnLines.Of(block);
+                Assert.True(lines.Count >= 3);
+                Assert.Equal(text, string.Concat(lines));
+                Assert.All(block.TextLayout.TextLines, line => Assert.True(line.Width <= block.Bounds.Width + 0.5, $"A line is {line.Width} wide in a block of {block.Bounds.Width}."));
+            }
+        }
+    }
+
+    [AvaloniaFact]
+    public void As_one_path_an_empty_or_missing_text_is_drawn_as_by_a_text_block()
+    {
+        foreach (var text in new[] { string.Empty, null })
+        {
+            var path = new PathTextBlock { Text = text, IsOnePath = true, FontSize = 12.5, TextWrapping = TextWrapping.Wrap };
+            var plain = new TextBlock { Text = text, FontSize = 12.5, TextWrapping = TextWrapping.Wrap };
+            using var host = DiffHost.Show(new StackPanel { Children = { path, plain } }, 600, 200, ThemeVariant.Dark);
+
+            Assert.Equal(plain.Bounds.Size, path.Bounds.Size);
+            Assert.Equal(DrawnLines.Of(plain), DrawnLines.Of(path));
+            Assert.Equal(text, path.Text);
+        }
+    }
+
+    [AvaloniaFact]
     public void A_short_path_is_as_wide_as_in_a_text_block()
     {
         const string Text = @"C:\src\api is not a git repository.";
@@ -154,8 +312,11 @@ public class PathTextBlockTests
         DiffColors.AssertBrush(Color.Parse("#EA7D86"), block.Foreground, "the error's colour");
     }
 
-    /// <summary>The welcome page's error at <paramref name="width"/>: a wrapping, centred <see cref="PathTextBlock"/> at the window's 12.5.</summary>
-    private static (DiffHost Host, PathTextBlock Block) Show(string text, double width)
+    /// <summary>
+    /// The welcome page's error at <paramref name="width"/>: a wrapping, centred <see cref="PathTextBlock"/>
+    /// at the window's 12.5; with <paramref name="isOnePath"/>, the first-run screen's path in its place.
+    /// </summary>
+    private static (DiffHost Host, PathTextBlock Block) Show(string text, double width, bool isOnePath = false)
     {
         var block = new PathTextBlock
         {
@@ -164,8 +325,13 @@ public class PathTextBlockTests
             TextWrapping = TextWrapping.Wrap,
             TextAlignment = TextAlignment.Center,
             Width = width,
-            Classes = { "error" },
+            IsOnePath = isOnePath,
         };
+        if (!isOnePath)
+        {
+            block.Classes.Add("error");
+        }
+
         var host = DiffHost.Show(new StackPanel { Margin = new Avalonia.Thickness(24), Children = { block } }, 1100, 700, ThemeVariant.Dark);
         return (host, block);
     }
