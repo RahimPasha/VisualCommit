@@ -451,7 +451,7 @@ public sealed partial class RealApp : IDisposable
                 {
                     message = string.Create(
                         System.Globalization.CultureInfo.InvariantCulture,
-                        $"{message} The last look read false; {failedLooks} of {looks} looks before it failed in UI Automation, the last of them with {FailureWords(lastFailure)}.");
+                        $"{message} The last look read false; {failedLooks} of {looks} looks failed in UI Automation, the last of them with {FailureWords(lastFailure)}.");
                 }
 
                 throw new TimeoutException(message, lastFailure);
@@ -463,32 +463,55 @@ public sealed partial class RealApp : IDisposable
 
     /// <summary>
     /// Whether <paramref name="exception"/> is how one look of <see cref="Poll"/> fails while the app's automation tree
-    /// changes, a look that is then taken as "not yet" and made again: a <see cref="System.Runtime.InteropServices.COMException"/>,
-    /// whatever its HRESULT, which is how FlaUI 5.0.0 hands on a failed call into UI Automation that it does not wrap
-    /// (<c>FindAll</c>, <c>FindFirst</c> and every property read: UIA_E_ELEMENTNOTAVAILABLE comes so too), and FlaUI's
-    /// own <see cref="FlaUI.Core.Exceptions.ElementNotAvailableException"/>, which its <c>Com.Call</c> (<c>FocusedElement</c>,
-    /// <c>FromHandle</c>) makes of UIA_E_ELEMENTNOTAVAILABLE. Nothing else, though <see cref="IsReadFailure"/>, made for one
-    /// read whose failure is noted, takes more: not an <see cref="InvalidOperationException"/>, which <see cref="Find"/>
-    /// throws for an element that is not in the window, and a look that throws it must end the wait as it always did;
-    /// not a <see cref="TimeoutException"/>, which a wait inside a look throws, as UI Automation's own time-out does
-    /// (COR_E_TIMEOUT), and the two cannot be told apart; not a <see cref="System.ComponentModel.Win32Exception"/>, which
-    /// <c>Com.Call</c> makes of every other HRESULT but the harness throws too when Windows does not list its windows,
-    /// a failure that I1's second start must fail on and never count as a look that found no window
-    /// (<c>Win32.Enumerate</c>); and no other exception of FlaUI's, such as one for an element that is not enabled.
+    /// changes, a look that is then taken as "not yet" and made again. Three forms, as FlaUI 5.0.0 hands a failed call
+    /// into UI Automation on:
+    /// <list type="bullet">
+    /// <item>a <see cref="System.Runtime.InteropServices.COMException"/>, whatever its HRESULT, from every call FlaUI does
+    /// not wrap (<c>FindAll</c>, <c>FindFirst</c> and every property read): the gate's <c>FindAll</c> failed so with E_FAIL
+    /// (.NET 10's "Unexpected HRESULT" message), and UIA_E_ELEMENTNOTAVAILABLE and a raw call's time-out (COR_E_TIMEOUT,
+    /// 0x80131505, which .NET 10 hands on as a COMException, not a <see cref="TimeoutException"/>) come so too: a wait on an
+    /// app that does not answer then lasts its own time-out and at most one of UI Automation's, and fails naming it;</item>
+    /// <item>FlaUI's own <see cref="FlaUI.Core.Exceptions.ElementNotAvailableException"/>, which its <c>Com.Call</c>
+    /// (<c>FocusedElement</c>, <c>FromHandle</c>) makes of UIA_E_ELEMENTNOTAVAILABLE;</item>
+    /// <item>FlaUI's <see cref="FlaUI.Core.Exceptions.PatternNotSupportedException"/> around a COMException: a pattern's
+    /// <c>Pattern</c> wraps every failure of its read so. A pattern that the element does not give comes around FlaUI's own
+    /// <see cref="InvalidOperationException"/> ("Native pattern is null") and does not count.</item>
+    /// </list>
+    /// Nothing else, though <see cref="IsReadFailure"/>, made for one read whose failure is noted, takes more: not an
+    /// <see cref="InvalidOperationException"/>, which <see cref="Find"/> throws for an element that is not in the window,
+    /// and a look that throws it must end the wait as it always did; not a <see cref="TimeoutException"/>, which
+    /// <c>Com.Call</c> makes of UI Automation's time-out ("UIA Timeout": the app did not answer, its tree did not change)
+    /// and a wait inside a look would throw too, which a caller that catches a wait's time-out could not tell from the
+    /// wait's own; not a <see cref="System.ComponentModel.Win32Exception"/>, which <c>Com.Call</c> makes of every other
+    /// HRESULT but the harness throws too when Windows does not list its windows, a failure that I1's second start must
+    /// fail on and never count as a look that found no window (<c>Win32.Enumerate</c>); and no other exception of
+    /// FlaUI's, though those <c>Com.Call</c> makes come around a COMException too: they say that an element is not
+    /// enabled, gives no clickable point or does not support what was asked, an action's failure or a lasting state.
     /// </summary>
     internal static bool IsFailedLook(Exception exception)
     {
         ArgumentNullException.ThrowIfNull(exception);
-        return exception is System.Runtime.InteropServices.COMException or FlaUI.Core.Exceptions.ElementNotAvailableException;
+        return exception is System.Runtime.InteropServices.COMException
+            or FlaUI.Core.Exceptions.ElementNotAvailableException
+            or FlaUI.Core.Exceptions.PatternNotSupportedException { InnerException: System.Runtime.InteropServices.COMException };
     }
 
-    /// <summary>A failure in words for a message: its type, a <see cref="System.Runtime.InteropServices.COMException"/>'s HRESULT, and its message.</summary>
+    /// <summary>
+    /// A failure in words for a message: its type, a <see cref="System.Runtime.InteropServices.COMException"/>'s HRESULT,
+    /// and its message (left out when empty, as FlaUI 5.0.0's <c>Com.Call</c> leaves its own exceptions' messages); for
+    /// any other exception around a COMException, as FlaUI wraps one, that COMException's words after it.
+    /// </summary>
     private static string FailureWords(Exception exception)
     {
         var code = exception is System.Runtime.InteropServices.COMException com
             ? string.Create(System.Globalization.CultureInfo.InvariantCulture, $" (HRESULT 0x{com.ErrorCode:X8})")
             : string.Empty;
-        return $"{exception.GetType().Name}{code} \"{exception.Message}\"";
+        var message = string.IsNullOrEmpty(exception.Message) ? string.Empty : $" \"{exception.Message}\"";
+        var words = $"{exception.GetType().Name}{code}{message}";
+        return exception is not System.Runtime.InteropServices.COMException
+            && exception.InnerException is System.Runtime.InteropServices.COMException inner
+            ? $"{words}, which wraps {FailureWords(inner)}"
+            : words;
     }
 
     /// <summary>

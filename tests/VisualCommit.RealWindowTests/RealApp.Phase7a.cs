@@ -149,10 +149,13 @@ public sealed partial class RealApp
     /// <paramref name="text"/>, read from the app, for an exception's message, after checking that it
     /// does not hold <paramref name="token"/>, the token typed into the dialog: when it does, throws
     /// naming <paramref name="place"/> instead, so that no message holds the token and the leak fails
-    /// by its place (design 13.2).
+    /// by its place (design 13.2). It throws an assertion's exception, which no read's catch takes
+    /// (<see cref="IsReadFailure"/>, <see cref="IsFailedLook"/>): read for a time-out's message
+    /// (<see cref="StateForMessage"/>, <see cref="ConfirmSignIn"/>), the leak is the failure, never a
+    /// window that could not be read (<see cref="WaitForRuleTests"/>).
     /// </summary>
     internal static string WithoutToken(string text, string token, string place) =>
-        text.Contains(token, StringComparison.Ordinal) ? throw new InvalidOperationException($"{place} holds the typed token.") : text;
+        text.Contains(token, StringComparison.Ordinal) ? throw new Xunit.Sdk.XunitException($"{place} holds the typed token.") : text;
 
     /// <summary>
     /// A real click on the open dialog's own "Sign in" (<c>ConfirmButton</c>, found inside the dialog:

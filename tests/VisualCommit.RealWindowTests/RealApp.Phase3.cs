@@ -152,35 +152,30 @@ public sealed partial class RealApp
     public AutomationElement WaitForMenu(TimeSpan? timeout = null)
     {
         AutomationElement? menu = null;
-        Rectangle? last = null;
+        var settling = new SettlingRectangle();
         WaitFor(
-            () =>
+            () => settling.Look(() =>
             {
-                // Cleared before the reads: a look that fails in UI Automation (WaitFor takes it as "not
-                // yet", IsFailedLook) leaves no rectangle, so that only two looks in a row settle the menu.
-                var previous = last;
-                last = null;
                 var found = FindAll("ContextMenu");
                 if (found.Count != 1 || found[0].BoundingRectangle is not { Width: > 0, Height: > 0 } bounds)
                 {
-                    return false;
+                    return null;
                 }
 
-                last = bounds;
                 menu = found[0];
-                return previous == bounds;
-            },
+                return bounds;
+            }),
             "a context menu to open and settle",
             timeout ?? TimeSpan.FromSeconds(10));
         return menu!;
     }
 
     /// <summary>
-    /// <see cref="WaitForMenu"/>'s rule for a settled menu, to be held with no window (<see cref="WaitForRuleTests"/>):
-    /// one look reads the menu's rectangle, null when there is no one menu with a non-empty rectangle, and the menu has
-    /// settled when two looks in a row read the same rectangle. Not decided yet for a read that fails: it keeps the
-    /// rectangle of the look before it, as <see cref="WaitForMenu"/> did before <see cref="Poll"/> took a failed look as
-    /// "not yet".
+    /// <see cref="WaitForMenu"/>'s rule for a settled menu, held with no window (<see cref="WaitForRuleTests"/>): one look
+    /// reads the menu's rectangle, null when there is no one menu with a non-empty rectangle, and the menu has settled
+    /// when two looks in a row read the same rectangle. The rectangle kept is cleared before each read, so that a read
+    /// that fails in UI Automation, which <see cref="Poll"/> takes as "not yet" (<see cref="IsFailedLook"/>), leaves
+    /// none, and the looks either side of it are not taken as two in a row.
     /// </summary>
     internal sealed class SettlingRectangle
     {
@@ -190,10 +185,10 @@ public sealed partial class RealApp
         public bool Look(Func<Rectangle?> read)
         {
             ArgumentNullException.ThrowIfNull(read);
-            var bounds = read();
-            var settled = bounds is not null && _last == bounds;
-            _last = bounds;
-            return settled;
+            var previous = _last;
+            _last = null;
+            _last = read();
+            return _last is { } bounds && previous == bounds;
         }
     }
 
