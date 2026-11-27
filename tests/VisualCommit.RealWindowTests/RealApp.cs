@@ -365,7 +365,7 @@ public sealed partial class RealApp : IDisposable
     /// <param name="condition">What to wait for; it may ask UI Automation or read the log.</param>
     /// <param name="what">What is awaited, in words, for the message when it does not come.</param>
     /// <param name="timeout">How long to wait.</param>
-    /// <exception cref="TimeoutException">The condition was still false when the time was up.</exception>
+    /// <exception cref="TimeoutException">The condition was still false, or its look failed in UI Automation, when the time was up.</exception>
     /// <exception cref="InvalidOperationException">The app exited while the test waited.</exception>
     public void WaitFor(Func<bool> condition, string what, TimeSpan timeout)
     {
@@ -381,7 +381,13 @@ public sealed partial class RealApp : IDisposable
     /// it is held with no window and no real waiting (<see cref="WaitForRuleTests"/>): <paramref name="condition"/>
     /// is looked at; while it is false, an app that has exited ends the wait at once, a time that is up ends it
     /// with a <see cref="TimeoutException"/>, and otherwise <paramref name="pause"/> is asked for
-    /// <see cref="PollInterval"/> before the next look.
+    /// <see cref="PollInterval"/> before the next look. A look that fails as <see cref="IsFailedLook"/> says, a read
+    /// through UI Automation while the app's automation tree changes, counts as false: never as met, so that no
+    /// wait ends on a look that could not see. When the time is up after such looks, the message says whether the
+    /// last look failed or read false, how many of the looks failed and with what the last of them did, which is
+    /// the exception's inner one; a wait in which no look failed has the message it always had. Any other
+    /// exception of a look leaves at once, as before: <see cref="Find"/>'s <see cref="InvalidOperationException"/>
+    /// for an element that is not in the window, an assertion, an exception of the test's own code.
     /// </summary>
     /// <param name="condition">What to wait for.</param>
     /// <param name="what">What is awaited, in words, for the messages.</param>
@@ -389,7 +395,7 @@ public sealed partial class RealApp : IDisposable
     /// <param name="elapsed">The time since the wait began.</param>
     /// <param name="exitCode">The app's exit code once it has exited; null while it runs.</param>
     /// <param name="pause">The pause between two looks.</param>
-    /// <exception cref="TimeoutException">The condition was still false when the time was up.</exception>
+    /// <exception cref="TimeoutException">The condition was still false, or its look failed, when the time was up.</exception>
     /// <exception cref="InvalidOperationException">The app exited while the test waited.</exception>
     internal static void Poll(Func<bool> condition, string what, TimeSpan timeout, Func<TimeSpan> elapsed, Func<int?> exitCode, Action<TimeSpan> pause)
     {
@@ -399,8 +405,32 @@ public sealed partial class RealApp : IDisposable
         ArgumentNullException.ThrowIfNull(exitCode);
         ArgumentNullException.ThrowIfNull(pause);
 
-        while (!condition())
+        var looks = 0;
+        var failedLooks = 0;
+        Exception? lastFailure = null;
+        var lastLookFailed = false;
+        while (true)
         {
+            looks++;
+            bool met;
+            try
+            {
+                met = condition();
+                lastLookFailed = false;
+            }
+            catch (Exception ex) when (IsFailedLook(ex))
+            {
+                met = false;
+                failedLooks++;
+                lastFailure = ex;
+                lastLookFailed = true;
+            }
+
+            if (met)
+            {
+                return;
+            }
+
             if (exitCode() is { } code)
             {
                 throw new InvalidOperationException($"The app exited with code {code} while waiting for {what}.");
@@ -408,9 +438,23 @@ public sealed partial class RealApp : IDisposable
 
             if (elapsed() >= timeout)
             {
-                throw new TimeoutException(string.Create(
+                var message = string.Create(
                     System.Globalization.CultureInfo.InvariantCulture,
-                    $"Timed out after {timeout.TotalSeconds:0.###} s waiting for {what}."));
+                    $"Timed out after {timeout.TotalSeconds:0.###} s waiting for {what}.");
+                if (lastFailure is not null && lastLookFailed)
+                {
+                    message = string.Create(
+                        System.Globalization.CultureInfo.InvariantCulture,
+                        $"{message} The last look failed in UI Automation with {FailureWords(lastFailure)}; {failedLooks} of {looks} looks failed.");
+                }
+                else if (lastFailure is not null)
+                {
+                    message = string.Create(
+                        System.Globalization.CultureInfo.InvariantCulture,
+                        $"{message} The last look read false; {failedLooks} of {looks} looks before it failed in UI Automation, the last of them with {FailureWords(lastFailure)}.");
+                }
+
+                throw new TimeoutException(message, lastFailure);
             }
 
             pause(PollInterval);
@@ -418,13 +462,33 @@ public sealed partial class RealApp : IDisposable
     }
 
     /// <summary>
-    /// Whether <paramref name="exception"/> is how one look of <see cref="Poll"/> fails while the app's automation
-    /// tree changes, a look that is then taken as "not yet". Not decided yet: none counts.
+    /// Whether <paramref name="exception"/> is how one look of <see cref="Poll"/> fails while the app's automation tree
+    /// changes, a look that is then taken as "not yet" and made again: a <see cref="System.Runtime.InteropServices.COMException"/>,
+    /// whatever its HRESULT, which is how FlaUI 5.0.0 hands on a failed call into UI Automation that it does not wrap
+    /// (<c>FindAll</c>, <c>FindFirst</c> and every property read: UIA_E_ELEMENTNOTAVAILABLE comes so too), and FlaUI's
+    /// own <see cref="FlaUI.Core.Exceptions.ElementNotAvailableException"/>, which its <c>Com.Call</c> (<c>FocusedElement</c>,
+    /// <c>FromHandle</c>) makes of UIA_E_ELEMENTNOTAVAILABLE. Nothing else, though <see cref="IsReadFailure"/>, made for one
+    /// read whose failure is noted, takes more: not an <see cref="InvalidOperationException"/>, which <see cref="Find"/>
+    /// throws for an element that is not in the window, and a look that throws it must end the wait as it always did;
+    /// not a <see cref="TimeoutException"/>, which a wait inside a look throws, as UI Automation's own time-out does
+    /// (COR_E_TIMEOUT), and the two cannot be told apart; not a <see cref="System.ComponentModel.Win32Exception"/>, which
+    /// <c>Com.Call</c> makes of every other HRESULT but the harness throws too when Windows does not list its windows,
+    /// a failure that I1's second start must fail on and never count as a look that found no window
+    /// (<c>Win32.Enumerate</c>); and no other exception of FlaUI's, such as one for an element that is not enabled.
     /// </summary>
     internal static bool IsFailedLook(Exception exception)
     {
         ArgumentNullException.ThrowIfNull(exception);
-        return false;
+        return exception is System.Runtime.InteropServices.COMException or FlaUI.Core.Exceptions.ElementNotAvailableException;
+    }
+
+    /// <summary>A failure in words for a message: its type, a <see cref="System.Runtime.InteropServices.COMException"/>'s HRESULT, and its message.</summary>
+    private static string FailureWords(Exception exception)
+    {
+        var code = exception is System.Runtime.InteropServices.COMException com
+            ? string.Create(System.Globalization.CultureInfo.InvariantCulture, $" (HRESULT 0x{com.ErrorCode:X8})")
+            : string.Empty;
+        return $"{exception.GetType().Name}{code} \"{exception.Message}\"";
     }
 
     /// <summary>
