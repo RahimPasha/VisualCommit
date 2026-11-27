@@ -156,17 +156,19 @@ public sealed partial class RealApp
         WaitFor(
             () =>
             {
+                // Cleared before the reads: a look that fails in UI Automation (WaitFor takes it as "not
+                // yet", IsFailedLook) leaves no rectangle, so that only two looks in a row settle the menu.
+                var previous = last;
+                last = null;
                 var found = FindAll("ContextMenu");
                 if (found.Count != 1 || found[0].BoundingRectangle is not { Width: > 0, Height: > 0 } bounds)
                 {
-                    last = null;
                     return false;
                 }
 
-                var settled = last == bounds;
                 last = bounds;
                 menu = found[0];
-                return settled;
+                return previous == bounds;
             },
             "a context menu to open and settle",
             timeout ?? TimeSpan.FromSeconds(10));

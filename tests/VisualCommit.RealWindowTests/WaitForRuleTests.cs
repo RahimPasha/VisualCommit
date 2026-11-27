@@ -7,8 +7,9 @@ using Xunit.Sdk;
 namespace VisualCommit.RealWindowTests;
 
 /// <summary>
-/// The rule of <see cref="RealApp.WaitFor"/>'s looks (<see cref="RealApp.Poll"/>) and which failures of a look count as
-/// "not yet" (<see cref="RealApp.IsFailedLook"/>), with no app and no window. Each wait is given a fake clock that a
+/// The rule of <see cref="RealApp.WaitFor"/>'s looks (<see cref="RealApp.Poll"/>), which failures of a look count as
+/// "not yet" (<see cref="RealApp.IsFailedLook"/>) and how a time-out's message reads the window after the wait
+/// (<see cref="RealApp.StateForMessage"/>), with no app and no window. Each wait is given a fake clock that a
 /// recorded pause moves on by the pause asked for, an exit code that the test sets, and a condition that the test
 /// scripts look by look, so that nothing sleeps and nothing depends on timing. Phase 8a's gate met the case on
 /// 2026-11-27 (round 0f9099a): phase 3's check 22 failed because one look of a wait, UI Automation's <c>FindAll</c>
@@ -212,6 +213,30 @@ public class WaitForRuleTests
 
         Assert.All(failedLooks, failure => Assert.True(RealApp.IsFailedLook(failure), $"{failure.GetType().Name} \"{failure.Message}\" does not count as a failed look."));
         Assert.All(others, other => Assert.False(RealApp.IsFailedLook(other), $"{other.GetType().Name} \"{other.Message}\" counts as a failed look."));
+    }
+
+    /// <summary>
+    /// What a time-out's message reads of the window after the wait (<see cref="RealApp.StateForMessage"/>, which
+    /// <c>WaitForTelling</c> and the passes' <c>WaitTelling</c> use): the read's words when it works; when it fails as a
+    /// read through UI Automation fails (<see cref="RealApp.IsReadFailure"/>: UI Automation's COMException, or
+    /// <see cref="RealApp.Find"/>'s <see cref="InvalidOperationException"/> for an element that has gone), words that say
+    /// so and with what, so that the check reports the time-out and what <see cref="RealApp.Poll"/> says of its looks,
+    /// not that read's exception; any other exception leaves. Before the helper such a read's exception replaced the
+    /// time-out.
+    /// </summary>
+    [Fact]
+    public void A_time_out_message_says_when_its_read_of_the_window_fails()
+    {
+        Assert.Equal("It says \"Ready\".", RealApp.StateForMessage(() => "It says \"Ready\"."));
+        Assert.Equal(
+            $"What the window shows could not be read for this message: COMException (HRESULT 0x80040201) \"{GateMessage}\".",
+            RealApp.StateForMessage(() => throw TreeChanged()));
+        Assert.Equal(
+            "What the window shows could not be read for this message: InvalidOperationException \"No element with the automation id 'OperationStatus' is in the window.\".",
+            RealApp.StateForMessage(() => throw new InvalidOperationException("No element with the automation id 'OperationStatus' is in the window.")));
+
+        var other = new IOException("The log could not be read.");
+        Assert.Same(other, Assert.Throws<IOException>(() => RealApp.StateForMessage(() => throw other)));
     }
 
     /// <summary>The failure of the gate's look: <see cref="GateMessage"/> with UIA_E_ELEMENTNOTAVAILABLE.</summary>
