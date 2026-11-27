@@ -1,7 +1,13 @@
+using Avalonia.Automation.Peers;
+using Avalonia.Headless.XUnit;
+using Avalonia.Styling;
+using Avalonia.VisualTree;
 using CommunityToolkit.Mvvm.Input;
+using VisualCommit.App.Controls;
 using VisualCommit.App.Services;
 using VisualCommit.App.ViewModels.Dialogs;
 using VisualCommit.App.ViewModels.GitSetup;
+using VisualCommit.App.Views.Shell;
 using VisualCommit.Core.Git;
 using VisualCommit.Core.Logging;
 using VisualCommit.Testing.Headless;
@@ -13,7 +19,8 @@ namespace VisualCommit.App.Tests;
 /// The first-run screen's view model (docs/phase-8a-design.md 5.3, 5.4; D405, D423, D449, D453):
 /// the guidance read once, the winget button by state, its confirm and its one start through the
 /// launcher, the Command Line Tools without a confirm, Choose's checks and write, the links, Copy,
-/// "Continue without it". Nothing is started: the launcher is the harness's fake.
+/// "Continue without it"; and, in its view, where the path's lines break. Nothing is started: the
+/// launcher is the harness's fake.
 /// </summary>
 public class GitSetupViewModelTests
 {
@@ -468,6 +475,36 @@ public class GitSetupViewModelTests
         running.SetResult();
         await checking;
         Assert.Equal("Check again", lab.Screen.CheckAgainText);
+    }
+
+    /// <summary>
+    /// The view in the graph area's 440 × 586 of the window at 1100 × 700 with the path of phase 8a's
+    /// real-window launches 8 and 9, the stand-in's, which holds a space: <c>GitSetupPath</c> is one
+    /// path, so that every line it draws but the last ends with a separator (the gate saw it break at
+    /// the space of <c>Visual Git</c> and after the hyphen of <c>net10.0-windows</c>); its text and its
+    /// automation name stay the plain path.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task The_screens_path_breaks_only_after_a_separator_also_across_a_space_and_a_hyphen()
+    {
+        const string StandIn = @"D:\Projects\Personal\Visual Git\tests\VisualCommit.RealWindowTests\bin\Release\net10.0-windows\visualcommit-git-stand-in.exe";
+        using var lab = new Lab();
+        await lab.Screen.ShowAsync(new GitDetection(GitAvailability.TooOld, StandIn, new GitVersion(2, 29, 0), null) { Source = GitSource.StandIn }, null);
+        Assert.Equal(StandIn, lab.Screen.PathText);
+
+        var view = new GitSetupView { DataContext = lab.Screen, FontSize = 12.5 };
+        using var host = DiffHost.Show(view, 440, 586, ThemeVariant.Dark);
+        var path = view.GetVisualDescendants().OfType<PathTextBlock>().Single(block => block.Name == "GitSetupPath");
+        Assert.True(path.IsEffectivelyVisible);
+        Assert.Equal(392, Assert.IsAssignableFrom<Avalonia.Controls.StackPanel>(path.Parent).Bounds.Width, 0.5);
+
+        var lines = DrawnLines.Of(path);
+        Assert.True(lines.Count > 1, $"Expected the path to need two lines or more: {string.Join(" | ", lines)}");
+        Assert.All(lines.Take(lines.Count - 1), line => Assert.True(line.EndsWith('\\'), $"The line \"{line}\" ends inside a name."));
+        Assert.Equal(StandIn, string.Concat(lines));
+        Assert.Equal(StandIn, path.Text);
+        Assert.Equal(StandIn, ControlAutomationPeer.CreatePeerForElement(path).GetName());
+        TestPictures.Save(host, "git-setup-path");
     }
 
     /// <summary>The screen over fakes: the settings, the dialog layer that answers from a queue, the file dialog, the launcher, the clipboard, a probe and a check again that count.</summary>
