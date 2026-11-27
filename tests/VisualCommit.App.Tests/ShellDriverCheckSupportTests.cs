@@ -389,7 +389,8 @@ public class ShellDriverCheckSupportTests
         server.RequireAuth = false;
         using var repo = await Scenarios.AuthRemoteAsync(server);
 
-        // Two remotes that reach no server of the tests: another host name, and https.
+        // Two remotes on the server's port that the message leaves out, as their URLs are not
+        // http://127.0.0.1: one by the name localhost, one over https.
         await repo.GitAsync("remote", "add", "mirror", $"http://localhost:{server.Port}/remote.git");
         await repo.GitAsync("remote", "add", "secure", $"https://127.0.0.1:{server.Port}/remote.git");
         using var data = new TempDirectory("data");
@@ -428,10 +429,15 @@ public class ShellDriverCheckSupportTests
             begun);
         server.Release();
 
-        // The server disposed while the tab's remote still names its port.
+        // The server disposed while the tab's remote still names its port. Another test's server
+        // may have that port by now: then the message describes that one, without this one's hold.
         await server.DisposeAsync();
         var disposed = (await Assert.ThrowsAsync<TimeoutException>(() => app.WaitForProgressPercentAsync(shortWait))).Message;
-        Assert.EndsWith($"\n{remotes}\nNo AuthRemoteServer of this process runs on port {server.Port}.", disposed, StringComparison.Ordinal);
+        if (!disposed.EndsWith($"\n{remotes}\nNo AuthRemoteServer of this process runs on port {server.Port}.", StringComparison.Ordinal))
+        {
+            Assert.Contains($"\n{remotes}\nThe server on port {server.Port} (times in UTC) had ", disposed, StringComparison.Ordinal);
+            Assert.DoesNotContain($"  asked {asked} for remote.git", disposed, StringComparison.Ordinal);
+        }
     }
 
     [AvaloniaFact]

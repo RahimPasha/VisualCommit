@@ -551,8 +551,9 @@ public class RepositoryOperationsFetchTests
         catch (TimeoutException ex)
         {
             var shown = string.Join(", ", new[] { first }.Concat(texts.Texts).Select(text => $"\"{text}\""));
+            var response = held.IsCompletedSuccessfully ? "held" : held.IsCanceled ? "not held, and its hold was let go" : "not held";
             throw new TimeoutException(
-                $"{ex.Message} The response was {(held.IsCompleted ? "held" : "not held")}; the status bar read \"{status.Text}\" and showed {shown} from the wait's start.\n{server.DescribeHoldsAndRequests()}",
+                $"{ex.Message} The response was {response}; the status bar read \"{status.Text}\" and showed {shown} from the wait's start.\n{server.DescribeHoldsAndRequests()}",
                 ex);
         }
     }
