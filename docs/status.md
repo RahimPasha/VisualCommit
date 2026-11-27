@@ -1354,20 +1354,42 @@ stand as the gate's.** A new counted round runs on the merge's commit: the defau
 laptop (nothing beside a counted run, ruling 115), the real-window pass, the list of pictures, the
 live command (by 2026-11-28) and the inspection. D246's two runs and the live command's run before
 the pictures are made once and stand. CI's run of the push that carries the merge is green in all
-six jobs at its first attempt (45965143178; the CI section). **Next:** the new round, on `e632e72`,
-as soon as the closing docs' workflow has ended, so that nothing runs beside it; then the report,
-the checks by hand with the owner (the Narrator walk-through of 21 steps, phase 6's System step, the
-icon beside its look-alikes, a second start from the lead's isolating start file; their session and
-start files are in `D:/Projects/Personal/phase8-work/gate/hand/`, built and verified, and a page
-with the steps is the owner's at https://claude.ai/artifact/BE3ha6qo5uM1Vozpympouh), and the closing
-steps 22 to 27. The closing docs are being drafted meanwhile by a workflow of the lead's: its
-changes to `docs/architecture.md`, `docs/plan.md`, `CLAUDE.md`, `README.md`,
-`docs/cloud-sessions.md` and the new `docs/handoffs/phase-8a.md` lie uncommitted in the main tree
-and are drafts until the lead has read them and brought them up to date with the new round;
-`docs/test-reports/phase-8a-pictures.sha256`, untracked, is the list of the round on `e4b323c` and
-is written again by the new round. The package is reviewed with the rest in step 19 and merged last,
-in that step. The three finished worktrees (`p8a-restore`, `p8a-restore-base`, `p8a-guide`) are
-removed; their `wip/` branches stay local (D396). §11's builders got with their briefs: mdBook at
+six jobs at its first attempt (45965143178; the CI section). **The new round's default run passed**
+on `0f9099a`, whose code is the merge's (2026-11-27, 02:36 to 04:33, alone on the laptop: 8,936
+tests, 8,929 passed, 7 skipped, none failed, 1 h 53 min 8 s, no watchdog stop). **Its real-window
+pass did not** (04:42 to 05:25: 124 tests, 118 passed, 5 skipped, 1 failed). Phase 3's
+`Check_22_remotes_dialog` ended on a `COMException` from UI Automation's `FindAll`, in the poll that
+waits for the Remotes dialog's rows after the remote's URL was changed: one look walked the app's
+automation tree while the dialog built its rows again, and `RealApp.WaitFor` lets a failed look end
+the check. It is a weakness of the harness, not a fault of the app; the check passed in every
+earlier pass. Q1 read 1,938 ms of 2,000. **The lead has the harness's wait made to take a failed
+look as "not yet"** (worktree `D:/Projects/Personal/phase8-work/gate/fix/p8a-uia-poll`, local branch
+`wip/p8a-uia-poll`: a builder, two readers, a fixer; test code in
+`tests/VisualCommit.RealWindowTests` alone, whose tests no agent runs). **Next:** read and merge it,
+run its tests that need no window, read CI's Windows job, which compiles the project; then the
+real-window pass alone on the merge's commit, as D246 and plan.md's Visual test gate, step 6, allow:
+the default run on `0f9099a` stands while nothing but that project and docs changed after it and the
+scripted pictures are still the files of the list written after the failed pass
+(`D:/Projects/Personal/phase8-work/gate/round-0f9099a/pictures-after-failed-pass.sha256`; the failed
+pass's pictures are beside it in `visual-failed-pass/`). Then the list of pictures, the live command
+(by 2026-11-28) and the inspection; then the report, the checks by hand with the owner (the Narrator
+walk-through of 21 steps, phase 6's System step, the icon beside its look-alikes, a second start
+from the lead's isolating start file; their session and start files are in
+`D:/Projects/Personal/phase8-work/gate/hand/`, built and verified, and a page with the steps is the
+owner's at https://claude.ai/artifact/BE3ha6qo5uM1Vozpympouh), and the closing steps 22 to 27. The
+closing docs' drafts are written (a workflow of the lead's: seven writers, two readers for each
+file, a fixer each) and are kept outside the repository, in
+`D:/Projects/Personal/phase8-work/gate/closing-drafts/`: byte copies of `CLAUDE.md`, `README.md`,
+`docs/architecture.md`, `docs/cloud-sessions.md`, `docs/plan.md` and the new
+`docs/handoffs/phase-8a.md`, each as changed from `0f9099a`, with their hashes in `drafts.sha256`.
+The tree was put back to the commit for the round. The lead copies them back, brings them up to date
+with what the rounds showed and reads them before any commit; what the writers left for the lead is
+in `…/gate/closing-docs-result.json`. The list of pictures of the round on `e4b323c` is
+`…/gate/round-e4b323c/pictures.sha256`; `docs/test-reports/phase-8a-pictures.sha256`, untracked, is
+the failed pass's and is written again by the next pass. The package is reviewed with the rest in
+step 19 and merged last, in that step. The three finished worktrees (`p8a-restore`,
+`p8a-restore-base`, `p8a-guide`) are removed; their `wip/` branches stay local (D396). §11's
+builders got with their briefs: mdBook at
 `D:/Projects/Personal/phase8-work/tools/mdbook-0.5.4/mdbook.exe` and the Linux archive's SHA-256 for
 `guide.yml` (Notes, "Wave 4"); the references `D:/Projects/Personal/phase8-work/references/wave3/`;
 rulings 80 (stop and report if the first-run link's frame touches its ink), 82 (the facts no check
