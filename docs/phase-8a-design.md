@@ -7842,6 +7842,76 @@ verdicts are in `D:/Projects/Personal/phase8-work/gate/round-e4b323c/`.
   tests' or the app's, and the first attempt's two are read again with it. A path on the first-run
   screen that breaks inside a name in the new round's captures.
 
+**The counted round: the default run on `0f9099a`, a pass that failed in the harness, its fix, and
+the pass on `750eb33` (the lead, 2026-11-27).** 116. The round that stands as the gate's. Its two
+passes ran on two commits, as D246 and plan.md's Visual test gate, step 6, allow when the commits
+between them change the real-window project alone: the default run on `0f9099a`, the real-window
+pass on `750eb33`, which is the Gate commit. D473 is the decision on the harness's wait. The round's
+logs, pictures, batches and verdicts are in `D:/Projects/Personal/phase8-work/gate/round-0f9099a/`.
+
+- *The default run* (`0f9099a`, docs alone after `e632e72`; 02:36 to 04:33, with nothing else
+  running on the laptop: the closing docs' workflow had ended, its drafts were set aside outside the
+  repository so that the tree was the commit, the idle build servers were shut down and two leftover
+  `git fsmonitor--daemon` processes stopped): 8,936 tests, 8,929 passed, 7 skipped, none failed, 1 h
+  53 min 8 s (7,004 s with the build and the lock), no watchdog stop. CI's run of the same code,
+  45965143178, had been read first: green in all six jobs.
+- *The pass on `0f9099a` failed in one check, with no fault of the app* (04:42 to 05:25, after a
+  rest of nine minutes, the owner told in the chat: 124 tests, 118 passed, 5 skipped, 1 failed; Q1
+  at 1,938 ms). Phase 3's `Check_22_remotes_dialog` ended on a `COMException`, "Unexpected HRESULT
+  has been returned from a call to a COM component", which is how .NET 10 words E_FAIL, from UI
+  Automation's `FindAll` in `WaitForRemoteRows`, step 3's wait after the remote's URL was changed.
+  One look of the poll walked the app's automation tree while the dialog built its rows again.
+  `RealApp.WaitFor` let any exception of a look end the check; the check had passed in every pass
+  before. Its log is `…/round-0f9099a/real-window.log`, its pictures `…/visual-failed-pass/`.
+- *The harness's fix* (D473; a package on `wip/p8a-uia-poll` in a worktree: a builder, two readers
+  who changed nothing this time, a fixer; no agent ran a test of the real-window project; five
+  commits, `664a973`, `7e6d851`, `14592aa`, `c8d6aa1`, `df263aa`; merged at `750eb33`).
+  `RealApp.Poll` holds the wait's rule with the clock, the app's exit and the pause handed in, and
+  `IsFailedLook` says which failures of a look count as "not yet". What the readers changed in it:
+  the pass's 335 waits were read one by one and none gives input, so a second look after a failed
+  one repeats nothing; `WaitForMenu` kept its last rectangle across a failed look, which would have
+  let two looks that were not in a row settle a menu, so the builder's third commit is no option but
+  part of the fix; the time-out's count of looks was off by one; a raw call's time-out arrives as a
+  `COMException` on .NET 10 and so counts, which the rule's words now say; a pattern's read wraps
+  its failure in FlaUI's `PatternNotSupportedException`, which counts when a `COMException` is
+  inside; a typed token found in a time-out's read of the window fails as an assertion again, not as
+  a window that could not be read. `WaitForRuleTests` has 21 tests with no window and no real
+  waiting. The lead ran them in the worktree: 21 of 21 at `df263aa`, and 6 failing at `c8d6aa1` and
+  at `664a973`, the commits that hold the tests before their fixes, each the ones named.
+- *The pass on `750eb33`* (06:31 to 07:12, the owner told in the chat; Windows' count of the time
+  since the last input read 65 minutes before it, back to the failed pass's own end): 145 tests, the
+  124 of before and the 21 new, 140 passed, the 5 facts of the opt-in performance series skipped,
+  none failed, 40 min 56 s (2,484 s with the lock and the build). D246's two conditions were checked
+  before it: `git diff --stat 0f9099a 750eb33 -- . ':(exclude)tests/VisualCommit.RealWindowTests'
+  ':(exclude)docs' ':(exclude)*.md'` prints nothing, and the 1,239 scripted pictures were still the
+  files of the list written after the failed pass; they were again after it. Display scaling 200 %,
+  the work area 1500×952, so phase 0's 1920×1080 window was not run, as the plan allows. Q1's first
+  rows after 1,626 ms of 2,000, its 468 frames at a 95th percentile of 0.9 ms and the longest 4.8
+  ms. In `f5a-too-old` and `f6a-config-fault` the lead read the path's three lines,
+  `D:\Projects\Personal\Visual Git\tests\`,
+  `VisualCommit.RealWindowTests\bin\Release\net10.0-windows\` and `visualcommit-git-stand-in.exe`:
+  D472's fix as it shows in the real window.
+- *The list of pictures and the live command.* 1,696 pictures, 1,239 scripted and 457 real-window
+  files, listed at once after the pass (`phase-8a-pictures.sha256`). The live command on the counted
+  round, on `750eb33` (07:13 to 07:18): its offline classes 582 of 582, then the whole project 596
+  of 596 in 3 min 4 s; its three `run.txt` hold no token, organization or namespace and differ from
+  the two runs before only in what changes from run to run.
+- *CI and the guide.* Run 46007767846 on `750eb33` is green in all six jobs at its first attempt
+  (status.md's CI section); its Windows job compiles the real-window project. The guide's site built
+  from the gate's app code (run 45965143205 on `e632e72`) holds the same 84 picture files and the
+  same pages as the site the lead read for ruling 114, and the links' check has no finding on it, so
+  that reading stands for the Gate commit.
+- *Limits.* (1) The two rounds took three default runs and three real-window passes to get the one
+  of each that stands: one default run was stopped by the watchdog for a cause that is not known,
+  one pass failed in the harness, and one round fell to the app's fault. Q1 read 1,912, 1,938 and
+  1,626 ms in the three passes, on code that is the same for it. (2) D473's rule covers a
+  `COMException` and FlaUI's two forms of it, not every way a changing tree can end a wait: D473
+  names what is left. (3) No agent ran the new tests, by the lead's rule for that project; the
+  lead's three runs of them are the proof.
+- *What would reopen it.* A real-window check that ends on a failed read of UI Automation again: its
+  time-out now names the failure and how many looks met it, which says whether the tree was changing
+  or the app had stopped answering.
+
 ### 13.2 What the integration settled
 
 Beyond moving the packages' contracts into section 1: the broker's `gitVersion` goes at §3's merge,
