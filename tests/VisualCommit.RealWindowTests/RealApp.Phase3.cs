@@ -175,6 +175,28 @@ public sealed partial class RealApp
         return menu!;
     }
 
+    /// <summary>
+    /// <see cref="WaitForMenu"/>'s rule for a settled menu, to be held with no window (<see cref="WaitForRuleTests"/>):
+    /// one look reads the menu's rectangle, null when there is no one menu with a non-empty rectangle, and the menu has
+    /// settled when two looks in a row read the same rectangle. Not decided yet for a read that fails: it keeps the
+    /// rectangle of the look before it, as <see cref="WaitForMenu"/> did before <see cref="Poll"/> took a failed look as
+    /// "not yet".
+    /// </summary>
+    internal sealed class SettlingRectangle
+    {
+        private Rectangle? _last;
+
+        /// <summary>One look: <paramref name="read"/>'s rectangle, and whether the look before this one read the same.</summary>
+        public bool Look(Func<Rectangle?> read)
+        {
+            ArgumentNullException.ThrowIfNull(read);
+            var bounds = read();
+            var settled = bounds is not null && _last == bounds;
+            _last = bounds;
+            return settled;
+        }
+    }
+
     /// <summary>The names (labels) of the open menu's items, in order, the header and separators left out. Waits for the menu (<see cref="WaitForMenu"/>).</summary>
     public IReadOnlyList<string> MenuItemNames()
     {

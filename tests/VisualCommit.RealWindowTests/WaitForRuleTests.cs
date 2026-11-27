@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Drawing;
 using System.Runtime.InteropServices;
 using FlaUI.Core.Exceptions;
 using Xunit;
@@ -8,42 +9,74 @@ namespace VisualCommit.RealWindowTests;
 
 /// <summary>
 /// The rule of <see cref="RealApp.WaitFor"/>'s looks (<see cref="RealApp.Poll"/>), which failures of a look count as
-/// "not yet" (<see cref="RealApp.IsFailedLook"/>) and how a time-out's message reads the window after the wait
-/// (<see cref="RealApp.StateForMessage"/>), with no app and no window. Each wait is given a fake clock that a
-/// recorded pause moves on by the pause asked for, an exit code that the test sets, and a condition that the test
-/// scripts look by look, so that nothing sleeps and nothing depends on timing. Phase 8a's gate met the case on
-/// 2026-11-27 (round 0f9099a): phase 3's check 22 failed because one look of a wait, UI Automation's <c>FindAll</c>
-/// over the Remotes dialog while it built its rows again, threw a <see cref="COMException"/>. As
-/// <see cref="Phase8aOrderTests"/>, the class constructs no fixture of a pass and touches nothing of the desktop; it
-/// runs in the whole pass and alone with <c>--filter-class "*WaitForRuleTests"</c>.
+/// "not yet" (<see cref="RealApp.IsFailedLook"/>), how a time-out's message reads the window after the wait
+/// (<see cref="RealApp.StateForMessage"/>), <see cref="RealApp.WaitForMenu"/>'s rule for a settled menu across a failed look
+/// (<see cref="RealApp.SettlingRectangle"/>) and a typed token in a time-out's read (<see cref="RealApp.WithoutToken"/>), with
+/// no app and no window. Each wait is given a fake clock that a recorded pause moves on by the pause asked for, an exit
+/// code that the test sets, and a condition that the test scripts look by look, so that nothing sleeps and nothing depends
+/// on timing. Phase 8a's gate met the case on 2026-11-27 (round 0f9099a): phase 3's check 22 failed because one look of a
+/// wait, UI Automation's <c>FindAll</c> over the Remotes dialog while it built its rows again, threw a
+/// <see cref="COMException"/>. As <see cref="Phase8aOrderTests"/>, the class constructs no fixture of a pass and touches
+/// nothing of the desktop; it runs in the whole pass and alone with <c>--filter-class "*WaitForRuleTests"</c>.
 /// </summary>
 public class WaitForRuleTests
 {
     private const string What = "the Remotes dialog to list mirror, origin";
 
     /// <summary>
-    /// The gate's message, "Unexpected HRESULT has been returned from a call to a COM component.", with
-    /// UIA_E_ELEMENTNOTAVAILABLE as its HRESULT: the gate's log gives the message alone.
+    /// The gate's message, which its log gives without the HRESULT: .NET 10's words for E_FAIL (<see cref="Unspecified"/>)
+    /// when the failed call leaves no error information, as <c>Marshal.GetExceptionForHR(0x80004005, -1)</c> and
+    /// <c>new COMException()</c> give it (read on .NET 10.0.15). .NET words every other HRESULT with the system's text and
+    /// the code (<see cref="ElementNotAvailableWords"/>), so the gate's <c>FindAll</c> failed with E_FAIL.
     /// </summary>
     private const string GateMessage = "Unexpected HRESULT has been returned from a call to a COM component.";
 
+    /// <summary>E_FAIL, the HRESULT of the gate's look.</summary>
+    private const int Unspecified = unchecked((int)0x80004005);
+
+    /// <summary>UIA_E_ELEMENTNOTAVAILABLE, how a raw call into UI Automation fails on an element that has gone.</summary>
     private const int ElementNotAvailable = unchecked((int)0x80040201);
+
+    /// <summary>
+    /// .NET 10's words for <see cref="ElementNotAvailable"/> with no error information: the system's text for the same
+    /// HRESULT (EVENT_E_ALL_SUBSCRIBERS_FAILED) and the code.
+    /// </summary>
+    private const string ElementNotAvailableWords = "An event was unable to invoke any of the subscribers (0x80040201)";
+
+    /// <summary>The words FlaUI 5.0.0 gives a <see cref="PatternNotSupportedException"/> for the Value pattern, given here so that no test depends on FlaUI's own.</summary>
+    private const string PatternReadWords = "The requested pattern 'Value [#10002]' is not supported";
 
     /// <summary>One second: eleven looks on the fake clock, at 0, 0.1, …, 1.0 s, with ten pauses between them.</summary>
     private static readonly TimeSpan Limit = TimeSpan.FromSeconds(1);
 
+    /// <summary>UI Automation's Value pattern (UIA_ValuePatternId), made here: FlaUI's constructor only keeps the id and the name.</summary>
+    private static readonly FlaUI.Core.Identifiers.PatternId ValuePattern = new(10002, "Value", null!);
+
+    /// <summary>A context menu's rectangle as <see cref="RealApp.WaitForMenu"/> reads it.</summary>
+    private static readonly Rectangle Menu = new(640, 360, 220, 180);
+
+    /// <summary><see cref="Menu"/> placed again, a little lower: a menu that has not settled.</summary>
+    private static readonly Rectangle Moved = new(640, 372, 220, 180);
+
     /// <summary>
-    /// A look that fails in UI Automation, a <see cref="COMException"/> as FlaUI hands on a failed <c>FindAll</c>, or
-    /// FlaUI's own exception for an element that has gone, counts as "not yet": the wait looks again after its pause
-    /// and ends when a later look is met. Without the rule the first failed look ends the wait: the fact fails with
-    /// that exception, after one look.
+    /// A look that fails in UI Automation, a <see cref="COMException"/> as FlaUI hands on a failed <c>FindAll</c>, FlaUI's
+    /// own exception for an element that has gone, or its exception for a pattern read that failed in UI Automation,
+    /// counts as "not yet": the wait looks again after its pause and ends when a later look is met. Without the rule the
+    /// first failed look ends the wait: the fact fails with that exception, after one look.
     /// </summary>
     [Theory]
     [InlineData(nameof(COMException))]
     [InlineData(nameof(ElementNotAvailableException))]
+    [InlineData(nameof(PatternNotSupportedException))]
     public void A_look_that_fails_in_UI_Automation_counts_as_not_yet_and_the_wait_looks_again(string kind)
     {
-        Exception failure = kind == nameof(COMException) ? TreeChanged() : new ElementNotAvailableException("The element is not available.");
+        Exception failure = kind switch
+        {
+            nameof(COMException) => TreeChanged(),
+            nameof(ElementNotAvailableException) => new ElementNotAvailableException("The element is not available."),
+            nameof(PatternNotSupportedException) => PatternReadFailed(),
+            _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "No such kind."),
+        };
         var looks = new ScriptedLooks(() => throw failure, () => throw failure, () => true);
         var time = new FakeTime();
 
@@ -76,16 +109,16 @@ public class WaitForRuleTests
         Assert.Equal(11, looks.Count);
         Assert.Equal(10, time.Pauses.Count);
         Assert.Equal(
-            $"Timed out after 1 s waiting for {What}. The last look failed in UI Automation with COMException (HRESULT 0x80040201) \"{GateMessage}\"; 11 of 11 looks failed.",
+            $"Timed out after 1 s waiting for {What}. The last look failed in UI Automation with COMException (HRESULT 0x80004005) \"{GateMessage}\"; 11 of 11 looks failed.",
             timedOut.Message);
         Assert.Same(thrown[^1], timedOut.InnerException);
     }
 
     /// <summary>
-    /// A wait whose last look read false after looks that failed says so: the last look read false, how many looks
-    /// before it failed and with what the last of them did, which is its inner exception. A read that fails every time
-    /// is so told from a condition that was simply false. Without the rule the first failed look ends the wait with
-    /// its <see cref="COMException"/>.
+    /// A wait whose last look read false after looks that failed says so: the last look read false, how many of all the
+    /// looks failed, as the message of a wait whose last look failed counts them, and with what the last failed one did,
+    /// which is its inner exception. A read that fails every time is so told from a condition that was simply false.
+    /// Without the count of all the looks, the message counts the look that read false among the looks before it.
     /// </summary>
     [Fact]
     public void A_wait_whose_last_look_read_false_after_failed_ones_says_how_many_failed()
@@ -98,7 +131,7 @@ public class WaitForRuleTests
 
         Assert.Equal(11, looks.Count);
         Assert.Equal(
-            $"Timed out after 1 s waiting for {What}. The last look read false; 3 of 11 looks before it failed in UI Automation, the last of them with ElementNotAvailableException \"The element is not available.\".",
+            $"Timed out after 1 s waiting for {What}. The last look read false; 3 of 11 looks failed in UI Automation, the last of them with ElementNotAvailableException \"The element is not available.\".",
             timedOut.Message);
         Assert.Same(gone, timedOut.InnerException);
     }
@@ -153,8 +186,9 @@ public class WaitForRuleTests
     /// Every other exception of a look leaves the wait at once, the same object, with no pause: <see cref="RealApp.Find"/>'s
     /// <see cref="InvalidOperationException"/> for an element that is not in the window, a <see cref="TimeoutException"/>
     /// of a wait inside the look, the harness's <see cref="Win32Exception"/> for a list of windows that Windows did not
-    /// give, an <see cref="ArgumentException"/>, an assertion, an <see cref="IOException"/> and FlaUI's exception for an
-    /// element that is not enabled. It holds without the rule too: it guards that the rule takes no more than a failed look.
+    /// give, an <see cref="ArgumentException"/>, an assertion, an <see cref="IOException"/>, FlaUI's exception for an
+    /// element that is not enabled and its exception for a pattern that the element does not give. It holds without the
+    /// rule too: it guards that the rule takes no more than a failed look.
     /// </summary>
     [Theory]
     [InlineData(nameof(InvalidOperationException))]
@@ -164,6 +198,7 @@ public class WaitForRuleTests
     [InlineData(nameof(XunitException))]
     [InlineData(nameof(IOException))]
     [InlineData(nameof(ElementNotEnabledException))]
+    [InlineData(nameof(PatternNotSupportedException))]
     public void Another_exception_of_a_look_leaves_the_wait_at_once(string kind)
     {
         var other = Other(kind);
@@ -180,21 +215,28 @@ public class WaitForRuleTests
     /// <summary>
     /// What <see cref="RealApp.IsFailedLook"/> takes as a look that failed while the automation tree changed: a
     /// <see cref="COMException"/> of any HRESULT (FlaUI 5.0.0's <c>FindAll</c>, <c>FindFirst</c> and property reads hand
-    /// UI Automation's failure on as one) and FlaUI's <see cref="ElementNotAvailableException"/> (its <c>Com.Call</c>'s
-    /// for UIA_E_ELEMENTNOTAVAILABLE); nothing else, not even what <see cref="RealApp.IsReadFailure"/> takes for a single
-    /// read: FlaUI's <c>InvalidOperationException</c> and <c>TimeoutException</c> and the <see cref="Win32Exception"/> its
-    /// <c>Com.Call</c> makes of any other HRESULT, nor FlaUI's other exceptions. Without the rule no failure counts, and
-    /// the fact fails at the first <see cref="COMException"/>.
+    /// UI Automation's failure on as one: the gate's E_FAIL, UIA_E_ELEMENTNOTAVAILABLE, a disconnected provider, and a raw
+    /// call's time-out, COR_E_TIMEOUT, which .NET 10 hands on as a <see cref="COMException"/> too), FlaUI's
+    /// <see cref="ElementNotAvailableException"/> (its <c>Com.Call</c>'s for UIA_E_ELEMENTNOTAVAILABLE) and FlaUI's
+    /// <see cref="PatternNotSupportedException"/> around a <see cref="COMException"/> (a pattern's <c>Pattern</c> wraps any
+    /// failure of the read so); nothing else, not even what <see cref="RealApp.IsReadFailure"/> takes for a single read:
+    /// FlaUI's <c>InvalidOperationException</c> and <c>TimeoutException</c> and the <see cref="Win32Exception"/> its
+    /// <c>Com.Call</c> makes of any other HRESULT, a <see cref="PatternNotSupportedException"/> for a pattern the element
+    /// does not give (around FlaUI's <c>InvalidOperationException</c>, or around nothing), nor FlaUI's other exceptions,
+    /// also those that <c>Com.Call</c> makes around a <see cref="COMException"/>. Without the rule for a pattern read the
+    /// fact fails at the <see cref="PatternNotSupportedException"/> around a <see cref="COMException"/>.
     /// </summary>
     [Fact]
-    public void Only_a_COMException_and_FlaUIs_ElementNotAvailableException_count_as_a_failed_look()
+    public void Only_a_COMException_and_FlaUIs_exceptions_for_a_failed_read_count_as_a_failed_look()
     {
         Exception[] failedLooks =
         [
             TreeChanged(),
-            new COMException("Unspecified error", unchecked((int)0x80004005)),
-            new COMException("The object invoked has disconnected from its clients.", unchecked((int)0x80010108)),
-            new ElementNotAvailableException(new COMException("The element is not available.", ElementNotAvailable)),
+            new COMException(ElementNotAvailableWords, ElementNotAvailable),
+            new COMException("The object invoked has disconnected from its clients. (0x80010108 (RPC_E_DISCONNECTED))", unchecked((int)0x80010108)),
+            new COMException("Operation timed out. (0x80131505)", unchecked((int)0x80131505)),
+            new ElementNotAvailableException(new COMException(ElementNotAvailableWords, ElementNotAvailable)),
+            PatternReadFailed(),
         ];
         Exception[] others =
         [
@@ -207,12 +249,16 @@ public class WaitForRuleTests
             new IOException("No read through UI Automation."),
             new XunitException("An assertion of the check."),
             new ElementNotEnabledException(),
+            new ElementNotEnabledException(new COMException("0x80040200", unchecked((int)0x80040200))),
             new NoClickablePointException(),
             new FlaUI.Core.Exceptions.NotSupportedException(),
+            new FlaUI.Core.Exceptions.NotSupportedException(new COMException("0x80040204", unchecked((int)0x80040204))),
+            PatternNotGiven(),
+            new PatternNotSupportedException(),
         ];
 
-        Assert.All(failedLooks, failure => Assert.True(RealApp.IsFailedLook(failure), $"{failure.GetType().Name} \"{failure.Message}\" does not count as a failed look."));
-        Assert.All(others, other => Assert.False(RealApp.IsFailedLook(other), $"{other.GetType().Name} \"{other.Message}\" counts as a failed look."));
+        Assert.All(failedLooks, failure => Assert.True(RealApp.IsFailedLook(failure), $"{failure.GetType().Name} \"{failure.Message}\" around {failure.InnerException?.GetType().Name ?? "nothing"} does not count as a failed look."));
+        Assert.All(others, other => Assert.False(RealApp.IsFailedLook(other), $"{other.GetType().Name} \"{other.Message}\" around {other.InnerException?.GetType().Name ?? "nothing"} counts as a failed look."));
     }
 
     /// <summary>
@@ -229,7 +275,7 @@ public class WaitForRuleTests
     {
         Assert.Equal("It says \"Ready\".", RealApp.StateForMessage(() => "It says \"Ready\"."));
         Assert.Equal(
-            $"What the window shows could not be read for this message: COMException (HRESULT 0x80040201) \"{GateMessage}\".",
+            $"What the window shows could not be read for this message: COMException (HRESULT 0x80004005) \"{GateMessage}\".",
             RealApp.StateForMessage(() => throw TreeChanged()));
         Assert.Equal(
             "What the window shows could not be read for this message: InvalidOperationException \"No element with the automation id 'OperationStatus' is in the window.\".",
@@ -239,8 +285,92 @@ public class WaitForRuleTests
         Assert.Same(other, Assert.Throws<IOException>(() => RealApp.StateForMessage(() => throw other)));
     }
 
-    /// <summary>The failure of the gate's look: <see cref="GateMessage"/> with UIA_E_ELEMENTNOTAVAILABLE.</summary>
-    private static COMException TreeChanged() => new(GateMessage, ElementNotAvailable);
+    /// <summary>
+    /// A failure that FlaUI wraps, its pattern read's <see cref="PatternNotSupportedException"/> or <c>Com.Call</c>'s
+    /// <see cref="ElementNotAvailableException"/> (whose message FlaUI 5.0.0 leaves empty), is named with the
+    /// <see cref="COMException"/> inside it, its HRESULT and its message, in a time-out's message as in a message's read of
+    /// the window; a wrapper's empty message is left out. So the time-out of a pattern read that kept failing does not say
+    /// only "is not supported". Without the rule for a pattern read the <see cref="PatternNotSupportedException"/> leaves
+    /// at the first look; without the words the COMException inside is not named.
+    /// </summary>
+    [Fact]
+    public void A_failure_that_FlaUI_wraps_is_named_with_the_COMException_inside()
+    {
+        var looks = new ScriptedLooks(() => throw PatternReadFailed());
+        var time = new FakeTime();
+
+        var timedOut = Assert.Throws<TimeoutException>(() => Wait(looks, time));
+
+        Assert.Equal(
+            $"Timed out after 1 s waiting for {What}. The last look failed in UI Automation with PatternNotSupportedException \"{PatternReadWords}\", which wraps COMException (HRESULT 0x80004005) \"{GateMessage}\"; 11 of 11 looks failed.",
+            timedOut.Message);
+        Assert.Equal(
+            $"What the window shows could not be read for this message: ElementNotAvailableException, which wraps COMException (HRESULT 0x80040201) \"{ElementNotAvailableWords}\".",
+            RealApp.StateForMessage(() => throw new ElementNotAvailableException(new COMException(ElementNotAvailableWords, ElementNotAvailable))));
+    }
+
+    /// <summary>
+    /// <see cref="RealApp.WaitForMenu"/>'s rule across a failed look (<see cref="RealApp.SettlingRectangle"/>): a look that
+    /// fails in UI Automation between two that read the same rectangle, which <see cref="RealApp.Poll"/> takes as "not
+    /// yet", leaves no rectangle, so the two are not two looks in a row and the menu settles a look later, on the fourth.
+    /// Without the rule the rectangle of the look before the failed one stays, and the menu settles on the third.
+    /// </summary>
+    [Fact]
+    public void A_look_that_fails_between_two_of_the_same_menu_does_not_settle_it()
+    {
+        var settling = new RealApp.SettlingRectangle();
+        var looks = new ScriptedLooks(
+            () => settling.Look(() => Menu),
+            () => settling.Look(() => throw TreeChanged()),
+            () => settling.Look(() => Menu));
+        var time = new FakeTime();
+
+        Wait(looks, time);
+
+        Assert.Equal(4, looks.Count);
+        Assert.Equal(3, time.Pauses.Count);
+    }
+
+    /// <summary>
+    /// <see cref="RealApp.WaitForMenu"/>'s rule with no failed look (<see cref="RealApp.SettlingRectangle"/>): a menu settles
+    /// on the same rectangle in two looks in a row, not on the first look, not across a look that found no menu, and not
+    /// while it moves. It holds without the rule for a failed look too: it guards what that rule leaves as it was.
+    /// </summary>
+    [Fact]
+    public void A_menu_settles_on_the_same_rectangle_in_two_looks_in_a_row()
+    {
+        Assert.Equal(2, LooksToSettle(() => Menu));
+        Assert.Equal(4, LooksToSettle(() => Menu, () => null, () => Menu));
+        Assert.Equal(3, LooksToSettle(() => Menu, () => Moved));
+        Assert.Equal(3, LooksToSettle(() => null, () => Menu));
+    }
+
+    /// <summary>
+    /// A typed token in what a time-out's message reads of the window fails the check by its place (phase 7a's design 13.2,
+    /// <see cref="RealApp.WithoutToken"/>, which <c>ConfirmSignIn</c>'s time-out reads through
+    /// <see cref="RealApp.StateForMessage"/>): the place's words, never the token, and not taken as a read that failed.
+    /// Text without the token is given as it is. Without the rule <see cref="RealApp.StateForMessage"/> takes the leak as a
+    /// window it could not read, and no exception leaves.
+    /// </summary>
+    [Fact]
+    public void A_typed_token_in_a_time_outs_read_of_the_window_fails_by_its_place()
+    {
+        const string token = "made-up-token-0123456789";
+        Assert.Equal("Bad credentials.", RealApp.WithoutToken("Bad credentials.", token, "The dialog's error or note"));
+
+        var leak = Assert.Throws<XunitException>(() => RealApp.StateForMessage(() => $"It still shows: {RealApp.WithoutToken($"Bad credentials for {token}.", token, "The dialog's error or note")}."));
+
+        Assert.Equal("The dialog's error or note holds the typed token.", leak.Message);
+    }
+
+    /// <summary>The failure of the gate's look: <see cref="GateMessage"/> with E_FAIL.</summary>
+    private static COMException TreeChanged() => new(GateMessage, Unspecified);
+
+    /// <summary>A read of the Value pattern that failed in UI Automation, as FlaUI's <c>Pattern</c> wraps it: around <see cref="TreeChanged"/>.</summary>
+    private static PatternNotSupportedException PatternReadFailed() => new(PatternReadWords, ValuePattern, TreeChanged());
+
+    /// <summary>The Value pattern on an element that does not give it, as FlaUI's <c>Pattern</c> says so: around its own <see cref="InvalidOperationException"/>.</summary>
+    private static PatternNotSupportedException PatternNotGiven() => new(PatternReadWords, ValuePattern, new InvalidOperationException("Native pattern is null"));
 
     /// <summary>One exception of each kind that is no failed look.</summary>
     private static Exception Other(string kind) => kind switch
@@ -252,12 +382,22 @@ public class WaitForRuleTests
         nameof(XunitException) => new XunitException("An assertion of the check."),
         nameof(IOException) => new IOException("The log could not be read."),
         nameof(ElementNotEnabledException) => new ElementNotEnabledException(),
+        nameof(PatternNotSupportedException) => PatternNotGiven(),
         _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "No such kind."),
     };
 
     /// <summary>One wait on <see cref="RealApp.Poll"/> with <paramref name="time"/>'s clock and pause, the app running unless <paramref name="exitCode"/> is given.</summary>
     private static void Wait(ScriptedLooks looks, FakeTime time, int? exitCode = null) =>
         RealApp.Poll(looks.Look, What, Limit, () => time.Now, () => exitCode, time.Pause);
+
+    /// <summary>How many looks a wait on <see cref="RealApp.WaitForMenu"/>'s rule takes to settle, the menu's rectangle read as <paramref name="reads"/> script it look by look (the last again for every later look).</summary>
+    private static int LooksToSettle(params Func<Rectangle?>[] reads)
+    {
+        var settling = new RealApp.SettlingRectangle();
+        var looks = new ScriptedLooks([.. reads.Select(read => (Func<bool>)(() => settling.Look(read)))]);
+        Wait(looks, new FakeTime());
+        return looks.Count;
+    }
 
     /// <summary>A wait's clock and pauses: <see cref="Pause"/> records each pause asked for and moves <see cref="Now"/> on by it. Nothing sleeps.</summary>
     private sealed class FakeTime

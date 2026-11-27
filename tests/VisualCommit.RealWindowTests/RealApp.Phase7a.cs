@@ -151,7 +151,7 @@ public sealed partial class RealApp
     /// naming <paramref name="place"/> instead, so that no message holds the token and the leak fails
     /// by its place (design 13.2).
     /// </summary>
-    private static string WithoutToken(string text, string token, string place) =>
+    internal static string WithoutToken(string text, string token, string place) =>
         text.Contains(token, StringComparison.Ordinal) ? throw new InvalidOperationException($"{place} holds the typed token.") : text;
 
     /// <summary>
