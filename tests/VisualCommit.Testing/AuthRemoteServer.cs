@@ -27,8 +27,9 @@ namespace VisualCommit.Testing;
 /// <see cref="HoldNextFetchPack(int)"/> holds back part of the next response that carries a pack, so
 /// that a test sees a fetch in progress, with a percentage (one it chose, if it likes), for as
 /// long as it likes: the part sent first ends after a whole line of git's progress with a
-/// percentage, when the response has one. The server keeps every hold asked of it, with what it
-/// sent once it began (<see cref="Holds"/>), and describes them with its requests
+/// percentage, when the response has one that reaches the hold's percentage (any, for a hold at
+/// 0). The server keeps every hold asked of it, with what it sent once it began and when it was
+/// let go (<see cref="Holds"/>), and describes them with its requests
 /// (<see cref="DescribeHoldsAndRequests"/>), for the message of a test that waited in vain for what
 /// git shows while held; a test that knows the server only by its port, from a remote's URL, finds
 /// that description through <see cref="DescribeServersOn"/>.
@@ -290,7 +291,8 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
 
     /// <summary>
     /// Every hold asked of this server (<see cref="HoldNextFetchPack(string, int)"/>), in the order
-    /// asked, with what it sent once it began; asking again before a response was held adds none.
+    /// asked: when a response took it, what it sent once it began and when it was let go; asking
+    /// again while it waits adds none.
     /// </summary>
     public IReadOnlyList<AuthRemoteHold> Holds
     {
@@ -298,47 +300,81 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
         {
             lock (_gate)
             {
-                return [.. _askedHolds.Select(hold => new AuthRemoteHold(hold.Asked, hold.Folder, hold.AtPercent, hold.Part))];
+                return [.. _askedHolds.Select(hold => hold.ToRecord())];
             }
         }
     }
 
     /// <summary>
     /// This server's requests and holds in a few lines, for the message of a test that waited in
-    /// vain for what git shows while a fetch is held, times in UTC: its port; its requests (the last
+    /// vain for what git shows while a fetch is held, times in UTC, all read under one lock, so that
+    /// they are of one moment. The first line gives its port; its requests (the last
     /// <see cref="DescribedRequests"/>), each with its method, path, protocol v2 command, status and
-    /// whether it was held; how many errors it had (<see cref="Errors"/>); and each hold asked of it
-    /// (<see cref="Holds"/>), in a line of its own: when it was asked, its repository and
-    /// percentage, and that it has not begun, or when it began, the bytes it sent of the body's,
-    /// its progress with <c>\r</c> and <c>\n</c> written out (the first and last characters of a
-    /// long one) and the last whole line with a percentage in it, which is the last such line git
-    /// can show, or that it has none.
+    /// whether it was held; how many errors it had (<see cref="Errors"/>); and how many of its
+    /// connections have not ended. A request is listed only once its response was decided
+    /// (<see cref="Requests"/>), so one whose response is not decided yet (its body still being
+    /// read, or http-backend still running) counts only among the connections; a request reads
+    /// held from the moment its response takes the hold, before the hold's first part is sent.
+    /// <para>
+    /// Then each hold asked of it (<see cref="Holds"/>), in a line of its own: when it was asked,
+    /// its repository and percentage, and how it stands. It waits for a response with a pack; or
+    /// it was dropped before it began, by a release or the server's disposal, at a time given; or
+    /// a response took it, at a time given, and its first part is not sent; or it began, at a time
+    /// given, and the line gives how many bytes of the body went before the hold, its progress with
+    /// <c>\r</c> and <c>\n</c> written out (the first and last characters of a long one) and the
+    /// last whole line with a percentage in it, which is the last such line git can show, or that
+    /// it has none. A taken or begun hold that was let go ends with <c>; let go</c> and the time:
+    /// of the release or the disposal, or of its response's end when the write of its first part
+    /// failed before either. A failed write of the headers leaves it taken until a release or the
+    /// disposal.
+    /// </para>
     /// </summary>
     public string DescribeHoldsAndRequests()
     {
-        var requests = Requests;
-        var holds = Holds;
-        var text = new StringBuilder().Append(CultureInfo.InvariantCulture, $"The server on port {Port} (times in UTC) had {requests.Count} request(s)");
-        if (requests.Count > 0)
+        AuthRemoteRequest[] requests;
+        AuthRemoteHold[] holds;
+        int errors;
+        int open;
+        lock (_gate)
         {
-            text.Append(requests.Count > DescribedRequests ? $", the last {DescribedRequests}: " : ": ")
-                .AppendJoin("; ", requests.Skip(requests.Count - Math.Min(requests.Count, DescribedRequests)).Select(Described));
+            requests = [.. _requests];
+            holds = [.. _askedHolds.Select(hold => hold.ToRecord())];
+            errors = _errors.Count;
+            open = _connections.Count(connection => !connection.IsCompleted);
         }
 
-        text.Append(CultureInfo.InvariantCulture, $", and {Errors.Count} error(s); ")
-            .Append(holds.Count == 0 ? "no hold was asked of it." : "the holds asked of it, oldest first:");
+        var text = new StringBuilder().Append(CultureInfo.InvariantCulture, $"The server on port {Port} (times in UTC) had {requests.Length} request(s)");
+        if (requests.Length > 0)
+        {
+            text.Append(requests.Length > DescribedRequests ? $", the last {DescribedRequests}: " : ": ")
+                .AppendJoin("; ", requests.Skip(requests.Length - Math.Min(requests.Length, DescribedRequests)).Select(Described));
+        }
+
+        text.Append(CultureInfo.InvariantCulture, $", {errors} error(s) and {open} connection(s) open; ")
+            .Append(holds.Length == 0 ? "no hold was asked of it." : "the holds asked of it, oldest first:");
         foreach (var hold in holds)
         {
             text.Append(CultureInfo.InvariantCulture, $"\n  asked {hold.Asked:HH:mm:ss.fff} for {hold.Repository} at {hold.AtPercent}%: ");
-            if (hold.Part is not { } part)
+            var letGo = hold.LetGo is { } at ? string.Create(CultureInfo.InvariantCulture, $"; let go {at:HH:mm:ss.fff}") : string.Empty;
+            if (hold.Part is { } part)
             {
-                text.Append("not begun");
-                continue;
+                var lastWhole = LastWholeLineWithPercent(part.Progress);
+                text.Append(CultureInfo.InvariantCulture, $"began {part.At:HH:mm:ss.fff}, held after {part.SentBytes} of {part.BodyBytes} bytes, progress \"{Visible(part.Progress)}\"; ")
+                    .Append(lastWhole is null ? "no whole line with a percentage" : $"last whole line with a percentage \"{lastWhole}\"")
+                    .Append(letGo);
             }
-
-            var lastWhole = LastWholeLineWithPercent(part.Progress);
-            text.Append(CultureInfo.InvariantCulture, $"began {part.At:HH:mm:ss.fff}, sent {part.SentBytes} of {part.BodyBytes} bytes, progress \"{Visible(part.Progress)}\"; ")
-                .Append(lastWhole is null ? "no whole line with a percentage" : $"last whole line with a percentage \"{lastWhole}\"");
+            else if (hold.Taken is { } taken)
+            {
+                text.Append(CultureInfo.InvariantCulture, $"taken {taken:HH:mm:ss.fff} by a response, its first part not sent").Append(letGo);
+            }
+            else if (hold.LetGo is { } dropped)
+            {
+                text.Append(CultureInfo.InvariantCulture, $"dropped {dropped:HH:mm:ss.fff} before it began");
+            }
+            else
+            {
+                text.Append("waiting for a response with a pack");
+            }
         }
 
         return text.ToString();
@@ -350,9 +386,10 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
     /// <summary>
     /// <see cref="DescribeHoldsAndRequests"/> of the server of this process that runs on each of
     /// <paramref name="ports"/>, each port once in the order given, one after another on lines of
-    /// their own; for a port no server of this process runs on, a line that says so. A server runs
-    /// from its start until it is disposed. For a test that knows the server only by its port, from
-    /// a remote's URL (<c>http://127.0.0.1:47391/remote.git</c>).
+    /// their own; for a port on which no <see cref="AuthRemoteServer"/> of this process runs (a
+    /// listener of another kind may), a line that says so. A server runs from its start until it
+    /// is disposed. For a test that knows the server only by its port, from a remote's URL
+    /// (<c>http://127.0.0.1:47391/remote.git</c>).
     /// </summary>
     public static string DescribeServersOn(IEnumerable<int> ports)
     {
@@ -365,7 +402,7 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
 
         return string.Join('\n', ports.Distinct().Select(port =>
             running.LastOrDefault(server => server.Port == port)?.DescribeHoldsAndRequests()
-            ?? string.Create(CultureInfo.InvariantCulture, $"No server of this process runs on port {port}.")));
+            ?? string.Create(CultureInfo.InvariantCulture, $"No AuthRemoteServer of this process runs on port {port}.")));
     }
 
     /// <summary>
@@ -783,15 +820,15 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
     /// or <c>\n</c> (<see cref="ScanPktLines"/>). A pkt-line carries what upload-pack read of
     /// pack-objects' progress at once: several of git's lines (<c>Counting objects:   0%</c> to
     /// <c>3%</c> for the 100k-commit repo), or part of one, since a read may end inside a line
-    /// (Git for Windows 2.56 was seen to write a progress line of odd length in two writes, its
-    /// last byte, the <c>\r</c> or <c>\n</c>, apart from the rest). The pkt-line is never split,
-    /// so git shows the last whole line with a percentage that it carries. With a percentage
-    /// the first part ends right after the first whole line of git's (up to its <c>\r</c> or
-    /// <c>\n</c>) whose percentage is at least that one; when more follows that line in its
-    /// pkt-line, the pkt-line is split in two there and the response sent with the length of
-    /// the rebuilt body (<see cref="SplitAtProgress"/>). Git shows a line only once it is whole,
-    /// so the last line it shows while held is that one: <c>Counting objects:  45% (…)</c> for
-    /// 45 (D150).
+    /// (upload-pack reads at most 128 bytes of it at a time, and Git for Windows 2.56 was seen to
+    /// write a progress line of odd length in two writes, its last byte, the <c>\r</c> or
+    /// <c>\n</c>, apart from the rest). The pkt-line is never split, so git shows the last whole
+    /// line with a percentage that it carries. With a percentage the first part ends right after
+    /// the first whole line of git's (up to its <c>\r</c> or <c>\n</c>) whose percentage is at
+    /// least that one; when more follows that line in its pkt-line, the pkt-line is split in two
+    /// there and the response sent with the length of the rebuilt body
+    /// (<see cref="SplitAtProgress"/>). Git shows a line only once it is whole, so the last line
+    /// it shows while held is that one: <c>Counting objects:  45% (…)</c> for 45 (D150).
     /// </para>
     /// <para>
     /// When git asked for no progress (<c>no-progress</c>, a fetch without <c>--progress</c> and
@@ -804,7 +841,8 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
     /// </summary>
     /// <param name="atPercent">0, or the percentage, 1 to 100, of the progress line to hold at.</param>
     /// <returns>A task that completes when the response is held: its first part has been sent.
-    /// It is cancelled when <see cref="Release()"/> comes first or the server is disposed.</returns>
+    /// It is cancelled when <see cref="Release()"/> comes first, when the server is disposed, or
+    /// when the write of the first part fails (the client went away).</returns>
     /// <exception cref="InvalidOperationException">The server serves a folder: name the repository (<see cref="HoldNextFetchPack(string, int)"/>).</exception>
     public Task HoldNextFetchPack(int atPercent = 0) => HoldNextFetchPack(RepositoryFolderName, atPercent);
 
@@ -837,10 +875,10 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
         }
     }
 
-    /// <summary>Sends the rest of every held response, of every served repository, and drops every hold that has not begun.</summary>
+    /// <summary>Sends the rest of every held response, of every served repository, and drops every hold that no response has taken yet.</summary>
     public void Release() => ReleaseHolds(null);
 
-    /// <summary>Sends the rest of the held responses of <paramref name="repository"/> (its name or folder name) and drops its hold that has not begun; the other repositories' stay held.</summary>
+    /// <summary>Sends the rest of the held responses of <paramref name="repository"/> (its name or folder name) and drops its hold that no response has taken yet; the other repositories' stay held.</summary>
     /// <exception cref="ArgumentException">The server serves no such repository.</exception>
     public void Release(string repository) => ReleaseHolds(FolderOf(repository));
 
@@ -856,12 +894,24 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
                 holds.Add(pending);
                 _pendingHolds.Remove(key);
             }
+
+            NoteLetGo(holds);
         }
 
         foreach (var hold in holds)
         {
             hold.Engaged.TrySetCanceled();
             hold.Released.TrySetResult();
+        }
+    }
+
+    /// <summary>Notes the time at which each of <paramref name="holds"/> was let go, unless it was noted before. Under <see cref="_gate"/>.</summary>
+    private static void NoteLetGo(IEnumerable<Hold> holds)
+    {
+        var now = DateTimeOffset.UtcNow;
+        foreach (var hold in holds)
+        {
+            hold.LetGo ??= now;
         }
     }
 
@@ -937,6 +987,7 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
             holds = [.. _activeHolds, .. _pendingHolds.Values];
             _activeHolds.Clear();
             _pendingHolds.Clear();
+            NoteLetGo(holds);
         }
 
         await _stopping.CancelAsync().ConfigureAwait(false);
@@ -1188,7 +1239,7 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
             var (hasPack, progressEnd) = ScanPktLines(response.Body);
             if (hasPack)
             {
-                hold = TakePendingHold(path);
+                hold = TakePendingHold(path, request with { Status = response.Status, Held = true });
                 if (hold is { AtPercent: > 0 })
                 {
                     (sent, var lineEnd) = SplitAtProgress(response.Body, hold.AtPercent);
@@ -1201,7 +1252,12 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
             }
         }
 
-        Record(request with { Status = response.Status, Held = hold is not null });
+        // A held request was recorded as its response took the hold.
+        if (hold is null)
+        {
+            Record(request with { Status = response.Status });
+        }
+
         var responseHead = new StringBuilder()
             .Append(CultureInfo.InvariantCulture, $"HTTP/1.1 {response.Status} {response.Reason}\r\n")
             .Append(response.Headers)
@@ -1234,7 +1290,10 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
             lock (_gate)
             {
                 _activeHolds.Remove(hold);
+                NoteLetGo([hold]);
             }
+
+            hold.Engaged.TrySetCanceled();
         }
 
         // The client may have given up meanwhile (a cancelled fetch): then this write fails,
@@ -1373,8 +1432,13 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
         return colon < 0 ? null : (decoded[..colon], decoded[(colon + 1)..]);
     }
 
-    /// <summary>The hold that waits for the next pack response of the repository <paramref name="path"/> lies in, made active; null when there is none.</summary>
-    private Hold? TakePendingHold(string path)
+    /// <summary>
+    /// The hold that waits for the next pack response of the repository <paramref name="path"/> lies
+    /// in, made active and noted as taken, with <paramref name="held"/> recorded under the same lock,
+    /// so that the request reads held from the moment the hold reads taken; null when there is
+    /// none, and then nothing is recorded.
+    /// </summary>
+    private Hold? TakePendingHold(string path, AuthRemoteRequest held)
     {
         if (RepositoryOf(path) is not { } folder)
         {
@@ -1383,11 +1447,14 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
 
         lock (_gate)
         {
-            if (_pendingHolds.Remove(folder, out var hold))
+            if (!_pendingHolds.Remove(folder, out var hold))
             {
-                _activeHolds.Add(hold);
+                return null;
             }
 
+            _activeHolds.Add(hold);
+            hold.Taken = DateTimeOffset.UtcNow;
+            _requests.Add(held);
             return hold;
         }
     }
@@ -2062,7 +2129,12 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
     /// <summary>A path a host serves at (<see cref="ServeAt"/>): its decoded segments, its folder (relative to the host's folder, with <c>/</c>) and whether <c>&lt;last&gt;.git</c> names it too.</summary>
     private sealed record ServedPath(string[] Segments, string Folder, bool GitSuffix);
 
-    /// <summary>One hold: begun when the first part of the response is sent, ended by <see cref="Release()"/> or <see cref="Release(string)"/>.</summary>
+    /// <summary>
+    /// One hold: taken by a response with a pack, begun when the first part of the response is
+    /// sent, and let go by a release (<see cref="Release()"/>, <see cref="Release(string)"/>) or the
+    /// server's disposal, or at its response's end when the write of its first part fails before
+    /// either; a failed write of the headers leaves it taken until a release or the disposal.
+    /// </summary>
     private sealed class Hold(string folder, int atPercent)
     {
         /// <summary>The folder name of the served repository whose pack response it holds.</summary>
@@ -2074,12 +2146,21 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
         /// <summary>When it was asked for, in UTC.</summary>
         public DateTimeOffset Asked { get; } = DateTimeOffset.UtcNow;
 
+        /// <summary>When a response took it, in UTC; null before. Under the server's gate.</summary>
+        public DateTimeOffset? Taken { get; set; }
+
         /// <summary>What it sent once it began; null before. Under the server's gate.</summary>
         public AuthRemoteHoldPart? Part { get; set; }
+
+        /// <summary>When it was let go, in UTC; null before. Under the server's gate.</summary>
+        public DateTimeOffset? LetGo { get; set; }
 
         public TaskCompletionSource Engaged { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         public TaskCompletionSource Released { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        /// <summary>The hold as <see cref="Holds"/> gives it. Under the server's gate.</summary>
+        public AuthRemoteHold ToRecord() => new(Asked, Folder, AtPercent, Taken, Part, LetGo);
     }
 
     /// <summary>A gate on a served repository's next request (<see cref="HoldNextRequest"/>): closed when the request arrives, opened by <see cref="ReleaseRequest"/> or disposing.</summary>
@@ -2254,12 +2335,14 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
     }
 }
 
-/// <summary>A hold asked of a server (<see cref="AuthRemoteServer.Holds"/>).</summary>
+/// <summary>A hold asked of a server (<see cref="AuthRemoteServer.Holds"/>), as <see cref="AuthRemoteServer.DescribeHoldsAndRequests"/> writes it.</summary>
 /// <param name="Asked">When it was asked for (<see cref="AuthRemoteServer.HoldNextFetchPack(string, int)"/>), in UTC.</param>
 /// <param name="Repository">The served repository's folder name (<c>remote.git</c>).</param>
 /// <param name="AtPercent">0, or the percentage it was asked for.</param>
+/// <param name="Taken">When a response with a pack took it, in UTC: its request reads held from then (<see cref="AuthRemoteRequest.Held"/>); null while it waits for one, and when it was dropped before.</param>
 /// <param name="Part">What it sent once it began; null when it has not begun.</param>
-public sealed record AuthRemoteHold(DateTimeOffset Asked, string Repository, int AtPercent, AuthRemoteHoldPart? Part);
+/// <param name="LetGo">When it was let go, in UTC: by a release (<see cref="AuthRemoteServer.Release()"/>) or the server's disposal, or at its response's end when the write of its first part failed before either (a failed write of the headers leaves it to a release or the disposal); null until then. A hold let go before a response took it was dropped.</param>
+public sealed record AuthRemoteHold(DateTimeOffset Asked, string Repository, int AtPercent, DateTimeOffset? Taken, AuthRemoteHoldPart? Part, DateTimeOffset? LetGo);
 
 /// <summary>What a held response sent before it held (<see cref="AuthRemoteHold.Part"/>).</summary>
 /// <param name="At">When its first part had been sent, in UTC.</param>

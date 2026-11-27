@@ -535,13 +535,14 @@ public class RepositoryOperationsFetchTests
 
     /// <summary>
     /// Waits until the server holds the fetch and the status bar shows a percentage. A timeout says
-    /// what was there instead: whether the response was held, what the status bar read, the texts it
-    /// showed from the wait's start, and the server's requests and holds
+    /// what was there instead: whether the response was held, what the status bar read, the text it
+    /// had when the wait started and each text it showed after, and the server's requests and holds
     /// (<see cref="AuthRemoteServer.DescribeHoldsAndRequests"/>), so that a failure under load can be
     /// told from a fault of the app.
     /// </summary>
     private static async Task WaitForPercentageAsync(ShellDriver app, AuthRemoteServer server, Task held, TextBlock status, string what)
     {
+        var first = status.Text ?? string.Empty;
         using var texts = app.RecordStatusTexts();
         try
         {
@@ -549,9 +550,10 @@ public class RepositoryOperationsFetchTests
         }
         catch (TimeoutException ex)
         {
-            var shown = texts.Texts.Count == 0 ? "no other text" : string.Join(", ", texts.Texts.Select(text => $"\"{text}\""));
+            var shown = string.Join(", ", new[] { first }.Concat(texts.Texts).Select(text => $"\"{text}\""));
+            var response = held.IsCompletedSuccessfully ? "held" : held.IsCanceled ? "not held, and its hold was let go" : "not held";
             throw new TimeoutException(
-                $"{ex.Message} The response was {(held.IsCompleted ? "held" : "not held")}; the status bar read \"{status.Text}\" and showed {shown} from the wait's start.\n{server.DescribeHoldsAndRequests()}",
+                $"{ex.Message} The response was {response}; the status bar read \"{status.Text}\" and showed {shown} from the wait's start.\n{server.DescribeHoldsAndRequests()}",
                 ex);
         }
     }

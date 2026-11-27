@@ -146,7 +146,8 @@ public class RemoteOperationTests
         var fetch = repository.FetchAsync(null, options, cancellationToken: cancellation.Token);
         await held.WaitAsync(StepTimeout, TestCancelled);
 
-        // The server held the pack after its first progress line with a percentage.
+        // The server held the pack after the pkt-line that completes its first progress line with
+        // a percentage.
         await WaitUntilAsync(
             () => progress.Reports.Any(report => report.Percent is not null),
             () => $"The progress reported so far: {Described(progress.Reports)}.\n{server.DescribeHoldsAndRequests()}");

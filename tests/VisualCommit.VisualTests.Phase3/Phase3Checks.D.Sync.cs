@@ -38,8 +38,9 @@ public sealed partial class Phase3ChecksD
         var refs = await RefsAsync(repo);
 
         // Step 2: the pull's fetch held, then cancelled.
-        _ = scenario.Server.HoldNextFetchPack();
+        var held = scenario.Server.HoldNextFetchPack();
         app.Click(ToolbarButton(app, "PullButton"));
+        await app.WaitForHeldFetchAsync(held, NetworkTimeout);
         await app.WaitForProgressPercentAsync(NetworkTimeout);
         Shot(app, "18b-pull-progress");
         AssertHeldProgress(app, PartD.PullingMain);

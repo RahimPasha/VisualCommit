@@ -310,25 +310,60 @@ public sealed partial class ShellDriver
         }
         catch (TimeoutException timedOut)
         {
-            var percent = status.Percent is { } shown ? shown.ToString(CultureInfo.InvariantCulture) : "none";
-            throw new TimeoutException(
-                $"{timedOut.Message} The status bar read \"{status.Text}\" (running: {status.IsRunning}, percentage: {percent}).\n{DescribeRemoteServers()}",
-                timedOut);
+            throw new TimeoutException($"{timedOut.Message} {DescribeStatusAndServers(status)}", timedOut);
         }
 
         return status.Percent!.Value;
     }
 
     /// <summary>
+    /// Waits, as <see cref="WaitForAsync"/> does, until <paramref name="held"/> has completed: the
+    /// task a server of the tests returned for a hold
+    /// (<see cref="AuthRemoteServer.HoldNextFetchPack(int)"/>), which completes once the server
+    /// holds the fetch, or is cancelled when a release, the server's disposal or a failed write of
+    /// the response's first part comes first. For a check that asks for a hold, starts the fetch
+    /// and then waits for its percentage (<see cref="WaitForProgressPercentAsync"/>).
+    /// </summary>
+    /// <exception cref="TimeoutException">The task had not completed in time; the message adds what
+    /// the status bar showed then and the servers' requests and holds, as
+    /// <see cref="WaitForProgressPercentAsync"/>'s does.</exception>
+    public async Task WaitForHeldFetchAsync(Task held, TimeSpan? timeout = null)
+    {
+        ArgumentNullException.ThrowIfNull(held);
+        var status = Session.Shell.ActiveTab.OperationStatus;
+        try
+        {
+            await WaitForAsync(() => held.IsCompleted, "the server to hold the fetch", timeout);
+        }
+        catch (TimeoutException timedOut)
+        {
+            throw new TimeoutException($"{timedOut.Message} {DescribeStatusAndServers(status)}", timedOut);
+        }
+    }
+
+    /// <summary>
+    /// The end of the message of a held fetch's wait that timed out: what <paramref name="status"/>
+    /// reads (its text, whether it runs, its percentage), then the servers the active tab's remotes
+    /// reach (<see cref="DescribeRemoteServers"/>).
+    /// </summary>
+    private string DescribeStatusAndServers(IStatusBarOperation status)
+    {
+        var percent = status.Percent is { } shown ? shown.ToString(CultureInfo.InvariantCulture) : "none";
+        return $"The status bar read \"{status.Text}\" (running: {status.IsRunning}, percentage: {percent}).\n{DescribeRemoteServers()}";
+    }
+
+    /// <summary>
     /// The servers of the tests (<see cref="AuthRemoteServer"/>) that the active tab's remotes reach
-    /// on 127.0.0.1, by the ports of their URLs as the repository's refs read them: which remote
-    /// names which port, then each port's server with its requests and holds
+    /// on 127.0.0.1, by the ports of their URLs as the repository's refs read them, which are the
+    /// configured URLs (git's <c>url.&lt;base&gt;.insteadOf</c> not applied): those with the scheme
+    /// http and the host 127.0.0.1, the address a server listens on. Which remote names which port,
+    /// then each port's server with its requests and holds
     /// (<see cref="AuthRemoteServer.DescribeServersOn"/>); or that no remote names such a port.
     /// </summary>
     private string DescribeRemoteServers()
     {
         var remotes = (Session.Shell.ActiveTab.Repository?.Refs?.RemoteUrls ?? [])
-            .Select(url => (url.Remote, Port: Uri.TryCreate(url.Url, UriKind.Absolute, out var uri) && uri.IsLoopback && uri.Scheme == Uri.UriSchemeHttp ? uri.Port : 0))
+            .Select(url => (url.Remote, Port: Uri.TryCreate(url.Url, UriKind.Absolute, out var uri) && uri.Scheme == Uri.UriSchemeHttp && uri.Host == "127.0.0.1" ? uri.Port : 0))
             .Where(remote => remote.Port > 0)
             .ToList();
         if (remotes.Count == 0)
