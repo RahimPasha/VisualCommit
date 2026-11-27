@@ -12,6 +12,10 @@ it are not built yet, and "As built" says which are. The reasons behind the main
 - **Git engine: the real `git` executable.** A process runner starts git, streams its output and
   parses the machine-readable formats (`log` with a custom format, `status --porcelain=v2`,
   `blame --porcelain`, unified diffs). Hunk and line staging build a patch and apply it to the index.
+  Since phase 8a the app needs Git 2.34.1 or newer (`GitVersion.Minimum`, D420) and carries none
+  (D405): it looks for git at the start and on "Check again", first the program chosen in Settings,
+  then the PATH and the usual install folders, and while none can be used a first-run screen says
+  why and how to get one (D423).
 - **Operation queue per repo (D81).** Every write to a repository runs through its queue
   (`OperationQueue`, Core): one at a time, first in first out, on the UI thread's context, with
   the watcher paused and a refresh afterwards. Network operations show progress and can be
@@ -71,26 +75,34 @@ it are not built yet, and "As built" says which are. The reasons behind the main
   services with the owner's tokens for a sandbox on each.
 - **CI.** GitHub Actions builds and tests on Windows, macOS and Linux on every push that changes
   more than docs, with a time limit on each job and on its test step; since phase 7a it also tests
-  the real keychain stores against throw-away entries (D259, D270).
+  the real keychain stores against throw-away entries (D259, D270), and since phase 8a a job of its
+  own runs the tests on git 2.34.1, the oldest the app supports, in an Ubuntu 22.04 container
+  (D406, D420). Since phase 8a a second workflow, `guide.yml`, builds the user guide's site with
+  its pictures, checks its links and publishes it to GitHub Pages from `master` alone (D408, D439).
 - **Packaging.** Velopack for installers and auto-update on all three platforms.
 
 ## Solution layout
 
 `VisualCommit.slnx`, `Directory.Build.props`, `Directory.Build.targets`, `Directory.Packages.props`
 and `global.json` sit at the repo root. App projects are under `src/`, test projects under
-`tests/`. A project is created in the phase that first needs it. Package versions are pinned
-centrally in `Directory.Packages.props`.
+`tests/`, and since phase 8a the icon's builder under `tools/`. A project is created in the phase
+that first needs it. Package versions are pinned centrally in `Directory.Packages.props`. Since
+phase 8a `assets/brand/` holds the icon's three SVG masters and, under `generated/`, the files the
+builder makes for the packages (see "The app's icon"), and `LICENSE`, `THIRD-PARTY-NOTICES.md` and
+`notices/` (the vendors' own notice files) at the root are build inputs: the app embeds them (D431,
+D433; see "The settings screen").
 
 | Project | Contents | State |
 |---|---|---|
-| `src/VisualCommit.Core` | Domain models and interfaces (git calls, repositories, commits, refs, the working-tree status with its conflicts and the operation in progress, rebases, lists of picks, the backups' retention, the lane layout, settings, session state, logging, data-folder paths, how dates are shown); diffs: parsing them, building patches for chosen lines, comparing the words of paired lines; ref-name rules (`RefNameRules`); the interactive rebase's todo (`Git/RebaseTodo`); `Conflicts/`: a conflicted file's blocks (`ConflictText`); `Operations/`: the operation queue, its contracts and the operation log, failure classification and output cleaning, the prompt contracts, the lock-file scan; phase 5's `Undo/` (the undo history, its scopes, effects, sequences and checks), `Graph/GraphFilter` (what the graph hides or solos), the result records of file history, blame, reflog, backups, compare and search, the record and backup clocks (`AppClocks`, `Git/BackupClock`) and the worktree key; phase 6's `Workspaces/` (the workspaces, `IWorkspaceStore`, `WorkspacePaths`, `WorkspaceEdits`, the folder scan `RepositoryScanner`), `Git/FetchRefspecs` (the remotes' fetch lines and their mapping), the contracts and records of git's own settings (`IGitConfiguration`, `GitConfigLocations`, `PullConfiguration`, `PullModes`, `GitBoolean`), `Operations/PromptGroup` (a bulk run's prompts), `ToolCatalogues` (what the machine has installed) and `DurableFile` (how the app's own files are written); phase 7a's `Hosting/AccountKey` (an account's provider, host and login), the account's bindings for git and the credential git gets (`Operations/CredentialBinding`), git's URL rewrites (`Git/UrlRewrites`) and the remotes' configured URLs (`Git/RemoteUrl`), and the status bar's offer (`OperationOffer`); phase 7b's `Hosting/HostingProviders` (each provider's name, possessive and id, the order of the Accounts section's blocks and which provider's form a token has, D378), `Hosting/PullRequestRefs` (each provider's request refs and the push guard's rule for them), the coverage of an account's token for git (`GitCoverage` in `Operations/CredentialBinding`, D359, D369) and git's conditional includes as a clone's binding judges them (`Git/GitConfigIncludes`, D391); no UI, no process calls | Built |
-| `src/VisualCommit.Git` | Git runner (since phase 7b on Windows a below-normal call's git joins a job that holds it at below normal, and the runner adds to that job each descendant it finds, `WindowsJob`, D386), git locator, call log; reading a repository and writing to it (`GitRepository`: status, diffs, stage, unstage, patches, snapshots, discard, commit; phase 3's branches, history, in-progress state, backups, remotes and the network, stash, tags, ignore; phase 4's rebases, lists of picks and reverts, Continue and Skip, conflicts and the merge tool, the backups' clean-up; phase 5's file history, blame, reflog, backups list, compare, search, the filtered graph, C12's checkout and stash members, and the undo history's reads and steps; phase 6's `OpenedAtTopAsync`, the refs read's fetch lines, the reads of Keep ignored files, the pull's settings and the repository's own configuration writes; phase 7a's remotes' URLs in the refs read, the read of git's URL rewrites and a pull request's fetch into `FETCH_HEAD`, since phase 7b also a GitLab merge request's `refs/merge-requests/<n>/head`), cloning, the repository watcher (since phase 7a with a test switch that holds its events, D262), the progress parser, the blame parser; since phase 6 `GitConfiguration` (git's own settings as the settings screen reads and writes them, and the merge-tool lookup; since phase 7b also the `url.` rules of a conditional include's file, `ReadIncludedAsync`, D391) and `GitMergeTools`; `Prompts/`: the askpass broker (since phase 7a also answering git's credential requests for the URLs bound to the hosting account, since phase 7b to each provider's account, and on dev.azure.com taking a prompt for the account only when its URL names the binding's organization), its locator and the prompt classifier | Built |
+| `src/VisualCommit.Core` | Domain models and interfaces (git calls, repositories, commits, refs, the working-tree status with its conflicts and the operation in progress, rebases, lists of picks, the backups' retention, the lane layout, settings, session state, logging, data-folder paths, how dates are shown); diffs: parsing them, building patches for chosen lines, comparing the words of paired lines; ref-name rules (`RefNameRules`); the interactive rebase's todo (`Git/RebaseTodo`); `Conflicts/`: a conflicted file's blocks (`ConflictText`); `Operations/`: the operation queue, its contracts and the operation log, failure classification and output cleaning, the prompt contracts, the lock-file scan; phase 5's `Undo/` (the undo history, its scopes, effects, sequences and checks), `Graph/GraphFilter` (what the graph hides or solos), the result records of file history, blame, reflog, backups, compare and search, the record and backup clocks (`AppClocks`, `Git/BackupClock`) and the worktree key; phase 6's `Workspaces/` (the workspaces, `IWorkspaceStore`, `WorkspacePaths`, `WorkspaceEdits`, the folder scan `RepositoryScanner`), `Git/FetchRefspecs` (the remotes' fetch lines and their mapping), the contracts and records of git's own settings (`IGitConfiguration`, `GitConfigLocations`, `PullConfiguration`, `PullModes`, `GitBoolean`), `Operations/PromptGroup` (a bulk run's prompts), `ToolCatalogues` (what the machine has installed) and `DurableFile` (how the app's own files are written); phase 7a's `Hosting/AccountKey` (an account's provider, host and login), the account's bindings for git and the credential git gets (`Operations/CredentialBinding`), git's URL rewrites (`Git/UrlRewrites`) and the remotes' configured URLs (`Git/RemoteUrl`), and the status bar's offer (`OperationOffer`); phase 7b's `Hosting/HostingProviders` (each provider's name, possessive and id, the order of the Accounts section's blocks and which provider's form a token has, D378), `Hosting/PullRequestRefs` (each provider's request refs and the push guard's rule for them), the coverage of an account's token for git (`GitCoverage` in `Operations/CredentialBinding`, D359, D369) and git's conditional includes as a clone's binding judges them (`Git/GitConfigIncludes`, D391); phase 8a's `Git/GitSetup.cs` (what a search for git is told, `GitLookup`; the probe's contract, `IGitSetupProbe`; the first-run screen's guidance and states) and `ProgramSearch` (a program's search in a `PATH` value, fully qualified folders only, D130: the launcher's and winget's); no UI, no process calls | Built |
+| `src/VisualCommit.Git` | Git runner (since phase 7b on Windows a below-normal call's git joins a job that holds it at below normal, and the runner adds to that job each descendant it finds, `WindowsJob`, D386), git locator (since phase 8a the search in a `GitLookup`'s order, and the machine's probe `MachineGitSetupProbe` with `OsRelease`), call log; reading a repository and writing to it (`GitRepository`: status, diffs, stage, unstage, patches, snapshots, discard, commit; phase 3's branches, history, in-progress state, backups, remotes and the network, stash, tags, ignore; phase 4's rebases, lists of picks and reverts, Continue and Skip, conflicts and the merge tool, the backups' clean-up; phase 5's file history, blame, reflog, backups list, compare, search, the filtered graph, C12's checkout and stash members, and the undo history's reads and steps; phase 6's `OpenedAtTopAsync`, the refs read's fetch lines, the reads of Keep ignored files, the pull's settings and the repository's own configuration writes; phase 7a's remotes' URLs in the refs read, the read of git's URL rewrites and a pull request's fetch into `FETCH_HEAD`, since phase 7b also a GitLab merge request's `refs/merge-requests/<n>/head`), cloning, the repository watcher (since phase 7a with a test switch that holds its events, D262), the progress parser, the blame parser; since phase 6 `GitConfiguration` (git's own settings as the settings screen reads and writes them, and the merge-tool lookup; since phase 7b also the `url.` rules of a conditional include's file, `ReadIncludedAsync`, D391) and `GitMergeTools`; `Prompts/`: the askpass broker (since phase 7a also answering git's credential requests for the URLs bound to the hosting account, since phase 7b to each provider's account, and on dev.azure.com taking a prompt for the account only when its URL names the binding's organization), its locator and the prompt classifier | Built |
 | `src/VisualCommit.AskPass` | The askpass helper `visualcommit-askpass` (D82): a small framework-dependent console program with no project references, run by git and ssh; its pipe protocol (`AskPassProtocol`) is shared with the broker. Since phase 7a also git's credential helper for the URLs bound to a hosting account (`CredentialMode`, run as `--vc-credential <action>`, D255), whose request line, reading of git's input and answer text `AskPassProtocol` holds too. `VisualCommit.Git` references it, so its app host lands next to the app and in every test project's output | Built |
-| `src/VisualCommit.App` | Avalonia views, view models, theme, custom controls (the commit graph, the diff text, the conflict panes and result, the blame's text and gutter, the context menu's item, the masked text box), the code font; settings and session stores, log file, folder dialog, file launcher, clipboard, prompt dialogs; the operations of every repository (`RepositoryOperations`), menus, dialogs, toolbar, status bar, conflict banner, auto-fetch; the interactive rebase's list, the conflict resolver, the message dialog; phase 5's undo and redo, the activity log, the graph area's pages (file history, blame, reflog and backups), the search bar, the comparison, hide and solo, C12's automatic stash and refusals; phase 6's workspaces (the welcome page's section, the dashboard tab, summary mode and the registry `OpenRepositories`), the bulk fetch and pull, the command palette and the keys (`ViewModels/Commands`, `Views/KeyRouter`), the settings screen (`ViewModels/Settings`), Open in editor, the workspace store, the System theme, the tab strip's overflow; phase 7a's Accounts section of the settings screen and its sign-in dialog, "Clone from GitHub" and its repository browser, the pull requests' section, their badges in the graph, their checkout and the create form (`ViewModels/Hosting`, `RepositoryOperations.PullRequests.cs` and `.CreatePullRequest.cs`), the authors' avatars in the graph and the details panel, and the status bar's offer; phase 7b's Accounts section with a block per provider (`ViewModels/Settings/AccountBlockViewModel`), the sign-in dialog per provider (Azure DevOps' with its Organization box), the repository browser per provider with a switch between the signed-in ones and the palette's three clone commands, the requests' section, badges, checkout and create form in each provider's words (GitLab's merge requests and its Draft title), and the texts that name the provider (`ViewModels/Hosting/HostingTexts.Provider.cs`, D351, D362). Its assembly and executable are named `VisualCommit` (`VisualCommit.exe`); its namespace is `VisualCommit.App` | Built |
+| `src/VisualCommit.App` | Avalonia views, view models, theme, custom controls (the commit graph, the diff text, the conflict panes and result, the blame's text and gutter, the context menu's item, the masked text box), the code font; settings and session stores, log file, folder dialog, file launcher, clipboard, prompt dialogs; the operations of every repository (`RepositoryOperations`), menus, dialogs, toolbar, status bar, conflict banner, auto-fetch; the interactive rebase's list, the conflict resolver, the message dialog; phase 5's undo and redo, the activity log, the graph area's pages (file history, blame, reflog and backups), the search bar, the comparison, hide and solo, C12's automatic stash and refusals; phase 6's workspaces (the welcome page's section, the dashboard tab, summary mode and the registry `OpenRepositories`), the bulk fetch and pull, the command palette and the keys (`ViewModels/Commands`, `Views/KeyRouter`), the settings screen (`ViewModels/Settings`), Open in editor, the workspace store, the System theme, the tab strip's overflow; phase 7a's Accounts section of the settings screen and its sign-in dialog, "Clone from GitHub" and its repository browser, the pull requests' section, their badges in the graph, their checkout and the create form (`ViewModels/Hosting`, `RepositoryOperations.PullRequests.cs` and `.CreatePullRequest.cs`), the authors' avatars in the graph and the details panel, and the status bar's offer; phase 7b's Accounts section with a block per provider (`ViewModels/Settings/AccountBlockViewModel`), the sign-in dialog per provider (Azure DevOps' with its Organization box), the repository browser per provider with a switch between the signed-in ones and the palette's three clone commands, the requests' section, badges, checkout and create form in each provider's words (GitLab's merge requests and its Draft title), and the texts that name the provider (`ViewModels/Hosting/HostingTexts.Provider.cs`, D351, D362); phase 8a's About section of the settings screen and the text dialog that shows the licence and the notices (`ViewModels/Settings/AboutSettingsViewModel`, `ViewModels/Dialogs/TextDocumentDialogViewModel`, `Controls/DocumentTextView`), the app's identity, icon and embedded texts (`Services/AppIdentity`, `AppIcon`, `EmbeddedTexts`; the icon's files in `Assets/Icon/`; `LICENSE`, `THIRD-PARTY-NOTICES.md` and `notices/` as embedded resources), the macOS application menu's item, the single-instance guard and its notice (`Services/SingleInstanceGuard`, `Services/AppLaunch`, `Views/InstanceNoticeWindow`), the first-run screen and the status bar's button to it (`ViewModels/GitSetup`, `MainWindowViewModel.Git.cs`, `Views/Shell/GitSetupView`), the settings screen's Git program row (`ViewModels/Settings/GitProgramViewModel`) and the restore order of the start's tabs (`ViewModels/RestoreOrder`). Its assembly and executable are named `VisualCommit` (`VisualCommit.exe`); its namespace is `VisualCommit.App` | Built |
 | `src/VisualCommit.Hosting` | The hosting services, since phase 7a: the provider model (`IHostingProvider`, `HostingOptions` with each provider's endpoints and handler, the records of `HostingRecords.cs`, `HostingRules`); since phase 7b `Http/`: the HTTP core every provider's REST client is built on (`HostingHttpClient`, driven by a `HostingHttpProfile` per provider: kept answers, redirects, paging, failures); `GitHub/`: `GitHubProvider`, its REST client `GitHubClient` (on that core since phase 7b), recognition `GitHubUrls` and GitHub's JSON shapes; since phase 7b `AzureDevOps/` (`AzureDevOpsProvider`, its client `AzureDevOpsClient`, recognition `AzureDevOpsUrls`, `AzureDevOpsEndpoints`, the API's versions and area id in `AzureDevOpsApi`, and its JSON shapes) and `GitLab/` (`GitLabProvider`, `GitLabClient`, `GitLabUrls`, `GitLabEndpoints` and its JSON shapes); the session (`IHostingSession`, `HostingSession`, `JsonAccountStore` for `accounts.json`; since phase 7b a slot per provider, D348), each repository's hosting (`RepositoryHosting`), the avatars' images (`AvatarCache`, GitHub's alone, D349) and e-mail maps (`AuthorMapStore`); `Tokens/`: the keychain stores and `TokenVault`. References Core only, and `Tmds.DBus.Protocol` for Linux's Secret Service; no UI and no git process. The App references it | Built: GitHub (phase 7a); Azure DevOps Services and gitlab.com (phase 7b, D347) |
-| `tests/VisualCommit.Testing` | Shared test helpers: temporary-repo builder, scenario repos, the 100k-commit repo, the credential test server, fakes (file launcher, clipboard, prompt handler, ssh), a clock tests move by hand (`ManualTimeProvider`), the hang watchdog, helpers that drive the app in headless mode, the window layout both harnesses share; since phase 6 the workspace "Web" of ten repositories (`TempWorkspace`, built by `LeanRepositories`), the fetch hold (`FetchHold`), the system's theme as a fake (`FakeSystemTheme`), the contrast and ink readers (`Contrast`, `TextInk`); since phase 7a (it references `VisualCommit.Hosting`) the fake of GitHub (`Hosting/`: `FakeGitHub`, its in-process handler, `LoopbackOnlyHandler`, `TokenTripwire`), `AuthRemoteServer`'s host mode, the scenario "hosting" (`Scenarios.Phase7a.cs`), the fake keychain (`FakeTokenStore`), the git-call budgets (`GitCallBudget`) and `RecordingCredentialSource`; since phase 7b the fakes of Azure DevOps and GitLab (`FakeAzureDevOps`, `FakeGitLab`) on a core taken out of `FakeGitHub` (`FakeHostingService*.cs`, D363), `AuthRemoteServer`'s host mode by URL path, the scenario "hosting7b" (`Scenarios.Phase7b*.cs`), the harness's seams for the new providers (`ShellDriver.Phase7b.cs`), 7a's GitHub-named session calls for 7a's tests (`HostingSessionGitHubForms`) and the measure of what the tests' git does with a URL's user after a 401 (`GitUrlUser`, D389). Not a test project | Built |
-| `tests/VisualCommit.Git.Tests` | Tests of Core and Git against real git and temporary repos, the askpass helper and the test server included; since phase 6 the workspace model and the folder scan, the fetch lines against git, git's own settings, Keep ignored files' reads; since phase 7a the scenario "hosting" (`Phase7aScenarioTests`), `AuthRemoteServer`'s host mode, the watcher's lag, a pull request's fetch, and the credential helper, its bindings, the URL rewrites and the prompt channel (see "Prompts and credentials"); since phase 7b the new providers' coverages through real git's credential matching, offline (`CoverageGitMatchTests`, `AzureDevOpsCoverageVectorsTests`), and in `CredentialBindingSelectTests`, the broker's organization check (`AskPassBrokerBindingTests`), the request refs (`PullRequestRefsTests`), the read of a conditional include's file (`GitConfigIncludeReadTests`), `AuthRemoteServer`'s paths and git's priority on Windows (`GitRunnerPriorityTests`, D386) | Built |
-| `tests/VisualCommit.App.Tests` | Settings, session, log, data-folder and view-model tests, the operations against real git through scenarios (since phase 5 the undo history's recording, steps and restores, and C12), and headless UI tests of behaviour (menus, dialogs, drag, selection, toolbar, status bar, banner, and since phase 5 the activity log, the pages, the search bar, the comparison, the window's keys; since phase 6 the workspaces, the dashboard, summary mode, the bulk runs, the palette, the keys, the settings screen, the editor and the theme); since phase 7a `GitCallBudgetTests`, the watcher lag's log line (`GitRepositoryProviderTests`), the credential tests of the operations, the dashboard and the push guard, and a pull request's fetch whose `FETCH_HEAD` another fetch rewrote (`PullRequestFetchHeadTests`); 7a's view-model, menu and view tests are in `VisualCommit.VisualTests.Phase7a` and `VisualCommit.Hosting.Tests` instead, so that App.Tests, which ends last in the default run, gained only 7a's operation, credential and budget tests (design 0.6); phase 7b likewise added only the push guard's rules for the new providers' request refs (`PushGuardProvidersTests`), new cases of the prompt group, the refused token's text and the budgets, a case of D390's count of the watcher's refreshes (`RepositoryWatcherQuietTests`), and the tests of two fixes, the window's close during Fetch all (`MainWindowCloseTests`) and the palette's growth measure (`PaletteGrowthWorksTests`, `GrowthMeasuresTests`; 7b design 0.6, 16.3) | Built |
+| `tests/VisualCommit.Testing` | Shared test helpers: temporary-repo builder, scenario repos, the 100k-commit repo, the credential test server, fakes (file launcher, clipboard, prompt handler, ssh), a clock tests move by hand (`ManualTimeProvider`), the hang watchdog, helpers that drive the app in headless mode, the window layout both harnesses share; since phase 6 the workspace "Web" of ten repositories (`TempWorkspace`, built by `LeanRepositories`), the fetch hold (`FetchHold`), the system's theme as a fake (`FakeSystemTheme`), the contrast and ink readers (`Contrast`, `TextInk`); since phase 7a (it references `VisualCommit.Hosting`) the fake of GitHub (`Hosting/`: `FakeGitHub`, its in-process handler, `LoopbackOnlyHandler`, `TokenTripwire`), `AuthRemoteServer`'s host mode, the scenario "hosting" (`Scenarios.Phase7a.cs`), the fake keychain (`FakeTokenStore`), the git-call budgets (`GitCallBudget`) and `RecordingCredentialSource`; since phase 7b the fakes of Azure DevOps and GitLab (`FakeAzureDevOps`, `FakeGitLab`) on a core taken out of `FakeGitHub` (`FakeHostingService*.cs`, D363), `AuthRemoteServer`'s host mode by URL path, the scenario "hosting7b" (`Scenarios.Phase7b*.cs`), the harness's seams for the new providers (`ShellDriver.Phase7b.cs`), 7a's GitHub-named session calls for 7a's tests (`HostingSessionGitHubForms`) and the measure of what the tests' git does with a URL's user after a 401 (`GitUrlUser`, D389); since phase 8a the stand-in's names (`GitStandIn`), git's words by version (`GitWords`, D420), the pinned identity (`TestIdentity`), the icon's files as the tests read them (`IconFile`), a link's keyboard frame (`LinkFrame`), the search for git as a fake (`FakeGitSetupProbe`), a git that holds a chosen call (`HeldGitRunner`), the sweep of names (`AutomationSweep`), the harness's reads of the first-run screen, the keyboard and the automation peers (`ShellDriver.Phase8a.FirstRun.cs`, `.Keyboard.cs`, `.Uia.cs`), and the record of a blank git folder's and a kept template's folders, with the proof of the shared 100,000-commit copies, so that the tests do not depend on what a cleaner of the temp folder leaves (`BlankGitFolder`, `TempRepo.RecordFolders`, `LargeHistory.IsUsableAsync`, D468; see "Tests"). Not a test project | Built |
+| `tests/VisualCommit.Git.Tests` | Tests of Core and Git against real git and temporary repos, the askpass helper and the test server included; since phase 6 the workspace model and the folder scan, the fetch lines against git, git's own settings, Keep ignored files' reads; since phase 7a the scenario "hosting" (`Phase7aScenarioTests`), `AuthRemoteServer`'s host mode, the watcher's lag, a pull request's fetch, and the credential helper, its bindings, the URL rewrites and the prompt channel (see "Prompts and credentials"); since phase 7b the new providers' coverages through real git's credential matching, offline (`CoverageGitMatchTests`, `AzureDevOpsCoverageVectorsTests`), and in `CredentialBindingSelectTests`, the broker's organization check (`AskPassBrokerBindingTests`), the request refs (`PullRequestRefsTests`), the read of a conditional include's file (`GitConfigIncludeReadTests`), `AuthRemoteServer`'s paths and git's priority on Windows (`GitRunnerPriorityTests`, D386); since phase 8a the search for git and its states (`GitLocatorTests`, `GitSetupStatesTests`, `OsReleaseTests`), the stand-in for git (`GitStandInTests`), the broker's helper found again (`AskPassBrokerHelperTests`), the merge tools' lookup forgotten (`GitConfigurationForgetTests`), git's words on every git the app supports (`GitWordsTests`, D420) and the test support's independence of a cleaner of the temp folder (`TempFolderCleanerTests`, 25 tests, D468) | Built |
+| `tests/VisualCommit.GitStandIn` | Phase 8a (design 1.14): the stand-in for git, `visualcommit-git-stand-in` (`.exe` on Windows), a framework-dependent console program with no references, which answers as an old or a broken git would: with `VISUALCOMMIT_GIT_STAND_IN_FAILURE` set it writes that text to standard error and exits 128 whatever it is asked; else `--version` prints `VISUALCOMMIT_GIT_STAND_IN_VERSION`'s line (by default `git version 2.29.0`) and exits 0, and any other call exits 1. Its namespace is `VisualCommit.GitStandInProgram`, so that it hides no test's `GitStandIn`. `VisualCommit.Git.Tests` and the real-window pass reference it, so its app host lands in their output. In the solution; never named `git`, never shipped (see "Git's detection and the first-run screen") | Built |
+| `tests/VisualCommit.App.Tests` | Settings, session, log, data-folder and view-model tests, the operations against real git through scenarios (since phase 5 the undo history's recording, steps and restores, and C12), and headless UI tests of behaviour (menus, dialogs, drag, selection, toolbar, status bar, banner, and since phase 5 the activity log, the pages, the search bar, the comparison, the window's keys; since phase 6 the workspaces, the dashboard, summary mode, the bulk runs, the palette, the keys, the settings screen, the editor and the theme); since phase 7a `GitCallBudgetTests`, the watcher lag's log line (`GitRepositoryProviderTests`), the credential tests of the operations, the dashboard and the push guard, and a pull request's fetch whose `FETCH_HEAD` another fetch rewrote (`PullRequestFetchHeadTests`); 7a's view-model, menu and view tests are in `VisualCommit.VisualTests.Phase7a` and `VisualCommit.Hosting.Tests` instead, so that App.Tests, which ends last in the default run, gained only 7a's operation, credential and budget tests (design 0.6); phase 7b likewise added only the push guard's rules for the new providers' request refs (`PushGuardProvidersTests`), new cases of the prompt group, the refused token's text and the budgets, a case of D390's count of the watcher's refreshes (`RepositoryWatcherQuietTests`), and the tests of two fixes, the window's close during Fetch all (`MainWindowCloseTests`) and the palette's growth measure (`PaletteGrowthWorksTests`, `GrowthMeasuresTests`; 7b design 0.6, 16.3); since phase 8a `ThemeTokensTests` as one table of text on background in both themes, with D469's pinned exceptions and their guard (`ThemeTokensTests.DimmedTexts.cs`), three `PanelViewTests` of the placeholder and of the accent on a row, `IconFilesTests`, `WindowIconTests`, `ThirdPartyNoticesTests`, `AboutSettingsViewModelTests`, `TextDocumentDialogViewModelTests`, `DocumentTextViewTests`, `LinkFocusFrameTests`, the single-instance guard, its notice and the window's answer (`SingleInstanceGuardTests`, `InstanceNoticeViewModelTests`, `MainWindowBringForwardTests`), the search for git and the first-run screen (`GitAccessTests`, `CheckGitAgainTests`, `GitSetupTextsTests`, `GitSetupViewModelTests`, `GitProgramViewModelTests`, `AccountsNetrcNoteTests`) and the restore order (`RestoreOrderTests`, `RestoreOrderShellTests`, `RepositoryFirstPageTests`) | Built |
 | `tests/VisualCommit.Hosting.Tests` | Phase 7a: the hosting's tests (the options, the token stores, GitHub's client and provider, the avatar cache, the hosting session, the fake of GitHub and the fake keychain) and the six classes with real git that D334 moved there (five start the app through `ShellDriver`; `RepositoryHostingWiringTests` builds a tab's `TabServices` by hand with a `HostingSession`), on a headless UI thread of its own beside the 7a walk-through's; every fake there on port 0 or in process (D265). Since phase 7b also the shared HTTP core (`HostingHttpClientTests`), Azure DevOps' and GitLab's clients, providers, recognition and JSON, their fakes and the fakes' core (`FakeAzureDevOpsTests`, `FakeGitLabTests`, each with its `…GitTests`, `FakeHostingServiceTests`), the session and a repository's hosting for three providers (`HostingSessionProvidersTests`, `RepositoryHostingProvidersTests` and its wiring), the clone from an account, the request and create operations per provider, the sign-in entries, and a network operation started right after a sign-in (`SignInBindingsWindowTests`, D388). Part of the default test run and CI; CI's keychain steps run its real-store classes | Built |
 | `tests/VisualCommit.VisualTests` | Scripted walk-throughs of phases 0 to 2 in headless mode with screenshots, for the visual test gate. Part of the default test run and CI | Built |
 | `tests/VisualCommit.VisualTests.Phase3` | Phase 3's scripted walk-through, a project of its own so that it runs beside phases 0 to 2's with a headless UI thread of its own. Part of the default test run and CI | Built |
@@ -101,18 +113,25 @@ centrally in `Directory.Packages.props`.
 | `tests/VisualCommit.VisualTests.Phase6Look` | Phase 6's part L, the look (every main screen in both themes, the light colours, the long folder, the tab strip), 9 test methods: a project of its own beside `Phase6`, whose base class, support and common expectations it compiles; both save their pictures in phase 6's one folder, and its test server has a port of its own (the report's ruling 1, D230). Part of the default test run and CI | Built |
 | `tests/VisualCommit.VisualTests.Phase7a` | Phase 7a's scripted walk-through of parts A (accounts and sign-in), B (browse and clone), P (pull requests), G (the graph's badge and avatars) and N (a new pull request), 27 test methods, against the fake of GitHub on port 47395 (D265), and 7a's expectation, view-model, menu and headless view tests, linking App.Tests' `RecordingActions.cs` and `RecordingLog.cs` (design 0.6, 2.8). Part of the default test run and CI | Built |
 | `tests/VisualCommit.VisualTests.Phase7b` | Phase 7b's scripted walk-through of parts A (accounts and sign-in), B (browse and clone), P (requests in the left panel and the graph) and N (a new pull or merge request), 29 test methods, against the fakes of Azure DevOps, GitLab and a GitHub of its own on ports 47397 to 47399 (D363), and 7b's expectation, view-model, menu, text and headless view tests, linking App.Tests' `RecordingActions.cs` and `RecordingLog.cs` and phase 7a's `GraphTestHost.cs`; the real-window pass compiles its `Phase7bExpectations*.cs` (design 0.3, 2.7). Part of the default test run and CI | Built |
-| `tests/VisualCommit.RealWindowTests` | The real-window pass (FlaUI), since phase 7a with a part for 7a that serves the fake of GitHub on 47395 in the test process, and since phase 7b a part for 7b (`Phase7bRealWindowPass`, five launches) that serves the fakes of Azure DevOps, GitLab and GitHub on 47397 to 47399 in the test process. Windows-only and opt-in. It is **not in the solution file**; that is what keeps it out of `dotnet build`, `dotnet test` and CI test runs (D25); CI's Windows job builds it (D337) | Built |
+| `tests/VisualCommit.VisualTests.Phase8a` | Phase 8a's scripted walk-through (D416), against the pinned identity (`TestIdentity.Pinned`), of parts L (the contrast round), I (one instance per data folder), F (first run), K (the keyboard), B (the icon), A (About and the notices), U (screen readers) and G (the guide's links), and 8a's expectation, support and headless view tests, linking App.Tests' `RecordingActions.cs` and `RecordingLog.cs`; the real-window pass compiles its `Phase8aExpectations*.cs`. Part of the default test run and CI | Built |
+| `tests/VisualCommit.RealWindowTests` | The real-window pass (FlaUI), since phase 7a with a part for 7a that serves the fake of GitHub on 47395 in the test process, and since phase 7b a part for 7b (`Phase7bRealWindowPass`, five launches) that serves the fakes of Azure DevOps, GitLab and GitHub on 47397 to 47399 in the test process; since phase 8a a part for 8a (`Phase8aRealWindowPass`, 13 launches, D442) and the opt-in performance series (`Phase8aPerformance`, D436, D437), and a reference to the stand-in for git, whose app host lands in its output (see "Tests"). Windows-only and opt-in. It is **not in the solution file**; that is what keeps it out of `dotnet build`, `dotnet test` and CI test runs (D25); CI's Windows job builds it (D337) | Built |
 | `tests/VisualCommit.LiveHostingTests` | The opt-in command against the real services with the owner's tokens for a sandbox on each: GitHub since phase 7a (D250), Azure DevOps Services and gitlab.com since phase 7b (D346, D352; "The live command"). Windows-only; **not in the solution file**, run only by its own command; CI's Windows job builds it and never runs it (D337) | Built |
+| `tests/VisualCommit.GuideShots` | Since phase 8a, the user guide's pictures (D439, D440): 42 shots, each in the dark and the light theme at a render scaling of 2, made headless through `ShellDriver` from demo data under the root that `VISUALCOMMIT_GUIDE_ROOT` names, with `LeakGuard` refusing a shot that shows the machine, and their own tests (`GuideCatalogueTests`, `LeakGuardTests`, `GuideSettingsTests`); the pictures are never committed (see "The user guide and the app's links"). **Not in the solution file**, so the default run leaves it out: the guide's workflow runs it, and CI's Windows job only builds it | Built |
+| `tools/VisualCommit.IconBuilder` | Since phase 8a, the icon's builder (D428, D447): a console tool on Svg.Skia 4.9.1 and SkiaSharp 3.119.4 that renders the three SVG masters in `assets/brand/` into the app's `.ico` and PNGs, Linux's PNGs, macOS's `.iconset` and `.icns`, and a manifest of the masters' hashes (see "The app's icon"). It references no project, is never shipped and is run by hand; the solution holds it (its folder `/tools/`), so every CI job builds it, and no test and no CI step runs it | Built |
 
 All projects target `net10.0`, except `VisualCommit.RealWindowTests` and, since phase 7a,
 `VisualCommit.LiveHostingTests` (`net10.0-windows`).
 `Directory.Build.props` turns on nullable reference types, implicit usings and warnings as errors
-for every project.
+for every project. It also stamps every assembly with `Product` (`VisualCommit`), `Version`,
+`Authors` and `Copyright`, since phase 8a `Rahim Khajei` and `Copyright (c) 2026 Rahim Khajei`,
+`LICENSE`'s copyright line (D397); About shows the app assembly's product, informational version
+and copyright (D431; see "The settings screen").
 
 `Directory.Build.targets` trims the platform-specific assets that packages bring under
-`runtimes/` to the app and every test project, above all the native libraries of SkiaSharp and
-HarfBuzzSharp, which Avalonia.Skia brings, for 21 platforms (D239); the part for Windows applies to
-every package's (Avalonia's ANGLE, Avalonia.Native's and Onigwrap's too).
+`runtimes/` in every project of the repository (the app, every test project and, since phase 8a,
+the icon's builder, which references SkiaSharp itself), above all the native libraries of SkiaSharp
+and HarfBuzzSharp, which Avalonia.Skia brings, for 21 platforms (D239); the part for Windows applies
+to every package's (Avalonia's ANGLE, Avalonia.Native's and Onigwrap's too).
 Its target `VisualCommitTrimNativeAssets` runs after `ResolvePackageAssets`, before anything is
 copied or written into the `.deps.json`, so the output folder and its `.deps.json` agree. On every
 platform it removes the packages' native `.pdb` files (from `RuntimeTargetsCopyLocalItems` and, for
@@ -121,13 +140,13 @@ a build with a `RuntimeIdentifier`, `NativeCopyLocalItems`); on Windows, in a bu
 the laptop), `runtimes/win` and `runtimes/any`. Two switches, false by default and set with
 `-p:<name>=true` or as environment variables, undo one part each: `VisualCommitNativeSymbols`
 copies the `.pdb` files again, and `VisualCommitAllRuntimes` every platform's libraries, which a
-portable `dotnet publish` needs (phase 8). A test project's `bin/Debug` is about 49 MB with it,
+portable `dotnet publish` needs (phase 8b). A test project's `bin/Debug` is about 49 MB with it,
 about 589 without (2026-10-28), and its `runtimes/` holds only `win-x64/native`
 (`libSkiaSharp.dll`, `libHarfBuzzSharp.dll`, `av_libglesv2.dll`, `libonigwrap.dll`); the
 real-window project keeps `runtimes/win` for FlaUI's `System.Management.dll`. On macOS and Linux
 only the `.pdb` part applies, so their builds, CI's included, keep every platform's libraries.
 
-## As built (after phase 7b)
+## As built (after phase 8a)
 
 Phase 0 built the foundation: an empty shell, the git runner, settings, the log and both test
 harnesses. Phase 1 added repositories in tabs: open, init and clone on a welcome page, the commit
@@ -199,13 +218,60 @@ GitHub's in 7a's words. Author avatars stay GitHub's. The tests stand in for bot
 of their own (`FakeAzureDevOps`, `FakeGitLab`) on a core taken out of `FakeGitHub`, and the opt-in
 command tries both services too, with the owner's tokens for a sandbox on each, behind a guard that
 keeps its requests to that sandbox.
+Phase 8a readied the app for its release. It raised the text boxes' placeholders, the dark theme's
+danger colour and the dark accent on hovered and selected rows, so that every text reaches 4.5:1 on
+what it is drawn on, in both themes, but three looks dimmed on purpose that the owner kept as
+recorded exceptions (D469). It gave the app its own icon, in its windows and its executable, made by
+a tool in the repository from three SVG masters, with the files macOS and Linux will need. It added
+About, the settings screen's last section, also opened from the palette and the macOS application
+menu, with the app's creator, version, copyright line, licence and third-party notices, which the
+app carries inside itself and shows in a dialog of its own. The oldest git it supports is 2.34.1,
+which a CI job of its own tests on Ubuntu 22.04. That git's fetch can move a branch checked out in
+another worktree, so on every git the app reads the worktrees before it fast-forwards a branch not
+checked out here; a mirror's fetch refspec on 2.34 can still move such a branch, plan.md's risk
+49 (D406, D420). One instance runs per data folder: a second start on it brings the first
+forward or, when the first does not answer, shows a notice with "Try again" and "Close" (D421,
+D422). The app carries no git (D405): it looks for the program chosen in Settings, then on the PATH
+and in the usual install folders, and while git is missing, gone, too old or not working, or the
+askpass helper is missing, a first-run screen stands in the welcome page's place with each
+platform's guidance, an install or update with winget on Windows, a choice of the program and
+"Check again" without a restart (D423, D449, D453); the settings screen gained the Git program row,
+and its Accounts section a note on a netrc file below Git 2.46 (D424). A start that restores the
+active repository's tab beside other tabs opens it first and alone, and the others after its first
+page (D457, D458): the one change that the performance series led to, an opt-in measure of the
+start with one and with ten restored 100,000-commit tabs, the memory, the reload after an outside
+commit and after a fetch, and Pull's settings reads, each held to a bound (D436). The keyboard
+reaches what only the pointer reached before: Tab goes through a diff's hunk buttons, a stage row's
+buttons and a list's rows in their order, the arrows pick a blame run and move the panel splitters,
+Enter in a dialog's list confirms the chosen row, the palette lists "Cancel {title}" while an
+operation can be cancelled, and the keyboard focus is not left on nothing after an action by the
+keys (D417, D425 to D427, D454, D462, D466). For screen readers every interactive control has a
+name without its key, UI Automation sees the commit graph as a list whose one item is the selected
+row, spoken as the selection moves, and the status bar speaks an operation's start and result, not
+its progress (D411, D435, D463). A user guide of 33 pages, built by mdBook into a site on GitHub
+Pages with pictures made from demo data at each build, opens from F1, the palette, About and the
+first-run screen (D408, D439). The tests never use the machine's git for a git that is missing, too
+old or failing: they point the app at a stand-in for git or give it a fake of the machine's search;
+only a configuration line that git cannot read is shown with the machine's git, written into the
+session's own global git file (part F's F6b, the real-window pass's launch 10). The real-window pass
+gained a part of 13 launches, among them the built app's guard with a second process, and its waits
+take a look that fails in UI Automation as "not yet" (D473); the test support no longer depends on
+what a cleaner of the temp folder leaves (D468).
 
 ### Start-up and composition
 
 ```
 Program.Main                        src/VisualCommit.App/Program.cs
+  ├─ AppPaths.Resolve, FileAppLog   the data folder, and the log of unhandled exceptions
+  ├─ SingleInstanceGuard.TryTake    phase 8a: instance.lock and instance.json (D421); a start on a
+  │                                 held folder asks the holder to come forward (ResolveHeld) and,
+  │                                 handed over, ends with 0 before Avalonia starts
+  ├─ AppLaunch.Current              phase 8a: the start's timeline (StartupTimeline.FromProcess,
+  │                                 D436), the guard and the mode, Normal or NotAnswered
   └─ App (Avalonia Application)     App.axaml(.cs): loads theme resources, Fluent theme, control,
-       │                            menu and dialog styles; tooltips on the overlay layer (D105)
+       │                            menu and dialog styles; tooltips on the overlay layer (D105);
+       │                            since phase 8a the macOS application menu's item (D431)
+       ├─ InstanceNoticeWindow      phase 8a, mode NotAnswered: the notice alone, no session
        └─ AppSession.Start          AppSession.cs: the composition root
             ├─ KeyTexts.Current     phase 6: every key text in the platform's words, Ctrl or Cmd
             │                       by the platform's command modifier (ShortcutKeys, D214)
@@ -223,7 +289,9 @@ Program.Main                        src/VisualCommit.App/Program.cs
             ├─ OperationLog, GitCallLog
             │                       the record of every operation and of every git call; the call
             │                       log keeps an operation's calls as long as its record (D173)
-            ├─ GitAccess            the pending search for git (D45)
+            ├─ GitAccess            the pending search for git (D45); since phase 8a over an
+            │                       IGitSetupProbe (MachineGitSetupProbe unless given), told the
+            │                       chosen program and the stand-in at each search (D423)
             ├─ DialogHostViewModel  the window's dialog stack (D69, D104)
             ├─ PromptDialogPresenter, PromptDialogs
             │                       git's and ssh's prompts as dialogs ("Prompts and credentials")
@@ -247,7 +315,9 @@ Program.Main                        src/VisualCommit.App/Program.cs
             │                       (one per worktree) and the GraphFilterStore; since phase 6 the
             │                       workspace store, WorkspaceItems, WorkspaceCommands, the
             │                       registry OpenRepositories, BulkSlots, GitSettings, Tools and
-            │                       ReadClock; since phase 7a Hosting, the hosting session
+            │                       ReadClock; since phase 7a Hosting, the hosting session;
+            │                       since phase 8a RestoreClock, Startup (the start-up timeline)
+            │                       and Identity, the app's identity (D431)
             ├─ MainWindowViewModel  the tabs, restored from the session (dashboards first); the
             │                       menu layer (MenuLayerViewModel), the ActivityLogViewModel (which
             │                       follows the active tab) and the AutoFetchScheduler, started;
@@ -258,13 +328,17 @@ Program.Main                        src/VisualCommit.App/Program.cs
 
 - `AppSession` is one running instance of the app on one data folder. New services are created
   and wired there, by hand; there is no dependency-injection container.
-- `App.OnFrameworkInitializationCompleted` starts a session only when there is a desktop lifetime,
-  and disposes it when the desktop exits. Headless tests have none: they call `AppSession.Start`
-  themselves with a temporary data folder and fakes
-  (`AppSession.Start(paths, application, folderPicker, launcher, clipboard, promptHandler,
-  recordClock, backupClock)`; all but the first two are optional: the first four replace the
-  folder dialog, the file launcher, the clipboard and the prompt dialogs, and the clocks default
-  to those the environment asks for, `AppClocks.RecordClockFromEnvironment` and
+- `App.OnFrameworkInitializationCompleted` acts only when there is a desktop lifetime. Since phase
+  8a, in the mode `NotAnswered` it shows the single-instance notice and starts no session (see the
+  guard below); otherwise `StartSession` starts a session with the launch's timeline
+  (`AppLaunch.Current.Timeline`), disposes it when the desktop exits, keeps its shell (`App.Shell`)
+  and, with a guard, sets the guard's `ComeForward` when the main window opens (the window's
+  `BringForward`, run on the UI thread) and again when it has closed (answering `Closing`). Headless
+  tests have no desktop lifetime: they call `AppSession.Start` themselves with a temporary data
+  folder and fakes (`AppSession.Start(paths, application, folderPicker, launcher, clipboard,
+  promptHandler, recordClock, backupClock)`; all but the first two are optional: the first four
+  replace the folder dialog, the file launcher, the clipboard and the prompt dialogs, and the clocks
+  default to those the environment asks for, `AppClocks.RecordClockFromEnvironment` and
   `BackupClockFromEnvironment`: the system's, unless `VISUALCOMMIT_RECORD_CLOCK=frozen` and
   `VISUALCOMMIT_BACKUP_CLOCK=fixed`, which the real-window pass sets).
 - Phase 5 (D173): `AppSession.Start` makes one `OperationLog` and hands it to the `GitCallLog`
@@ -307,6 +381,33 @@ Program.Main                        src/VisualCommit.App/Program.cs
   provider, `{Name}: {host}.` or `{Name}: off.`, in D353's order (GitHub, GitLab, Azure DevOps). In
   the tests' environment all three are off unless a check gives a fake (see "Hosting: the provider
   and GitHub's API" and "Hosting: the session and the account").
+- Phase 8a, About (D431; `docs/phase-8a-design.md` 1.6, 8.3): `AppSession.Start` also takes
+  `identity`, an `AppIdentity` (null: the app assembly's, `AppIdentity.FromAssembly`), which
+  `TabServices.Identity` hands to the settings screen's About. `ShellDriver` gives every headless
+  start `TestIdentity.Pinned` (`0.1.0 (1a2b3c4)`) unless a test gives another, so that no scripted
+  picture changes with the commit; the real window shows the built commit. `App.axaml` declares the
+  application's `NativeMenu` with one item, "About VisualCommit", so that it exists before
+  Avalonia's menu exporter reads the application's menu: on macOS Avalonia's own "About Avalonia"
+  then goes, and the standard items (Services, Hide, Hide Others, Show All, Quit) stay.
+  `App.Initialize` sets the item's command, `App.AboutCommand`, which opens the settings screen on
+  About through the window's `OpenSettingsCommand` while `App.Shell` is set (the desktop session's
+  shell, set as it starts) and no dialog is open, the settings screen among them, and otherwise does
+  nothing, as Mod+, does. Nothing of the menu is drawn on Windows or Linux. `AboutEntryTests` holds
+  the item and its command headless; no Mac has run the app (D447).
+- Phase 8a, git's search and the start (`docs/phase-8a-design.md` 1.2, 1.9, 1.10; D423, D436):
+  `AppSession.Start` also takes `gitProbe`, an `IGitSetupProbe` (null: `MachineGitSetupProbe`, the
+  machine's search), `askPassHelper`, where the prompt broker looks for its helper (null: next to
+  `VisualCommit.Git`, `AskPassLocator.ExpectedPath`), `startup`, an `IStartupTimeline` (null:
+  `NullStartupTimeline`), and `restoreClock` (see the restore order below). It reads
+  `VISUALCOMMIT_GIT_STAND_IN` from the process's environment once and makes the session's one
+  `GitAccess` over the probe, with a lookup that gives
+  `new GitLookup(settings.Current.GitExecutable, standIn)` as each search starts, so that a choice
+  saved meanwhile reaches the next search; git's settings, the repositories' provider and the
+  window ask that access. The timeline is told when the main window opens and when the first search
+  ends, only if it found a usable git; `TabServices.Startup` holds it for the window. `ShellDriver`
+  gives a probe and a helper's path only when a test names one (else the machine's search and the
+  built helper) and never a timeline; the desktop app gives the process's timeline and nothing else
+  (see "Git's detection and the first-run screen").
 - `AppSession.Initialization` is `MainWindowViewModel.InitializeAsync`: it looks for git, then opens
   the repositories of the tabs restored from the session and loads their whole history. Since phase
   6 it also awaits the first read of a restored dashboard that is the active tab, beside those
@@ -336,6 +437,10 @@ Program.Main                        src/VisualCommit.App/Program.cs
   `StartWithTabs` take the optional `restoreClock` (null: the session's clock). "Check again"
   (`OpenWhatWaitedForGitAsync`) still reopens the tabs whose restore failed all at once, outside the
   order (ruling 90; plan.md's Backlog at the close). Tests await it before they look at the window.
+  `RestoreOrderTests` (a window over fakes on the headless dispatcher, the provider holding each
+  opening until the test answers it, the clock a `ManualTimeProvider`), `RepositoryFirstPageTests`,
+  `RestoreOrderShellTests` (through `ShellDriver.StartWithTabs` on real repositories) and the
+  merge-tool lookup's cases of `SettingsEntryTests` (App) hold the order.
 - Services that need git hold the `GitAccess` and ask it for the runner when they need it
   (`GetRunnerAsync`), which waits for the search and throws `GitUnavailableException` when git
   was not found. Nothing assumes git is there. Since phase 8a git is looked for again on "Check
@@ -389,16 +494,214 @@ Program.Main                        src/VisualCommit.App/Program.cs
   users out of everything below it; a missing folder above it gets the system's default mode, as
   `mkdir -p` gives it, and a file or folder that exists keeps its mode. A stale socket named by
   `instance.json` is deleted only when no server answers on it (`RemoveStaleSocket`), so a start on
-  a copy of a running instance's data folder leaves that instance its endpoint. No harness runs
-  `Program.Main`; `SingleInstanceGuardTests` drive the guard.
+  a copy of a running instance's data folder leaves that instance its endpoint.
+  `TryTake` never throws: a lock that another process holds (the open tried every 50 ms for 250 ms
+  while the file exists, since a virus scanner may hold it for a moment) gives `Held`, and any other
+  failure to open it (no access, a path under a file) gives `Unavailable`, with which the app starts
+  unguarded after a Warning. Taken, the guard starts its server and writes `instance.json` through
+  `DurableFile.Replace` (`{"v":1,"pid":…,"endpoint":"…","started":"…"}`), tried again every 20 ms
+  for up to a second while a second start holds the file open; a server or a file it cannot make
+  leaves it taken, with a Warning, so that a second start gets the notice and not a second session.
+  The endpoint is `VisualCommit-<16 hexadecimal digits>`, on macOS and Linux a socket of that name
+  in the temp folder, or in `/tmp` when that path is over 100 bytes; it holds nothing of the data
+  folder's path. A held start asks with one line,
+  `{"v":1,"request":"come-forward","pid":…,"args":[]}`, an attempt every 100 ms until
+  `SingleInstanceOptions.Connect` (5 s) has passed, reading `instance.json` again before each; on
+  Windows it first lets the holder take the foreground (`AllowSetForegroundWindow`). The holder
+  answers one line, `{"v":1,"answer":"…"}` with `activated`, `starting` or `closing`; each side
+  waits at most `Reply` (3 s) for the other's line, of at most 4 KB. The server takes one client at
+  a time, admits the current user alone (`ServerPipeOptions`, `PipeOptions.CurrentUserOnly`, D448)
+  and answers nothing to a malformed line, another version or another request. Its answer is
+  `ComeForward`'s, run on a pool thread within `Reply`: while it is null (no window yet) the answer
+  is `starting`; `App` sets it when the main window opens (`MainWindow.BringForward`: a minimised
+  window comes back maximised or normal, as it was, and is activated) and, once the window has
+  closed, to `closing`. In `Program.Main` every wait comes before any UI thread exists: at most
+  about 8.5 s before a held start gives up, the 250 ms before the ask and after it included, and up
+  to 30 s more for a holder that answered `closing`. `Dispose`, after the lifetime, stops the
+  server, deletes `instance.json` and only then lets the lock go, so that the file it deletes is its
+  own; the lock file stays, since two processes could otherwise lock two files of one name, and a
+  `Held` or `Unavailable` guard touches no file. On macOS and Linux `TryTake` logs a Warning when
+  `DOTNET_SYSTEM_IO_DISABLEFILELOCKING` (`1` or `true`) or the switch `System.IO.DisableFileLocking`
+  turns .NET's file locks off, since the guard then stops no second VisualCommit
+  (`LockingOffWarning`). The headless harness never runs `Program.Main` (`ShellDriver` calls
+  `AppSession.Start`), so no headless test meets the guard: `SingleInstanceGuardTests`,
+  `InstanceNoticeViewModelTests` and `MainWindowBringForwardTests` (App.Tests) drive the guard, the
+  notice's model and the window's answer, and part I shows the notice through `InstanceNoticeHost`
+  (`VisualCommit.VisualTests.Phase8a`), with a fake try in place of the guard. The guard in the
+  built app, its exit codes and the notice under a real desktop lifetime run only in the real-window
+  pass, whose phase 8a launches 4 to 6 start the built app on a data folder of their own
+  (`Phase8aRealWindowPass.I.cs`).
+- The single-instance notice (`Views/InstanceNoticeWindow`, `ViewModels/InstanceNoticeViewModel`,
+  `InstanceNoticeTexts`; D421, D422, D448). In the mode `NotAnswered` `App` shows it as the
+  desktop's main window, with `ShutdownMode.OnExplicitShutdown` and `AppLaunch.Current.ExitCode` 2:
+  no session, no settings store, nothing written. Its theme is set on the window alone, from
+  `settings.json` read without writing (`InstanceNoticeViewModel.ReadTheme`: Dark when the file is
+  missing or cannot be read, which is left where it is; System by the platform's colours now). The
+  window, titled "VisualCommit", is 480 wide, as high as its content, not resizable and centred on
+  the screen: the heading "VisualCommit is already running" (`InstanceNoticeHeading`), the data
+  folder on one line trimmed at its start, with the whole path as its tooltip and automation name
+  (`InstanceNoticeFolder`, D448), the body ("Another VisualCommit uses the same data folder but did
+  not answer. Switch to its window, or close it and start VisualCommit again."), the platform's
+  sentence on ending the other VisualCommit (in Task Manager, Activity Monitor or the system
+  monitor, "then choose Try again."), then "Close" and "Try again" (primary, Enter, focused at the
+  opening). "Try again" reads "Trying…", disabled, while it runs
+  `InstanceNoticeViewModel.RetryOn(guard)` on a pool thread: `TryTakeNow`, then `ResolveHeld` as
+  `Program.Main` makes it. A folder found free starts the session in this process, shows the main
+  window, puts `ShutdownMode` back to `OnLastWindowClose` and sets the exit code to 0 (D422); a
+  hand-over sets 0 and ends the app; no answer shows "It still did not answer."
+  (`InstanceNoticeStatus`) and gives "Try again" its focus back. "Close", Esc, the title bar's close
+  and Alt+F4 end it at once, also during a try, whose later result then changes nothing, with exit
+  code 2. What a screen reader hears of it is in "Conventions".
 - `Program.Main` logs unhandled exceptions to the same log file.
+
+### Git's detection and the first-run screen (R4, D405, D420, D423, D424, D449, D453)
+
+Phase 8a. `Core/Git/GitSetup.cs` (`GitLookup`, `IGitSetupProbe`, `GitGuidance`, `LinuxDistribution`,
+`GitSetupState`, `GitSetupStates`), `Core/ProgramSearch.cs`, `Git/GitLocator.cs`,
+`Git/GitSetupProbe.cs` (`MachineGitSetupProbe`) and `Git/OsRelease.cs`; `Services/GitAccess.cs`,
+`ViewModels/GitSetup/` (`GitSetupViewModel`, `GitSetupTexts`),
+`ViewModels/MainWindowViewModel.Git.cs`, `ViewModels/Settings/GitProgramViewModel.cs` and
+`Views/Shell/GitSetupView` in the App. The app carries no git (D405). How the session's searches
+start, join and probe a chosen file is under "Start-up and composition".
+
+- **The floor** (D420): `GitVersion.Minimum` is 2.34.1. A git below it is `TooOld`, and every text
+  that says so reads `Minimum`: the status bar's "Git {v} is too old (needs 2.34.1 or newer)",
+  `GitAccess.GetRunnerAsync`'s "Git {v} is too old; VisualCommit needs 2.34.1 or newer." and the
+  log's Warning "Git {v} at {path} is older than the minimum, 2.34.1." What 2.34.1 does otherwise is
+  under "Git versions" in "Git layer".
+- **The search** (`GitLocator.DetectAsync(GitLookup, …)`, on the thread pool; D423, D449). First the
+  git chosen in Settings (`AppSettings.GitExecutable`), run whatever it answers and with no
+  fallback: a value that is not a full path, on Windows one that is not an `.exe`, or one with no
+  file there gives `NotFound` with `ChosenMissing`, a Warning that says why, and in `PathCandidate`
+  what the next steps (the stand-in, else the machine's search) would find, which is not run. Else
+  the stand-in that `VISUALCOMMIT_GIT_STAND_IN` names (below). Else the PATH's fully qualified
+  folders, a relative entry skipped since it would name the app's current folder, then the usual
+  install folders: on Windows `Git\cmd\git.exe` under `ProgramW6432`, Program Files, Program Files
+  (x86) and `%LOCALAPPDATA%\Programs`; elsewhere `/usr/bin/git`, `/usr/local/bin/git`,
+  `/opt/homebrew/bin/git` and `/opt/local/bin/git`, which the short PATH of an app started from the
+  Finder or a desktop launcher can miss. On macOS `/usr/bin/git`, the Command Line Tools' shim, is
+  run only while `/usr/bin/xcode-select -p` exits 0 within 5 s, asked at most once per search
+  (`CommandLineToolsMissing` otherwise; a chosen `/usr/bin/git` is then `NotFound` too). The program
+  found is asked `git --version`: one that cannot start, fails or prints no version is `Broken`,
+  with git's own words (`ErrorText`: its standard error, else its output, at most 4,000 characters,
+  or why it could not start) and its `ExitCode`, and `fatal: bad config line <n> in file <f>` fills
+  `ConfigFault`; one below `Minimum` is `TooOld`; any other is `Available`, logged "Using Git
+  {version} at {path}." and at Debug where it came from. On Windows a git whose version has no
+  `.windows.` is used, with a Warning. `GitDetection.Source` says where the program came from
+  (`Path`, `InstallFolder`, `Setting`, `StandIn`).
+- **The states** (`GitSetupStates.Of(git, missingHelperPath)`): `Searching` (no search has ended),
+  `Found`, `Missing`, `ChosenMissing`, `TooOld`, `NotWorking` (a `Broken` git, or a search that
+  threw, shown without a path and with its message as git's words) and `HelperMissing` (git works,
+  and the askpass helper is not where the broker looked; see "Prompts and credentials").
+- **The screen** (`GitSetupViewModel`, one per window; `GitSetupView`, its id `GitSetup`). Every tab
+  without a repository that is not opening and not a dashboard shows it in the welcome page's place
+  (see "Repository tabs") while the state is one of the last five, `HelperMissing` until "Continue
+  without it" for the session. The graph area makes its view only once a state has first shown it
+  (`HasShown`), so a session that finds git makes none. The guidance's facts
+  (`IGitSetupProbe.ReadGuidance`: on Windows `winget.exe` in the PATH's fully qualified folders,
+  `ProgramSearch.FindOnPath`; on Linux the distribution from `/etc/os-release`, else
+  `/usr/lib/os-release`, `OsRelease`) are read once per session, off the UI thread, the first time a
+  state shows the screen, and the screen shows only once they are read; a read that fails gives the
+  running platform's, without winget or a distribution. `GitSetupTexts.For(state, git, guidance,
+  missingHelperPath)` gives the content: the title (`GitSetupTitle`: "VisualCommit needs Git", "The
+  chosen Git is gone", "Git {v} is too old", "Git is not working", "Part of VisualCommit is
+  missing"), the body (`GitSetupBody`), the path (`GitSetupPath`, a `PathTextBlock` with
+  `IsOnePath`, D472), git's own words under "Git said:" (`GitSetupGitSaid`), the guidance
+  (`GitSetupGuidance`), a command to type with Copy
+  (`GitSetupCommand`, `GitSetupCopyButton`: `brew install git` on macOS, and `sudo xcode-select
+  --switch /Library/Developer/CommandLineTools` for Command Line Tools that look damaged; on Linux
+  `sudo apt install git`, `sudo dnf install git`, `sudo pacman -S git` or `sudo zypper install git`,
+  by os-release's `ID` and then each `ID_LIKE` token, and none for a distribution the list does not
+  know or for a git that is too old), the buttons (`GitSetupButtons`) and the links
+  (`GitSetupLinks`: "Other ways to install Git", `GitSetupMoreLink`, git-scm.com's page for macOS or
+  Linux, not for a git that does not work or a gone choice with another git found;
+  `GitSetupGuideLink`, "How VisualCommit finds Git", or "What the helper does", the user guide's
+  page of the state). A configuration line git cannot read is named with its file ("Git cannot read
+  line {n} of {file}. Correct that line, or rename the file, then press Check again."), and "Show
+  the file" (`GitSetupShowFileButton`) shows it in the file manager. The error line
+  (`GitSetupError`) holds Choose's "Checking…" and its refusal, or a start that failed. The screen's
+  focus returns and what a screen reader hears of it are in "Conventions".
+- **The offers** (D405, D449, D453). The buttons, in their order: winget (Windows, with `winget.exe`
+  found), "Download Git for Windows" (Windows, git-scm.com's page; not for a gone choice with
+  another git found), "Install the Command Line Tools" (macOS, the tools missing or damaged), "Show
+  the file", "Choose git.exe…" ("Choose the git program…" on macOS and Linux), "Use the Git it
+  found" or "Use the Git on the PATH", and "Check again"; while the helper is missing, "Check again"
+  and "Continue without it" alone. winget is offered for a git that is missing (a gone choice only
+  when no other git was found) and for one that is too old and was found on the machine, not chosen
+  in Settings, never for one that does not work: "Install with winget…" or "Update with winget…"
+  asks first ("Install Git with winget?" or "Update Git with winget?", showing git-scm.com's line
+  `winget install --id Git.Git -e --source winget`, with "Install" or "Update"), then starts
+  `cmd.exe /S /K ""<winget's full path>" install --id Git.Git -e --source winget"` in winget's
+  folder, in a console window of its own (`GitSetupViewModel.WingetLaunch`), not waited for. On
+  macOS "Install the Command Line Tools" starts `/usr/bin/xcode-select --install` with no question
+  of the app's own, since macOS asks. Both go through `IFileLauncher.StartAsync`, which starts a
+  `LaunchCommand` off the UI thread from the program `FileLauncher.ResolveStart` names (`cmd.exe`
+  from the system folder, any other bare name through `ProgramSearch.FindOnPath`, a full path as it
+  is); the start is logged ("Started in a terminal: …"), and a failure shows "{winget or
+  xcode-select} could not be started: {message}" in the error line.
+- **Choose and "Use the Git…"**. "Choose git.exe…" opens the file dialog ("Choose git.exe", "Choose
+  the git program"); on Windows a file that is not an `.exe` is refused unrun, and any other is
+  probed (`GitSetupViewModel.CheckChosenAsync` over `GitAccess.ProbeAsync`, for at most 10 s; see
+  "Start-up and composition"). A git found and new enough is saved as `gitExecutable` and looked for
+  again once a running search has ended (`GitSetupViewModel.CheckAgainAfterRunningAsync`); anything
+  else leaves the settings as they were, with its refusal in the error line ("Git {v} at this path
+  is too old: VisualCommit needs {min} or newer.", "This Git did not report its version. Git said:
+  …", "This file could not be started: …"). "Use the Git it found" (a gone choice, another git
+  found) and "Use the Git on the PATH" (a chosen git too old or not working) remove the setting and
+  search again the same way.
+- **Check again** (`MainWindowViewModel.CheckGitAgainCommand`, one search at a time; the screen's
+  `GitSetupCheckAgainButton` reads "Checking…" while it runs). The status bar reads "Looking for
+  Git...", the search runs, then come `Git`, the status bar's text and tooltip, the helper looked
+  for again off the UI thread while git works and the helper was missing
+  (`IGitPromptBroker.CheckHelper`), and the screen. When git is found it drops the merge tools'
+  lookup (`IGitConfiguration.ForgetToolLookup`), reopens every tab whose restore failed
+  (`RepoTabViewModel.ReopenAsync`, outside the restore order), drops each other empty tab's error
+  that the missing git gave (`WelcomeViewModel.ClearGitError`), reads the active dashboard, and
+  looks the merge tools up again once the reopenings have ended. In `HelperMissing` it looks for the
+  helper alone. `InitializeAsync` shows the start's search through the same steps. A choice saved in
+  Settings while git works applies at the next start; one saved while git does not work is looked
+  for once the screen has closed (D423; see "The settings screen").
+- **The status bar**. `GitStatus` reads "Looking for Git...", "Git {v}", "Git {v} (helper missing)",
+  "Git {v} is too old (needs {min} or newer)", "Git not found", "Chosen Git not found" or "Git is
+  not working"; its tooltip and help text (`GitStatusToolTip`) are the git's path and where it came
+  from ("{path}, found on the PATH", "…, found in Git for Windows' install folder" on Windows and
+  "…, found in a usual install folder" elsewhere, "…, chosen in Settings", "…, from
+  VISUALCOMMIT_GIT_STAND_IN (a test switch)"), none without a path. `GitSetupButton`, left of it in
+  the screen's states (`InScreenState`), reads "Set up Git…", or "Details…" while the helper is
+  missing, which undoes "Continue without it", and shows the first tab that shows the screen, else a
+  new tab.
+- **The settings** (D423, D424): the Git program row of the settings screen's Git section and the
+  netrc note of its Accounts section are under "The settings screen"; `gitExecutable` is under
+  "Settings, session, log and data folder".
+- **The stand-in and its switch** (design 1.14). `VISUALCOMMIT_GIT_STAND_IN`, a test switch that
+  `AppSession.Start` reads once, names the machine's only git when it is a full path to a file (on
+  Windows an `.exe`; `GitSource.StandIn`); `none`, or any other value, means the machine has none,
+  which `GitLocator` logs at Info at each search. A git chosen in Settings still comes first.
+  `GitAccess` logs a Warning once, at the first search told of the switch
+  ("VISUALCOMMIT_GIT_STAND_IN is set (a test switch): …"). Nothing in the app sets it. The stand-in
+  program is `tests/VisualCommit.GitStandIn` (see "Solution layout"), its names `GitStandIn`
+  (Testing). `GitIsolation` removes the switch and the stand-in's two variables from every test
+  process and from the app the real-window pass starts, which sets them last for its launches that
+  use the stand-in (`RealApp.StandInEnvironment`); a headless test gives `ShellDriver` a
+  `FakeGitSetupProbe` instead and never sets them (see "Tests").
+- **Tests**: `GitLocatorTests` (one case per rule of the search, over a `GitSearchContext`),
+  `GitSetupStatesTests`, `GitStandInTests`, `OsReleaseTests`, `AskPassBrokerHelperTests`,
+  `GitConfigurationForgetTests` and `GitVersionTests` (Git); `GitAccessTests`, `CheckGitAgainTests`,
+  `GitSetupTextsTests`, `GitSetupViewModelTests`, `GitProgramViewModelTests`,
+  `AccountsNetrcNoteTests`, `FileLauncherTests` (`ResolveStart`), `JsonSettingsStoreTests`
+  (`gitExecutable`) and `MainWindowViewModelTests` (App); `GitSetupShellTests`,
+  `FirstRunSearchTests` and part F's checks F1 to F14 (`VisualCommit.VisualTests.Phase8a`); the
+  real-window pass's phase 8a launches 7 to 9, with the stand-in, and 10, with the machine's git and
+  a configuration line it cannot read. No test of the first run starts `cmd.exe`, winget,
+  `xcode-select`, a terminal or a browser: the headless launchers record what they are asked, and
+  the real-window pass presses no install.
 
 ### Repository tabs (D45)
 
 | Type | Role |
 |---|---|
-| `MainWindowViewModel` | `Tabs` (never empty) and `ActiveTab`; `NewTab`, `ActivateTab`, `CloseTab`; saves the tabs and the active one to the session whenever they change; the theme switch and the git status as in phase 0; `Dialogs`, the window's dialog layer; `Menu`, the menu layer; `AutoFetch`; `NamesRepositoryInDialogs` (more than one tab has a repository: dialogs name their repository, "In &lt;repo&gt;"); since phase 5 `ActivityLog` (the panel's view model; its being open is the window's, see "Activity log"); `TryClose` and `ConfirmClose` (closing the window while operations run, see "Operation queue"). A tab closed while an operation the user started runs in it is kept until its queue is idle. Since phase 6, in partial files: `.Workspaces.cs` (`IWorkspaceHost.ShowWorkspace`, a row's open, a deleted workspace's tab, what the close waits for), `.Session.cs` (the restore with the dashboards first, `ActiveTabIndex`), `.Commands.cs` (`Commands`, the palette, the repositories a key or the palette opens), `.Settings.cs` (`OpenSettingsCommand`, the merge-tool lookup) and `.Theme.cs` (`Theme`, `UseTheme`); `NamesRepositoryInDialogs` is true while a dashboard tab is open or more than one tab has a repository (design 3.8); `OnWindowActivated` (the window's `Activated`) reads the active dashboard's stale rows. Since phase 7a `.Hosting.cs` (the window's sign-in entry, since phase 7b `SignInAsync(provider)` for any provider, see "The settings screen") and, in `.Commands.cs`, the palette's clone from an account (since phase 7b `CloneFromAccountAsync(provider)`, see "Clone from an account") |
-| `RepoTabViewModel` | One tab: `Title` ("New tab" or the repository's folder name), `CanClose`, the `Welcome` page, the open `Repository` or null. `LeftPanel`, `Details`, `Changes` (the stage panel), `ShowsWorkingChanges`, `BranchText`, `Toolbar` and `OperationStatus` are the repository's, or empty ones (an empty toolbar has every command disabled; an empty status says "Ready"). Since phase 4 `ShowsRightPanel` (false while the conflict resolver is open), `ShowsDetailsPanel`, `ShowsStagePanel` and `GraphColumnSpan` (2 while the resolver is open, else 1) say what the right-hand columns show (D140). A tab restored from the session shows its folder's name at once (`ShowPending`) and opens it once git is found; one that fails keeps its folder in the session (`FailedPath`) until the user opens something else in it. Since phase 6 a tab can be a workspace's dashboard (`ShowDashboard(workspace)`, once): `Dashboard`, `IsDashboard`, `ShowsDashboard`, `ShowsLeftPanel` (false on a dashboard), `GraphColumn` (0 on a dashboard, else 1), `SavedWorkspaceId` and `TabAutomationId` (`DashboardTab` or `RepoTab`); on a dashboard `Title` and `BranchText` are the workspace's name and follow a rename, `GraphColumnSpan` is 3, `ShowsRightPanel` is false, `Toolbar` is the dashboard's (`ToolbarViewModel.ForDashboard`) and `OperationStatus`, typed `IStatusBarOperation`, its `DashboardBulkViewModel`. `CloseToolTip` and `CloseKeyText` give the close button Mod+W on the active tab only. `ShowAsync` waits while a closed tab's or a released summary's queue still runs on the worktree (`WaitingText`, "Waiting for {title} to finish…"), then adopts the worktree's summary-mode view model when a dashboard holds one (see "Summary mode, the registry and adoption") and registers what it shows |
+| `MainWindowViewModel` | `Tabs` (never empty) and `ActiveTab`; `NewTab`, `ActivateTab`, `CloseTab`; saves the tabs and the active one to the session whenever they change; the theme switch and the git status as in phase 0; `Dialogs`, the window's dialog layer; `Menu`, the menu layer; `AutoFetch`; `NamesRepositoryInDialogs` (more than one tab has a repository: dialogs name their repository, "In &lt;repo&gt;"); since phase 5 `ActivityLog` (the panel's view model; its being open is the window's, see "Activity log"); `TryClose` and `ConfirmClose` (closing the window while operations run, see "Operation queue"). A tab closed while an operation the user started runs in it is kept until its queue is idle. Since phase 6, in partial files: `.Workspaces.cs` (`IWorkspaceHost.ShowWorkspace`, a row's open, a deleted workspace's tab, what the close waits for), `.Session.cs` (the restore with the dashboards first, `ActiveTabIndex`), `.Commands.cs` (`Commands`, the palette, the repositories a key or the palette opens), `.Settings.cs` (`OpenSettingsCommand`, the merge-tool lookup) and `.Theme.cs` (`Theme`, `UseTheme`); `NamesRepositoryInDialogs` is true while a dashboard tab is open or more than one tab has a repository (design 3.8); `OnWindowActivated` (the window's `Activated`) reads the active dashboard's stale rows. Since phase 7a `.Hosting.cs` (the window's sign-in entry, since phase 7b `SignInAsync(provider)` for any provider, see "The settings screen") and, in `.Commands.cs`, the palette's clone from an account (since phase 7b `CloneFromAccountAsync(provider)`, see "Clone from an account"). Since phase 8a `.Git.cs`: `GitSetup` (the first-run screen, one per window, which `AddTab` gives every tab), `CheckGitAgainCommand`, `GitStatusToolTip` and `ShowGitSetupCommand` (see "Git's detection and the first-run screen"); and the start's `RestoreOrder` (see "Start-up and composition") |
+| `RepoTabViewModel` | One tab: `Title` ("New tab" or the repository's folder name), `CanClose`, the `Welcome` page, the open `Repository` or null. `LeftPanel`, `Details`, `Changes` (the stage panel), `ShowsWorkingChanges`, `BranchText`, `Toolbar` and `OperationStatus` are the repository's, or empty ones (an empty toolbar has every command disabled; an empty status says "Ready"). Since phase 4 `ShowsRightPanel` (false while the conflict resolver is open), `ShowsDetailsPanel`, `ShowsStagePanel` and `GraphColumnSpan` (2 while the resolver is open, else 1) say what the right-hand columns show (D140). A tab restored from the session shows its folder's name at once (`ShowPending`) and opens it once git is found; one that fails keeps its folder in the session (`FailedPath`) until the user opens something else in it. Since phase 6 a tab can be a workspace's dashboard (`ShowDashboard(workspace)`, once): `Dashboard`, `IsDashboard`, `ShowsDashboard`, `ShowsLeftPanel` (false on a dashboard), `GraphColumn` (0 on a dashboard, else 1), `SavedWorkspaceId` and `TabAutomationId` (`DashboardTab` or `RepoTab`); on a dashboard `Title` and `BranchText` are the workspace's name and follow a rename, `GraphColumnSpan` is 3, `ShowsRightPanel` is false, `Toolbar` is the dashboard's (`ToolbarViewModel.ForDashboard`) and `OperationStatus`, typed `IStatusBarOperation`, its `DashboardBulkViewModel`. `CloseToolTip` and `CloseKeyText` give the close button Mod+W on the active tab only. `ShowAsync` waits while a closed tab's or a released summary's queue still runs on the worktree (`WaitingText`, "Waiting for {title} to finish…"), then adopts the worktree's summary-mode view model when a dashboard holds one (see "Summary mode, the registry and adoption") and registers what it shows. Since phase 8a `GitSetup` (the window's first-run screen), `ShowsGitSetup` (no repository, not opening, not a dashboard, and the screen shown; `ShowsWelcome` is false then), `GitSetupForView` (the screen once it has first shown, else null, so that a session that finds git makes no view of it) and `ReopenAsync()`, by which "Check again" opens a tab whose restore failed (`FailedPath`) again, as the restore did, the welcome page's error from the missing git dropped first (`WelcomeViewModel.ClearGitError`, which an error shown with `fromMissingGit` alone answers) |
 | `WelcomeViewModel` | The welcome page (D42): Open and Init through `IFolderPicker`, the clone form with its progress (`CloneProgress` from git's stderr) and Cancel, the shared recent list. A clone opens a prompt scope ("Clone", `PromptMode.Ask`) and passes its variables to `CloneAsync`, so an ssh or HTTPS clone asks in the window. Since phase 6 its "Workspaces" section (see "Workspaces"), and `InitAtAsync`, which the palette's and the key's Init share. Since phase 7a the form's browse button while an account is signed in (since phase 7b of any provider: `ShowsBrowseButton`, `BrowseButtonText`, `BrowseCommand` over `BrowseAsync(provider)`), and a URL's binding to the signed-in accounts in the clone's prompt scope (see "Clone from an account") |
 | `RepositoryViewModel` | One open repository: its `Graph` (`CommitGraphData`), `SelectedIndex`, `Selection` (`GraphSelection`, by SHA, D88) and `MultiSelection`, `IsWorkingRowSelected` and `WorkingRowText`, `ScrollOffset` (kept per tab), `LeftPanel`, `Details`, `Status` (`WorkingTreeStatus`) with `HasWorkingChanges`, `Changes` (the stage panel), the open `Diff`, `Refs` as last read, `BranchText`, the watcher and the refreshes, the Q1 measurements; phase 3's `Queue`, `Operations` (`RepositoryOperations`), `OperationStatus`, `Toolbar`, `Banner` (`ConflictBannerViewModel`), `MenuContext` and the menus' entry points; phase 4's `InteractiveRebase` (the list, or null), `Resolver` and `IsResolverOpen`, `ShowsGraph`, `ShowsInteractiveRebase` and `ShowsDiff` (what the graph area shows), `MergeTool`, `BackupsToKeep` (see "The graph area: the list, the resolver and the pages"); phase 5's `UndoHistory` (its worktree's, from `TabServices.UndoHistories`), `Page` and `ShowsPage`, `Search` and `SearchMarks`, `Comparison`, `Filters`, `GraphFilter` and `IsReloadingGraph`, `ShowCommit`, `ShowInGraph`, `Reveal`. Split over `RepositoryViewModel.cs`, `.Menus.cs` (menus, double-clicks, the drop), `.Selection.cs` (multi-selection), `.InProgress.cs` (banner with Abort, Continue and Skip and their questions, working-row text, left-panel sync, the stopped commit's message, the questions about conflict markers), `.GraphArea.cs` (phase 4's hooks: the list, the resolver, leaving the graph area, the focus when they close, `merge.tool`, the clean-up at opening), and phase 5's `.Pages.cs` (the pages and their host, a commit shown from a page, the search bar's place and marks, the filter's reload, the restore bar's tie to the undo history), `.Find.cs` (the search's and the comparison's hosts) and `.Filters.cs` (hide and solo), and phase 6's `.Palette.cs` (the palette's items from the menus) and `.Settings.cs` (whether an editor is chosen, for the file menus). Since phase 6 it has a summary mode for a dashboard's rows (`ForSummary`, `IsSummary`, `Promote`, `FirstRead` and `HasFirstRead`; see "Summary mode, the registry and adoption"), and `IsWatcherQuiet`, which the harnesses wait for (see "Watching and refreshing"). Disposing it (`IsClosed` from then on) disposes its queue and cancels all its other work |
 | `RecentRepositories` | The recent list, newest first, at most 10, kept in the session |
@@ -411,9 +714,11 @@ The window's regions show the active tab: `MainWindow.axaml` binds the left regi
 to `ActiveTab.Details` (`RightPanelView`, while `ShowsDetailsPanel`) or, while the working-changes
 row is selected, `ActiveTab.Changes` (`WorkingChangesView`, while `ShowsStagePanel`); the status
 bar's branch to `ActiveTab.BranchText`. `CommitGraphView` shows `WelcomeView` for a tab without a
-repository, and for one with a repository one of: `RepositoryGraphView` (`ShowsGraph`), the
-interactive rebase's list `InteractiveRebaseView` (`ShowsInteractiveRebase`), `DiffView`
-(`ShowsDiff`, also over the list or a page), the conflict resolver `ConflictResolverView`
+repository (since phase 8a, while git cannot be used, the first-run screen in its place:
+`GitSetupSlot`, while `ShowsGitSetup`), and for one with a repository one of:
+`RepositoryGraphView` (`ShowsGraph`), the interactive rebase's list `InteractiveRebaseView`
+(`ShowsInteractiveRebase`), `DiffView` (`ShowsDiff`, also over the list or a page), the conflict
+resolver `ConflictResolverView`
 (`IsResolverOpen`) or, since phase 5, a page (`ShowsPage`: `PageSlot`, a `ContentControl` whose
 template is `DialogViewLocator`, which finds `FileHistoryView`, `BlameView` or `ReflogView` for
 `Repository.Page`), with the conflict banner above whichever shows, and nothing while a restored
@@ -499,8 +804,14 @@ in summary mode.
 ### From a repository to the screen
 
 1. `RepoTabViewModel.OpenAsync(path)` starts a stopwatch for Q1 and asks the provider, which
-   waits for git and calls `GitRepository.OpenAsync`: one `git rev-parse` gives the working tree,
-   the git folder and the common git folder, or `NotARepositoryException`.
+   waits for git and calls `GitRepository.OpenAsync`: one `git rev-parse --is-inside-work-tree
+   --show-toplevel --absolute-git-dir --git-common-dir` gives the working tree, the git folder and
+   the common git folder, or `NotARepositoryException`. When git names the common folder relatively
+   (a main worktree's `.git`) and the folder opened is not the top level as git reports it (a
+   subfolder, or a path through a link or a short name), one more read in the top level, `git
+   rev-parse --path-format=absolute --git-common-dir`, gives it, taken as it is (D420;
+   `ResolveCommonDirectoryAsync`). The opening call keeps its words, which phase 5's A2 asserts;
+   `ActivityLogViewTests` holds the second call.
 2. `RepositoryViewModel.StartAsync` starts the watcher, then reads the refs
    (`ReadRefsAsync`: `for-each-ref`, `stash list`, `symbolic-ref`, `rev-parse HEAD` and, since
    phase 6 in place of `git remote`, `config --null --get-regexp ^remote\.`, which gives the remotes
@@ -542,7 +853,7 @@ Contracts are in `src/VisualCommit.Core/Git`, implementations in `src/VisualComm
 | `GitResult` | Exit code, standard output, standard error, duration |
 | `GitCallRecord` | The record of a call: command, folder, outcome, exit code, start and duration by the system clock, the first 16 KiB of each output stream with credentials hidden (D103), and `OperationId`, the queue's operation the call belongs to, or null for a read outside one. Phase 5 (D173): `Sequence` (a number from `RecordSequence`, the process's one counter, which operations take theirs from too, taken when the call starts), `DisplayedStart` and `DisplayedDuration` (by the record clock), `StandardInput` (for `RecordsStandardInput`, cut and with credentials hidden as the output is) and `OnTemporaryIndex` (the call ran with `GIT_INDEX_FILE` set: a snapshot's index) |
 | `IGitCallLog` / `GitCallLog` | Keeps the session's call records in two stores (phase 5, D173): an operation's calls as long as its `OperationRecord` stays in the `OperationLog` (it listens to `Evicted`), within a budget of 64 MB for all of them that drops the oldest operation's calls first (`HasDroppedCalls`); the reads, calls outside an operation, in a ring of their own of the newest 2,000. So a burst of reads never takes an operation's commands away. Events `Added` and `Removed` |
-| `GitLocator`, `GitSearchContext`, `GitDetection`, `GitVersion` | Finding git and checking its version |
+| `GitLocator`, `GitSearchContext`, `GitDetection`, `GitVersion`; since phase 8a `GitSource`, `GitConfigFault`, `GitLookup`, `IGitSetupProbe` (Core), `MachineGitSetupProbe`, `OsRelease` | Finding git and checking its version. Since phase 8a in the order a `GitLookup` gives (the program chosen in Settings, the stand-in, the PATH's fully qualified folders, the usual install folders), against `GitVersion.Minimum`, 2.34.1 (D420); a detection says where the program came from (`Source`) and, for one that does not work, git's own words, its exit code and a line of git's configuration that git could not read. `MachineGitSetupProbe` is the session's `IGitSetupProbe` unless a harness gives one, and reads the first-run screen's facts (winget's path on Windows, `os-release` on Linux). See "Git's detection and the first-run screen" |
 | `IGitRepository` / `GitRepository` | One open repository. Reads: `ReadRefsAsync`, `ReadHeadAsync`, `LoadCommitsAsync`, `ReadCommitDetailsAsync`, `ReadStatusAsync`, `ReadDiffAsync`, `ReadFileAsync`, `ReadFileSizeAsync`. Writes: `StageAsync`, `UnstageAsync`, `ApplyPatchAsync`, `SaveSnapshotAsync`, `DiscardAsync`, `RestoreSnapshotAsync`, `CommitAsync`. `CreateWatcher`; static `OpenAsync`, `InitAsync`, `CloneAsync`. Since phase 5 `OpenedFolder`: the folder the repository was opened from (a subfolder, or a path through a link, which git's `--show-toplevel` resolves; the activity log counts reads made there as the worktree's), and `BackupClock`, which the provider sets. Phase 3's to phase 7a's members are listed in "Phase 3's repository members" to "Phase 7a's repository members" below. Split over `GitRepository.cs`, `.Refs.cs`, `.Commits.cs`, `.Clone.cs`, `.Changes.cs` (status, diffs, file versions), `.Writes.cs`, phase 3's `.Backups.cs`, `.Branches.cs`, `.History.cs`, `.InProgress.cs`, `.Remotes.cs`, `.Stash.cs`, `.Tags.cs` and `.Ignore.cs`, phase 4's `.Rebase.cs`, `.Sequence.cs` and `.Conflicts.cs`, phase 5's `.FileHistory.cs`, `.Reflog.cs`, `.Compare.cs`, `.Search.cs` and `.Undo.cs`, phase 6's `.KeepIgnored.cs`, `.PullConfig.cs` and `.Config.cs`, and phase 7a's `.Hosting.cs` and `.PullRequests.cs`. Since phase 6 a `.git` file whose folder is gone (an orphaned worktree) opens as `NotARepositoryException` both in git's words up to 2.55 ("not a git repository") and from 2.56 ("gitfile does not point to a valid repository") |
 | `WorkingTreeStatus` | The staged files (HEAD → index), the unstaged ones (index → working tree, untracked as added, conflicted as `FileChangeKind.Conflicted`) and which are untracked, each list in byte order of the paths; from `git status --porcelain=v2 -z --untracked-files=all --renames`. `InProgress` (`InProgressState`) is the operation in progress, read from git's files (see "Toolbar, status bar, conflict banner and auto-fetch"). Since phase 4 `Conflicts` (a `ConflictEntry` per `u` line), `Submodules` (the paths whose `sub` field starts with `S`), `HasUnstagedTrackedChanges` (a tracked file that is not conflicted and not a submodule has unstaged changes: git's rebase Continue refuses then), `FindConflict(path)` and `SameAs` (both lists, the conflicts and the state compared) |
 | `InProgressState`, `InProgressKind` | What is in progress: `Kind` (None, Merge, CherryPick, Revert, Rebase, ApplyMailbox), the commit and its subject, a rebase's branch and new base, `Remaining` (the commits a terminal's sequence or a rebase has left), `Empty` (a pick or revert that changes nothing), `AbortKeepsHead` (D110). Phase 4's init properties: `Sequenced` (a `sequencer/` folder: a list), `HasPickHead` (a list with no pick head is paused between commits), for a rebase `StopKind` (`RebaseStopKind`), `NextIsSquash` (the stopped commit is the target of a fixup or squash) and `Group` (the app's group the stop is in), and `Done` and `Total` (a rebase's commit commands done and in all; a list's commits made and in all) |
@@ -673,7 +984,7 @@ progress.
 |---|---|
 | Reads (`GIT_OPTIONAL_LOCKS=0`) | `ReadHeadAsync` (HEAD's branch and commit only), `CountDetachedCommitsAsync` (`rev-list --count HEAD --not --branches --remotes --tags`), `IsAncestorAsync` (`merge-base --is-ancestor`), `CountCommitsAsync`, `ResolveAsync` (`rev-parse --verify --quiet`, unpeeled), `ReadWorktreesAsync` (`worktree list --porcelain`), `ReadRemotesAsync` (`git remote` and `git config --null --get-regexp` of every `remote.<name>.url` and `.pushurl`: URLs as configured, never `git remote -v`, which applies `insteadOf` rules, D129) |
 | Backups (`.Backups.cs`) | `SaveBackupRefsAsync`, `SnapshotForHardResetAsync`, `SnapshotIndexAsync`, `SnapshotTrackedChangesAsync` (see "Backup refs") |
-| Branches (`.Branches.cs`) | `CheckoutBranchAsync` (`switch --no-guess <b>`), `CheckoutTrackingBranchAsync` (`switch --create <b> --track refs/remotes/<r>/<b>`), `CheckoutDetachedAsync` (`switch --detach`), `CreateBranchAsync` (`branch <name> <start>`, or `switch --create` to check it out), `RenameBranchAsync` (`branch --move`), `DeleteBranchAsync` (`branch --delete --force`), `FastForwardBranchAsync` (`fetch --no-auto-maintenance --no-write-fetch-head . <target>:refs/heads/<b>`, which refuses a non-fast-forward and a branch checked out in any worktree, D94), `MergeAsync` (the message from `git fmt-merge-msg` for the short name, then `merge --no-edit --no-log -m <message> <full ref>`, with `--no-ff` or `--ff-only` for the other modes, D94). Since phase 6 the checkouts, `CreateBranchAsync` and `MergeAsync` take `keepIgnored` (and `CreateBranchAsync` `noTrack`): see "Phase 6's repository members" |
+| Branches (`.Branches.cs`) | `CheckoutBranchAsync` (`switch --no-guess <b>`), `CheckoutTrackingBranchAsync` (`switch --create <b> --track refs/remotes/<r>/<b>`), `CheckoutDetachedAsync` (`switch --detach`), `CreateBranchAsync` (`branch <name> <start>`, or `switch --create` to check it out), `RenameBranchAsync` (`branch --move`), `DeleteBranchAsync` (`branch --delete --force`), `FastForwardBranchAsync` (since phase 8a first `git worktree list --porcelain`, a read: when another worktree has the branch checked out it throws `BranchCheckedOutElsewhereException(branch, worktreePath)` and runs no fetch, on every git, since git guards another worktree's branch only from 2.35, D420; then `fetch --no-auto-maintenance --no-write-fetch-head . <target>:refs/heads/<b>`, which refuses a non-fast-forward and this worktree's own branch on every git and, from 2.35, a branch another worktree checked out after the read, D94; `RepositoryOperations` shows the app's refusal as "<branch> is checked out in another worktree (<path>)." with no git output, and nothing moves), `MergeAsync` (the message from `git fmt-merge-msg` for the short name, then `merge --no-edit --no-log -m <message> <full ref>`, with `--no-ff` or `--ff-only` for the other modes, D94). Since phase 6 the checkouts, `CreateBranchAsync` and `MergeAsync` take `keepIgnored` (and `CreateBranchAsync` `noTrack`): see "Phase 6's repository members" |
 | History (`.History.cs`, `.InProgress.cs`) | `ResetAsync` (`reset --soft <sha> --`, `reset --mixed --quiet <sha> --` or `reset --hard <sha> --`), `CherryPickAsync(commit)` (`cherry-pick <sha>`), `RevertAsync(commit, isMerge)` (`revert --no-edit [-m 1] <sha>`) for one commit; several go through phase 4's list overloads with git's sequencer (D136, below). `Empty` for a pick that changes nothing (`CHERRY_PICK_HEAD` left), while Git 2.36's empty revert leaves nothing and throws (D117). `AbortAsync(kind)` (`merge`, `cherry-pick`, `revert`, `rebase` or `am --abort`) |
 | Remotes and the network (`.Remotes.cs`) | `FetchAsync(remote)`: `fetch --progress <r>`; for null one such call per remote in `git remote`'s order, without remotes whose `skipFetchAll` is set, every call but the last with `--no-auto-maintenance` (all of them for auto-fetch), going on after a failure and throwing one `GitException` at the end with an `error: Could not fetch <r>` line per failed remote; a prompt the user cancelled stops it (D109). Never `--prune` or `--tags` (D99). `IntegratePullAsync(branch)`: pull's second step (below). `PushAsync(PushRequest)`: `push --progress [--set-upstream] [--force-with-lease=<remote ref> --force-if-includes] <r> refs/heads/<b>:<remote ref>` (D100). `SetUpstreamAsync`, `UnsetUpstreamAsync`. `DeleteRemoteBranchAsync` and `DeleteRemoteTagAsync`: `push --progress --force-with-lease=<ref>:<expected> <r> --delete <ref>` (D100). `AddRemoteAsync` (`remote add -- <name> <url>`), `RenameRemoteAsync`, `SetRemoteUrlAsync`, `RemoveRemoteAsync`, `PushTagAsync` (`push --progress <r> refs/tags/<t>:refs/tags/<t>`). A local upstream (remote `.`) is never pushed to |
 | Stash (`.Stash.cs`) | `StashAsync` (`stash push [--include-untracked] [--message <m>]`, without `GIT_LITERAL_PATHSPECS`, D108; returns the new stash commit, or null for "No local changes to save"), `ApplyStashAsync` (`stash apply`, `stash pop`, or `stash pop --index` followed by a plain pop when git refuses the index part and changed nothing, D91), `DropStashAsync`. A stash is passed by its commit and found again in `git stash list` as `stash@{n}`; one no longer listed fails with "This stash no longer exists." |
@@ -799,7 +1110,7 @@ an undo step run inside one operation of the queue and take its `NetworkOptions`
 | File history, blame, a tree (`.FileHistory.cs`, D175) | `ReadFileHistoryAsync(startSha, path, onRow)`: `git -c core.quotePath=true log --follow --root -M --name-status` with the graph's format and plain-log options, `<start> -- <path>`; not `-z`, with which a commit's entries share a line with the next header and each row came one commit late. Each row is handed over on its entry line, its paths C-unquoted (`GitQuotedPaths`). `--follow` lists no merge (git's own rule). `ReadBlameAsync(sha or null, path)`: `git -c i18n.logOutputEncoding=UTF-8 blame --porcelain --no-textconv [<sha>] -- <path>`, read as Latin-1 (D66) and parsed by `BlameParser`; the user's `blame.ignoreRevsFile` is honoured, and one naming a missing file throws `BlameIgnoreRevsFileMissingException`; a gitlink (mode 160000 in `ls-tree`, or in `ls-files --stage` for the working tree) returns a result with `IsSubmodule`. `ReadTreeFilesAsync(sha)`: `ls-tree -r -z --name-only <sha>` ("All files") |
 | Reflog and backups (`.Reflog.cs`, D180) | `ReadReflogAsync(fullRef, limit)`: two walks side by side, `log --walk-reflogs --ignore-missing -z -n <limit + 1> --format=%gD%x1f%H%x1f%P%x1f%gs%x1f%s <ref> --` and the same with `--date=raw --format=%gD%x1f%H` (the selector then names the entry's own time, which no placeholder gives), zipped by position; when they list different commits (the ref moved between them) both are read once more, and a second disagreement fails the read. Never `.git/logs`, which reftable lacks. `FindLostCommitsAsync(shas)`: one `rev-list --ignore-missing --stdin --not --branches --tags --remotes HEAD --` with the SHAs on standard input (the `--` because a file named `HEAD` makes `HEAD` ambiguous). `ReadBackupsAsync()`: one `for-each-ref` of `refs/visualcommit/backup/` with each ref's object, its type, what a tag object points at and the messages, grouped into backups by phase 4's name scheme |
 | Compare (`.Compare.cs`, D177) | `CompareAsync(from, to, threeDot, countCommits)`: both names to commits with one `rev-parse <from>^{commit} <to>^{commit} --`, kept from then on; for three-dot `merge-base --all` (the first base is the one `git diff A...B` uses; exit 1: no common history; more than one: a criss-cross); `diff-tree -r -z --name-status -M --no-ext-diff --no-color --no-commit-id <old> <to>` with two SHAs, never a range (`diff-tree A...B` prints nothing); for branches `rev-list --left-right --count <from>...<to> --` beside it |
-| Search (`.Search.cs`, D174) | `SearchAsync(mode, text, shas, onMatch, progress)`: `git log --no-walk=unsorted --stdin --encoding=UTF-8` with the plain-log options and the graph's rows' SHAs on standard input, the first 2,000, then 20,000 per call, one call after another, each match handed over as git prints it. Commits: `-F --regexp-ignore-case --grep=<text>` (the app matches authors and SHA prefixes in memory). Files: `--format=%x1e%H --first-parent --root --no-renames --name-only -- ":(glob,icase)**/*<t>*" ":(glob,icase)**/*<t>*/**"` without `GIT_LITERAL_PATHSPECS`; a commit matches when a path line follows its own line, since Git 2.55.0 (and Git for Windows 2.56.0.windows.2) ignore the path under `--no-walk`. Changes: `--first-parent --diff-merges=first-parent --root --find-renames --no-textconv -s --regexp-ignore-case -S<text>`, `--diff-merges` left out for good once git refuses it (older than 2.31). `fatal: bad object` ends the search quietly; an empty text runs nothing |
+| Search (`.Search.cs`, D174) | `SearchAsync(mode, text, shas, onMatch, progress)`: `git log --no-walk=unsorted --stdin --encoding=UTF-8` with the plain-log options and the graph's rows' SHAs on standard input, the first 2,000, then 20,000 per call, one call after another, each match handed over as git prints it. Commits: `-F --regexp-ignore-case --grep=<text>` (the app matches authors and SHA prefixes in memory). Files: `--format=%x1e%H --first-parent --root --no-renames --name-only -- ":(glob,icase)**/*<t>*" ":(glob,icase)**/*<t>*/**"` without `GIT_LITERAL_PATHSPECS`; a commit matches when a path line follows its own line, since Git 2.55.0 (and Git for Windows 2.56.0.windows.2) ignore the path under `--no-walk`. Changes: `--first-parent --diff-merges=first-parent --root --find-renames --no-textconv -s --regexp-ignore-case -S<text>`, on every git the app supports, all of which have `--diff-merges` (D420). `fatal: bad object` ends the search quietly; an empty text runs nothing |
 | Filtered graph (`.Commits.cs`, D178) | `LoadCommitsAsync(refs, filter, onPage)`: see "Solo and hide" |
 | C12 (`.Branches.cs`, `.Stash.cs`, D179) | `CheckoutDetachedAsync(commit, noOverwriteIgnore)`: `switch --detach --no-overwrite-ignore <sha>` (since phase 6 the one `CheckoutDetachedAsync(commit, keepIgnored)`, see "Phase 6's repository members"). `ReadStashPathsAsync(stash)`: three reads side by side, `diff-tree -r -z --no-renames --name-status <s>^1 <s>`, `diff-tree -r -z --no-renames --name-only <s>^1 <s>^2` and `rev-parse <s>^3` (then `ls-tree -r -z --name-only` of it), kept per full SHA for the repository's life (a commit never changes; a name such as `stash@{0}` is read each time), shared by C12's apply check, the undo recording and an undo step's pop. `FindIgnoredAsync(paths)`: `check-ignore`, a folder asked about by its files. `RestoreWorkingTreeFilesAsync(source, paths)`: `restore --source=<s> --worktree --pathspec-from-file=- --pathspec-file-nul`. `PutBackUnclearedStashAsync(stash)`: see "Protected changes". `StashAsync` with untracked files makes again the empty untracked folders that `stash push`'s clean removes (`ls-files -z --others --exclude-standard --directory` before it) |
 | Shared reads (`.InProgress.cs`) | `ReadInProgressStateAsync`: what is in progress, read from the git folder alone (no git call while nothing is, D89; it decides no empty stop); `ReadConflictedPathsAsync`: `ls-files --unmerged -z`. Used since phase 5's review wherever only these matter, in place of a whole status |
@@ -841,11 +1152,12 @@ the new hosts are those of "Prompts and credentials".
 
 **Git versions** that the code handles. The development machine runs Git 2.56.0.windows.4 since
 2026-10-28 (D248); it ran 2.36.0.windows.1 before, on which phases 3 to 6 derived their facts. CI
-runs Git 2.56.0.windows.4 (Windows, since 2026-11-02; 2.56.0.windows.2 from 2026-10-15), 2.56.0
-(macOS, and `ubuntu-latest` since 2026-10-29; 2.55.0 before) and 2.43.0 (the two containers), so
-since then no CI job runs 2.55;
-Git 2.55 is still on the development machine, inside Visual
-Studio (phase 5's research used it; a trimmed one, plan risk 28). Phase 4 found Git 2.55's
+ran Git 2.56.0.windows.2 on Windows from 2026-10-15 and 2.56.0.windows.4 from 2026-11-02, 2.56.0 on
+macOS and, from 2026-10-29, on `ubuntu-latest` (2.55.0 before), and 2.43.0 in the two containers; in
+phase 8a's runs Windows ran 2.56.1.windows.1 (all but two jobs), macOS and `ubuntu-latest` 2.56.1 in
+the runs whose job logs were kept, the containers still 2.43.0, and the floor's job, new in phase
+8a, 2.34.1 (see "CI"), so no CI job runs 2.55; Git 2.55 is still on the development machine, inside
+Visual Studio (phase 5's research used it; a trimmed one, plan risk 28). Phase 4 found Git 2.55's
 differences: at a conflict stop `rebase-merge/message` ends with a `# Conflicts:` block, left out
 of the message the stage panel fills; `done` and `git-rebase-todo` write each subject as a comment
 (`pick <sha> # Subject`), and the app reads only the command and the SHA; an autostash that
@@ -883,6 +1195,18 @@ helper, whose token goes with the third request (CI's 2.43, phase 7b's design 8.
 ASCII, where 2.43's refused fullwidth letters (the same As built); and git up to 2.56.0 without its
 commit 76524c2604bc, over a libcurl that strips the user from its effective URL (curl 8.23.0),
 asks for the credential after the first 401 with no user (D389, plan risk 43).
+
+Phase 8a set the floor at 2.34.1 (D420): 2.34.1 reverts 2.34.0's fault in `.gitignore`'s directory
+patterns, which the ignored-files guards rely on. It found, on 2.34.1 against later gits:
+`git fetch . a:refs/heads/b` refuses a branch checked out in another worktree only from 2.35, so
+`FastForwardBranchAsync` reads the worktrees first, on every git (above); below 2.36 a stash is
+named after the part of its branch's name after the last `/`, which the app shows as git wrote it;
+`merge.conflictStyle=zdiff3` exits 128 below 2.35; and a branch made with tracking reads "Branch
+'l' set up to track remote branch 'rb' from 'r'." below 2.35 and "branch 'l' set up to track
+'r/rb'." from it. The tests take each through `GitWords` (see "Tests"). On 2.34 a fetch refspec into
+`refs/heads/*` (a mirror's `+refs/*:refs/*`) can still move a branch checked out in another
+worktree, as in a terminal: plan risk 49, not fixed (D420). Every git the app supports has
+`--diff-merges` (2.31) and `config --fixed-value` (2.30), which the app uses with no fallback.
 
 ### Lane layout (D48, D54, D55)
 
@@ -972,6 +1296,33 @@ to a real parent from there and is solid. Lanes, colours and nodes are as before
   graph takes the focus, so a new text for the same row raises nothing, and a new hint raises a
   help-text change. The other rows are not exposed: there is no peer per row, and none at all
   without an automation client.
+  The graph's peer (`CommitGraphAutomationPeer`) is a List with the Selection pattern, which may
+  select several rows and needs none; its children and its selection are the one row's peer
+  (`CommitGraphRowAutomationPeer`), made with it and kept for its life: a ListItem over the graph
+  itself, with the id `GraphSelectedRow`, the class `CommitGraphRow`, the Selection item pattern and
+  no children. `GraphRowSpeech`, pure, holds every word as a public constant: a commit reads
+  `{subject}, {author}, {date}` ("No message" for a blank subject, the date as the Date column shows
+  it), then each label in drawing order, those under "+N" too ("current branch main", "branch
+  feature/ff", "remote branch origin/main", "tag v1.1", "HEAD, detached", a stash's own text), a
+  label with an open request followed by the request's words as its tooltip has them (" (pull
+  request #12: Add the login form)"); a stash's row reads `Stash: {subject}, {date}` and its labels;
+  the working-changes row its text with " · " read as ", ". The hint is `Commit {short SHA}`, then
+  `, {n} commits selected` and `, matches the search`, empty on the working-changes row and never
+  the graph's tooltip. Both are made when a client reads them. The row's bounds are its drawn
+  bounds clipped to the graph (off screen when none of it shows); setting the focus focuses the
+  graph, bringing it into view scrolls it there, Select selects it alone as a click does, and its
+  context menu is the graph's keyboard menu, as Shift+F10 opens it. The control only asks whether
+  its peer exists (`ControlAutomationPeer.FromElement`): with a client, a change of the selection,
+  the working-changes row, the data, the dates, the search or the requests, and the focus coming or
+  going, posts one update for the dispatcher's turn at background priority
+  (`ScheduleAutomationUpdate`), and without one nothing is made or posted; drawing and layout take
+  no part. The route uses public API only (D455): Windows'
+  bridge in Avalonia 12.1.3 forwards a peer's events only once a client was handed its node, so a
+  client hears the row's moves after it has read the graph's first child or its selection. The
+  real-window pass's launch 13 reads the first child, then asks for a LiveRegionChanged from
+  `GraphSelectedRow` at each move, a Name change alone failing (D450). What Narrator says is the
+  gate's walk-through by hand (D460). `GraphRowSpeechTests` and `CommitGraphControlAutomationTests`
+  (App) and part U (`VisualCommit.VisualTests.Phase8a`) hold it.
 - `RowsDrawn` and `FrameDrawn` (the time `Render` took) feed the Q1 measurements.
 - **The working-changes row (D60).** With `ShowsWorkingRow` (bound to the view model's
   `HasWorkingChanges`) the control draws one more row above the first commit and counts rows as
@@ -1239,7 +1590,12 @@ to a real parent from there and is solid. Lanes, colours and nodes are as before
   Since phase 6 the commit button's tooltip is "{its text} ({key})" (`CommitToolTip`; its reason
   `CommitDisabledReason`, which the palette's commit entry reads), Mod+Enter in the message boxes
   commits (see "Keyboard shortcuts"), and a ticked Amend keeps the HEAD it was ticked on, against
-  which the commit's operation checks HEAD first (D235, see "Operations").
+  which the commit's operation checks HEAD first (D235, see "Operations"). Since phase 8a (its
+  design 6.3.7) the message boxes stay editable while a commit runs, so that the summary keeps its
+  focus on a Mod+Enter commit: the commit takes the message and Amend as they were when it started,
+  and once it has succeeded it empties the boxes only when both still hold that message, so that
+  text typed meanwhile stays, and unticks Amend. Amend cannot be changed while the commit runs
+  (`CanToggleAmend`: `CanAmend` and not `IsCommitting`). A failed commit keeps the boxes (check K7).
 - **The keyboard's focus after an action** (phase 8a; D462). `WorkingChangesView` gives the focus a
   place when an action took it away. A row's Stage, Unstage or Discard pressed while it showed the
   keyboard's frame gives it, once the run has ended and the lists show its result, to the row now at
@@ -1301,7 +1657,13 @@ to a real parent from there and is solid. Lanes, colours and nodes are as before
   through `IConflictMarkerQuestions` (D148).
 - Phase 3 added the files' context menus (see "Context menus"): stage, discard, ignore, open,
   show in folder, copy path, and phase 4 "Resolve conflict" and "Open in merge tool" for a
-  conflicted file; the hover buttons of D70 stay.
+  conflicted file; D70's row buttons stay. They show on a hovered row, on a selected row and, since
+  phase 8a, on a row that holds the keyboard focus (`:focus-within`, D425); on a focused row that is
+  neither hovered nor selected they are drawn at opacity 0, each at 1 while it shows the keyboard's
+  frame, so that nothing new is drawn and UI Automation sees one more row's buttons, not every
+  row's. F6 gives the focus to the row's own button; Tab from it reaches Stage and Discard (Unstage
+  on a staged row), then the next row, and Shift+Tab into a row lands on its own button (see "Tab
+  through a list's rows" in "Keyboard shortcuts"; check K4).
 - Discard and restore (D75): files with a conflict and nested repositories (untracked paths
   ending in `/`) are left out of a discard, with a word in the question or the panel's message.
   After a discard that succeeded, the view model keeps the snapshot and a SHA-256 of each of its
@@ -1385,6 +1747,23 @@ to a real parent from there and is solid. Lanes, colours and nodes are as before
   both implement; `CodeTextEditor` is the editor base both use (AvaloniaEdit's `TextEditor` with
   the search panel removed and scrolling through its scroll viewer), and `DiffPalette` the colours
   both look up. Phase 2's 66 pictures stayed byte-identical through the change.
+- **Tab in the diff** (since phase 8a, D426). Tab and Shift+Tab leave every read-only text view:
+  `AcceptsTab` is false in `DiffPane` (the diff's and the resolver's panes), in `BlameTextEditor`
+  and in `DocumentTextView`. The diff's text stays a Tab stop (`TabNavigation` `Continue` on each
+  pane's editor and text area): Tab goes from it through the buttons of the hunk bars in view, in
+  hunk order ("Stage hunk" and "Discard hunk", or "Unstage hunk" on a staged diff), then out of the
+  diff (side by side, from the old file's text to the new file's, whose bars hold the buttons), and
+  Shift+Tab from the text reaches the diff's toolbar. The bars' layer marks a focus that arrives in
+  it as handled, so that the text area does not take it back. A bar about to leave, scrolled away or
+  made again (`HunkHeaderLayer.BarRemoving`, raised by `Update` and by `Rebuild`, which a pane's
+  redraw calls), hands the focus of one of its buttons to the left pane's text first, without the
+  keyboard's frame, when the button shows the frame or the keys pressed it
+  (`DiffTextView.OnBarRemoving`); left alone, Avalonia would pick the next focus itself. A diff that
+  opens, or whose body comes later, gives its text the focus only while the user has not moved it
+  (`DiffTextView.FocusBody(stillWanted)`, `DiffView.StillWanted`): while the focus is on nothing, on
+  the window, on the element that had it as the open was posted, or inside the diff, so a read that
+  still runs while the user presses Mod+Shift+M leaves the focus in the summary
+  (`DiffTextViewTests`, `ConflictPanesTests`, `KeyboardPassTests`; checks K1 and K6).
 - `DiffHighlighter`/`DiffSyntax`: TextMateSharp's registry, grammars and the Dark+ and Light+
   themes are loaded once per process; each side of a diff is tokenized on its own, in order, and
   a token's style is the first matching rule's colour and font style (D64). Diffs of up to 1,000
@@ -2372,8 +2751,16 @@ The undo's Keep move and pop take the distinct ignored files of `FindIgnoredAtAs
   `VISUALCOMMIT_OPERATION_ID`, `prompt`, `sshPrompt` from `SSH_ASKPASS_PROMPT`), waits as long as
   the user takes for one line back (`answer`), prints the answer and a line feed and exits 0, or
   exits 1 for null, a closed pipe or a malformed line. `AskPassProtocol` holds both ends' format.
-  `AskPassLocator` expects the helper next to the `VisualCommit.Git` assembly; a missing helper is
-  logged at Error at start-up, and every prompt then fails as git or ssh fails without an answer.
+  `AskPassLocator` expects the helper next to the `VisualCommit.Git` assembly (`AppSession.Start`'s
+  `askPassHelper` names another, for a test); a missing helper is logged at Error when the broker
+  starts, every prompt then fails as git or ssh fails without an answer, and no account's binding
+  is used. Since phase 8a the first-run screen shows a state of its own for it (`HelperMissing`,
+  "Part of VisualCommit is missing", with the path looked at) until "Continue without it", and the
+  status bar reads "Git {v} (helper missing)". `CheckHelper()`, which the window calls off the UI
+  thread after a search that found git while the helper was missing and on "Check again" in that
+  state, looks again and logs Info "The askpass helper is there now ({path})."; `HelperFound` and
+  `MissingHelperPath` follow it, and a helper once found stays found (see "Git's detection and the
+  first-run screen").
 - **The helper's credential mode** (phase 7a, `CredentialMode.cs`, D255, D273, design 4.5): with
   `--vc-credential` as its first argument the helper is git's credential helper for the URLs bound
   to a hosting account, any of the three providers' since phase 7b (below); git runs it through `sh`
@@ -2620,10 +3007,10 @@ account"; where tokens are kept, in "Tokens and the keychains".
   is then read with `GitConfiguration.ReadIncludedAsync`, D391) and the URL its `url.` rules give is
   bound (D331); a failed read binds nothing and logs a Warning, and an include that could change the
   URL binds nothing with a Debug line. Local operations, reads and phase 2's writes carry none.
-- **The scope's variables** (`AskPassBroker.Begin`; D274, D277, D329, D340). A scope uses its
+- **The scope's variables** (`AskPassBroker.Begin`; D274, D277, D329, D340, D420). A scope uses its
   bindings only when the helper was found, a credential source was given, the inherited
-  `GIT_CONFIG_COUNT` is valid, the mode is `Ask` or `Deny` and the detected git is 2.31 or newer (a
-  version not yet known counts as 2.31: an older git ignores the pairs anyway); each URL once.
+  `GIT_CONFIG_COUNT` is valid and the mode is `Ask` or `Deny`; each URL once. Every git the app
+  supports reads `GIT_CONFIG_COUNT` (2.31 and later), so since phase 8a the broker asks no version.
   Otherwise the scope's variables are phase 3's, byte for byte. The inherited count is the
   session's git environment's `GIT_CONFIG_COUNT` when it names the variable, else the process's;
   empty or absent is 0, and any other value that is not a whole number turns every binding off with
@@ -2755,14 +3142,15 @@ account"; where tokens are kept, in "Tokens and the keychains".
   refused the token of {login}. Sign in to {Provider} in Settings, Accounts." Both are in
   `OperationTexts.Hosting.Credentials.cs`; GitHub's are 7a's word for word ("GitHub refused git's
   credentials for {login}. …"), and 7a's one-argument forms stay, for GitHub (D351, D362).
-- **Limits** (D275, D277; plan risks 35, 39 and 43). Git older than 2.31 ignores `GIT_CONFIG_COUNT`,
-  so no binding is used there and the token never reaches git; the Accounts section says that the
-  option needs Git 2.31 (see "The settings screen"). Answering git's prompts from the account there
-  (ruling 3's fallback) is not built, since after an answer that succeeds git sends it to every
-  helper of the list with `store`, which would put the token in Git Credential Manager or a plain
-  file. On 2.31 to 2.45 a netrc entry for a bound host answers a bound call's first 401 before the
-  app's helper, and git-lfs's own HTTP client reads neither the key nor `NETRC` and asks HOME's
-  netrc before any helper on every version (risk 35): design 4.1's "and from nothing else" holds for
+- **Limits** (D275, D277, D420; plan risks 35, 39 and 43). Every git the app supports reads
+  `GIT_CONFIG_COUNT`, so the token reaches git through the bindings alone. Answering git's prompts
+  from the account (ruling 3's fallback) is not built, since after an answer that succeeds git sends
+  it to every helper of the list with `store`, which would put the token in Git Credential Manager
+  or a plain file. On 2.34.1 to 2.45 a netrc entry for a bound host answers a bound call's first 401
+  before the app's helper (since phase 8a the Accounts section's netrc note says so while it can
+  happen, D424; see "The settings screen"), and git-lfs's own HTTP client reads neither the key nor
+  `NETRC` and asks HOME's netrc before any helper on every version (risk 35): design 4.1's "and from
+  nothing else" holds for
   git's own requests from 2.46 on (D340). When the session refuses the account through the API, or
   signs out, after an operation bound its calls and before git's credential request, the helper has
   nothing, git asks for a user name and the app shows git's "Sign in to {host}" dialog in a bound
@@ -2771,14 +3159,15 @@ account"; where tokens are kept, in "Tokens and the keychains".
   git's dialog in bound repositories until the switch is turned off (D275).
   The refusal of another user (D275) needs git to keep a URL's user in its credential request: git
   up to 2.56.0 without its commit 76524c2604bc, over a libcurl that strips the user from its
-  effective URL (curl 8.23.0, CI's macOS), asks after the first 401 with no user, and a binding
-  whose key git matches to another user's URL is then answered, the token given without a prompt
-  (plan risk 43, D389); `Select`'s drop (D278) is the guard there. The new hosts' rule drops in
-  git's credential view, so GitHub's raw comparison (below) is the exposed one: on such a git, from
-  2.46 on, a reserved character escaped in the binding and raw in the other URL, which D340's
-  proactive fill does not cover, gives that URL the token, and on 2.31 to 2.45 so do the trailing
-  `/`, the unreserved escape and a stale binding (phase 7b's design 16.3); the token reaches only the
-  bound key's host. `GitUrlUser` in the tests' library measures which kind of git a run has.
+  effective URL (curl 8.23.0, as on CI's macOS in phase 7b; in phase 8a's last runs macOS's git,
+  2.56.1, kept the user, see "CI"), asks after the first 401 with no user, and a binding whose key
+  git matches to another user's URL is then answered, the token given without a prompt (plan risk
+  43, D389); `Select`'s drop (D278) is the guard there. The new hosts' rule drops in git's
+  credential view, so GitHub's raw comparison (below) is the exposed one: on such a git, from 2.46
+  on, a reserved character escaped in the binding and raw in the other URL, which D340's proactive
+  fill does not cover, gives that URL the token, and on 2.34.1 to 2.45 so do the trailing `/`, the
+  unreserved escape and a stale binding (phase 7b's design 16.3); the token reaches only the bound
+  key's host. `GitUrlUser` in the tests' library measures which kind of git a run has.
   Accepted in phase 7b (phase 7b's design 16.3; D379, D381, D392): GitHub's rule stays
   7a's raw comparison, which misses an unreserved escape, an unsafe character raw on one side and
   escaped on the other, a reserved character escaped in the binding and raw in the other URL, and a
@@ -2800,7 +3189,7 @@ account"; where tokens are kept, in "Tokens and the keychains".
   prompt queued behind a credential answer), `AccountCredentialTests` (fetch, push and clone
   against `AuthRemoteServer` with the token: a revoked token, an unbound URL, a `Deny` scope, an
   inherited `GIT_CONFIG_COUNT` pair, an inherited `GIT_CONFIG_PARAMETERS` or `include.path` helper,
-  curl's trace, what git older than 2.31 sees, a netrc entry from 2.46 on, a stale `Authorization`
+  curl's trace, a netrc entry from 2.46 on, a stale `Authorization`
   header; the user's `store` helper's file never holds the token), `CredentialBindingSelectTests`,
   `UrlRewritesTests`, `UrlRewritesParityTests` (Git); `HostingSessionCredentialTests` (Hosting);
   `AutoFetchCredentialTests`, `DashboardCredentialTests`, `RefusedTokenDisplayTests`,
@@ -3051,18 +3440,27 @@ account"; where tokens are kept, in "Tokens and the keychains".
   renaming, else nothing selected and the caret at the end). Enter runs `ConfirmButton` unless
   the focus is in a multi-line box or on a button (since phase 6 Mod+Enter runs it from a
   multi-line box, D215), and its automation peer
-  makes the root a control element (a pane named by the title). `DialogRow` is a list row with
-  buttons of its own (the Remotes dialog's `RemoteRow`), a list item to UI Automation. Every
-  dialog's buttons are `CancelButton` and `ConfirmButton` (`VcPrimaryButton`, or `VcDangerButton`
-  for a destructive one). `Theme/Dialogs.axaml` holds the look: a card 400 wide at most (460, class
-  `wide`, for the Remotes and Pick dialogs, and since phase 7a "Clone from GitHub" and "Create pull
-  request"), the title, text, error, box, button row and code
-  classes, and a radio button with a second line (`VcRadioButton`: its keyboard frame, `FocusFrame`,
-  lies round the ring and the content outside the button's bounds and takes no room, phase 3's gate;
-  since phase 8a's review it is only drawn, `IsHitTestVisible` false, so a hover or a click just
-  outside the button is none on it, `RadioFocusFrameTests`); since phase 6 also the settings
-  screen's large card (class `settings`, at most 860 × 680) with its row classes, a warning under a
-  box (`dialogWarning`), and the palette's backdrop and card.
+  makes the root a control element (a pane named by the title). Since phase 8a (D454) Enter also
+  confirms from a dialog's list, where Avalonia's list and radio buttons took it for themselves: in
+  the repository browser's list and a pick dialog's list (`DialogView.ConfirmsOnEnter`), a plain
+  Enter while a row is selected runs the confirm button when it is shown and enabled and its
+  command can run, and with no row selected the key stays the list's; on the checked option of a
+  choice dialog and the checked remote of the push dialog (`ConfirmsOnEnterOnChecked`) it does the
+  same, and on an unchecked one it only checks it. The Reset dialog's modes, "Add repositories", the
+  settings screen's radio groups and the Remotes dialog's rows keep their own Enter
+  (`KeyboardPassTests`). `DialogRow` is a list row with buttons of its own (the Remotes dialog's
+  `RemoteRow`), a list item to UI Automation. Every dialog's buttons are `CancelButton` and
+  `ConfirmButton` (`VcPrimaryButton`, or `VcDangerButton` for a destructive one).
+  `Theme/Dialogs.axaml` holds the look: a card 400 wide at most (460, class `wide`, for the Remotes
+  and Pick dialogs, and since phase 7a "Clone from GitHub" and "Create pull request"), the title,
+  text, error, box, button row and code classes, and a radio button with a second line
+  (`VcRadioButton`: its keyboard frame, `FocusFrame`, lies round the ring and the content outside
+  the button's bounds and takes no room, phase 3's gate; since phase 8a's review it is only drawn,
+  `IsHitTestVisible` false, so a hover or a click just outside the button is none on it,
+  `RadioFocusFrameTests`); since phase 6 also the settings screen's large card (class `settings`, at
+  most 860 × 680) with its row classes, a warning under a box (`dialogWarning`), and the palette's
+  backdrop and card; since phase 8a the text dialog's card (class `document`, at most 760 × 600 and
+  40 from the window's edges: 760 × 600 at (170, 50) at 1100×700, over the settings screen's).
 
 | Dialog (automation id) | View model / view | What it is |
 |---|---|---|
@@ -3084,6 +3482,7 @@ account"; where tokens are kept, in "Tokens and the keychains".
 | `SignInDialog` (phase 7a) | `SignInDialogViewModel` (`DialogViewModel<AccountStatus?>`) / `SignInDialogView` | "Add GitHub account": a personal access token, masked, checked with GitHub; since phase 7b one per provider, "Add GitLab account" (with a second link, to GitLab's legacy token form) and "Add Azure DevOps account" (with the organization's box above the token's); see "The settings screen" |
 | `CloneFromGitHubDialog` (phase 7a) | `CloneFromGitHubDialogViewModel` (`DialogViewModel<string?>`) / `CloneFromGitHubDialogView` | "Clone from GitHub": the account's repositories, a filter and "Choose"; since phase 7b also "Clone from GitLab" and "Clone from Azure DevOps", with a switch between the signed-in providers while two or three are; see "Clone from an account" |
 | `CreatePullRequestDialog` (phase 7a) | `CreatePullRequestDialogViewModel` (`DialogViewModel<bool>`) / `CreatePullRequestDialogView` | "Create pull request": From, Into, the title, the description, Draft and the error line; since phase 7b also GitLab's "Create merge request", with the title GitLab is sent under Draft and the quick-actions note; see "Pull requests" |
+| `TextDocumentDialog` (phase 8a) | `TextDocumentDialogViewModel` (`DialogViewModel<bool>`) / `TextDocumentDialogView` | The licence ("MIT License") or the third-party notices ("Third-party notices"), read-only, stacked over the settings screen (D432): the title (`DialogTitle`); with more than one text, 12 below it, the switch `TextDocumentSwitch`, flat buttons 28 high and 4 apart, each named by its text (`TextDocumentPartMain` and one `TextDocumentPart<name>` per vendor file), the shown one `selected`; the text in a `DocumentTextView` (`TextDocumentText`), 8 below the switch or 12 below the title, shown from its top at opening and after each switch; "Copy all" (`TextDocumentCopyButton`), which puts the shown text whole on the clipboard and leaves the dialog open (a failure a Warning in the log), and "Close" (`ConfirmButton`, primary: true; Esc false). It writes nothing to disk and starts no other program; see "The settings screen" |
 
 Each title has an automation id of its own (`ConfirmTitle`, `NameDialogTitle`, `ResetTitle`,
 `PickTitle`, `ChoiceTitle`, `PushTitle`, `RemotesTitle`, `ErrorTitle`, `FinishingTitle`,
@@ -3109,7 +3508,8 @@ account"'s is `DialogTitle`, as the prompt dialogs'. Phase 7b's questions are th
 sign-outs, "Sign out of GitLab?" and "Sign out of Azure DevOps?" (button "Sign out", primary, as
 GitHub's); its dialogs keep 7a's titles' ids on every provider ("Add GitLab account" and "Add Azure
 DevOps account" `DialogTitle`, the browser `CloneFromGitHubTitle`, the form
-`CreatePullRequestDialogTitle`, D362).
+`CreatePullRequestDialogTitle`, D362). Phase 8a's text dialog asks nothing, and its title's id is
+`DialogTitle`.
 
 ### Drag a branch onto a branch (D87, D120)
 
@@ -3323,7 +3723,9 @@ pages (below). All belong to the `RepositoryViewModel`, like the diff, so a tab 
     from the view's top line does), and across only when it goes to a line that itself ends left of
     the edge, as AvaloniaEdit brings every moved caret into view. A right-click on the text inside a
     selection leaves the selection and the caret as they were, since the run's menu has no copy of
-    its own (`BlameViewTests`, `KeyboardPassTests`).
+    its own (`BlameViewTests`, `KeyboardPassTests`). Tab leaves the text (D426), and the Menu key or
+    Shift+F10 opens, at the text's top, the menu of the picked run, or of the caret's run while none
+    is picked, so that it works as soon as the page opens.
     "Loading…" until git ends; "{name} is a binary file: it has no lines to blame", "{name}
     is a submodule: it has no lines to blame", "{name} is empty", git's failure, or the sentence for
     a `blame.ignoreRevsFile` that names a missing file.
@@ -3562,8 +3964,10 @@ place in `CommitGraphView`: see "Repository tabs").
   area keeps 160 above the 5-high splitter (`ActivityLogViewModel.Fit`): when the window is too low
   for both, the panel gives way first, down to its 30-high header, and it takes its height back
   when the window grows. Letting go of the splitter saves the height in the session
-  (`SessionState.ActivityLogHeight`). It spans what the graph area spans, both columns while the
-  resolver is open.
+  (`SessionState.ActivityLogHeight`), and since phase 8a so does Up or Down on the focused splitter
+  (`ActivityLogSplitter`, "Resize the activity log"), fitted and saved at `Loaded` after the key as
+  a drag's end is (D427; `CommitGraphView`). It spans what the graph area spans, both columns while
+  the resolver is open.
 - **The rows.** A header 30 high (`ActivityLogHeader`): "Activity log", the repository's name, the
   check box "Show reads" (`ActivityLogShowReads`, unchecked) and the close button. Then a
   virtualised list (`ActivityLogList`) in the order the operations and calls started (their
@@ -3997,9 +4401,21 @@ Phase 6. `ViewModels/Commands/CommandPaletteViewModel.cs`, `PaletteEntry.cs`, `P
   GitHub…" after Clone while GitHub is not off, and since phase 7b "Clone from GitLab…" and "Clone
   from Azure DevOps…" after it, each while its provider is not off; see "Clone from an account"),
   New workspace…, Show or hide the activity log, Open settings…, Show keyboard shortcuts…, "Choose
-  an editor…" while none is chosen, and the two themes and System not chosen now). Each state comes
-  from `AppCommands`, which the keys share, and a state taken from a menu builder from that builder
-  on the same `MenuContext` snapshot, so a key, its entry and its menu item are enabled together.
+  an editor…" while none is chosen, the two themes and System not chosen now, and since phase 8a
+  "About VisualCommit…", on every kind of tab, enabled, keyless and with no detail, which opens the
+  settings screen on About, and last "Open the user guide", with F1, D417, D431; see "The user guide
+  and the app's links"). Each state comes from `AppCommands`, which the keys share, and a state
+  taken from a menu builder from that builder on the same `MenuContext` snapshot, so a key, its
+  entry and its menu item are enabled together.
+  Since phase 8a (D417, D452) a repository tab lists "Cancel {title}" first while its running
+  operation can be cancelled (`AppCommands.CancelEntry`, the text `DashboardTexts.CancelTitle`, as a
+  dashboard row's menu words it): no key, no `AppCommand` value, not in the destructive style, the
+  repository's name as its detail while dialogs name it. Run, it presses the status bar's Cancel
+  only while the operation it was listed for is still the one running (`RunningTitle` still equals
+  its title) and can still be cancelled, so that a late Enter never cancels the operation that
+  waited behind it; otherwise it does nothing and logs `Cancel {title}: that operation is no longer
+  running.` at Info (`CancelNoLongerRunning`). A dashboard lists none: its rows' menus have their
+  own "Cancel {title}".
 - **The items** (`AppCommands.PaletteItems`, once the user types; an empty box would list some 1,500
   "Copy SHA" lines): on a repository tab the items of its menus, built by the `RepositoryMenus`
   builders on one snapshot (`RepositoryViewModel.PaletteItems`: every local branch, the checked-out
@@ -4041,7 +4457,9 @@ Phase 6. `ViewModels/Commands/CommandPaletteViewModel.cs`, `PaletteEntry.cs`, `P
   `CommandPaletteViewTests`, `PaletteGrowthTests` (App); check K10; since phase 7a
   `PaletteCloneFromGitHubTests` (Hosting.Tests), `RepositoryMenusHostingTests` (Phase7a) and checks
   B7, B8 and P11; since phase 7b `CloneFromAccountTests` (Hosting.Tests),
-  `RepositoryMenusProvidersTests` (Phase7b) and phase 7b's check B8.
+  `RepositoryMenusProvidersTests` (Phase7b) and phase 7b's check B8; since phase 8a "Cancel {title}"
+  in `StatusBarTests` (App) and check K3, "Open the user guide" in `OpenUserGuideCommandTests` (App)
+  and check G1.
 
 ### Keyboard shortcuts (D163, D192, D199, D213 to D215)
 
@@ -4065,14 +4483,19 @@ by it (`Views/KeyRouter.cs`); every key text comes from one formatter; no screen
   Mod+F search, F3 (Mod+G) and Shift+F3 (Mod+Shift+G) the next and previous match, Mod+Shift+R the
   reflog, Mod+Shift+A and Mod+Shift+X stage and unstage all, Mod+Shift+M the commit message, Mod+Enter
   commit, Mod+Shift+H and Mod+Shift+B the open diff's file history and blame, Mod+Shift+E the filter,
-  F6 and Shift+F6 the regions. `Route(shortcut, platform)` gives a key's command on the tunnelling
-  pass (with its argument, the place for Mod+1 to Mod+8), `Shown` the key a text shows (Refresh F5 but
-  Cmd+R on macOS, Redo Ctrl+Y but Cmd+Shift+Z, the matches F3 but Cmd+G), `All`, `ShownFirst`, and
-  `Groups(platform)` the settings screen's list. The commands left without a key (D199, D213) are
-  reached through the palette; since phase 7a "Clone from GitHub…" (`AppCommand.CloneFromGitHub`,
-  after `FollowSystemTheme`) is one of them (D299), and since phase 7b "Clone from GitLab…" and
-  "Clone from Azure DevOps…" (`CloneFromGitLab`, `CloneFromAzureDevOps`, right after it, so that
-  only the keys-only values moved) are too (D354). The keys left free are D213's.
+  F6 and Shift+F6 the regions, and since phase 8a F1 the user guide's start page (`OpenUserGuide`,
+  D417), one meaning on every tab, the first-run screen's included, and nothing while a dialog or a
+  menu is open (Shift+F1 and Ctrl+F1 route nowhere). `Route(shortcut, platform)` gives a key's
+  command on the tunnelling pass (with its argument, the place for Mod+1 to Mod+8), `Shown` the key
+  a text shows (Refresh F5 but Cmd+R on macOS, Redo Ctrl+Y but Cmd+Shift+Z, the matches F3 but
+  Cmd+G), `All`, `ShownFirst`, and `Groups(platform)` the settings screen's list. The commands left
+  without a key (D199, D213) are reached through the palette; since phase 7a "Clone from GitHub…"
+  (`AppCommand.CloneFromGitHub`, after `FollowSystemTheme`) is one of them (D299), and since phase
+  7b "Clone from GitLab…" and "Clone from Azure DevOps…" (`CloneFromGitLab`, `CloneFromAzureDevOps`,
+  right after it, so that only the keys-only values moved) are too (D354), and since phase 8a
+  "About VisualCommit…" (`AppCommand.About`, right after `CloneFromAzureDevOps`, so that again only
+  the keys-only values moved, with `OpenUserGuide`, F1's, after it; D417). The keys left free are
+  D213's.
 - **One formatter** (D214): `ShortcutText.Format(shortcut, platform)` writes every key text in words,
   also on macOS, joined by `+` (`Ctrl+Shift+P`, `Cmd+Shift+P`, `Option+Up`, `Ctrl+,`, `Esc`; on macOS
   Backspace as `Delete` and Delete as `Forward Delete`), and `FormatAll` joins several (`Ctrl+1 to
@@ -4186,13 +4609,16 @@ by it (`Views/KeyRouter.cs`); every key text comes from one formatter; no screen
   The search box's own Enter and Shift+Enter in those two are written by `ShortcutText.Format` too,
   and the search bar's close button says "Close the search (Esc)" with Close's key
   (`SearchViewModel.CloseToolTipFor`, through `KeyTexts.WithKey`), as tooltip and help text, with no
-  `AcceleratorKey`.
+  `AcceleratorKey`. Since phase 8a a control's automation name holds no key: these buttons are
+  named by `AutomationNames` ("Previous conflict", "Next match", "Close the search", …), and their
+  keys stay in the tooltip, the help text and `AcceleratorKey` (D435; see "Conventions").
 - **Kept from phase 5**: D163's undo and redo on the bubbling pass, Mod+F (now one of the set, still
   selecting the search box's text when the bar is open), the Esc chain and its `EscapeOrder`.
 - Tests: `ShortcutTextTests`, `AppShortcutsTests`, `KeyRouterTests`, `TabKeysTests`,
   `RegionKeysTests`, `CommitKeyTests`, `MenuKeyColumnTests`, `RepositoryMenusKeyTests`,
   `ToolbarToolTipTests`, `ShellToolTipTests`, `WindowKeysTests` (App, with `KeysTestSupport`); checks
-  K11 to K13.
+  K11 to K13; since phase 8a `OpenUserGuideCommandTests` (App), `KeyboardPassTests`
+  (`VisualCommit.VisualTests.Phase8a`) and phase 8a's part K.
 
 ### The settings screen (D197, D200, D216)
 
@@ -4205,14 +4631,20 @@ sign-in entry (`MainWindowViewModel.Hosting.cs`) and their texts
 (`OperationTexts.Hosting.Accounts.cs`, `AccountTexts`). Since phase 7b
 `ViewModels/Settings/AccountBlockViewModel.cs`, one block per provider, and one sign-in dialog per
 provider (phase 7b's design 10); `AccountTexts`' forms that take a provider first (`…Of(p)`) return
-7a's constants for GitHub, word for word (D362).
+7a's constants for GitHub, word for word (D362). Since phase 8a
+`ViewModels/Settings/AboutSettingsViewModel.cs`, its texts (`OperationTexts.About.cs`,
+`AboutTexts`), the text dialog (`ViewModels/Dialogs/TextDocumentDialogViewModel.cs`,
+`Views/Dialogs/TextDocumentDialogView`, `Controls/DocumentTextView.cs`) and the embedded texts
+(`Services/EmbeddedTexts.cs`); the Git program row (`ViewModels/Settings/GitProgramViewModel.cs`)
+and the netrc note, whose texts are in `ViewModels/GitSetup/GitSetupTexts.cs`.
 
 - **A large dialog of the dialog layer** (`SettingsDialog`, `DialogViewModel<bool>`: true after a
   Save that closed it), so both harnesses capture and drive it and "This repository" stays fixed
   while it is open: the card at most 860 × 680 (class `settings`), the title `SettingsTitle`, the
   section list `SettingsNav` (`SettingsNavGeneral`, `SettingsNavGit`, `SettingsNavTools`,
-  `SettingsNavShortcuts`, since phase 7a `SettingsNavAccounts` last, which has no error dot; a
-  section with an error after Save gets `SettingsNavError`), the shown
+  `SettingsNavShortcuts`, since phase 7a `SettingsNavAccounts` and since phase 8a `SettingsNavAbout`
+  last, neither of which has an error dot; a section with an error after Save gets
+  `SettingsNavError`), the shown
   section in a `ScrollViewer` (`SettingsSection`), Cancel and Save, and `SettingsSaving` while a save
   waits. No combo box and no menu over it: radios, check boxes, text boxes, and the Pick dialog stacked
   on top for a long list. The first focus is the shown section's button. Since phase 8a's review,
@@ -4232,9 +4664,15 @@ provider (phase 7b's design 10); `AccountTexts`' forms that take a provider firs
   tab's repository (none on an empty or a dashboard tab, in summary mode or before its refs are read),
   git's settings, the tool catalogues and the key list; since phase 7a also the session's hosting,
   the window's sign-in entry and the detected git's version (`SettingsScreenServices.Hosting`,
-  `SignIn`, since phase 7b a `Func<HostingProvider, Task<bool>>`, `GitVersion`). The error dialog of
+  `SignIn`, since phase 7b a `Func<HostingProvider, Task<bool>>`, `GitVersion`, which since phase 8a
+  the netrc note alone reads); since phase 8a also what the last search for git found
+  (`Detection`), the probe of a chosen file (`ProbeGit`, `GitAccess.ProbeAsync`) and the netrc
+  question and its dismissal (`HomeHasNetrc`, `DismissNetrcNote`). The error dialog of
   git's credentials that a provider refused opens the screen on Accounts ("Open settings…", see
-  "Prompts and credentials").
+  "Prompts and credentials"). Since phase 8a the palette's "About VisualCommit…" and the macOS
+  application menu's "About VisualCommit" open it on About (see "The command palette" and
+  "Start-up and composition"), and the screen is also given the app's identity, the window's
+  launcher and its clipboard (`SettingsScreenServices.Identity`, `Launcher`, `Clipboard`).
 - **General**: the theme (Dark, Light, System), auto-fetch (`AutoFetchCheckBox` and
   `AutoFetchMinutesBox`, 1 to 60 minutes; 0 off; a file's value above 60 kept until edited), Keep
   ignored files (`KeepIgnoredCheckBox`), "Include untracked files when stashing"
@@ -4242,10 +4680,40 @@ provider (phase 7b's design 10); `AccountTexts`' forms that take a provider firs
   list; `RunnablePathExt`, `PATHEXT`'s other entries on Windows; `RunnableExtraBox`, the user's own,
   saved lower-cased in `ExtraRunnableExtensions`). **Git**: git's own settings (see "Git's own
   settings"), always opening on "All repositories (global)", "This repository" one click away, edits
-  in both kept while switching (D200). **Tools**: the editor of Open in editor (`EditorValue`,
+  in both kept while switching (D200); since phase 8a its global scope ends with the Git program row
+  (below). **Tools**: the editor of Open in editor (`EditorValue`,
   `EditorChooseButton`, Other's `EditorProgramBox`, `EditorBrowseButton` and `EditorArgumentsBox`;
   see "Open in editor and Open file"). **Keyboard shortcuts**: `AppShortcuts.Groups` read-only, a
-  `ShortcutGroup` heading per group and a `ShortcutRow` per action, the keys in the code font (D192).
+  `ShortcutGroup` heading per group and a `ShortcutRow` per action, the keys in the code font
+  (D192); since phase 8a its last group is "Help", with one row, "Open the user guide" and F1
+  (D417), which on macOS alone carries the note "On a Mac keyboard F1 needs Fn unless "Use F1, F2,
+  etc. keys as standard function keys" is on." (`AppShortcuts.HelpNoteOnMac`). The guide's
+  shortcuts page holds the same tables (see "The user guide and the app's links").
+- **The Git program row** (since phase 8a; D423; phase 8a's design 5.3). Last in the Git section's
+  global scope (`GitProgramRow`), in every state of the section, also while git cannot be used, and
+  never in "This repository". `GitProgramViewModel` (`GitProgram`, made with the screen from the
+  saved `gitExecutable`, the screen's `Detection` and `ProbeGit`) shows `GitProgramPath`, one line
+  trimmed at its start with its whole text as its tooltip: the pending choice, else the git in use,
+  else "None found"; `GitProgramNote`, where that git came from ("Found on the PATH.", "Found in Git
+  for Windows' install folder." on Windows and "Found in a usual install folder." elsewhere, "Chosen
+  here.", "Chosen here. There is no file at this path.", "Chosen here. VisualCommit runs Git only
+  from a full path to the program itself.", "From VISUALCOMMIT_GIT_STAND_IN, a test switch." or "No
+  Git was found on the PATH or in the usual install folders."), followed, while the choice differs
+  from the git in use, by "VisualCommit uses it from its next start." while git works and
+  "VisualCommit looks for Git again when you save." while it does not (a gone choice dropped while
+  another git was found reads that sentence alone), and, for a chosen git in use that works whose
+  choice is dropped, by "VisualCommit looks for Git again at its next start."; and
+  `GitProgramStatus`, "Checking…" while Browse probes a file, then its refusal (`dialogError`).
+  "Browse…" (`GitProgramBrowseButton`) checks a file as the first-run screen's Choose does, with its
+  10 s, ended with the screen's lifetime (`GitSetupViewModel.CheckChosenAsync`), and a git found and
+  new enough becomes the choice; beside it, while a path is chosen, `GitProgramUsePathButton` drops
+  the choice: "Use the Git it found" while the chosen git is gone and another was found, or while
+  the choice would give way to a git of a usual install folder, else "Use the Git on the PATH". Save
+  writes the choice as `gitExecutable` when it changed (`IsChanged`, `Choice`); Cancel and Esc drop
+  it. A choice saved while git works applies at the next start; one saved while git does not work is
+  looked for once the screen has closed, after a running search has ended
+  (`MainWindowViewModel.ShowSettingsAsync`; see "Git's detection and the first-run screen").
+  `GitProgramViewModelTests` (App), check F12.
 - **Accounts** (since phase 7a; D256, D277, D294, D296, D297; design 8.3; since phase 7b one block
   per provider, D348, D353, D362, phase 7b's design 10.3). `AccountsSettingsViewModel` (`Accounts`,
   made with the screen, disposed at its Cancel and at a Save that closes it) holds `Blocks`, one
@@ -4278,10 +4746,11 @@ provider (phase 7b's design 10); `AccountTexts`' forms that take a provider firs
   question, naming the login and saying that the token and the saved avatars go (D291); "Sign out of
   GitLab?", "Sign out of GitLab as {login}? VisualCommit removes its token from this computer and no
   longer lists merge requests."; "Sign out of Azure DevOps?", the same "for {organization}" and with
-  pull requests; each one's last sentence, on git's own helpers, left out with a detected git older
-  than 2.31; the button "Sign out", primary (D296). Then it shows `AccountsBusy` ("Signing out…")
-  while `IHostingSession.SignOutAsync(provider, CancellationToken.None)` runs: sign-in and sign-out
-  act at once, and the screen's Cancel cannot undo them (D256). While any block signs out, every
+  pull requests; each one ends with "Git over HTTPS asks your own credential helpers again." on
+  every git the app supports (D420); the button "Sign out", primary (D296). Then it shows
+  `AccountsBusy` ("Signing out…") while `IHostingSession.SignOutAsync(provider,
+  CancellationToken.None)` runs: sign-in and sign-out act at once, and the screen's Cancel cannot
+  undo them (D256). While any block signs out, every
   block's buttons are disabled (`Joins`). A sign-out outlives its screen: the blocks keep the running
   sign-outs per session and provider (a `ConditionalWeakTable`), so a block made while one runs, in a
   screen reopened meanwhile, shows "Signing out…", every block's buttons disabled, until it ends, then
@@ -4291,14 +4760,28 @@ provider (phase 7b's design 10); `AccountTexts`' forms that take a provider firs
   the block's "Sign in…". "Git", with an account: `AccountUseForGit` ("Use for git over HTTPS") and
   `AccountUseForGitNote` (`AccountUseForGitNoteOf`: GitHub's 7a's; GitLab's naming GitLab; Azure
   DevOps' "Clone, fetch, pull and push to {organization}'s repositories on Azure DevOps over HTTPS use
-  this account's token …", D350), which with a detected git older than 2.31 reads, for every
-  provider, "This needs Git 2.31 or newer. …" (D277; the switch stays enabled, kept for a newer git).
+  this account's token …", D350), the same on every git the app supports (D420).
   Each switch is a setting: it starts as its account's, resets when `AccountChanged` brings another
   account of its provider and, while not toggled, follows its account's own value; Save applies each
   changed one (`IsChanged`; `ApplySwitches`: `IHostingSession.SetUseForGit(provider, value)` per
   changed block, which the session writes off the UI thread); Cancel and Esc drop them. No scope or
   expiry is shown or warned of (D297). With two or three accounts signed in the section scrolls at
   1100×700 (D353).
+- **The netrc note** (since phase 8a; D424; phase 8a's design 5.3). Under the blocks,
+  `AccountsNetrcNote` (classes `settingsNote notice warning`) with "Dismiss"
+  (`AccountsNetrcDismiss`) under it shows while an account of any provider is signed in with "Use
+  for git over HTTPS" saved on, the git found is older than 2.46.0 (`GitSetupTexts.NetrcSafeFrom`)
+  and the home folder git is given (`GitConfigLocations.Home` over git's settings' environment)
+  holds a `.netrc` or `_netrc` file: "Your home folder has a .netrc or _netrc file. With Git {v}, an
+  entry in that file for a host can answer git's requests to it before your signed-in account. Git
+  2.46 or later stops this for git's own requests; git-lfs reads the file with every version of
+  Git." Whether either file exists is one of the screen's reads when it opens, off the UI thread
+  (`AccountsSettingsViewModel.ReadNetrcAsync` over `SettingsScreenServices.HomeHasNetrc`, which the
+  window gives from `MainWindowViewModel.HomeHasNetrc`); the file's content is never read, and a
+  read that fails shows no note, with a Warning. "Dismiss" hides it for the session: the window
+  keeps that (`DismissNetrcNote`) and asks no more; nothing is written. `AccountsSettingsViewModel`
+  keeps the detected git's version for this note alone, and no block reads it (see "Limits" in
+  "Prompts and credentials"). `AccountsNetrcNoteTests` (App), check F14.
 - **"Add … account"** (`SignInDialog`; D253, D288, D295, D297, D298; design 8.4; since phase 7b one
   per provider, D345, D360, D378, D385, D387, phase 7b's design 10.4).
   `SignInDialogViewModel(hosting, provider, launcher, log, organization)` is a
@@ -4384,9 +4867,69 @@ provider (phase 7b's design 10); `AccountTexts`' forms that take a provider firs
   signed out, and the palette's "Clone from {name}…" while that provider is signed out. No other
   palette command signs in, and none opens Accounts (D299): each "Clone from …" opens the sign-in
   dialog only as its own first step.
+- **About** (since phase 8a; D398, D409, D431, D432; phase 8a's design 8.3).
+  `AboutSettingsViewModel` (`About`) is made with the screen and saves nothing. The view
+  (`SettingsAbout`, inside a `Panel` that carries `ShowsAbout`) holds rows 18 apart: the app's mark
+  (`AboutIcon`, `AppIcon.Image96Uri` decoded once and drawn at 48 × 48 with high-quality
+  interpolation, raw to UI Automation), 16 left of its name (`AboutName`, 20, SemiBold) over
+  "Created by Rahim Khajei" (`AboutCreator`, `secondary`); then, with the screen's 132-px label
+  column, Version (`AboutVersion`, named by its text), Copyright (`AboutCopyright`), License ("MIT
+  License", `AboutLicense`, with "Show license…", `AboutShowLicenseButton`, 10 below), Notices
+  (`AboutNoticesNote`, "VisualCommit is built on open-source components, each under its own
+  license.", with "Show third-party notices…", `AboutShowNoticesButton`, 10 below), Source code
+  (`AboutRepositoryLink`, `github.com/RahimPasha/VisualCommit`, which opens `AppLinks.Repository`)
+  and User guide (`AboutGuideLink`, "Open the user guide", which opens
+  `AppLinks.Guide(GuidePage.Start)`). The two links are `VcLinkButton`s (see "Shell and views"),
+  underlined while hovered or focused, each with a tooltip ("Opens … in your browser."); they open
+  through `IFileLauncher.OpenUrlAsync`, are disabled without a launcher, and a failure to open one
+  is a Warning in the log. No text of the section holds an e-mail address (D409). The identity is
+  the session's `AppIdentity` (`Services/AppIdentity.cs`; see "Start-up and composition"), which
+  `AppIdentity.FromAssembly` makes from the assembly's product, `AppIdentity.CreatorName`, its
+  informational version and its copyright. `AppVersionInfo.Parse`
+  reads the informational version: `0.1.0+<7 to 40 hexadecimal digits>` gives the commit, shown by
+  its first seven characters (`0.1.0 (3dc0887)`); any other part after `+` is dropped, and none
+  gives `0.0.0`. "Show license…" and "Show third-party notices…" read their texts off the UI thread,
+  wait for a Save that runs (see "Its work ends with it" below) and then show the text dialog
+  (see "Dialogs") without waiting for it to close: the licence as one text, "MIT License"; the
+  notices as "Components and licenses" (`THIRD-PARTY-NOTICES.md`, `TextDocumentPartMain`) followed
+  by each vendor file in the order of its resource's name, its switch button named by its
+  component ("Avalonia", ".NET Community Toolkit", "Onigwrap", "SkiaSharp and HarfBuzzSharp"; a
+  file it does not know keeps its own name) and its id `AboutSettingsViewModel.PartId(file)`
+  (`TextDocumentPart` and the file's name before its first `-`, without dots). A text that cannot be
+  read is an Error in the log ("The text {name} could not be read.") and shows no dialog, and none
+  shows once the screen has closed; a second press while the texts are read opens nothing more.
+  The four commands allow concurrent runs, so that their buttons keep the keyboard focus (see
+  "Conventions").
+- **The texts About shows** (D431, D433, D434; `Services/EmbeddedTexts.cs`). The app's project
+  embeds `LICENSE` as `VisualCommit.License.txt`, `THIRD-PARTY-NOTICES.md` as
+  `VisualCommit.ThirdPartyNotices.md` and each file of `notices/` as `VisualCommit.Notices.<file
+  name>`, word for word, in `VisualCommit.dll`, so nothing lies beside the executable and the
+  installers ship the same texts. `EmbeddedTexts.Read(name)` gives a text with `\n` line ends and a
+  byte-order mark dropped, and throws `FileNotFoundException` for a name the assembly lacks;
+  `VendorNotices()` gives the vendor files' resource names in ordinal order, and `FileNameOf` each
+  one's file name. `notices/` holds the vendors' own files byte for byte (`.gitattributes`:
+  `notices/** -text`): Avalonia's `NOTICE.md`, CommunityToolkit.Mvvm's `ThirdPartyNotices.txt`,
+  Onigwrap's `THIRD-PARTY-NOTICES.TXT` and SkiaSharp's `THIRD-PARTY-NOTICES.txt`, which
+  HarfBuzzSharp ships too (their sources and SHA-256 are in phase 8a's design 1.17).
+  `THIRD-PARTY-NOTICES.md` lists, under `## Components`, each component the build output ships on
+  the three systems, with a `Packages:` line (its NuGet packages with their versions; none for a
+  component that is no package), `Files:`, `Source:`, its copyright lines word for word in a fenced
+  block, and `License:`; then `## License texts`, each licence text once (BSD-3-Clause once per
+  holder), and `## Keeping this file true`. It spells "License" as the app's labels do (D434).
+  `ThirdPartyNoticesTests` (App.Tests, eight facts) hold it to the build: every package of the app's
+  `VisualCommit.deps.json` that ships a runtime, native or resources file is named once with its
+  version, and every such file is on its entry; every package named ships at that version (the
+  macOS and Linux native packages of SkiaSharp and HarfBuzzSharp, which a Windows build trims, D239,
+  at their managed packages' versions); every grammar and theme of TextMateSharp.Grammars is
+  listed; every licence named has its text under "License texts" or in `notices/`; the embedded
+  texts equal the repository's files; `AppIdentity.FromAssembly`'s copyright is `LICENSE`'s third
+  line; and the only e-mail addresses in the file are those its copyright lines carry, each inside
+  a fenced block. Because the app embeds these files, CI's trigger counts them as code (D433; see
+  "CI").
 - **Save** (design 7.8), in order: validate every section (an error marks its section, shows it and
   focuses its first wrong field; the editor's disk checks run off the UI thread); the app's settings
-  in one `ISettingsStore.Update`; since phase 7a Accounts' switch when changed, since phase 7b each
+  in one `ISettingsStore.Update` (since phase 8a with `gitExecutable` when the Git program row
+  changed); since phase 7a Accounts' switch when changed, since phase 7b each
   block's changed switch alone (`AccountsSettingsViewModel.ApplySwitches`:
   `IHostingSession.SetUseForGit(provider, value)`); the theme through `UseTheme`; the global git
   writes, one at a time through the app-level writer; this repository's writes as one operation of
@@ -4417,14 +4960,20 @@ provider (phase 7b's design 10); `AccountTexts`' forms that take a provider firs
   operation; the editor at the next file menu; the identity at the next commit, also in a terminal;
   the pull mode at the next pull; the merge tool at once in an open resolver; since phase 7a a
   sign-in or a sign-out at once, and "Use for git over HTTPS" from Save (see
-  "Hosting: the session and the account").
+  "Hosting: the session and the account"); since phase 8a the Git program at the next start while
+  git works, and while it does not once the screen has closed (D423).
 - Tests: `SettingsDialogViewModelTests`, `SettingsDialogViewTests`, `PickDialogViewModelTests`,
   `SettingsEntryTests`, `GitSettingsViewModelTests`, `RepositoryOperationsSettingsTests`,
   `GitSettingsChangedTests`, `JsonSettingsStoreTests`, `AppSessionTests` (App); checks S14 and S16
   to S21. Since phase 7a `AccountsSettingsViewModelTests`, `SignInDialogViewModelTests` (Phase7a),
   `SignInEntryTests` (Hosting.Tests, D334) and checks A1 to A11; since phase 7b
   `AccountsProvidersViewModelTests`, `SignInDialogProvidersTests` (Phase7b),
-  `SignInEntryProvidersTests` (Hosting.Tests) and phase 7b's checks A1 to A14.
+  `SignInEntryProvidersTests` (Hosting.Tests) and phase 7b's checks A1 to A14; since phase 8a
+  `AboutSettingsViewModelTests`, `TextDocumentDialogViewModelTests`, `DocumentTextViewTests`,
+  `ThirdPartyNoticesTests` and three cases of `SettingsDialogViewModelTests` (a Show and a Save that
+  overlap) (App), `AboutSectionTests` and `AboutEntryTests` (Phase8a), and phase 8a's checks A1 to
+  A6; for the Git program row and the netrc note `GitProgramViewModelTests` and
+  `AccountsNetrcNoteTests` (App) and phase 8a's checks F12 and F14.
 
 ### Git's own settings (D190, D200, D202, D217 to D219)
 
@@ -4517,6 +5066,94 @@ this computer), `EditorCommands.cs` (how one starts), `FileLauncher.OpenInEditor
   thread pool (`TabServices.FileExists`, D59), and it stops when the tab closed meanwhile.
 - Tests: `KnownEditorsTests`, `EditorCatalogTests`, `EditorCommandsTests`, `FileMenuEditorTests`,
   `FileLauncherTests`, `RepositoryOperationsFilesTests` (App); check S17.
+
+### The user guide and the app's links (D408, D417, D434, D439 to D441, D451, D471)
+
+Phase 8a. The guide's source is `docs/guide/`: `book.toml`, `guide.css` and, under `src/`,
+`SUMMARY.md` and 33 pages. mdBook 0.5.4, pinned by its version and its archive's hash, builds it
+into a site in the guide's own workflow, and GitHub Pages serves the site from `master` alone at
+`https://rahimpasha.github.io/VisualCommit/` (D408, D439). mdBook is no part of the repository.
+
+- **The app's links** (`Services/AppLinks.cs`): `GuideBase`, that address; `Repository`,
+  `https://github.com/RahimPasha/VisualCommit`; and `Guide(page)`, the base and a `GuidePage`'s
+  path, with no query string: `Start`, the start page; `FirstRun`, `first-run.html`; `GitMissing`,
+  `GitChosenMissing`, `GitTooOld`, `GitNotWorking` and `HelperMissing`, the anchors `#git-missing`,
+  `#git-chosen-missing`, `#git-too-old`, `#git-not-working` and `#helper-missing` of
+  `troubleshooting/git.html`; and `Shortcuts`, `reference/shortcuts.html`. Every link opens through
+  `IFileLauncher.OpenUrlAsync`, in the user's browser. F1 and the palette's "Open the user guide"
+  open the start page on every tab (`AppCommands.OpenUserGuideAsync`; see "Keyboard shortcuts"):
+  with no launcher nothing opens and `Open the user guide: there is no launcher.` is logged at Info,
+  and a launcher that fails gives the Error line `Open the user guide failed.`. About's
+  `AboutGuideLink` opens the start page and `AboutRepositoryLink` the repository (see "The settings
+  screen"), and the first-run screen's `GitSetupGuideLink` its state's anchor (`GitSetupTexts`; see
+  "Git's detection and the first-run screen"). No control links to `FirstRun` or `Shortcuts` yet;
+  their pages are held as the others are.
+- **The pages** quote the app's words, so they spell the American way (D434). A picture is two raw
+  `<img>` elements, light first, each with its `alt` text, `srcset` "<file> 2x" (D440) and `width`,
+  half the picture's pixel width, so that it shows at the app's own size also where the browser
+  takes the `src` (D471; no test holds the widths). `guide.css` hides the other theme's image by
+  mdBook's theme class on `html`: `light` and `rust` show the light pictures, `coal`, `navy` and
+  `ayu` the dark ones; it also widens the content to 1,000 px. `book.toml` sets `site-url` to
+  `/VisualCommit/`, the light theme by default and navy as the dark one, makes no code block
+  runnable (the playground's `runnable` false), turns the print page off (`print.html` keeps a
+  picture's `srcset` as the page wrote it, which would then point outside the site) and keeps
+  mdBook's search. The site loads nothing from another host: no analytics and no outside font.
+- **The pictures** are made at every build by `tests/VisualCommit.GuideShots`, a project outside the
+  solution (D439; see "Solution layout"), and never committed. There are 42 shots
+  (`GuideShotCatalogue.Names`), each an `[AvaloniaTheory]` over the dark and the light theme, so 84
+  pictures, each from a fresh `ShellDriver.Start` on the demo data (`GuideScenario`) under the root
+  that `VISUALCOMMIT_GUIDE_ROOT` names, whose paths the pictures show: `Projects/weather-station`,
+  30 commits by three made-up authors at `example.com` with branches, tags, a stash, an `origin`
+  never fetched and changed files, `Projects/recipe-box` for the dashboard, and the data folder
+  `.config/VisualCommit`, empty at each start. The demo's GitHub owner is `demo--alex`, a name
+  GitHub cannot give out (D451), served by the fake of GitHub in process, and git reads as 2.43.0
+  at its usual path in every shot but the first-run ones (`GuideRun.ShownGitVersion`). The window's
+  render scaling is 2 (`GuideCamera.Scale`), and each picture is cut to its window, control or area
+  (`GuideFrame`), a dialog's card or a menu with 8 pixels round it (`GuideFrame.Card`). `LeakGuard`
+  fails a shot, saving nothing, when a visible text of a text block or a text box holds the user's
+  or the machine's name (three characters or more), the temp folder, the real home folder, the
+  repository's path, `VisualCommit.Tests`, `Test Author`, an e-mail address not at `example.com`, or
+  a `github.com/` address of an owner other than the demo's, the app's own repository aside; it
+  cannot read what a control draws itself (the graph, the diff), whose text is the demo's.
+  `GuideSettings` refuses a root that is not absolute, that lies inside the temp folder or the
+  repository or holds either, or that is neither empty nor marked by its `.visualcommit-guide`, and
+  deletes only its own folders there (`Projects`, `remotes`, `.config`, `.template`). The pictures
+  go to `artifacts/guide/pictures/`, or to the folder `VISUALCOMMIT_GUIDE_PICTURES` names, as the
+  workflow names `docs/guide/src/pictures/`, which git ignores.
+- **The workflow** (`.github/workflows/guide.yml`) runs on a push that touches `docs/guide/**`, the
+  workflow, the links' check, `src/**`, `tests/VisualCommit.Testing/**`,
+  `tests/VisualCommit.GuideShots/**`, `tests/Directory.Build.props`, `Directory.*.props`,
+  `Directory.Build.targets` or `global.json`, and by hand (`workflow_dispatch`); one run per ref, a
+  newer push cancelling an older run except on `master`. Its token is read-only (`contents: read`)
+  and its checkout keeps no credentials (D451). Its job `build`, on `ubuntu-latest` within 30
+  minutes, runs "App's links" (`AppLinksTests` and `GuideShortcutsPageTests`, the two App.Tests
+  classes that read the pages, since CI leaves `docs/**` out, D451), "Pictures" (GuideShots with the
+  root `/home/demo`) and "Book" (mdBook's Linux archive downloaded and checked against its SHA-256,
+  the book built into `docs/guide/book/`, then the links' check's self-test and the check of the
+  site). On `master` the site goes to GitHub Pages, by the job `deploy`, the only one with
+  `pages: write` and `id-token: write`, in the environment `github-pages`; on any other branch it is
+  the run's artifact `guide-site`, kept 14 days. Its runs are read as CI's (CLAUDE.md's Commands).
+- **The links' check** (`scripts/check-guide-links.py`, Python's standard library alone, run with
+  `python3 -I`; D441, D451) reads every `.html` and `.css` file of the built site: every relative
+  address must resolve to a file of the site and every `#fragment` to an `id` in its target, and
+  nothing that loads may name another host or a protocol-relative address (a script, an image or
+  its `srcset`, a frame, a media source, a style sheet, a `url(…)` or `@import` in a style or a
+  `.css` file, among others); a link a user follows to another site passes. Findings print as
+  `<file>: <url>: <reason>`; the exit code is 0 for a clean site, 1 with findings and 2 for a wrong
+  call, and `--self-test` checks the script's own rules.
+- **Tests.** `AppLinksTests` (App): the repository is the build's `RepositoryUrl` and the guide its
+  owner's pages under its name, every page an https address under the guide with no query, and each
+  `GuidePage`'s page in `docs/guide/src`, linked from `SUMMARY.md`, with its anchor once as
+  `{ #id }` at a heading's end, outside code. `GuideShortcutsPageTests` (App): the tables between
+  `<!-- shortcuts:start -->` and `<!-- shortcuts:end -->` in `reference/shortcuts.md` are those made
+  from `AppShortcuts.Groups` for both platforms, so the guide and the settings screen's list cannot
+  drift. `OpenUserGuideCommandTests` (App); `GuideCatalogueTests` (every picture a page shows is in
+  the catalogue and shown in both themes, as two images with their `srcset`), `LeakGuardTests` and
+  `GuideSettingsTests` (GuideShots); part G (`VisualCommit.VisualTests.Phase8a`), whose fake
+  launcher records each address the palette, F1 and the links open. Every statement of the pages
+  was checked against the source before the guide's merge (phase 8a's design 11.10); beyond the
+  pages and anchors the app links to and the shortcuts page's tables nothing holds a page to the
+  app, so a change to the app's words, keys or behaviour needs its page's change too.
 
 ### Hosting: the provider and GitHub's API (D252, D257, D258, D284 to D286, D347, D357, D358, D378)
 
@@ -6309,7 +6946,97 @@ scheduled tasks ran, measured 2,456 ms, over the limit, and the pass run again a
 rest 1,400 ms, its 459 frames after the load at a 95th percentile of 1.3 ms and a longest of
 21.2 ms (plan risk 10). At phase 7b's gate the pass, started straight after the default run without
 a rest, measured 1,827 ms, its 459 frames at a 95th percentile of 1 ms and a longest of 10 ms. Phase
-7b changed neither the lines nor how the pass reads them.
+7b changed neither the lines nor how the pass reads them, and neither did phase 8a: Q1 is M1 of its
+performance measures, still taken by phase 1's pass against its bounds of 2,000 ms to the first
+rows, 8 ms at the 95th percentile and 33 ms for the longest frame (D436), and the other measures
+have lines and a class of their own (next section). At phase 8a's gate the pass that stands (on
+`750eb33`, 2026-11-27, begun about an hour after the pass before it ended) measured 1,626 ms, its
+468 frames after the load at a 95th percentile of 0.9 ms and a longest of 4.8 ms. The two passes
+before it, on code that is the same for Q1, do not stand as the gate's: the first round's (on
+`e4b323c`, after a rest of 14 minutes; ruling 115) measured 1,912 ms, and the one on `0f9099a`,
+nine minutes after the default run, 1,938 ms (ruling 116; plan risk 10).
+
+### Start-up, memory and reload measures (D436 to D438, D457, D458, D461, D467)
+
+Phase 8a. `Services/StartupTimeline.cs` and the reload's and the heap's lines in
+`RepositoryViewModel`; the opt-in series `Phase8aPerformance` and `PerformanceSeries` in
+`tests/VisualCommit.RealWindowTests`; the commands are CLAUDE.md's.
+
+- **The start-up timeline** (`IStartupTimeline`, `StartupTimeline`, `NullStartupTimeline`). The
+  process's one is made in `Program.Main` once the single-instance guard is resolved
+  (`StartupTimeline.FromProcess`) and reaches the session and the tabs as "Start-up and
+  composition" says (`AppLaunch.Current.Timeline`, `AppSession.Start`'s `startup`,
+  `TabServices.Startup`); the headless harness and every test that builds `TabServices` by hand use
+  `NullStartupTimeline`. It counts from the process's start time as the system reports it, so the
+  guard's wait is inside its times. It is told of the main window's `Opened`, of the end of the
+  first search for git when that found a usable git, of the restored tabs that open a repository
+  (counted before they open, dashboards not counted; `MainWindowViewModel.InitializeAsync`) and of
+  a repository's first rows drawn (`RepositoryViewModel.OnRowsDrawn`), and writes each line at Info
+  once per process, whatever the thread (each line's flag is set with `Interlocked`), N the whole
+  milliseconds since the process started, rounded down, 0 for a clock that reads earlier:
+  `Start-up: window opened after {N} ms since the process started.`, `Start-up: Git found after
+  {N} ms since the process started.` and, only after a restore of one tab or more,
+  `Start-up: first graph rows of {name} after {N} ms since the process started ({k} restored
+  tabs).` (`1 restored tab` for one); a user's own open has Q1's line alone (D438). When the start
+  time cannot be read, one Warning, `Start-up: the process's start time could not be read, so no
+  start-up times are logged.`, and the null timeline.
+- **The reload and the heap** (D438). A refresh whose refs' fingerprint changed writes, after the
+  swap, `{name}: graph reloaded after a change of the refs, {n} commits in {N} ms.` at Info, timed
+  from before the refs' read to the swap; a refresh with no change and a swap for a filter alone
+  write none. Every load, the first and each reload, writes after its `loaded` line
+  `{name}: managed heap {N} MB after loading {n} commits.` at Info, N from
+  `GC.GetGCMemoryInfo().HeapSizeBytes`, the size the last collection left (none is forced), in MB of
+  1,048,576 bytes, rounded half away from zero. Neither line starts a process or adds a git call.
+- **Pull's git calls** are held to a budget: `RepositoryOperationsPullTests` holds a fast-forward
+  and a merge Pull on `Scenarios.RemoteSyncAsync` to 23 calls each (`GitCallBudget.AssertAtMost`,
+  measured on git 2.56.0.windows.4; D280's rule), and every run appends its count, budget and git's
+  version to `artifacts/visual/pull-budget.txt`, which CI uploads with each job's pictures.
+- **The series** (`Phase8aPerformance`) has five facts, run in the order M2, M3, M4 with M5, M6,
+  M7 (`Phase8aPerformanceOrder`). Each is skipped unless `VISUALCOMMIT_PERF_RUNS` holds a whole
+  number from 1 to 20, the runs per measure, and any other value fails it; the gate's real-window
+  pass runs without the variable and shows the five as skipped, and `PerformanceSeriesTests` never
+  sets it. Its fixture (`Phase8aPerformanceRun`) does no work before a skip: the first fact that
+  needs them makes the clones of the 100,000-commit repository (`git clone --local --no-hardlinks`
+  with `gc.auto=0` and `maintenance.auto=false`), and every run asserts before and after that no
+  measured repository holds a commit-graph (D47, D437). Every launch has a data folder of its own
+  and `RealApp.Launch`'s environment without the watcher's lag; each wait has its own limit (one
+  load 120 s, ten loads 300 s, a reload 60 s).
+
+| Measure | Value of a counted run | Bound | Trigger |
+|---|---|---|---|
+| M1 | Q1, in phase 1's pass | 2,000 ms; 8 ms; 33 ms | none |
+| M2 | the start with one restored 100,000-commit tab: the first-rows line's N, after an uncounted warm-up launch | 9,500 ms | none |
+| M3 | the start with ten such tabs, `LargeHistory` active and nine clones: the active tab's first-rows line, after a warm-up launch; the working set after the ten loads noted | 8,900 ms | median above 1.25 times M2's |
+| M4 | in M5's launches (`RealApp.Memory()`): the working set 2 s after the `loaded` line, and the peak working set 2 s after the reload line | 370 MB; 440 MB | peak above twice the working set after the load |
+| M5 | an empty commit made outside the app: from git's return to the reload line (`RealApp.LogTime`); the line's N noted | 4,600 ms | the line's median above 2,000 ms |
+| M6 | a commit made in the bare remote of the measured clone, then a click on Fetch: from the click to the reload line; the line's N and the Fetch's span noted | 8,800 ms | as M5 |
+| M7 | 20 calls of `ReadPullConfigurationAsync("main")` on `Scenarios.RemoteSyncAsync()`, no window: their median | 630 ms | median at 250 ms or more |
+
+- **The bounds** are the slowest counted run of a series times 1.25, rounded up, times to 100 ms
+  (M7's to 10 ms) and memory to 10 MB (D436, D437), and every counted run must stay at or under its
+  bound. M4's to M7's come from the three series of 2026-11-22 (D457 (3)), M2's and M3's from the
+  restore order's alternated series of 2026-11-23 (D458 (3)); no kept run of that series taken
+  again on 2026-11-24 passed one, so they stay (D461 (4), D467). The class writes each trigger's
+  line, and a trigger that fires is settled by a ruling or a row of plan.md's Backlog: M5's, M6's
+  and M7's fired and went to the Backlog, and M3's brought the restore order (D457 (4), (5); see
+  "Start-up and composition"), proven by M2 and M3 with the two builds run alternately (D458,
+  D461, D467).
+- **How a series is taken** (D457 (2), D458 (4), D461 (2)): on the owner's laptop in the Release
+  build, the real-window project built on the very commit at least ten minutes before and nothing
+  committed in between, no agent at work, and Windows' Task Scheduler read for what is due before a
+  run and for what ran after it, a run that met a task taken again. A series' numbers are the
+  laptop's of that hour (D467: on 2026-11-24 M2 read 2,953 to 5,535 ms on the two builds and M3 with
+  the restore order 3,173 to 3,998 ms). Each run of the class writes
+  `artifacts/perf/phase-8a/series-<yyyyMMdd-HHmmss>-<commit>.txt`, `-changes` added when the tree is
+  not clean, the commit and the tree read by a git cut off from the machine with
+  `GIT_OPTIONAL_LOCKS=0`, never through `RealWindowRun`, which empties the gate's captures (D437):
+  a head line (the date, the commit, git's version, the runs), each run's line with its noted
+  values, and per measure `M2: median {m} ms, range {a} to {b} ms, {n} runs; bound {B} ms, held`
+  (or `not held`), its trigger's line and, for a measure that failed, why.
+- Tests: `StartupTimelineTests` (App); the reload's and the heap's lines in
+  `RepositoryViewModelTests` and `RepositoryViewModelFilterTests` (App); `PerformanceSeriesTests`
+  (the real-window project: the median, the range, the bounds' rounding, the variable's values and
+  the summary line).
 
 ### Settings, session, log and data folder
 
@@ -6318,10 +7045,16 @@ a rest, measured 1,827 ms, its 459 frames at a 95th percentile of 1 ms and a lon
   (`MergeToolsFile`, the kept list of merge tools, D202), and since phase 7a `accounts.json`
   (`AccountsFile`, the hosting accounts' records, since phase 7b one per provider, never a token,
   D287, D357) and `avatars/` (`AvatarsDirectory`: GitHub's avatars' images and `index.json`, and
-  the e-mail maps in `authors/`; D286, D291, D349). Phase 7b added no path. `AppPaths.Resolve()`
-  uses `VISUALCOMMIT_DATA_DIR` when it is set, otherwise the per-user folder
-  (`%APPDATA%\VisualCommit`, `~/Library/Application Support/VisualCommit`,
-  `~/.config/VisualCommit`).
+  the e-mail maps in `authors/`; D286, D291, D349). Phase 7b added no path. Phase 8a added
+  `instance.lock` (`InstanceLockFile`: the instance that owns the folder holds it alone for its
+  process's life, and it is never deleted, so that two processes can never lock two files of one
+  name) and `instance.json` (`InstanceFile`: that instance's process id, endpoint and start, which
+  it deletes as it ends; D421, see "Start-up and composition"). `AppPaths.Resolve()` uses
+  `VISUALCOMMIT_DATA_DIR` when it is set, otherwise the per-user folder (`%APPDATA%\VisualCommit`,
+  `~/Library/Application Support/VisualCommit`, and on Linux `$XDG_CONFIG_HOME/VisualCommit`,
+  usually `~/.config/VisualCommit`): .NET's `SpecialFolder.ApplicationData`, which follows
+  `XDG_CONFIG_HOME` on Linux alone. `AppPathsTests` holds each platform's folder (ruling 68), the
+  macOS one in CI's macOS job.
 - `AppSettings` (Core) is an immutable record of preferences: `Theme`, `FileList` (D44),
   `DiffMode` (D61), `AutoFetchMinutes` (default 5, 0 turns auto-fetch off; no screen sets it
   before phase 6, D85), `StashIncludeUntracked` (default true: the stash dialog's check box
@@ -6336,7 +7069,10 @@ a rest, measured 1,827 ms, its 459 frames at a 95th percentile of 1 ms and a lon
   D107), not 0 or false. `ISettingsStore.Update(settings => settings with { ... })` changes and
   saves it. Phase 7a added no setting, and neither did phase 7b: "Use for git over HTTPS", which the
   settings screen's Accounts section saves for each provider, is each account's, in its record in
-  `accounts.json` (D255, D287, D350).
+  `accounts.json` (D255, D287, D350). Phase 8a added `GitExecutable` (`gitExecutable`): the git
+  program chosen on the first-run screen or in the settings screen's Git program row, a full path,
+  written only while it is set (`JsonIgnoreCondition.WhenWritingNull`), so that a file without it
+  reads as none (D423; see "Git's detection and the first-run screen").
 - `SessionState` (Core) is what changes as the app is used (D46): `Tabs` and `ActiveTab`,
   `Recent`, `Window` (`WindowPlacement`: position, client size, maximised) and the panels'
   preferred widths. `JsonSessionStore` (App) keeps it like the settings: written through a
@@ -6384,18 +7120,24 @@ region is a `UserControl` in `Views/Shell`.
 | Repo tabs | `RepoTabsView` | 36 high | `RepoTabs` | Real: one tab per repository (`RepoTab` buttons named by title, `CloseTabButton`), and "+" (`AddRepoButton`, since phase 6 named "Open a new tab") for a new tab. Since phase 6 a dashboard's tab first (`DashboardTab`, `TabIcon` `IconWorkspace`, `ItemStatus` `Workspace`), and the tabs laid out by `RepoTabStripPanel` (D228): they keep 120 to 220 while they and "+" fit, then the widest shrink first down to 80, then they scroll with the active tab whole in view and "+" at the right end (a wheel notch 80, no arrow buttons) |
 | Toolbar | `ToolbarView` | 52 high | `Toolbar` | `FetchButton`, `PullButton`, `PushButton`, `BranchButton`, `StashButton`, `PopButton` are real (see "Toolbar, status bar, conflict banner and auto-fetch"); since phase 5 `UndoButton`, `RedoButton` and `SearchButton` too, with their tooltips as automation help text; since phase 6 `SettingsButton` at the start of the right group, every button's tooltip as help text and its key as `AcceleratorKey`. `ThemeSwitch` works |
 | Left panel | `LeftPanelView` | 260 wide by default; 180 to 520; hidden on a dashboard tab | `LeftPanel` | Real: `FilterBox` and the list `RefList` (`Section`, `RefItem`), with menus, double-clicks and branch drags, and since phase 5 the marks of hidden and soloed branches (`RefHiddenToggle`, `RefSoloToggle`); since phase 7a, with a hosted remote (since phase 7b of any provider, the section titled "Merge requests" on GitLab), the "Pull requests" section's rows (`PullRequestItem` with `PullRequestNumber`, `PullRequestTitle`, `PullRequestDraft`, `PullRequestAuthor`; `PullRequestMessage`) and a branch row's `RefPullRequest`, see "Pull requests"; without one "Pull requests" stays phase 1's closed, empty header |
-| Commit graph | `CommitGraphView` | The rest; at least 320; while the resolver is open, the right panel's column too; on a dashboard tab all three columns | `CommitGraph` | Real: `WelcomeView` (`OpenRepoButton`, `CloneRepoButton`, `InitRepoButton`, the clone form, since phase 7a with `CloneFromGitHubButton` while signed in, since phase 6 the Workspaces section `WorkspacesHeading`, `NewWorkspaceButton`, `WorkspaceList`, `WorkspaceItem`, `NoWorkspacesText`, `WorkspacesNotice`), since phase 6 `DashboardView` (`Dashboard` and its parts, see "The dashboard tab") and `TabWaitingText`, `RepositoryGraphView` (`GraphRows`, `GraphScrollBar`, and since phase 5 the search bar `SearchBar` with `SearchModeButton`, `SearchBox`, `SearchCount`, `SearchProgress`, `SearchPrevious`, `SearchNext`, `SearchClose`, and `GraphReloading`), or in its place `InteractiveRebaseView` (`InteractiveRebaseView`, `RebaseRow`, …), `DiffView` (`DiffView`, `DiffText`, see "Diff view"), `ConflictResolverView` (`ConflictResolver`, `ConflictOurs`, `ConflictTheirs`, `ConflictResult`, …, see "The graph area") or a page of phase 5 (`FileHistory`, `Blame`, `Reflog` and their parts); above any of them, while one shows, `ConflictBanner` (`BannerText`, `BannerContinueButton`, `BannerSkipButton`, `BannerAbortButton`); under them, while the window has it open, the activity log (`ActivityLogSplitter`, `ActivityLog` with `ActivityLogHeader`, `ActivityLogShowReads`, `ActivityLogClose`, `ActivityLogList`, `ActivityLogOperation`, `ActivityLogCall`, `ActivityLogOutput`) |
+| Commit graph | `CommitGraphView` | The rest; at least 320; while the resolver is open, the right panel's column too; on a dashboard tab all three columns | `CommitGraph` | Real: `WelcomeView` (`OpenRepoButton`, `CloneRepoButton`, `InitRepoButton`, the clone form, since phase 7a with `CloneFromGitHubButton` while signed in, since phase 6 the Workspaces section `WorkspacesHeading`, `NewWorkspaceButton`, `WorkspaceList`, `WorkspaceItem`, `NoWorkspacesText`, `WorkspacesNotice`), since phase 8a in its place while git cannot be used the first-run screen (`GitSetupSlot` with `GitSetup` and its parts, `GitSetupTitle` to `GitSetupGuideLink`; see "Git's detection and the first-run screen"), since phase 6 `DashboardView` (`Dashboard` and its parts, see "The dashboard tab") and `TabWaitingText`, `RepositoryGraphView` (`GraphRows`, `GraphScrollBar`, and since phase 5 the search bar `SearchBar` with `SearchModeButton`, `SearchBox`, `SearchCount`, `SearchProgress`, `SearchPrevious`, `SearchNext`, `SearchClose`, and `GraphReloading`), or in its place `InteractiveRebaseView` (`InteractiveRebaseView`, `RebaseRow`, …), `DiffView` (`DiffView`, `DiffText`, see "Diff view"), `ConflictResolverView` (`ConflictResolver`, `ConflictOurs`, `ConflictTheirs`, `ConflictResult`, …, see "The graph area") or a page of phase 5 (`FileHistory`, `Blame`, `Reflog` and their parts); above any of them, while one shows, `ConflictBanner` (`BannerText`, `BannerContinueButton`, `BannerSkipButton`, `BannerAbortButton`); under them, while the window has it open, the activity log (`ActivityLogSplitter`, `ActivityLog` with `ActivityLogHeader`, `ActivityLogShowReads`, `ActivityLogClose`, `ActivityLogList`, `ActivityLogOperation`, `ActivityLogCall`, `ActivityLogOutput`) |
 | Right panel | `RightPanelView` or `WorkingChangesView` | 400 wide by default; 280 to 720; hidden while the resolver is open and on a dashboard tab | `RightPanel` or `StagePanel` | Real: commit details (`DetailsSubject`, `ParentLink`, `FlatFilesButton`, `TreeFilesButton`, `ChangedFilesTitle`, `FileList` with `ChangedFile` rows, and since phase 5 `AllFilesButton`; since phase 7a `DetailsAuthorAvatar` before `DetailsAuthor`), `CompareView` while two commits are selected or branches are compared (`Compare`, `CompareFrom`, `CompareTo`, `CompareSwap`, `CompareClose`, `CompareAllDifferences`, `CompareCounts`, `CompareFileList`), `MultiSelectionView` while three or more are selected, or the placeholder; while the working-changes row is selected, the stage panel (`UnstagedFileList` and `StagedFileList` with `StageFileRow` rows and their `RowStageButton`, `RowDiscardButton`, `RowUnstageButton`; `CommitSummary`, `CommitDescription`, `AmendCheckBox`, `CommitButton`, which reads "Continue …" during a list or a rebase, `RestoreBar`) |
-| Status bar | `StatusBarView` | 26 high | `StatusBar` | `CurrentBranch`, `GitStatus`, `OperationStatus`, `OperationProgress`, `OperationCancelButton` and `OperationWaiting` are real, and since phase 5 `ActivityLogToggle`; since phase 6 `StatusWorkspaceIcon` before the workspace's name on a dashboard tab; since phase 7a `OperationOfferButton` after `OperationStatus` while a result carries an offer (see "Toolbar, status bar, conflict banner and auto-fetch") |
+| Status bar | `StatusBarView` | 26 high | `StatusBar` | `CurrentBranch`, `GitStatus`, `OperationStatus`, `OperationProgress`, `OperationCancelButton` and `OperationWaiting` are real, and since phase 5 `ActivityLogToggle`; since phase 6 `StatusWorkspaceIcon` before the workspace's name on a dashboard tab; since phase 7a `OperationOfferButton` after `OperationStatus` while a result carries an offer (see "Toolbar, status bar, conflict banner and auto-fetch"); since phase 8a `GitSetupButton` left of `GitStatus` in the first-run screen's states, and `GitStatus`'s tooltip and help text, the git's path and where it came from (see "Git's detection and the first-run screen") |
 
 - The window opens at 1280×800, or at the size and place the session saved, and cannot be made
   smaller than 1000×560. `MainWindow.UseSession` restores and saves the placement (a window
   restored maximised keeps its normal size and position).
-- The panels are resized with two `GridSplitter`s (`LeftSplitter`, `RightSplitter`) that lie over
-  the panel edges. Letting go of an edge makes that panel's width its preferred width, saved in
-  the session. `PanelLayout.Fit` gives the drawn widths: when the window is too narrow for both
-  preferred widths and the graph's 320, both panels give way in proportion to their room above
-  their minimums, and take their preferred widths back when it grows.
+- The panels are resized with two `GridSplitter`s (`LeftSplitter`, `RightSplitter`; since phase 8a
+  named "Resize the left panel" and "Resize the right panel") that lie over the panel edges.
+  Letting go of an edge makes that panel's width its preferred width, saved in the session. Since
+  phase 8a (D427) a move by the keys does the same: a focused splitter moves by `GridSplitter`'s
+  own arrow keys, 10 a press, which raise no drag's end, so after an arrow key the splitter handled
+  `MainWindow` runs the drag's fitting and saving (`PanelDragged`) at `Loaded`, once the layout has
+  drawn the new widths. The splitters follow the panels in `MainWindow.axaml`, so Tab reaches them
+  after the right panel and before the status bar (check K8). `PanelLayout.Fit` gives the drawn
+  widths: when the window is too narrow for both preferred widths and the graph's 320, both panels
+  give way in proportion to their room above their minimums, and take their preferred widths back
+  when it grows.
 - The diff view replaces the graph while a file's diff is open (D63), and so do the interactive
   rebase's list, the conflict resolver (D140, D141) and since phase 5 the pages (D158); the
   activity log lies under all of them (D156); the menu layer, the drag layer and the dialog layer
@@ -6416,6 +7158,10 @@ region is a `UserControl` in `Views/Shell`.
   are "Add GitHub account", "Clone from GitHub" and "Create pull request", since phase 7b each
   provider's ("Add GitLab account", "Clone from Azure DevOps", "Create merge request" and the
   others).
+- Since phase 8a `InstanceNoticeWindow` is the app's one window besides the main one: 480 wide, as
+  high as its content, not resizable, centred on the screen, and shown only while another
+  VisualCommit holds the data folder and did not answer, with no main window and no session (see
+  "Start-up and composition").
 
 Custom controls, in `Controls/`:
 
@@ -6428,7 +7174,9 @@ Custom controls, in `Controls/`:
   named as one, whose peer raises its Name change only when `SpokenText` changes; see "Toolbar,
   status bar, conflict banner and auto-fetch".
 - `CommitGraphControl`: see "Commit graph". Since phase 7a `AvatarBitmaps` (a static class, not a
-  control) decodes an author's avatar on the thread pool for the graph and the details panel.
+  control) decodes an author's avatar on the thread pool for the graph and the details panel, and
+  since phase 8a `GraphRowSpeech` (pure and static) holds the words UI Automation reads for the
+  graph's exposed row.
 - `ContextMenuItem`: see "Context menus". `SecretTextBox`: see "Prompts and credentials".
 - `Diff/CodeTextEditor`, `Diff/DiffPane` and `Diff/DiffTextView`: see "Diff view";
   `Conflicts/ConflictPanes` and `Conflicts/ConflictResultEditor` (with `ConflictTint`, the
@@ -6440,11 +7188,30 @@ Custom controls, in `Controls/`:
   (the confirmation's question, the error dialog's summary, the prompt dialogs' texts). Since phase
   6 `PathTextBlock` (D227, design 13.2) wraps a rooted path only after a directory separator: it puts
   U+FEFF (no break) between a path's characters and U+200B (a break) after each `\` or `/`, so the
-  welcome page's errors and the scan dialog no longer break at `C:` or inside a folder name; only
-  the drawn text changes, `Text` and the automation name stay as given. All three are styled as
-  plain text blocks.
+  welcome page's errors and the scan dialog no longer break at `C:` or inside a folder name; a path
+  ends at white space there, as a path inside running text must. Since phase 8a `IsOnePath`, off by
+  default, marks the whole text as one path (`MarkAsOnePath`, D472): a line breaks only after `\` or
+  `/`, also where the path holds a space or a hyphen, and the text's own line breaks get no mark
+  beside them; the first-run screen's `GitSetupPath`, which holds a path and nothing else, sets it,
+  and every other use keeps D227's rule (`PathTextBlockTests`, `GitSetupViewModelTests`). Only the
+  drawn text changes, `Text` and the automation name stay as given. All three are styled as plain
+  text blocks.
 - Phase 6's panels: `Views/Shell/RepoTabStripPanel` (the tab strip's layout, see "Shell and views")
   and `Views/Workspaces/DashboardRowPanel` (the dashboard's columns, from `DashboardColumns`).
+- Since phase 8a `DocumentTextView` (D432), a `CodeTextEditor` for a long text shown whole and
+  read-only, the text dialog's licence and notices: AvaloniaEdit lays out only the lines in view,
+  so some 200 KB open at once, where a text block would stall the window. It wraps, uses the code
+  font at 11.5 (`TextFontSize`), draws no caret, and takes the focus at the dialog's opening without
+  the keyboard's frame (`FocusText`). Up and Down scroll a line, PageUp and PageDown the view less a
+  line, and Home and End, also with the platform's command key, go to the start or the end, End
+  showing the true last line once the wrapped lines below are measured; the platform's copy key
+  copies a selection, and nothing without one, and its select-all selects the whole text, both run
+  by the view itself, since AvaloniaEdit picks those keys by the operating system. Every other key
+  that would move, extend or use the hidden caret, or type, is taken and does nothing. Enter, with
+  or without modifiers, is not the text's, so a plain Enter runs the dialog's Close: the view
+  removes the Enter bindings from its own text area's input handlers alone, so every other editor
+  keeps its keys. Tab and Shift+Tab leave the text (D426). Its peer is a Document whose value is
+  the text (`DocumentTextViewTests`).
 
 Control themes in `Theme/Controls.axaml`: `VcFlatButton` (since phase 5 with a class `selected`:
 primary text on `VcControlBackgroundBrush`, the status bar's Activity log while its panel shows),
@@ -6453,8 +7220,16 @@ primary text on `VcControlBackgroundBrush`, the status bar's Activity log while 
 file or folder row), `VcIconButton` (22 by 22: the stage rows' buttons, the panels' and pages'
 close buttons, the resolver's arrows, the search bar's; since phase 5's gate a disabled one draws
 in `VcTextDisabledBrush`, as every other button theme does, and the resolver's own rule for its
-arrows, D160's `Button.arrow:disabled`, went), `VcPrimaryButton` (the commit button),
-`VcDangerButton` (since phase 6 its text `VcDangerTextBrush`), `VcCheckBox` (20 high), and the text classes `heading`, `secondary` and `error`.
+arrows, D160's `Button.arrow:disabled`, went; its automation name is its tooltip, through a setter
+that a local `AutomationProperties.Name` beats, see "Conventions"), `VcPrimaryButton` (the commit
+button), `VcDangerButton` (since phase 6 its text `VcDangerTextBrush`), `VcCheckBox` (20 high), and
+the text classes `heading`, `secondary` and `error`.
+Since phase 8a the file also holds `VcLinkButton`, the sign-in dialog's `SignInLinkButton` moved
+there and renamed: a link, accent text on no background with the hand cursor, reached by Tab, which
+a view underlines while it is hovered or focused; disabled, it draws in `VcTextDisabledBrush` with
+the arrow cursor. Its keyboard frame (`FocusFrame`, in Fluent's focus colours) lies 4 px outside the
+button on every side, is only drawn and is never hit (`LinkFocusFrameTests`; see "The settings
+screen", "Add … account"). The sign-in dialogs' token links and About's two links use it.
 The same file holds since phase 5 the `ToolTip` style that takes no input (D182). Phase 3's menus
 and dialogs have files of their own, `Theme/Menus.axaml` and `Theme/Dialogs.axaml`, included in
 `App.axaml`.
@@ -6474,7 +7249,9 @@ and dialogs have files of their own, `Theme/Menus.axaml` and `Theme/Dialogs.axam
   save it (from System, the opposite of what shows, its tooltip then adding "(stops following the
   system)"). `UseTheme(AppTheme)` is the one way to change the theme: the switch, the palette's three
   entries and the settings screen's Save (D223). `ThemeVariant.Default` is unused; Linux without a
-  portal reads as Light.
+  portal reads as Light. High contrast has no palette of its own (D411): with System chosen the app
+  shows the variant that Avalonia maps the system's contrast scheme to, Light or Dark
+  (`PlatformSystemTheme`), and the real-window pass needs high contrast off (D224).
 - All colours are tokens in `Theme/Tokens.axaml`, one set per theme. Views use them only as
   `{DynamicResource ...}`, never as fixed colours, so switching recolours everything at once. The
   graph control looks them up for its theme variant and redraws when the variant changes, as do
@@ -6482,8 +7259,51 @@ and dialogs have files of their own, `Theme/Menus.axaml` and `Theme/Dialogs.axam
   conflict views. Phase 6 brought the light status colours to 4.5:1 against every background they
   are drawn on (`VisualCommit.Testing/Contrast.cs`, `ThemeTokensTests`), gave the danger button's
   text a token of its own and drew tooltips in the app's colours through Fluent's `ToolTip…` keys.
+- Since phase 8a's contrast round (D410, D418, amending D198) every text reaches 4.5:1 (WCAG 2) on
+  every background it is drawn on, in both themes, but the three that D469 keeps under it (below).
+  The round gave the placeholder a token of its own a step below the secondary text, raised the
+  dark danger colour along its own hue with a dark label on the danger button, and gave the accent
+  on a hovered or selected row a token of its own (the table below); lane 3 and the accent itself
+  kept their colours. `ThemeTokensTests` (App.Tests) holds one table of which text token lies on
+  which background, with no list of gaps: the primary, secondary, success, warning and danger texts
+  on the window, panel, chrome, control, hover, selection and row-hover backgrounds;
+  `VcAccentBrush` on the same but a hovered or selected row, where `VcAccentOnRowBrush` lies; the
+  placeholder and the typed text on a text box at rest, under the pointer and focused, where the
+  placeholder lies between the disabled and the secondary text, so that the Summary box's counter
+  does not read as a placeholder; the warning on the conflict banner and on a conflict's marker
+  lines; and the text on the accent, on the danger button and in a tooltip on their own
+  backgrounds. It pins the round's lowest figures and phase 6's light ones to two places, and holds
+  a label's text to 4.5:1 on every lane in both themes and each light lane to 3:1 as a line on the
+  window. Accent text on a hovered or selected background takes `VcAccentOnRowBrush`, never
+  `VcAccentBrush`; `PanelViewTests` reads the placeholder and the row's accent in the drawn views.
+- **Texts dimmed on purpose** (D469, amending D418). Three looks older than phase 8a stay under
+  4.5:1 in both themes as recorded exceptions; each lies on a row the user still acts on, in a state
+  the user sets and can undo. (a) A branch's name in the left panel while the graph hides it, and in
+  solo mode the name of every branch left out (`TextBlock.refName.dimmed`, `VcTextDisabledBrush`;
+  see "Left panel and commit details"): lowest under the pointer, 2.16:1 dark and 1.84:1 light. (b)
+  A dropped row's SHA and subject in the interactive rebase's list (`TextBlock.dropped`, the same
+  colour, struck through): lowest selected, 2.23:1 and 1.85:1. (c) A graph row that a search dims,
+  drawn at 35 % (`CommitGraphControl.SearchDimmedOpacity`; see "Commit graph"): its author, date and
+  SHA lowest selected, 1.83:1 and 1.56:1, and its labels, whose fill fades with the text, down to
+  1.26:1 and 1.18:1 at rest (a branch's name on its lane). D469 gives every figure.
+  `ThemeTokensTests.DimmedTexts.cs` pins each to two places and under 4.5:1, so a changed token or
+  opacity, a new state of the row or a fix that reaches 4.5:1 fails its fact, whose pin then comes
+  out with a change to the decision. The pins of (a) and (b) are computed from their view's styles
+  and control themes, every colour setter of which the fact lists; those of (c) from three tables
+  of tokens (`DimmedRowTexts`, `DimmedRowLabels`, `DimmedRowBackgrounds`), to which a render of the
+  graph, with a stand-in colour for each token, holds the control. A guard scans every XAML and C#
+  file under `src/VisualCommit.App` and fails, with file and line, on a reference to
+  `VcTextDisabledBrush` or to its colours written out, on a place where a class whose style gives
+  that colour is applied (`disabled`, `dimmed`, `dropped`) and on a use of the search's dimming that
+  its table (`DimmedTextUses`) does not list with its reason: a definition, a disabled state (a
+  disabled palette entry, whose reason shows in its detail's place, among them), a mark that is no
+  text, a class's name that applies no dimming there, or one of the three exceptions; a listed use
+  that is gone fails too. A row while it is dragged is outside the exceptions and not pinned.
 - The Fluent theme is the base for standard controls, with its accent set to ours. Its text-box
-  colours are replaced by `TextControl...` keys in `Tokens.axaml`.
+  colours are replaced by `TextControl...` keys in `Tokens.axaml`, and since phase 8a its
+  placeholder's opacity, 0.5 in Fluent's own resources, by `TextControlPlaceholderOpacity` (1), so
+  that the placeholder is drawn in its token as it is (D418). A disabled text box keeps Fluent's
+  `TextControlBackgroundDisabled`, which the app does not set (ruling 29).
 - The typeface is Inter, shipped with Avalonia, on every platform (D28). Code in the diff view
   is JetBrains Mono NL (OFL), shipped with the app in `Assets/Fonts` and named by the resource
   `VcCodeFontFamily` (D64).
@@ -6502,6 +7322,11 @@ and dialogs have files of their own, `Theme/Menus.axaml` and `Theme/Dialogs.axam
   Phase 7a added `IconPullRequest` (Lucide's "git-pull-request", the graph's badge; in
   `THIRD-PARTY-NOTICES.md` among the icons derived from Feather) and no token: the Accounts section,
   the three dialogs, the section's rows, the badge, the avatars and the offer use existing brushes.
+  Phase 8a added no glyph to `Icons.axaml` (the app's own icon is no glyph; see "The app's icon").
+  Its tokens are `VcTextPlaceholderBrush` and `VcAccentOnRowBrush`, with the key
+  `TextControlPlaceholderOpacity`, and it gave the dark `VcDangerBrush` and `VcDangerTextBrush` new
+  values (D418). Its new views (the first-run screen, the single-instance notice, About and the text
+  dialog) take every colour from the tokens and set none of their own.
 
 | Token (brush key) | Dark | Light | Used for |
 |---|---|---|---|
@@ -6513,15 +7338,16 @@ and dialogs have files of their own, `Theme/Menus.axaml` and `Theme/Dialogs.axam
 | `VcBorderBrush` | `#323845` | `#D2D6DE` | Lines between regions, input borders, tag and stash label borders |
 | `VcTextPrimaryBrush` | `#E4E7EC` | `#1B1F27` | Main text, commit messages |
 | `VcTextSecondaryBrush` | `#9BA3B0` | `#5C6572` | Headings, hints, counts, author, date and SHA |
-| `VcTextDisabledBrush` | `#5F6775` | `#A1A8B3` | Disabled buttons; since phase 5 a hidden branch's name in the left panel, and in solo mode the branches left out |
-| `VcAccentBrush` | `#7C8CFF` | `#4353D8` | The line on the active tab, focus borders, the branch HEAD is on in the left panel, renamed files, parent links; since phase 5 the solo button, the search's progress bar and the graph's reload bar |
+| `VcTextDisabledBrush` | `#5F6775` | `#A1A8B3` | Disabled buttons, links, menu items and palette entries; since phase 4 a dropped row's SHA and subject in the interactive list, and since phase 5 a hidden branch's name in the left panel and in solo mode the branches left out, both under 4.5:1 (D469's exceptions (b) and (a), "Theme" above) |
+| `VcAccentBrush` | `#7C8CFF` | `#4353D8` | The line on the active tab, focus borders, links (since phase 7a the sign-in dialog's, since phase 8a as `VcLinkButton` with About's, and the first-run screen's), the branch HEAD is on in the left panel, renamed files, parent links; since phase 5 the solo button, the search's progress bar and the graph's reload bar. Since phase 8a never text on a hovered or selected row, where `VcAccentOnRowBrush` takes its place (D418) |
 | `VcAccentTextBrush` | `#10121A` | `#FFFFFF` | Text on an accent background: the primary button's label, a check box's tick, the dot of a dialog's radio button |
 | `VcSuccessBrush` | `#3FB97F` | `#187248` | Added files (the light value darkened in phase 6, 11.10) |
 | `VcWarningBrush` | `#E0A23B` | `#895A17` | Modified files (the light value darkened in phase 6) |
-| `VcDangerBrush` | `#E5606B` | `#B7323D` | Errors, deleted files; the danger button (the light value darkened in phase 6) |
-| `VcDangerTextBrush` | `#FFFFFF` | `#FFFFFF` | Text on the danger button (`VcDangerButton`, phase 6, 11.11) |
+| `VcDangerBrush` | `#EA7D86` | `#B7323D` | Errors, deleted files, destructive menu items and palette entries; the danger button (the light value darkened in phase 6; the dark one raised along its own hue in phase 8a, D418, from lane 3's `#E5606B`, which lane 3 keeps, so that its text reaches 4.5:1 on a hovered row, a selected row and a control: 4.55, 4.70 and 5.18:1) |
+| `VcDangerTextBrush` | `#10121A` | `#FFFFFF` | Text on the danger button (`VcDangerButton`, phase 6, 11.11): since phase 8a dark on the dark danger (6.92:1, D410, D418), white on the light one (5.94:1) |
 | `VcSelectionBrush` | `#2A3150` | `#DDE1FA` | The selected graph row and left-panel item |
 | `VcRowHoverBrush` | `#1C1F27` | `#F3F4F7` | The graph row under the pointer |
+| `VcAccentOnRowBrush` | `#8B9AFF` | `#4353D8` | Phase 8a (D418): accent text on a hovered or selected row, set only by those states' styles: HEAD's branch name in the left panel; a renamed file's "R" in the commit details, the stage panel and the compare view while its row is hovered or selected, and in the file history while it is selected or pressed; the first-run screen's links under the pointer. In light it is the accent itself, which reaches 4.5:1 there (4.66:1 on a hovered row); in dark 4.78:1 hovered, 4.94:1 selected |
 | `VcLabelTextBrush` | `#10121A` | `#FFFFFF` | Text on a filled branch label |
 | `VcDiffAddedBrush` | `#1A2E24` | `#E6F6EC` | An added line of a diff, gutter included |
 | `VcDiffAddedWordBrush` | `#2B5A3F` | `#B4E5C6` | The changed words of an added line |
@@ -6541,6 +7367,67 @@ and dialogs have files of their own, `Theme/Menus.axaml` and `Theme/Dialogs.axam
 | `VcSearchMatchBrush` | `#F2C94C` | `#B98900` | The 3-px mark at the left edge of a search's matching row (phase 5) |
 | `VcLane0Brush` ... `VcLane7Brush` | `#7C8CFF` `#3FB97F` `#E0A23B` `#E5606B` `#4FB3D9` `#B07CE8` `#D97EB6` `#8FB84A` | `#4353D8` `#1C8655` `#A16A1B` `#C93A46` `#1D7EA6` `#8048C7` `#B54A8C` `#59811C` | Lane colours 0 to 7 (D48; light lanes 1, 2, 4 and 7 darkened in phase 6, D198) |
 | `ToolTipBackground`, `ToolTipForeground`, `ToolTipBorderBrush` (Fluent's keys) | `#1A1D24` `#E4E7EC` `#323845` | `#F5F6F8` `#1B1F27` `#D2D6DE` | Tooltips, in the panel's colours (phase 6, 11.12) |
+| `VcTextPlaceholderBrush`; Fluent's `TextControlPlaceholderForeground`, `…PointerOver` and `…Focused` | `#8F97A4` | `#68707D` | Phase 8a (D418): a text box's placeholder, a step below the secondary text, 4.75:1 dark and 5.00:1 light on the box; Fluent's three keys copy the token |
+| `TextControlPlaceholderOpacity` (`x:Double`, outside the theme dictionaries) | 1 | 1 | Phase 8a (D418): the opacity at which Fluent draws a text box's placeholder, 0.5 in Fluent's own resources; the app's key wins, so the placeholder is drawn in its token as it is |
+
+### The app's icon (D407, D428 to D430, D447)
+
+Phase 8a. The mark is the owner's choice (D407); the candidates' rounds, each with its contact
+sheet and a README of the owner's choice and changes, are kept under `docs/brand/icon/round-<n>/`
+(D447).
+
+- **The masters** (`assets/brand/`, D429). `icon.svg` (`viewBox="0 0 1024 1024"`) is drawn above
+  32 px, `icon-small.svg` (`0 0 16 16`, its straight edges on whole units) for 32 px and below, and
+  `icon-macos.svg` (on Apple's grid: an opaque squircle with a margin) for macOS's files. Each
+  master's first comment names it as the owner's chosen mark. A master holds only `svg`, `g`,
+  `defs`, `title`, `desc`, `path`, `rect`, `circle`, `ellipse`, `line`, `polyline`, `polygon`,
+  `linearGradient` and `stop`, refers to nothing outside itself, and has no `width` or `height` but
+  its viewBox's size.
+- **The builder** (`tools/VisualCommit.IconBuilder`, D428), run as `dotnet run --project
+  tools/VisualCommit.IconBuilder` from any folder of the repository (the root is the nearest folder
+  above that holds `VisualCommit.slnx`, or `--root`). It checks every master by those rules
+  (`MasterRules`) before anything is drawn, renders each size with Svg.Skia 4.9.1 on SkiaSharp
+  3.119.4, and writes the files `IconOutputs` lists:
+  - in `src/VisualCommit.App/Assets/Icon/`, `VisualCommit.ico` (16, 20, 24, 30, 32, 36, 40, 48, 60,
+    64, 72, 80, 96 and 256; the 256 a PNG, the others 32-bit bitmaps), `VisualCommit-48.png` and
+    `VisualCommit-96.png`;
+  - Linux's PNGs in `assets/brand/generated/png/` (16, 24, 32, 48, 64, 128, 256 and 512), with
+    `icon.svg` itself as the scalable icon;
+  - `assets/brand/generated/VisualCommit.iconset/` (Apple's ten names, from `icon-macos.svg`) and
+    `VisualCommit.icns`, which holds the `.iconset`'s ten PNGs byte for byte under Apple's entry
+    types (`IcnsWriter`, D447);
+  - `assets/brand/generated/manifest.json`: the renderer, each master's SHA-256 (of its text, with
+    CRLF read as LF) and every file's sizes, with no time stamp (LF on every checkout,
+    `.gitattributes`).
+
+  It writes everything to a temporary folder first and then moves it into place, the manifest
+  last. It owns `assets/brand/generated/` and `src/VisualCommit.App/Assets/Icon/`, and deletes any
+  other file and every empty folder in them. A failure puts back every file it replaced or deleted
+  and deletes the new ones (`Placement`), so the committed files stay as they were. A run with no
+  master changed writes the same bytes. For each `.ico` size it prints the share of opaque pixels
+  at 3:1 on `#202020` and on `#F3F3F3`, which nothing asserts. The generated files are committed.
+  The solution holds the tool, so every CI job builds it, but no test, CI step or build runs it; it
+  references no project and is never shipped. The files under `generated/` are for phase 8b's
+  packages: Linux's PNGs and macOS's `.icns` (D429, D447).
+- **In the app.** The app's project embeds the three files of `Assets/Icon/` as Avalonia resources
+  and the `.ico` as the executable's icon (`ApplicationIcon`); no icon file lies beside the
+  executable. `MainWindow` and the single-instance notice's window carry
+  `Icon="/Assets/Icon/VisualCommit.ico"`, and About draws `VisualCommit-96.png` at 48 × 48 (see
+  "The settings screen"). `Services/AppIcon` holds the three resource addresses. The app shows no
+  new text for it, and the title stays "VisualCommit".
+- **Tests.** `IconFilesTests` (App.Tests, D430) checks the files by their format, their sizes and
+  the manifest, never by their pixels, which may differ between machines: the masters keep the
+  rules, with their first comment in the chosen form, and the small master's straight edges lie on
+  whole units (a `transform`, a `stroke` other than `none` or a `style` there is refused); the
+  manifest's hashes equal the masters', so a master changed without its files fails, with the
+  tool's command in the message; the `.ico` holds its 14 entries, ascending, each frame neither
+  blank nor a full square; the `.iconset`, Linux's folder and `Assets/Icon` hold exactly their files
+  at their sizes; the `.icns` holds its entries in order, each the `.iconset` file it names; and on
+  macOS alone (CI's macOS job) Apple's `iconutil` turns the `.iconset` into an `.icns` and reads the
+  committed `.icns` back, the one proof before phase 8b that macOS reads the file.
+  `WindowIconTests` (App.Tests) holds the two windows' icons and the three resources. `IconFile`
+  (Testing) reads the files for these tests and the real-window pass (see "Tests"), and phase 8a's
+  part B lays the `.ico`'s frames and the other files out in both themes.
 
 ### Conventions
 
@@ -6557,9 +7444,47 @@ and dialogs have files of their own, `Theme/Menus.axaml` and `Theme/Dialogs.axam
   `ConflictBanner`, `MultiSelectionView`, `DialogRow`, and since phase 4 `InteractiveRebaseView`,
   its rows `RebaseListRow`, the `ConflictResolver` and its card, `ConflictPanes`, and since phase 5
   every page's root, the activity log, the comparison and `BlameGutter`), as `CommitGraphControl`
-  has; the resolver's result and the blame's text are Documents with a read-only Value pattern. A
-  button whose tooltip says what it would do (phase 5's Undo, Redo, Search and Activity log) has
-  the same text as its `AutomationProperties.HelpText`.
+  has; the resolver's result, the blame's text and, since phase 8a, `DocumentTextView` (the
+  licence's and the notices' text) are Documents with a read-only Value pattern. Since phase 8a
+  two peers do more: `CommitGraphControl`'s is a List with one exposed row (see "Commit graph"),
+  and `StatusText`'s raises its Name change for its spoken text alone (see "Toolbar, status bar,
+  conflict banner and auto-fetch"). A button whose tooltip says what it would do (phase 5's Undo,
+  Redo, Search and Activity log) has the same text as its `AutomationProperties.HelpText`.
+- Since phase 8a (D411, D435, D456) an accessible name says what the control does and holds no key:
+  the key is the control's `AcceleratorKey`, and the tooltip with its key is its help text. A
+  `VcIconButton` takes its tooltip as its name (a setter of its theme); where the tooltip holds a
+  key or names nothing, the view sets a name from `ViewModels/Commands/AutomationNames` as a local
+  value, which beats that setter: the resolver's four arrows and its close ("Previous conflict",
+  "Next conflict", "Previous file", "Next file", "Close the resolver"), the diff's "Close the diff",
+  the search bar's "Previous match", "Next match" and "Close the search", "Close the activity log",
+  "Close the comparison", "Swap From and To", the restore bar's "Dismiss the restore offer", the
+  status bar's `ActivityLogToggle` ("Activity log") and the three splitters ("Resize the left
+  panel", "Resize the right panel", "Resize the activity log"). A row's buttons are named by their
+  row, so that two rows' buttons differ: a stage row's `Stage {path}`, `Discard {path}` and
+  `Unstage {path}` over `ChangedFileRow.Key`, a branch row's eye and solo
+  `Show {full name} in the graph` and `Stop soloing {full name}` over `RefItemRow.ToolTip`
+  (compiled bindings with a `StringFormat` from `x:Static`). A left panel row's own button
+  (`RefItem`) keeps the row's text as its name (`main`, `alpha`), which every test and real-window
+  helper finds it by, and takes the ref's full name as its help text (D456 (3)). The first-run
+  screen's root (`GitSetup`) is named by its state's title, with its body as its help text, and the
+  single-instance notice by its heading, with its body and the sentence on ending the other
+  VisualCommit as its help text (D448). A control that later needs a name takes it from its area's
+  texts class, and its tooltip does not change for it. `AutomationSweep`
+  (`tests/VisualCommit.Testing/Headless`) holds the rule: it walks a window's peers depth first
+  from the window's own peer, as a client reads them, past every control not shown (one drawn at
+  opacity 0 is walked) and every scroll bar with what lies inside it (D456 (1)), and reports each
+  interactive control element whose name is `empty`, is a .NET `type name`, ends in a `key text`
+  ("Close (Esc)", "Previous match (Shift+Enter, Shift+F3)", a run such as "Ctrl+1 to Ctrl+8", D456
+  (4); not "Pull requests (3)"), or is a `duplicate`: the same id and name twice under one items
+  container, or in one dialog outside its lists, a dialog being its own container (D456 (2)).
+  `RefItem` under `RefList` is exempt from the duplicate rule: its rows are told apart by their
+  place and their help text. `AccessibleNameSweepTests`
+  (`VisualCommit.VisualTests.Phase8a`, 14 facts) sweeps the welcome page and the palette, every
+  settings section with the Git program row, the three sign-in dialogs, About and its two text
+  dialogs, every dialog kind and git's prompts, the ops tab with its menus, search, compare and the
+  pages, the rebase list, the resolver under its banner, the dashboard, the first-run states on
+  Windows, macOS and Linux, a missing helper, and the single-instance notice, each fact failing once
+  with every problem of its states; `AutomationSweepTests` (App) holds the rules themselves.
 - Every write to a repository is an operation of its queue. A new operation is a method of
   `RepositoryOperations` built on `RunAsync`, `ConfirmAndRunAsync` and `GuardAsync`, with its texts
   in `OperationTexts` (an `OperationText` per operation) and its git calls in `GitRepository`; it
@@ -6725,32 +7650,37 @@ Tests run on xunit.v3 with Microsoft Testing Platform (D24). The commands are in
 | Helper | Where | What it is for |
 |---|---|---|
 | `TempDirectory` | `tests/VisualCommit.Testing` | A folder under the system temp folder, deleted on dispose |
-| `TempRepo` | same | Builds a real git repo for a test, cut off from the machine's git configuration, with a fixed author and a clock that advances one minute per commit, so the same steps give the same SHAs everywhere; `user.name` and `user.email` in the repo's own configuration give the app's commits an identity (D72). Helpers for text and byte files, commits, branches, tags (lightweight and annotated), merges, stashes, a bare remote next to the repo and pushes; `CopyAsync` makes an independent copy with its remotes pointed at the copy (http URLs left alone, linked worktrees joined to the copy) and a clock that carries on from the template's; anything else goes through `GitAsync`, `GitWithInputAsync` or `GitAllowingFailureAsync` (a step meant to stop). Phase 3 added `ConfigAsync`, `RefTargetAsync`, `BackupRefsAsync`, `StashListAsync`, `CloneSiblingAsync` and `OpenSibling` (siblings share the clock), `IsolatedEnvironment(home)`, `ClockTime` and `MoveClockTo` (forward only, for a step that must look newer in the reflog than an app operation, D111). Its git calls drop the machine's askpass, ssh and proxy variables too (D116), and since phase 4 run with `GIT_EDITOR=:` and `GIT_SEQUENCE_EDITOR=:`, so that a step such as `git rebase --continue` never starts the machine's editor (D151); `GitWithEnvironmentAsync(extra, args)` and its "allowing failure" twin add variables for one call (a sequence editor that writes a todo) and keep the clock's dates. Phase 5's speed-ups (`7e7d99d`), which every test project gets: a repository is a copy of a blank git folder that `git init` and the repository settings made once per test process and initial branch (a bare remote likewise), which saves six git processes per repository; a commit's SHA is read from git's summary line (`CommitArguments`, which adds `-c core.abbrev=no`, and `CommittedSha`), with no `rev-parse` after it; `maintenance.auto=false` in every repository and `receive.autogc=false` on bare remotes, so no commit, merge or push starts git's automatic maintenance. `ExactStateAsync()` is part P's "exact state" (HEAD, every ref, the index, the status with untracked and ignored files, every file's contents), which the scenario pins (`Phase5ScenarioTests`), both harnesses and the App and Git tests compare. Phase 6: the blank git folders leave out git's `hooks/*.sample` (a copy then has some 220 files fewer, D229), `AddBareRemoteAsync(name, relative: true)` gives the remote the URL `../<name>.git`, so a copy fetches from its own remote with nothing rewritten, and `Over(root, path, clock)` wraps a repository made by other means (the lean builder) with the class's isolation. Phase 7a: `CommitFileAsAsync(path, content, message, authorName, authorEmail)` commits as another author, the clock advancing as for `CommitFileAsync`; the isolation (`GitIsolation.MachineIndependence`) also removes `NETRC`, and the calls' `HOME` was always an empty folder of the class's (D340). Phase 8a (D468): a blank git folder is a `BlankGitFolder`, whose `Record` reads its folders from the disk right after it is made and refuses one without `refs` or `objects`, and every copy of a blank is made by its `CopyTo` (at all six places that copy one), which gives the copy every recorded folder after its files, whatever a cleaner of the temp folder that removes empty folders (Windows' Storage Sense) took from the blank since; `RecordFolders` records a kept template's folders (`KeptFolders`) through `TemplateFoldersIn`, which refuses a record in which a git folder (one with a `HEAD` and a `config`) has no `refs` or no `objects`, and `CopyAsync` makes them in every copy. `CopyDirectory(from, to)` walks strictly (`StrictWalk`: hidden folders and files included, and a folder it cannot open fails the copy); `CopyDirectory(from, to, folders)` with a record does not go into such a folder but makes it in the copy and goes on (`WalkPastUnopenable`, `IgnoreInaccessible`; a folder that a cleaner is deleting holds nothing by its rule), then makes each recorded folder; an empty record counts as none and copies strictly. `TempFolderCleanerTests` (`VisualCommit.Git.Tests`, 25 tests) strip blanks, repositories and a workspace of their own and copy them; copy a whole repository, its hidden `.git` and a hidden file among them, alike with a record and without; give a repository a folder that cannot be opened, which a copy with a record walks past and makes, and on which a copy without one and a copy of a repository never kept fail (on Windows the folder is marked for deletion through a held handle; on macOS and Linux it loses its permissions, which a root process ignores, so there the three facts are skipped when the process runs as root, `Assert.SkipWhen`, as in CI's three container jobs); and run `LargeHistory`'s proof and remake on a small history of their own, never on the process's blanks and templates or the shared folder |
+| `TempRepo` | same | Builds a real git repo for a test, cut off from the machine's git configuration, with a fixed author and a clock that advances one minute per commit, so the same steps give the same SHAs everywhere; `user.name` and `user.email` in the repo's own configuration give the app's commits an identity (D72). Helpers for text and byte files, commits, branches, tags (lightweight and annotated), merges, stashes, a bare remote next to the repo and pushes; `CopyAsync` makes an independent copy with its remotes pointed at the copy (http URLs left alone, linked worktrees joined to the copy) and a clock that carries on from the template's; anything else goes through `GitAsync`, `GitWithInputAsync` or `GitAllowingFailureAsync` (a step meant to stop). Phase 3 added `ConfigAsync`, `RefTargetAsync`, `BackupRefsAsync`, `StashListAsync`, `CloneSiblingAsync` and `OpenSibling` (siblings share the clock), `IsolatedEnvironment(home)`, `ClockTime` and `MoveClockTo` (forward only, for a step that must look newer in the reflog than an app operation, D111). Its git calls drop the machine's askpass, ssh and proxy variables too (D116), and since phase 4 run with `GIT_EDITOR=:` and `GIT_SEQUENCE_EDITOR=:`, so that a step such as `git rebase --continue` never starts the machine's editor (D151); `GitWithEnvironmentAsync(extra, args)` and its "allowing failure" twin add variables for one call (a sequence editor that writes a todo) and keep the clock's dates. Phase 5's speed-ups (`7e7d99d`), which every test project gets: a repository is a copy of a blank git folder that `git init` and the repository settings made once per test process and initial branch (a bare remote likewise), which saves six git processes per repository; a commit's SHA is read from git's summary line (`CommitArguments`, which adds `-c core.abbrev=no`, and `CommittedSha`), with no `rev-parse` after it; `maintenance.auto=false` in every repository and `receive.autogc=false` on bare remotes, so no commit, merge or push starts git's automatic maintenance. `ExactStateAsync()` is part P's "exact state" (HEAD, every ref, the index, the status with untracked and ignored files, every file's contents), which the scenario pins (`Phase5ScenarioTests`), both harnesses and the App and Git tests compare. Phase 6: the blank git folders leave out git's `hooks/*.sample` (a copy then has some 220 files fewer, D229), `AddBareRemoteAsync(name, relative: true)` gives the remote the URL `../<name>.git`, so a copy fetches from its own remote with nothing rewritten, and `Over(root, path, clock)` wraps a repository made by other means (the lean builder) with the class's isolation. Phase 7a: `CommitFileAsAsync(path, content, message, authorName, authorEmail)` commits as another author, the clock advancing as for `CommitFileAsync`; the isolation (`GitIsolation.MachineIndependence`) also removes `NETRC`, and the calls' `HOME` was always an empty folder of the class's (D340). Phase 8a (D468): a blank git folder is a `BlankGitFolder`, whose `Record` reads its folders from the disk right after it is made and refuses one without `refs` or `objects`, and every copy of a blank is made by its `CopyTo` (at all six places that copy one), which gives the copy every recorded folder after its files, whatever a cleaner of the temp folder that removes empty folders (Windows' Storage Sense) took from the blank since; `RecordFolders` records a kept template's folders (`KeptFolders`) through `TemplateFoldersIn`, which refuses a record in which a git folder (one with a `HEAD` and a `config`) has no `refs` or no `objects`, and `CopyAsync` makes them in every copy. `CopyDirectory(from, to)` walks strictly (`StrictWalk`: hidden folders and files included, and a folder it cannot open fails the copy); `CopyDirectory(from, to, folders)` with a record does not go into such a folder but makes it in the copy and goes on (`WalkPastUnopenable`, `IgnoreInaccessible`; a folder that a cleaner is deleting holds nothing by its rule), then makes each recorded folder; an empty record counts as none and copies strictly. `TempFolderCleanerTests` (`VisualCommit.Git.Tests`, 25 tests) strip blanks, repositories and a workspace of their own and copy them; copy a whole repository, its hidden `.git` and a hidden file among them, alike with a record and without; give a repository a folder that cannot be opened, which a copy with a record walks past and makes, and on which a copy without one and a copy of a repository never kept fail (on Windows the folder is marked for deletion through a held handle; on macOS and Linux it loses its permissions, which a root process ignores, so there the three facts are skipped when the process runs as root, `Assert.SkipWhen`, as in CI's three container jobs); and run `LargeHistory`'s proof and remake on a small history of their own, never on the process's blanks and templates or the shared folder. Phase 8a (D420): `StashAsync` records a stash as git 2.36 and later do, on every git: below 2.36, on a branch whose name holds a `/`, it writes the stash's commits again with the whole name in their messages (`RenameStashBranchAsync`: `cat-file`, `hash-object`, `stash drop` and `stash store`, every other byte git's own) before the clock moves, so that the scenarios' stash ids, which the reports pin, hold on every git; on 2.36 and later, on a branch without `/` and on a detached HEAD it adds no call. The app's own stashes are never rewritten: the tests take git's words for them (`GitWords`) |
+| `GitWords` | same | Phase 8a (D420; design 3.3.3): git's version and the words it changed between 2.34.1 and 2.36, in one place, each member naming the version that changed it and git's source: `VersionAsync()` (`git --version` of `TempRepo`'s git, read once), `HasZdiff3` and `FetchGuardsEveryWorktree` (from 2.35), `StashNamesTheWholeBranch` (from 2.36), `StashBranch`, `StashText` (a text in 2.36's words as the running git writes it) and `TrackingSetUp`. `GitWordsTests` |
 | `Scenarios` | same | The scenario repos: `LinearAsync` (phase 0), `GraphAsync` (phase 1: branches in folders, a merge, tags, a remote with ahead and behind, a stash), `ChangesAsync` (phase 2: staged, unstaged and untracked changes of every kind the diff view shows; its contents in `Scenarios.ChangesFiles`) `CrlfAsync` (phase 2: `core.autocrlf` in the repo's own configuration) and `ConflictAsync` (phase 2: a merge stopped with a conflict). Phase 3's, in `Scenarios.Phase3.cs`: `OperationsAsync` ("ops": branches, tags, a stash, a bare `origin`), `StoppedAsync(kind)` (an ops copy stopped in a merge, cherry-pick sequence, revert, rebase, or with stash conflicts, as a terminal would leave it; built each time), `RemoteSyncAsync` ("sync": published, unpushed and local branches) with `PushFromElsewhereAsync`, `CheckoutBlockedAsync` ("blocked"), `EdgeCasesAsync` ("edges": a detached HEAD, a linked worktree, a local upstream, a branch named like a remote branch, a tag named like a branch), `AuthRemoteAsync(server)` ("auth": a clone of what `AuthRemoteServer` serves). Phase 4's, in `Scenarios.Phase4.cs`: `RebaseAsync` ("rebase": `feature/topic` and `feature/other` to rebase onto `main` without a conflict, a bare `origin`), `InteractiveAsync` ("interactive": one line of eight commits on `main`, one a fixup candidate, one with a `#42 is the issue` body line), `ConflictsAsync` ("conflicts": `main` and `feature/theirs`, `feature/rebase`, `feature/picks`, `feature/kinds`, with notes.txt, other.txt, image.png and new.txt) and `ConflictsStoppedAsync(ConflictsStop.Merge | Rebase | CherryPicks | MergeKinds, mergeTool)` (stopped as a terminal would leave it, built each time, optionally with the fake merge tool of `ConfigureFakeMergeToolAsync`); their files in `RebaseFiles`, `InteractiveFiles` and `ConflictsFiles`, whose lines are short enough for a resolver pane at 1100×700. `GraphAsync`, `ChangesAsync`, phase 3's and phase 4's (except the stopped ones) are built once per test process as templates and copied for each test; `Phase3ScenarioTests` and `Phase4ScenarioTests` pin their refs, SHAs, graphs and stopped states. Phase 5's, in `Scenarios.Phase5.cs`, built once per process as templates and pinned by `Phase5ScenarioTests`: `HistoryAsync` ("history": three authors, `src/Parser.cs` renamed to `src/Reader.cs` with an edit, blame lines from four commits, a file deleted and added again, a merge, words only in commit bodies, a pickaxe string added and removed, `main` and `feature/compare` diverged), `FiltersAsync` ("filters": branches to hide and solo, their upstreams, `origin/HEAD`, two stashes), `ReflogAsync` ("reflog": lost commits, a gap in HEAD's reflog, a deleted branch, backups of every kind the list shows, dated against the fixed backup clock; built with 88 git calls), `ReflogManyBackupsAsync` (built each time) and `AddOldAndManyBackupsAsync` (old and more than 50 backups, for the clean-up's notes), `ProtectAsync` ("protect": a branch whose checkout the checks' own changes block, a file `main` ignores that the two oldest commits track); their files in `HistoryFiles`, `ReflogFiles`, `ProtectFiles`. `Scenarios.Phase5.Shell.cs`: a merge tool that waits until released (`ConfigureWaitingMergeToolAsync`). `Scenarios.MergeToolTimeout` (120 s, D185) bounds every wait for `git mergetool` to start. Phase 6's, in `Scenarios.Phase6.cs` (D229), built once per process and pinned by `Phase6ScenarioTests`: `WorkspaceAsync` (the workspace "Web" of ten repositories in mixed states, a `TempWorkspace`), `ServeWorkspaceAsync(copy, requireAuth, names)` (its remotes over `AuthRemoteServer`'s folder mode), `RenamingRefspecAsync` ("refspecs"), `IgnoredAsync` ("ignored") and `GitSettingsAsync` ("settings"). Phase 7a's, in `Scenarios.Phase7a.cs`, built once per process and pinned by `Phase7aScenarioTests`: `HostingAsync` ("hosting": `hello/`, `tool/` and the fake's six bare repositories in `github/`) and `ServeHostingAsync(hello, port, inProcess, ct, ownsCopy)` (the fake of GitHub on them, a `ServedHosting`); see "The fake of GitHub". Phase 7b's, in `Scenarios.Phase7b.cs` and its two halves `Scenarios.Phase7b.AzureDevOps.cs` and `.GitLab.cs`, built once per process and pinned by `Phase7bSupportTests` and, for the halves, `FakeAzureDevOpsGitTests` and `FakeGitLabGitTests`: `Hosting7bAsync` ("hosting7b": `mobile-app/`, `manifest/` and `web-app/` beside the three fakes' bare repositories in `azure-devops/`, `gitlab/` and `github/`) and `ServeHosting7bAsync(copy, azureDevOpsPort, gitLabPort, gitHubPort, ownsCopy, ct)` (the three fakes on them, a `ServedHosting7b`); see "The fakes of Azure DevOps and GitLab". Since phase 8a (D468) `KeepUntilExit` records a template's folders before it is first copied (`TempRepo.RecordFolders`, `TempWorkspace.RecordFolders`), so that every copy has them whatever a cleaner of the temp folder takes from the template while the process runs, and deletes the template at once when the record is refused; the templates `VisualCommit.Git.Tests` keeps by helpers of its own are not recorded (D468 (4)) |
 | `TestImages` | same | Small PNGs whose bytes depend only on their pixels (stored deflate blocks), for scenario repos |
 | `FakeRepositoryBase` | same | The start of a fake `IGitRepository` for view-model tests: a clean working tree, every write refused; phase 3's and phase 4's reads give empty results (no remotes, no worktrees, nothing detached, no merge tool, no operation message, a clean-up that removes nothing) and their writes throw `NotSupportedException`; phase 5's reads find nothing (no history, blame, reflog, backups, differences, matches, ignored files or stash paths), the undo history's read sees HEAD alone, so that no action leaves an entry, and an undo step and C12's writes throw; phase 6's reads find no ignored file in the way and no pull setting, `OpenedAtTopAsync` answers true, and the configuration write throws; phase 7a's read finds no URL rewrite and its fetch of a pull request's head into `FETCH_HEAD` throws |
 | `LargeHistory` | same | The 100k-commit repo (D51), built once per machine with `git fast-import` under `%TEMP%/VisualCommit.Tests/shared/` and shared read-only; what each row shows follows from its number. Since phase 4 `GetBareAsync()` gives a bare copy made once beside it (`large-history-v1.git`), which `AuthRemoteServer` serves in place for phase 1's clone checks (D150). Since phase 8a (D468) each test process proves each copy through git once, before it uses it, with `TempRepo.IsolatedEnvironment` (`IsUsableAsync`): `rev-parse --is-bare-repository` gives the copy's kind, one `cat-file --batch-check` finds `refs/heads/main` at the SHA the copy's marker holds and `refs/heads/feature` and `refs/tags/middle` as commits, and in the working copy `git --no-optional-locks status --porcelain --untracked-files=no` prints nothing; a marker counts only when it holds a SHA (`MarkedSha`). A copy that fails is deleted, its marker first (`DeleteCopy`), and made again under the lock already held, the bare one cloned into `large-history-v1.git.partial` beside its place and moved in whole before its marker is written, so that no half-made copy lies at the final path |
-| `GitIsolation` | same | Cuts the test process off from the machine: no system or user git configuration, no search for a repository above the tests' own temp folder (`GIT_CEILING_DIRECTORIES`), none of the variables a surrounding process can hand git, and dates in UTC; since phase 3 also no askpass program or ssh command of the machine (`GIT_ASKPASS`, `SSH_ASKPASS`, `SSH_ASKPASS_REQUIRE`, `GCM_INTERACTIVE`, `GIT_SSH`, `GIT_SSH_COMMAND`, `GIT_SSH_VARIANT`), no proxy (`no_proxy` set to `127.0.0.1,localhost`) and auto-fetch off (`VISUALCOMMIT_AUTO_FETCH_MINUTES=0`) (D112, D116); since phase 4 no editor of the machine (`EDITOR`, `VISUAL`, `GIT_EDITOR`, `GIT_SEQUENCE_EDITOR`, D151). `ApplyMachineIndependence` does the same for a process about to start (the real-window pass's app). The UI test assemblies call it through `HeadlessTestApp.IsolateFromTheMachine` in a module initializer, `VisualCommit.Git.Tests` directly. Phase 6 (D220, design 17.2): the test process's `GIT_CONFIG_GLOBAL` names a file in a folder nobody makes (`NoGlobalConfigFile`), so reads see no global configuration and a global write outside an app session fails with exit 255 in the test that made it, and its `XDG_CONFIG_HOME` is an empty folder of the tests' (`ProcessXdgConfigHome`, `%TEMP%/VisualCommit.Tests/isolation/xdg`), so the user's `~/.config/git/ignore` and `attributes` reach no call; `GIT_AUTHOR_*`, `GIT_COMMITTER_*`, `EMAIL` and `MSYSTEM` are removed and `PATHEXT` is Windows' default; `SessionGitEnvironment(data)` gives an app session its own `GIT_CONFIG_GLOBAL` (`<data>/harness/global.gitconfig`) and `XDG_CONFIG_HOME`, which both harnesses pass; the tripwire `GlobalConfigurationWrittenOutsideASession` lists the traces a global write outside a session leaves in the isolation folder, which every test process shares (`%TEMP%/VisualCommit.Tests/isolation`: its `no-global` folder made, a `git` folder in its `xdg`, the old shared `gitconfig` not empty); `GitIsolationTripwireTests` (in `GitIsolationTests.cs`) and `Phase6TripwireTests` (in `Phase6SupportTests.cs`) assert that it lists nothing, each in a collection with parallelization off, which xunit runs after the parallel tests, so that every git call of their process has ended and what the projects beside them wrote until then is seen too; `ShellTests` and `Phase6SupportTests` also assert it at the end of a test of a session's git environment. Phase 7a (design 1.8, 19 item 4; ruling 24, D340): `MachineIndependence` also sets `VISUALCOMMIT_GITHUB_URL=none` and `VISUALCOMMIT_KEYCHAIN=memory` and removes `GH_TOKEN`, `GITHUB_TOKEN`, `GH_ENTERPRISE_TOKEN`, `GITHUB_ENTERPRISE_TOKEN`, `GH_HOST` and the live command's two variables (`HostingTokenVariables`), so every test process and the app the real-window pass starts begin with GitHub off and tokens in memory, a check's own variables overriding; it removes `NETRC` (`NetrcVariables`) and leaves `VISUALCOMMIT_WATCHER_LAG_MS` alone; `SessionGitEnvironment(data)` also gives `HOME = <data>/harness/home` (`SessionHomeFolder`), empty, so that the curl of a session's git calls never reads the machine's `.netrc` or `_netrc`, which answers a server's 401 before any credential helper. Phase 7b (design 1.8, ruling 27): `MachineIndependence` also sets `VISUALCOMMIT_AZURE_DEVOPS_URL=none` and `VISUALCOMMIT_GITLAB_URL=none`, and `HostingTokenVariables` also holds GitLab's tools' variables (`GITLAB_TOKEN`, `GITLAB_ACCESS_TOKEN`, `OAUTH_TOKEN`, `GITLAB_HOST`, `GITLAB_URI`, `GL_HOST`, `GITLAB_API_HOST`, `GL_TOKEN`, `CI_JOB_TOKEN`), Azure DevOps' and Git Credential Manager's for Azure Repos (`AZURE_DEVOPS_EXT_PAT`, `SYSTEM_ACCESSTOKEN`, `GCM_AZREPOS_SP_SECRET`, `GCM_AZREPOS_WIF_ASSERTION`) and the live command's four new variables, so every test process and the app the real-window pass starts begin with the three providers off and no tool's token; `GitIsolationTests` and `Phase7bSupportTests` pin the names, written out. Runners that use neither `TempRepo`'s environment nor a session's (App.Tests' `OperationsHarness`, static runners, `AuthRemoteServer`'s own) still see the machine's `HOME` (plan.md's risk 37) |
+| `GitIsolation` | same | Cuts the test process off from the machine: no system or user git configuration, no search for a repository above the tests' own temp folder (`GIT_CEILING_DIRECTORIES`), none of the variables a surrounding process can hand git, and dates in UTC; since phase 3 also no askpass program or ssh command of the machine (`GIT_ASKPASS`, `SSH_ASKPASS`, `SSH_ASKPASS_REQUIRE`, `GCM_INTERACTIVE`, `GIT_SSH`, `GIT_SSH_COMMAND`, `GIT_SSH_VARIANT`), no proxy (`no_proxy` set to `127.0.0.1,localhost`) and auto-fetch off (`VISUALCOMMIT_AUTO_FETCH_MINUTES=0`) (D112, D116); since phase 4 no editor of the machine (`EDITOR`, `VISUAL`, `GIT_EDITOR`, `GIT_SEQUENCE_EDITOR`, D151). `ApplyMachineIndependence` does the same for a process about to start (the real-window pass's app). The UI test assemblies call it through `HeadlessTestApp.IsolateFromTheMachine` in a module initializer, `VisualCommit.Git.Tests` directly. Phase 6 (D220, design 17.2): the test process's `GIT_CONFIG_GLOBAL` names a file in a folder nobody makes (`NoGlobalConfigFile`), so reads see no global configuration and a global write outside an app session fails with exit 255 in the test that made it, and its `XDG_CONFIG_HOME` is an empty folder of the tests' (`ProcessXdgConfigHome`, `%TEMP%/VisualCommit.Tests/isolation/xdg`), so the user's `~/.config/git/ignore` and `attributes` reach no call; `GIT_AUTHOR_*`, `GIT_COMMITTER_*`, `EMAIL` and `MSYSTEM` are removed and `PATHEXT` is Windows' default; `SessionGitEnvironment(data)` gives an app session its own `GIT_CONFIG_GLOBAL` (`<data>/harness/global.gitconfig`) and `XDG_CONFIG_HOME`, which both harnesses pass; the tripwire `GlobalConfigurationWrittenOutsideASession` lists the traces a global write outside a session leaves in the isolation folder, which every test process shares (`%TEMP%/VisualCommit.Tests/isolation`: its `no-global` folder made, a `git` folder in its `xdg`, the old shared `gitconfig` not empty); `GitIsolationTripwireTests` (in `GitIsolationTests.cs`) and `Phase6TripwireTests` (in `Phase6SupportTests.cs`) assert that it lists nothing, each in a collection with parallelization off, which xunit runs after the parallel tests, so that every git call of their process has ended and what the projects beside them wrote until then is seen too; `ShellTests` and `Phase6SupportTests` also assert it at the end of a test of a session's git environment. Phase 7a (design 1.8, 19 item 4; ruling 24, D340): `MachineIndependence` also sets `VISUALCOMMIT_GITHUB_URL=none` and `VISUALCOMMIT_KEYCHAIN=memory` and removes `GH_TOKEN`, `GITHUB_TOKEN`, `GH_ENTERPRISE_TOKEN`, `GITHUB_ENTERPRISE_TOKEN`, `GH_HOST` and the live command's two variables (`HostingTokenVariables`), so every test process and the app the real-window pass starts begin with GitHub off and tokens in memory, a check's own variables overriding; it removes `NETRC` (`NetrcVariables`) and leaves `VISUALCOMMIT_WATCHER_LAG_MS` alone; `SessionGitEnvironment(data)` also gives `HOME = <data>/harness/home` (`SessionHomeFolder`), empty, so that the curl of a session's git calls never reads the machine's `.netrc` or `_netrc`, which answers a server's 401 before any credential helper. Phase 7b (design 1.8, ruling 27): `MachineIndependence` also sets `VISUALCOMMIT_AZURE_DEVOPS_URL=none` and `VISUALCOMMIT_GITLAB_URL=none`, and `HostingTokenVariables` also holds GitLab's tools' variables (`GITLAB_TOKEN`, `GITLAB_ACCESS_TOKEN`, `OAUTH_TOKEN`, `GITLAB_HOST`, `GITLAB_URI`, `GL_HOST`, `GITLAB_API_HOST`, `GL_TOKEN`, `CI_JOB_TOKEN`), Azure DevOps' and Git Credential Manager's for Azure Repos (`AZURE_DEVOPS_EXT_PAT`, `SYSTEM_ACCESSTOKEN`, `GCM_AZREPOS_SP_SECRET`, `GCM_AZREPOS_WIF_ASSERTION`) and the live command's four new variables, so every test process and the app the real-window pass starts begin with the three providers off and no tool's token; `GitIsolationTests` and `Phase7bSupportTests` pin the names, written out. Runners that use neither `TempRepo`'s environment nor a session's (App.Tests' `OperationsHarness` when it is given no session environment, App.Tests' static runners and Git.Tests' `RepositoryTestSupport.NewRunner`) still see the machine's `HOME` (plan.md's risk 37); `AuthRemoteServer` and `LargeHistory` give their calls `TempRepo.IsolatedEnvironment`, all but the server's check that git has `http-backend`, which sends no request. Phase 8a (design 1.14): `MachineIndependence` also removes `VISUALCOMMIT_GIT_STAND_IN`, `VISUALCOMMIT_GIT_STAND_IN_VERSION` and `VISUALCOMMIT_GIT_STAND_IN_FAILURE` (`GitStandInVariables`), so that no run takes a machine's value; the real-window pass sets them last for the launches that use the stand-in (`RealApp.StandInEnvironment`). `GitStandIn` (same folder) holds the stand-in's file name (`visualcommit-git-stand-in`, with `.exe` on Windows) and its two variables |
 | `AuthRemoteServer` | same | The credential test server (D97): a `TcpListener` on 127.0.0.1 serving `git http-backend` through `GitRunner` as CGI for one bare repository (its own `remote.git`, or an existing one in place), asking for HTTP Basic auth (alice/s3cret) unless `RequireAuth` is false. Port 0 (the system picks) by default; `StartForVisualChecksAsync` uses 47391 (`VisualChecksPort`) so the pictures do not change, or since phase 4 47392 (`Phase1VisualChecksPort`) for phase 1's clone checks, which run in another process at the same time as phase 3's (D150), falling back to a free port (`PortWasTaken`). `Requests`, `Errors`; `HoldNextFetchPack(atPercent)` holds the next fetch's pack until `Release()`, so a check can show and cancel a running fetch: with 0 after the packet in which its first whole progress line with a percentage ends, or after the first packet with a `%` when no such line ends (since phase 8a, D470; before, always after the first packet that held a `%`), with a percentage right after the first whole progress line at or above it, the packet re-framed so that git's last line shows exactly that percentage (phase 1's clone is held at 45 %, so it cannot race). Since phase 6 (D229) `StartForFolderAsync(folder, port)` serves a folder of bare repositories, each at its own URL with its own hold at a chosen percentage (`UrlOf`), on `Phase6VisualChecksPort` 47393 for phase 6's walk-through and the real window, and on `Phase6LookVisualChecksPort` 47394 for `VisualCommit.VisualTests.Phase6Look`, which runs beside it; its own tests take a system port. Since phase 7a (D266) `StartForHostAsync(folder, options, port)` stands in for a git host, `Serve("owner/name")` registering each repository, with Basic auth by token (`LoginOfToken`), anonymous reads of public repositories, pushes by pushers only, a hook for the routes it claims and `GivenUserName` in `AuthRemoteRequest`; `Phase7aVisualChecksPort` is 47395 (D265). Since phase 7b (D363, design 2.2) a host also serves a repository at a path of any depth (`ServeAt(urlPath, folder, gitSuffix)`, looked up only when 7a's two levels find nothing, so their answers stay), `AuthRemoteHostOptions` takes `PushRefusal`, `LoginOfTokenIn` and `FetchRefusal`, and `Phase7bAzureDevOpsPort`, `Phase7bGitLabPort` and `Phase7bGitHubPort` are 47397, 47398 and 47399. Since phase 8a (D470) a server keeps every hold asked of it (`Holds`: when a response took it, what it sent once it began, when it was let go) and describes them with its requests and its counts of errors and of open connections, read under one lock (`DescribeHoldsAndRequests()`; `DescribeServersOn(ports)` for a test that knows a server only by the port in a remote's URL), for the message of a wait that timed out: `ShellDriver.WaitForHeldFetchAsync` (the server holds the fetch, which phase 3's part D waits for first) and `WaitForProgressPercentAsync` (the status bar shows a percentage) add it, and so do the fetch and pull tests' helpers and `RemoteOperationTests`. See "The fake of GitHub" and "The fakes of Azure DevOps and GitLab" |
-| `FakeFileLauncher`, `FakeClipboard` | `tests/VisualCommit.Testing/Headless` | Record what the app asked to open, show or copy, and touch nothing on the machine; `ShellDriver.Start` injects them (`Launcher`, `Clipboard`). Since phase 7a the launcher records "Open in browser" as `FileLaunchKind.OpenUrl` with the address, and fails an address that is not `http` or `https` with the real launcher's `ArgumentException`, recording nothing. Since phase 8a's review each has a `Hold`, a task: while it is set, a request (a file shown, an address opened, a program started; a copy) is recorded at once and answered when the task ends, a start's failure after it, as the real launcher, which starts a program off the UI thread, and a clipboard that another program holds answer late |
+| `FakeFileLauncher`, `FakeClipboard` | `tests/VisualCommit.Testing/Headless` | Record what the app asked to open, show or copy, and touch nothing on the machine; `ShellDriver.Start` injects them (`Launcher`, `Clipboard`). Since phase 7a the launcher records "Open in browser" as `FileLaunchKind.OpenUrl` with the address, and fails an address that is not `http` or `https` with the real launcher's `ArgumentException`, recording nothing. Since phase 8a (design 1.3) the launcher also records a program's start, such as winget's or `xcode-select`'s, and starts nothing (`StartAsync`, `FileLaunchKind.Start`; `Starts`, the `LaunchCommand`s the app built); `StartFailure` makes the next start throw once it is recorded, then clears. Since phase 8a's review each has a `Hold`, a task: while it is set, a request (a file shown, an address opened, a program started; a copy) is recorded at once and answered when the task ends, a start's failure after it, as the real launcher, which starts a program off the UI thread, and a clipboard that another program holds answer late |
 | `ScriptedPromptHandler` | `tests/VisualCommit.Testing` | Answers prompts from a queue of answers and records every prompt; a prompt without an answer is refused. Injected through `AppSession.Start` or `ShellDriver.Start` (`promptHandler`), or given to a broker |
 | `AskPassRunner` | same | Runs the real helper as OpenSSH runs `SSH_ASKPASS` (the prompt as its argument, `SSH_ASKPASS_PROMPT` when ssh sets it, an open scope's environment) for the prompt dialogs no ssh server can reach; since phase 7a `RunCredentialAsync` runs it as git runs a credential helper (`--vc-credential` and the action, the input written and closed), for the credential tests (see "Prompts and credentials") |
 | `FakeSsh` | same | A shell script set as a remote's `core.sshCommand` that runs `$SSH_ASKPASS` with recorded OpenSSH texts (passphrase, unknown host, PIN), writes the answers to a file and exits 1 (D115) |
 | `AppLogFile` | same | The app's log as checks read it, and the patterns of the lines they wait for or count, in both harnesses. Since phase 5 every test reads the log only through it (`ReadText` opens the file sharing it for writing): a plain `File.ReadAllText` is refused on Windows while the app writes an entry. Since phase 7a `PullRequestsListed(repo)` and `AvatarsShown(repo)` match the Debug lines `{repo}: listed {n} open pull requests of {owner/name}` and `{repo}: showing GitHub avatars for {n} authors` (groups `count` and `repository`), each written on the UI thread once the list or the avatars are applied (the second by the active tab's graph only); both harnesses take a picture of an opened GitHub repository while signed in only after both (D322). Since phase 7b (design 2.4) `PullRequestsListed`'s listed repository has any depth and may hold spaces (`northfield/platform/web-app`, `Fernhill-Labs/Mobile App/mobile-app`), 7a's lines matching as before; Azure DevOps and GitLab write no avatars line (D349), so a picture of such a repository while signed in waits for that line alone |
 | `WindowLayout` | same | The window's fixed layout in logical pixels, copied from the reports (tab strip, toolbar, panels, column headers, rows 26 high, the banner's minimum, the menu's heights and gaps) and the neutral point (760, 687) where both harnesses rest the pointer before a capture that is not about a hover. Both harnesses compute positions from it |
 | `HeadlessTestApp` | `tests/VisualCommit.Testing/Headless` | Builds the real `App` for headless mode with Skia rendering. Each UI test assembly names it in `AssemblyInfo.cs` |
-| `ShellDriver` | same | Starts an `AppSession` on a data folder (`Start`, or `StartWithTabs` with repositories open through the session file), shows its window at a size, and drives it with simulated input: click, right-click, double-click, drag, wheel, hover, typing and keys. `Folders` is the fake folder dialog; `WaitForAsync` waits for a condition while the UI thread keeps running; `Capture()` returns a `Screenshot`. Partial since phase 3: `ShellDriver.Phase3.cs` (clicks with modifiers, a drag in steps, `Menu()` as a `MenuSnapshot`, `ClickMenuItem`, `MenuItemBounds`, the open dialog, `TypeInto`, `WaitForIdleAsync` for the queue and its refresh), `.Pointer.cs` (the neutral point, resting the pointer until a tooltip opens), `.Log.cs` (the app's log lines, git's call records, step times; since phase 8a's review `LogMark` also notes the dashboards' read clock with each mark, for `WaitForDashboardReadAsync`), `.Checks.cs` (opening a repository, rows below the banner, left-panel and file rows, the error dialog as an `ErrorDialogSnapshot`, progress, closing the window); phase 4's `.Phase4.cs` (`Undo()` and `Redo()` by the first gesture of `HotkeyConfiguration.Undo` and `.Redo`, the banner's Continue and Skip, the result's caret held still: `ConflictResultEditor.CaretBlinks = false` in `Start`), `.Phase4.Rebase.cs` (the list as a snapshot, a row's point, a drag of a row in steps, a row's action through its menu) and `.Phase4.Conflicts.cs` (the resolver as a snapshot, a bar's button, the result's text, caret and modified state, typing into it, a click at a line and column). `WaitForIdleAsync` also waits for the stage panel's read of the stopped commit's message (`StagePanelSettled`: `IsFillingMessage` false), which fills its boxes after the status is shown. `FindByAutomationId` looks in the open menu first, then in the top dialog, then in the whole window. Phase 5: `Start` gives the session a frozen record clock and a fixed backup clock at 2026-01-02 09:00:00 UTC (`AppClocks.HarnessTime`); `DefaultWaitTimeout` is 60 s since phase 6's gate (D237: with nine test projects side by side a git call took 10 to 15 times as long as alone, and a pop of 24 calls ran past 30 s; it was 10 s before phase 5, 30 s from it); `DoubleClick` stops the window's input clock for its two presses (`HeadlessInputClock`), so that a busy first click cannot split a double-click into two clicks, and since phase 7a (CI's run on WP-P's merge) it first waits, running the dispatcher's jobs, until that clock (`HeadlessInputClock.Read`) stands more than the double-tap time of 500 ms past the last press in the window, by anyone, when that press lay within the double-tap size of 4 by 4 pixels around its spot: Avalonia's `MouseDevice` counts a press on from the last one there whatever control either went to, so a double-click right after a click at its spot came as that click's second and third press (`LeftPanelPullRequestsViewTests`' double-click on pull request #5, which had taken the clicked sign-in row's place); `DoubleClick(Visual)` reads the control's centre again after that wait, and `DoubleClick` throws an `InvalidOperationException` naming the counts and the press before when its presses are not counted 1 and 2; `Click` and `RightClick` do not wait, so two presses at one spot within 500 ms are a double-click there as for a user (phase 7a's design 17 item 9); `.Phase5.Shell.cs` (`PressSearch`, `PressGitUndo`, `PressGitRedo`, the activity log as a snapshot, `WaitForOperationRecordAsync`), `.Phase5.Find.cs` (the search bar and its marks read from the graph control's state, never from pixels, the comparison and `WaitForComparisonShownAsync`, the left panel's marks, the waits for a search and a filter's reload), `.Phase5.Graph.cs` (a lane's centre read as dashed or solid), `.Phase5.Pages.cs` (the pages as snapshots and their waits), `.Phase5.Protect.cs` (the status bar's text as laid out, the stash calls since a mark, the wait for a status read) and `.Phase5.Undo.cs` (the toolbar's Undo and Redo as both harnesses read them). Phase 4's `Undo()` and `Redo()` stay the text undo of a text box and the resolver. Phase 6 (design 17.2): `Start` gives the session `GitIsolation.SessionGitEnvironment` on its data folder (`GlobalGitConfigPath`, `SeedGlobalGitConfig` writes it before a start; a restart on the folder keeps it), `ToolCatalogues.Fixed` (or `tools`, such as `HeldMergeTools`), a `FakeSystemTheme` dark unless `systemDark` is false (`SystemTheme`), and an optional `readClock` (`ReadClock`); its parts `.Phase6.Workspaces.cs` (`WriteWorkspaces`, `StartWithTabs` with `TabState`s, `StartWithWorkspace`, the welcome page's section, the Add repositories dialog), `.Phase6.Dashboard.cs` (the dashboard as a `DashboardSnapshot`, `WaitForDashboardReadAsync` on the pass's line or, since phase 8a's review, on the rows themselves (a pass whose reads all ran past their patience logs no line, so the wait also ends once no pass runs, no row reads and every row that follows no tab has read after the mark by the read clock, `DashboardRowViewModel.LastRead`), `ActivateWindow`, a row's point, menu and open, `CallMark` and `CallsSince`), `.Phase6.Bulk.cs` (Fetch all, Pull all, Cancel all, a row's percentage, Details… and Cancel), `.Phase6.Palette.cs` (`PressPalette`, `TypeInPalette`, `PaletteSnapshot`, `RunPaletteEntryAsync`), `.Phase6.Keys.cs` (`PressShortcut` from the app's own `Shortcut`, the focused region, `AcceleratorKey` and help texts, a menu item's key), `.Phase6.Settings.cs` (the screen as a `SettingsSnapshot`, its sections, scopes, fields and Save), `.Phase6.Theme.cs` (`SetSystemThemeAsync`, a token's colour) and `.Phase6.TabStrip.cs` (`TabStrip()`); and in `.Phase3.cs` `WatchersQuiet` and `WaitForWatchersQuietAsync()`, every open tab's `RepositoryViewModel.IsWatcherQuiet`, which part S waits for before it marks and reads a step's git calls. Phase 7a (design 2.5, 1.9): `Start` and `StartWithTabs` take, last, `gitHub:` (a `FakeGitHub` on a port), `tokens:` (a `FakeTokenStore`, new per start unless given) and `hosting:` (options as given), refuse both together and an in-process fake as `gitHub:`, put every HTTP client but `hosting:`'s behind a `LoopbackOnlyHandler`, and pump the UI thread until `Session.HostingStarted` has completed (see "The fake of GitHub"); the session's git environment has its own empty `HOME`. `.Phase7a.cs`: `Tokens`, `GitHub`, `Hosting`, `RefusedRequests`, `SignInAsync(token)` (through the session, no dialog; anything but signed in throws with the failure's kind and message, never the token); `.Phase7a.Accounts.cs`: the Accounts section and the "Add GitHub account" dialog (`OpenAccountsAsync`, `OpenSignInDialogAsync`, `TypeToken`, `ConfirmSignInAsync`, `WaitForSignInCheckAsync`, `SignOutAsync`, `WaitForAccountAsync`); `.Budget.cs`: `QuietCallMarkAsync()` and `QuietCallsSinceAsync(mark, inFolder)` (S8, `GitCallBudget`); `.Pointer.cs`: `WaitForControlAtAsync(Point)`, a hit test polled until the window has drawn a control there, since `WaitUntilReadyAsync` renders no frame (the wheel test failed without it in a bare Ubuntu container). Phase 7b (design 1.9, 2.4): `Start` and `StartWithTabs` take, after `hosting:`, `azureDevOps:` and `gitLab:` (fakes on a port), refuse either beside `hosting:` and an in-process one, and put all three providers' handlers behind a `LoopbackOnlyHandler` (see "The fake of GitHub"); `.Phase7b.cs`: `AzureDevOps`, `GitLab` and `SignInAsync(provider, token, organization)` (through the session, no dialog; a failure's text names the provider and holds neither the token nor the organization); `.Phase7a.Accounts.cs` keeps 7a's GitHub forms and gains the provider forms `OpenSignInDialogAsync(provider)` (it waits for the keychain's answer and the focus in `SignInOrganization` while that box shows empty, else in `SignInToken`), `TypeOrganization`, `SignOutAsync(provider, confirm)`, `WaitForAccountAsync(provider, condition)`, `AccountsBlock(provider)` and `AccountIdOf(provider, id)` (7a's ids, followed by `GitLab` or `AzureDevOps`); `.Budget.cs` gains `WatcherRefreshes`, `QuietStepMarkAsync()` and `AssertNoStepCallsAsync(mark, what)` (D390, see `GitCallBudget`) |
+| `ShellDriver` | same | Starts an `AppSession` on a data folder (`Start`, or `StartWithTabs` with repositories open through the session file), shows its window at a size, and drives it with simulated input: click, right-click, double-click, drag, wheel, hover, typing and keys. `Folders` is the fake folder dialog; `WaitForAsync` waits for a condition while the UI thread keeps running; `Capture()` returns a `Screenshot`. Partial since phase 3: `ShellDriver.Phase3.cs` (clicks with modifiers, a drag in steps, `Menu()` as a `MenuSnapshot`, `ClickMenuItem`, `MenuItemBounds`, the open dialog, `TypeInto`, `WaitForIdleAsync` for the queue and its refresh), `.Pointer.cs` (the neutral point, resting the pointer until a tooltip opens), `.Log.cs` (the app's log lines, git's call records, step times; since phase 8a's review `LogMark` also notes the dashboards' read clock with each mark, for `WaitForDashboardReadAsync`), `.Checks.cs` (opening a repository, rows below the banner, left-panel and file rows, the error dialog as an `ErrorDialogSnapshot`, progress, closing the window); phase 4's `.Phase4.cs` (`Undo()` and `Redo()` by the first gesture of `HotkeyConfiguration.Undo` and `.Redo`, the banner's Continue and Skip, the result's caret held still: `ConflictResultEditor.CaretBlinks = false` in `Start`), `.Phase4.Rebase.cs` (the list as a snapshot, a row's point, a drag of a row in steps, a row's action through its menu) and `.Phase4.Conflicts.cs` (the resolver as a snapshot, a bar's button, the result's text, caret and modified state, typing into it, a click at a line and column). `WaitForIdleAsync` also waits for the stage panel's read of the stopped commit's message (`StagePanelSettled`: `IsFillingMessage` false), which fills its boxes after the status is shown. `FindByAutomationId` looks in the open menu first, then in the top dialog, then in the whole window. Phase 5: `Start` gives the session a frozen record clock and a fixed backup clock at 2026-01-02 09:00:00 UTC (`AppClocks.HarnessTime`); `DefaultWaitTimeout` is 60 s since phase 6's gate (D237: with nine test projects side by side a git call took 10 to 15 times as long as alone, and a pop of 24 calls ran past 30 s; it was 10 s before phase 5, 30 s from it); `DoubleClick` stops the window's input clock for its two presses (`HeadlessInputClock`), so that a busy first click cannot split a double-click into two clicks, and since phase 7a (CI's run on WP-P's merge) it first waits, running the dispatcher's jobs, until that clock (`HeadlessInputClock.Read`) stands more than the double-tap time of 500 ms past the last press in the window, by anyone, when that press lay within the double-tap size of 4 by 4 pixels around its spot: Avalonia's `MouseDevice` counts a press on from the last one there whatever control either went to, so a double-click right after a click at its spot came as that click's second and third press (`LeftPanelPullRequestsViewTests`' double-click on pull request #5, which had taken the clicked sign-in row's place); `DoubleClick(Visual)` reads the control's centre again after that wait, and `DoubleClick` throws an `InvalidOperationException` naming the counts and the press before when its presses are not counted 1 and 2; `Click` and `RightClick` do not wait, so two presses at one spot within 500 ms are a double-click there as for a user (phase 7a's design 17 item 9); `.Phase5.Shell.cs` (`PressSearch`, `PressGitUndo`, `PressGitRedo`, the activity log as a snapshot, `WaitForOperationRecordAsync`), `.Phase5.Find.cs` (the search bar and its marks read from the graph control's state, never from pixels, the comparison and `WaitForComparisonShownAsync`, the left panel's marks, the waits for a search and a filter's reload), `.Phase5.Graph.cs` (a lane's centre read as dashed or solid), `.Phase5.Pages.cs` (the pages as snapshots and their waits), `.Phase5.Protect.cs` (the status bar's text as laid out, the stash calls since a mark, the wait for a status read) and `.Phase5.Undo.cs` (the toolbar's Undo and Redo as both harnesses read them). Phase 4's `Undo()` and `Redo()` stay the text undo of a text box and the resolver. Phase 6 (design 17.2): `Start` gives the session `GitIsolation.SessionGitEnvironment` on its data folder (`GlobalGitConfigPath`, `SeedGlobalGitConfig` writes it before a start; a restart on the folder keeps it), `ToolCatalogues.Fixed` (or `tools`, such as `HeldMergeTools`), a `FakeSystemTheme` dark unless `systemDark` is false (`SystemTheme`), and an optional `readClock` (`ReadClock`); its parts `.Phase6.Workspaces.cs` (`WriteWorkspaces`, `StartWithTabs` with `TabState`s, `StartWithWorkspace`, the welcome page's section, the Add repositories dialog), `.Phase6.Dashboard.cs` (the dashboard as a `DashboardSnapshot`, `WaitForDashboardReadAsync` on the pass's line or, since phase 8a's review, on the rows themselves (a pass whose reads all ran past their patience logs no line, so the wait also ends once no pass runs, no row reads and every row that follows no tab has read after the mark by the read clock, `DashboardRowViewModel.LastRead`), `ActivateWindow`, a row's point, menu and open, `CallMark` and `CallsSince`), `.Phase6.Bulk.cs` (Fetch all, Pull all, Cancel all, a row's percentage, Details… and Cancel), `.Phase6.Palette.cs` (`PressPalette`, `TypeInPalette`, `PaletteSnapshot`, `RunPaletteEntryAsync`), `.Phase6.Keys.cs` (`PressShortcut` from the app's own `Shortcut`, the focused region, `AcceleratorKey` and help texts, a menu item's key), `.Phase6.Settings.cs` (the screen as a `SettingsSnapshot`, its sections, scopes, fields and Save), `.Phase6.Theme.cs` (`SetSystemThemeAsync`, a token's colour) and `.Phase6.TabStrip.cs` (`TabStrip()`); and in `.Phase3.cs` `WatchersQuiet` and `WaitForWatchersQuietAsync()`, every open tab's `RepositoryViewModel.IsWatcherQuiet`, which part S waits for before it marks and reads a step's git calls. Phase 7a (design 2.5, 1.9): `Start` and `StartWithTabs` take, last, `gitHub:` (a `FakeGitHub` on a port), `tokens:` (a `FakeTokenStore`, new per start unless given) and `hosting:` (options as given), refuse both together and an in-process fake as `gitHub:`, put every HTTP client but `hosting:`'s behind a `LoopbackOnlyHandler`, and pump the UI thread until `Session.HostingStarted` has completed (see "The fake of GitHub"); the session's git environment has its own empty `HOME`. `.Phase7a.cs`: `Tokens`, `GitHub`, `Hosting`, `RefusedRequests`, `SignInAsync(token)` (through the session, no dialog; anything but signed in throws with the failure's kind and message, never the token); `.Phase7a.Accounts.cs`: the Accounts section and the "Add GitHub account" dialog (`OpenAccountsAsync`, `OpenSignInDialogAsync`, `TypeToken`, `ConfirmSignInAsync`, `WaitForSignInCheckAsync`, `SignOutAsync`, `WaitForAccountAsync`); `.Budget.cs`: `QuietCallMarkAsync()` and `QuietCallsSinceAsync(mark, inFolder)` (S8, `GitCallBudget`); `.Pointer.cs`: `WaitForControlAtAsync(Point)`, a hit test polled until the window has drawn a control there, since `WaitUntilReadyAsync` renders no frame (the wheel test failed without it in a bare Ubuntu container). Phase 7b (design 1.9, 2.4): `Start` and `StartWithTabs` take, after `hosting:`, `azureDevOps:` and `gitLab:` (fakes on a port), refuse either beside `hosting:` and an in-process one, and put all three providers' handlers behind a `LoopbackOnlyHandler` (see "The fake of GitHub"); `.Phase7b.cs`: `AzureDevOps`, `GitLab` and `SignInAsync(provider, token, organization)` (through the session, no dialog; a failure's text names the provider and holds neither the token nor the organization); `.Phase7a.Accounts.cs` keeps 7a's GitHub forms and gains the provider forms `OpenSignInDialogAsync(provider)` (it waits for the keychain's answer and the focus in `SignInOrganization` while that box shows empty, else in `SignInToken`), `TypeOrganization`, `SignOutAsync(provider, confirm)`, `WaitForAccountAsync(provider, condition)`, `AccountsBlock(provider)` and `AccountIdOf(provider, id)` (7a's ids, followed by `GitLab` or `AzureDevOps`); `.Budget.cs` gains `WatcherRefreshes`, `QuietStepMarkAsync()` and `AssertNoStepCallsAsync(mark, what)` (D390, see `GitCallBudget`). Phase 8a (design 1.15): `Start` and `StartWithTabs` take, last, `gitProbe` (an `IGitSetupProbe` such as `FakeGitSetupProbe`; null: the machine's search), `askPassHelper` (the helper's path; null: the built one), `identity` (null: `TestIdentity.Pinned`) and `restoreClock` (the restore order's clock; null: the session's); `.Phase8a.FirstRun.cs` reads the first-run screen: `GitSetupView()`, `ShowsGitSetupView()`, `GitSetupPart(id)`, `GitSetupText(id)`, `GitSetupButtonIds()`, `GitSetupLinkIds()` and `WaitForGitSetupAsync`; `.Phase8a.Keyboard.cs` reads the keyboard's state for part K and the keyboard tests (`FocusVisible`, whether the focused element shows the keyboard's frame; `StageRows`, `StageRow`, `StageRowOf` and `RowButton`, a stage list's rows and a row's buttons; `FocusedRowPath`; `TabToAsync`, one Tab or Shift+Tab and a wait until the expected element has the focus, failing with what has it; `DescribeFocus` for a failure's message); `.Phase8a.Uia.cs` reads the peers as a client makes them, for part U (`WindowPeer()`, made once and kept, `GraphControl()`, `GraphPeer()`, `GraphRowPeer()`, which fails unless the graph exposes exactly one row, and `RecordNameChanges(peer)`, a `NameChangeRecorder` of a peer's name changes in order) |
 | `FakeFolderPicker` | same | Answers the app's folder dialogs with folders the test queued (D42); since phase 6 the file dialog too, from a queue of its own (`AnswerFile`). Since phase 8a's review `FileHold`, a task: while it is set, the file dialog takes its answer from the queue when it is asked and gives it when the task ends, as the native dialog does while it is open; `FolderHold` holds the folder dialog in the same way, so that a button that opens it, pressed by the keys, loses the focus while its run waits, as with the native dialog (the welcome page's Open, Init and the clone form's Browse, the dashboard's Add repository; `KeyboardPassTests`) |
 | `FakeGitSetupProbe`, `FakeGitAnswer` | same | Phase 8a (design 1.15, 5.3): stands in for the machine's search for git and for the first-run screen's guidance facts, so that a test reaches each state of the screen without the machine's `PATH`, git or os-release. It records every lookup in order (`Lookups`), a chosen file's probe among them, answers a chosen path from `AnswerFor` every time and any other lookup from its queue, the last answer repeated, and `HoldNext` holds the next lookup until the test releases it (`ProbeHold`). `FakeGitAnswer` holds the answers: detections made up for the screen's states (`Missing`, `CommandLineToolsMissing`, `ChosenMissing`, `TooOld`, `NotWorking`, `ConfigFault`, `NotStarted`) and the machine's git reported at a made-up path (`RealAt`); since phase 8a's review `AvailableAt(path, source, version)`, a git found and new enough at a made-up path with no git run, for a chosen file's probe (Choose's and the settings row's Browse's), so that no time limit can catch it on a busy machine: the facts of the settings row's Browse in `OutcomeAtFocusTests` and `FirstRunFocusTests` use it and no longer depend on the probe's 10 s, while the other facts that choose a file answer it with `RealAt`, which runs the machine's git within that limit |
+| `HeldGitRunner` | same | Phase 8a (design 1.15, 6.4): a slow git for part K and the keyboard tests, an `IGitRunner` over the git the machine's search finds, handed to a session through its `Probe` (`ShellDriver.Start(gitProbe: held.Probe)`), so that a tab's git calls take it. `HoldNext(word)` holds the next call whose first argument is that word (`diff-files` for an unstaged file's diff, `commit`) until `Release`; `Started` completes with that call; every other call goes through at once |
+| `AutomationSweep`, `AutomationProblem` | same | Phase 8a (design 1.12, 9.3.8; D456): the sweep of names (see "Conventions"). `FindProblems(root, state)` lists every interactive control element of a window whose name breaks a rule (`empty`, `type name`, `key text`, `duplicate`), in the walk's order with the duplicates last; `AssertNamed` throws `AutomationSweepException` with every problem, one per line; `RuleBroken(name, acceleratorKey)` is a rule's check alone. `AccessibleNameSweepTests` (`VisualCommit.VisualTests.Phase8a`) and `AutomationSweepTests` (App) use it |
 | `Screenshot` | same | A captured frame: save as PNG, read pixel colours |
 | `LayoutAudit` | same | `FindClippedText` lists every visible text that is not shown in full; with `allowShortenedWithToolTip` it lets through text cut with "…" on purpose whose whole text is in a tooltip, and with `allowScrolledOutOfView` text cut only by a scrolling list's edge (since phase 5 also a list's partly shown row where a page around the list ends too). A wrapped line's trailing space is not counted. Since phase 8a's review a parent's clip geometry (`Clip`, which may reach outside its bounds) counts as a clip as its bounds do when it clips to them, the two intersected when it has both, so that the audit still sees the clip of the settings screen's section, which clips by a geometry while at its top (`LayoutAuditTests`) |
 | `FreshApplication` | same | Runs part of a test with a new Avalonia application object: how a scripted check crosses a restart (D32). Its wait for its turn on the headless UI thread does not count against the test (D132) |
-| `VisualRun`, `VisibleTexts` | same | Where the walk-throughs save their pictures (`artifacts/visual/phase-N/scripted/`); the texts a region shows, as a person reads them. Shared by the walk-through projects. Since phase 5 a phase's folder is emptied once per run, not once per process (`RunKey`: the `dotnet` process that started the test process, named by its id and start; a `.run` file in the folder names the run whose pictures it holds, and the processes take turns at it), so phase 5's two projects fill one folder, and phase 6's two (`Phase6`, `Phase6Look`) theirs, emptied once by one `dotnet test`. Since phase 7a a phase is a string (`FolderFor(string)`, `Save(Screenshot, string, string)`; the `int` forms delegate, as `Screens` and `RealWindowRun` do in the real-window project), so 7a's pictures go to `artifacts/visual/phase-7a/` (design 2.7) and 7b's to `artifacts/visual/phase-7b/` |
+| `VisualRun`, `VisibleTexts` | same | Where the walk-throughs save their pictures (`artifacts/visual/phase-N/scripted/`); the texts a region shows, as a person reads them. Shared by the walk-through projects. Since phase 5 a phase's folder is emptied once per run, not once per process (`RunKey`: the `dotnet` process that started the test process, named by its id and start; a `.run` file in the folder names the run whose pictures it holds, and the processes take turns at it), so phase 5's two projects fill one folder, and phase 6's two (`Phase6`, `Phase6Look`) theirs, emptied once by one `dotnet test`. Since phase 7a a phase is a string (`FolderFor(string)`, `Save(Screenshot, string, string)`; the `int` forms delegate, as `Screens` and `RealWindowRun` do in the real-window project), so 7a's pictures go to `artifacts/visual/phase-7a/` (design 2.7), 7b's to `artifacts/visual/phase-7b/` and 8a's to `artifacts/visual/phase-8a/`. The user guide's pictures (`artifacts/guide/pictures/`, `VisualCommit.GuideShots`) and the performance series' files (`artifacts/perf/phase-8a/`) lie outside every phase's folder and every list of pictures, and never go through `VisualRun` or `RealWindowRun` (phase 8a's design 0.3, D437) |
 | `TempWorkspace`, `LeanRepositories` | `tests/VisualCommit.Testing` | Phase 6 (D229, design 17.1): the workspace "Web", ten repositories in the dashboard's order (`api` … `notes`, and `old-site`, listed and never made), eight with a bare remote under `remotes/<name>.git` reached by the relative URL `../remotes/<name>.git`, so a copy is files only and fetches from its own remotes. Built once per test process the lean way (`LeanRepositories`: `git fast-import` and configuration written as text in a copy of the blank git folder, 28 git processes for the ten instead of about 80), then copied for each test. Since phase 8a (D468) the template that `Scenarios` keeps records its folders (`RecordFolders`, `KeptFolders`, refused as `TempRepo`'s record is), and its copies (`CopyAsync`) go through `TempRepo.CopyDirectory(from, to, folders)`, which walks past a folder it cannot open and makes every recorded folder in the copy; `LeanRepositories` copies its blank git folders through `BlankGitFolder.CopyTo` |
 | `FetchHold` | same | Phase 6: holds the fetches of chosen repositories from their file remotes until a test lets them go: a shell script set as the remote's `remote.origin.uploadpack` in each held repository's own configuration (never the session's global one), which waits for a file `release` before it hands over to `git upload-pack`. A held fetch waits at most `Rounds` (120) rounds of `sleep 0.5`, then gives up and leaves a marker `gave-up-<remote folder>.<pid>`, on which `WaitForHeldAsync` and `Release` fail. Since phase 8a's review `Dispose` writes `release` and never fails, since a failing step's exception may be unwinding through it, and only notes a marker in the test's output; so that a check never passes on a hold that held nothing, it ends its body with `Release` or `Assert.Empty(hold.GaveUp())` (`FetchHoldTests`) |
 | `FakeSystemTheme`, `HeldMergeTools`, `DrawnLines` | `tests/VisualCommit.Testing/Headless` | Phase 6: the operating system's mode for a headless session (`Set` flips it); merge-tool catalogues that hold their list back until released, for the settings screen's loading state; the lines a text block draws, read from its layout, where it wrapped and where it cut (the long folder's checks), without `UrlTextBlock`'s and `PathTextBlock`'s marks |
-| `Contrast`, `TextInk` | `tests/VisualCommit.Testing` | Phase 6 (design 11.10 to 11.15): WCAG 2's contrast ratio of two colours (`ThemeTokensTests` holds every light text token to 4.5:1 on each background it lies on); the colour a small text is drawn in, read from a picture: per channel the extreme toward the foreground within the text's rectangle, which must lie within `Tolerance` (8) of the token's colour, since subpixel smoothing rarely draws a pixel of exactly that colour |
+| `Contrast`, `TextInk` | `tests/VisualCommit.Testing` | Phase 6 (design 11.10 to 11.15): WCAG 2's contrast ratio of two colours (`ThemeTokensTests` holds every light text token to 4.5:1 on each background it lies on, since phase 8a every text token of both themes, and pins D469's three exceptions under it; see "Theme"); the colour a small text is drawn in, read from a picture: per channel the extreme toward the foreground within the text's rectangle, which must lie within `Tolerance` (8) of the token's colour, since subpixel smoothing rarely draws a pixel of exactly that colour |
 | `LinkFrame` | same | Phase 8a: a link's keyboard frame read from two pictures of one window, the link not focused and then focused by the keys (`VcLinkButton`). `Problems` lists what is wrong: inside the text's box (its `TextBlock`'s bounds) a change other than the underline's (at most `UnderlineRowsAt` rows next to each other in the box's lower half, each pixel kept or moved toward the link's colour) or an underline that does not show, and outside it a frame that is not a closed ring of the frame's colour within `Reach` (8) of the box, or that leaves no line of the background between itself and the text's ink. Since phase 8a's review it reads pictures drawn at a display scaling above 1: `Problems` takes the scaling (`scale`, 1 or more, 1 by default) and the text's box in the pictures' device pixels, its bounds in the window times `scale`, and `UnderlineRowsAt(scale)` gives the rows the underline may take there, `UnderlineRows` (2) at 1 and 3 from 1.25 to 2 (`LinkFrameTests`). Phase 8a's checks A1 and G3 and `LinkFocusFrameTests` (App.Tests, which render every `VcLinkButton` of the app at 1 to 2 in steps of 0.25) read with it |
+| `IconFile` | same | Phase 8a (D429, D430, D447): the icon's files as the tests read them. It holds the tests' own copy of the builder's lists, written from the design and not read from the tool (`Masters`, `IcoSizes`, `PngSizes`, `AppImageSizes`, `IconSetNames`, `IcnsTypes`, `IcnsFiles`), the files' places in the repository (`IcoFile`, `PngFolder`, `IconSetFolder`, `IcnsFile`, `ManifestFile`, `RepositoryPath`), and readers of an `.ico` (`Read`, giving `IconFrame`s), an `.icns` (`ReadIcns`) and a PNG (`DecodePng`, `PngHeader.Read`), in plain .NET without Avalonia or a renderer, so that `IconFilesTests`, part B and the real-window pass read the files alike (see "The app's icon") |
+| `TestIdentity` | same | Phase 8a (D431): `Pinned`, the identity every headless start gets unless a test gives another (`ShellDriver.Start`'s `identity`): VisualCommit by Rahim Khajei, version `0.1.0 (1a2b3c4)`, copyright `Copyright (c) 2026 Rahim Khajei`, so that no scripted picture changes from one commit to the next |
 | `WorkspaceTestSupport`, `DashboardTestSupport`, `BulkTestSupport`, `KeysTestSupport` | `tests/VisualCommit.App.Tests` | Phase 6: a session's services on a workspace store in memory with real git behind the provider and a fake folder dialog, a host that records what it is asked, a tree of real repositories and a folder link as each platform makes one; the dashboard's, the bulk runs' and the keys' fakes and builders |
 | `OperationsHarness` | `tests/VisualCommit.App.Tests` | Phase 3 (its design 7.4): runs `RepositoryOperations` against a real scenario repository with no window and no UI thread: the repository's view model opened and read as a tab opens it, a real dialog layer whose dialogs `ScriptedDialogs` answers, a `FakeClipboard`, a `FakeFileLauncher` and a `RecordingLog`. Since phase 8a's review (S19-32) its own steps, the open, the first read and `WaitForIdleAsync`, are held to a limit: what the hang watchdog leaves the test (`HangWatchdogAttribute.TimeLeftForCurrentTest`) less `WatchdogMargin` (15 s), and at least 5 s; the first read and `WaitForIdleAsync` take instead the `stepLimit` a test gives `OpenAsync`, and `WaitForIdleAsync(limit)` its own. A step past its limit fails with a `TimeoutException` that names it, the git calls that ended meanwhile and the queue's operation, so the test fails alone with a stack where the watchdog would stop the whole test process; a test whose harness step ends between 165 and 180 s counted, which passed before, now fails. The awaits it does not limit, above all the operations a test runs through `Operations`, get a stall note: a background thread per harness, ended by `Dispose`, writes one line to the standard error and output once the watchdog leaves the test no more than `WatchdogMargin`, with the test and its counted time, the repository, the queue's operation and the git calls that ended since the open (`OperationsHarnessTests`) |
 | `ThreadWork` | `tests/VisualCommit.App.Tests` | Phase 6: the work the calling thread has done, as the processor counts it (its cycles on Windows, its processor time elsewhere), which does not grow while the thread waits for a processor other test projects keep busy, so two runs on one thread can be compared under load as a ratio (`PaletteGrowthTests`, `DiffTextViewGrowthTests`) |
@@ -6792,11 +7722,12 @@ Tests run on xunit.v3 with Microsoft Testing Platform (D24). The commands are in
   `Phase3Expectations.Common.cs` and `Phase3Expectations.A.cs` to `.D.cs` (nested `PartA` to
   `PartD`). A test is named `Check_<NN>[<suffix>]_<what>`, one per app start; every wait is on a
   condition, never a fixed time. `scripts/time-scripted-check.sh` times chosen checks alone and
-  prints each step's time (its second argument picks the phase and the project: 7b when left out,
-  since phase 7b, which runs `VisualCommit.VisualTests.Phase7b`, `7a` runs
-  `VisualCommit.VisualTests.Phase7a`, and a phase it does not know, `7` among them, exits 2 before
-  anything is built; for phase 5 the filter picks the project, `Phase5Undo` for part U and `Phase5`
-  otherwise, and for phase 6 `Phase6Look` for part L and `Phase6` otherwise).
+  prints each step's time (its second argument picks the phase and the project: 8a when left out,
+  since phase 8a, which runs `VisualCommit.VisualTests.Phase8a`, `7b` runs
+  `VisualCommit.VisualTests.Phase7b` and `7a` `VisualCommit.VisualTests.Phase7a`, and a phase it
+  does not know, `7` and `8` among them, exits 2 before anything is built; for phase 5 the filter
+  picks the project, `Phase5Undo` for part U and `Phase5` otherwise, and for phase 6 `Phase6Look`
+  for part L and `Phase6` otherwise).
 - Phase 4's walk-through is the project `VisualCommit.VisualTests.Phase4` (D151), built the same
   way: the abstract base `Phase4Checks` (`Phase4Checks.Support.cs`, a copy of what phase 3's
   support offers, plus what phase 3 repeated in each part: a graph assertion, the backups,
@@ -6924,8 +7855,102 @@ Tests run on xunit.v3 with Microsoft Testing Platform (D24). The commands are in
   `RequestCheckoutProvidersTests`, `RepositoryMenusProvidersTests`, `GraphRequestBadgeTests`,
   `CreateRequestDialogProvidersTests`, `HostingTextsDescribeProvidersTests`, with `RequestTestData`'s
   made-up requests), linking App.Tests' `RecordingActions.cs` and `RecordingLog.cs` and 7a's
-  `GraphTestHost.cs`. It runs 179 tests (15 min 33 s of its own in the gate's counted default run).
-  Its checks are in phase 7b's report.
+  `GraphTestHost.cs`. It ran 179 tests at phase 7b's gate (15 min 33 s of its own in that gate's
+  counted default run). Its checks are in phase 7b's report.
+- Phase 8a's walk-through is one project, `VisualCommit.VisualTests.Phase8a` (D416): the base
+  `Phase8aChecks` with its support (`Phase8aChecks.Support.cs`), a class per part
+  (`Phase8aChecksL`, `Phase8aChecksI`, `Phase8aChecksF`, `Phase8aChecksK`, `Phase8aChecksB`,
+  `Phase8aChecksA`, `Phase8aChecksU`, `Phase8aChecksG`), each with its own helpers where it has them
+  (`Phase8aChecks.<part>.Helpers.cs`), its expectations (`Phase8aExpectations.<part>.cs`, beside
+  `Phase8aExpectations.Common.cs`, `Phase = "8a"`) and their tests
+  (`Phase8aExpectationTests.<part>.cs`, and `Phase8aSupportTests.cs`, named so that the real-window
+  project's link pattern does not take them). It has 45 test methods, and the part letters avoid C,
+  O, Q, R and T (design 0.3). Every headless start gets `TestIdentity.Pinned`. A check starts on one
+  empty tab (`StartEmptyAsync`) or on one repository (`OpenAsync`, which then waits until the
+  watchers are quiet), each with an optional probe for git (`gitProbe`) and the first with the
+  helper's path (`askPassHelper`), and a theme other than dark is written into the settings before
+  the start; every provider stays off, and the phase adds no port (design 0.3): part K's one clone
+  serves the fake of GitHub on a port the system picks. `Shot` saves under
+  `artifacts/visual/phase-8a/scripted/` (89 pictures in the gate's counted default run, on
+  `0f9099a`, where the project took 33 min 53 s from its start to its end) and the step times under
+  `phase-8a/timings/`, and refuses a name that does not match `Phase8aExpectations.PictureName` or
+  that a step of the run saved already. Its parts:
+  - Part L, L1 to L6 (D410, D418), seven methods: the placeholders in their own token at full
+    opacity, the dark danger on hovered, selected and control backgrounds, the danger button's dark
+    label and the accent on hovered and selected rows. It reads each colour from the pictures with
+    `TextInk` (the ink within 8 of the new colour and, where the round changed it, more than 8 from
+    the colour it replaced) and each control's brush in the tree. `Phase8aExpectations.L` holds its
+    colours by token, its texts and its 31 picture names; its methods 1 and 2 are the twins of the
+    real window's first two launches.
+  - Part I, I2 and I3, two methods (D421, D422, D448): the single-instance notice through
+    `InstanceNoticeHost`, an `InstanceNoticeWindow` over its view model with a fake try in place of
+    the guard and the theme on the window, with no guard, no session and no data folder: dark on
+    Windows with a try left unanswered and Esc, and light on Linux by Tab, Shift+Tab and Space, each
+    captured at the notice's own size, 480 wide. I1, the hand-over, runs in the real window alone,
+    since the headless harness never runs `Program.Main` (see "Start-up and composition");
+    `InstanceNoticeLiveRegionTests` holds the status line as a screen reader reaches it, without
+    pictures.
+  - Part F, F1 to F14, fifteen methods (D405, D423, D424, D449, D453), over a `FakeGitSetupProbe`:
+    the first-run screen in every state with each platform's guidance (Windows with and without
+    winget, macOS's Command Line Tools missing and then damaged, Ubuntu's and Alpine's), the winget
+    confirms and their starts, Choose refusing a too-old file and then saving a working one, Check
+    again finding git and reopening the restored tab, the keys over the screen, the status bar's
+    text and button, the settings screen's Git program row and the netrc note; F6b runs the
+    machine's git with a configuration line it cannot read. The fake launcher records the starts of
+    winget and
+    `xcode-select`, and nothing is started. `GitSetupShellTests` (each state's texts unclipped at
+    1100×700 and 1000×560, the view's name and help text) and `FirstRunSearchTests` (a choice saved
+    while the start's search runs, a probe ended with the window) hold the screen without pictures.
+  - Part K, K1 to K8, seven methods (D417, D425 to D427, D452): a hunk and chosen lines by the keys,
+    a blame run picked by the arrows, "Cancel {title}" in the palette, a stage row's buttons by Tab,
+    the focus after "Choose", a loading diff that leaves a moved focus where it is, the commit boxes
+    and Amend while a commit runs, and the walks by Tab to the status bar's Cancel and to a
+    splitter. The keys go through `ShellDriver.Phase8a.Keyboard.cs`, and a slow git is
+    `HeldGitRunner`; its methods 1 and 2 are the twins of the real window's launches 11 and 12.
+  - Part B, B1 and B2: the `.ico`'s frames and the other files laid out in a harness control,
+    `IconSheet`, in a plain headless `Window` of 1100×700 with the app's resources, dark and light;
+    no app is started.
+  - Part A, A1 to A6, five methods: About from the palette and its section in dark, in light and at
+    1920×1080, the licence and the notices in the text dialog, and the palette's entry on a
+    repository tab; nothing is launched but A1's one address, which the fake launcher records.
+    `AboutSectionTests` (the section's texts, the text dialog's Enter, Esc, Copy all and focus
+    return, the notices' switch, the links) and `AboutEntryTests` (the palette's entry on every kind
+    of tab, and the macOS menu's item and its command read through
+    `NativeMenu.GetMenu(Application.Current)`) hold About without pictures.
+  - Part U, U1 to U3, three methods (D411, D435, D450): the graph's selected row as a client meets
+    it on "ops" (a picture before and after the peers are made, the same bytes, then each move
+    raising one name change of the one exposed row) and on a stopped merge, the sweep of names on
+    the ops tab's busiest state, and the fixed names read with every tooltip, help text and key as
+    they were. It reads the peers through `ShellDriver.Phase8a.Uia.cs`; its method 2 is the scripted
+    counterpart of the real window's launch 13, which takes no capture.
+  - Part G, G1 to G3, four methods (D417, D452): on "ops" the palette's one row for "guide" with F1,
+    F1 opening the guide's start page from the graph and nothing over the palette or the settings
+    screen, Shift+F1 and Ctrl+F1 nothing, and the shortcuts list's last group "Help"; the first-run
+    screen's guide link in each state; About's guide link. The fake launcher records each address
+    and opens nothing, and the palette's row, F1 and the links start no git call; no real window
+    opens a browser, so the part has no twin.
+  - Without pictures, the keyboard's and the screen readers' tests that start the app:
+    `KeyboardPassTests` (the diff's toolbar and hunks by Tab, chosen lines by the arrows and
+    Shift+F10, the focus after "Choose", Enter on a dialog's selected row or checked option, Amend
+    during a commit, the splitters by the arrows, Tab out of the read-only texts and more), with its
+    partial files `.TabSwitch`, `.FocusReturns`, `.Toggles`, `.RowOrder` and the seven
+    `.AfterPress*` (the window's rule, D462; see "Conventions"), and `FirstRunFocusTests`;
+    `AccessibleNameSweepTests` (see "Conventions"); and the live regions and the focus events as a
+    client reaches them (`ClientWalk`, `GitSetupShellTests`, `InstanceNoticeLiveRegionTests`,
+    `OutcomeAtFocusTests`).
+  - The project links App.Tests' `RecordingActions.cs` and `RecordingLog.cs`, as 7a's and 7b's do,
+    and the real-window pass compiles its `Phase8aExpectations*.cs`. Its checks are in phase 8a's
+    report.
+- The user guide's pictures are a test project of their own, `VisualCommit.GuideShots` (D439;
+  phase 8a's design 11.3.5), outside the solution and so outside the default run and CI's test
+  runs: the guide's workflow runs it on Linux, CI's Windows job only builds it, and on the laptop
+  its whole run goes under the heavy-run lock (D245; CLAUDE.md's Commands). It is set up as the
+  walk-throughs are, with `HeadlessTestApp`, the hang watchdog and the isolation from the machine in
+  its module initializer, which first reads the guide's variables and the machine's facts that no
+  picture may show (`LeakGuard`'s); its tests run one after another
+  (`DisableTestParallelization`), 119 at the guide's merge, the 84 shots among them. Its pictures
+  go to their own folder, never through `VisualRun`. What it shows, and how, is under "The user
+  guide and the app's links".
 - `VisualCommit.Hosting.Tests` (phase 7a; design 1.1, D334) holds the hosting's unit tests by
   subject: the fakes' own (`FakeGitHubTests`, `FakeGitHubGitTests`, `FakeTokenStoreTests`; since
   phase 7b `FakeHostingServiceTests`, the shared core through a fake of its own, `FakeAzureDevOpsTests`
@@ -6957,7 +7982,7 @@ Tests run on xunit.v3 with Microsoft Testing Platform (D24). The commands are in
   D363).
 - **The gits** (phase 3's rule, carried into phases 4 and 5): the reports quote git's own texts and
   files as Git 2.36 writes them, and the checks assert them word for word only on that git
-  (`Phase4Expectations.IsReportGitAsync()`); on any other git (CI's 2.43 to 2.56) they assert the
+  (`Phase4Expectations.IsReportGitAsync()`); on any other git (CI's 2.34.1 to 2.56) they assert the
   classifying parts, and the `rebase-merge/` files are compared after 2.55's additions are taken
   out (the subject written as a comment in `done` and `git-rebase-todo`, the `# Conflicts:` block
   at the end of `message`). Nothing is skipped: the version decides what is asserted. The
@@ -6973,8 +7998,10 @@ Tests run on xunit.v3 with Microsoft Testing Platform (D24). The commands are in
   Git 2.56 (D248), so no machine runs 2.36: the word-for-word
   assertions that `IsReportGitAsync()` keeps for 2.36 run nowhere, and the classifying parts run on
   every git; a design's git facts are taken on 2.56, with 2.43 and 2.55 from CI where versions
-  differ (D248; since 2026-10-29 no CI job runs 2.55, so only the containers' 2.43
-  differs).
+  differ (D248; since 2026-10-29 no CI job runs 2.55, so the containers' 2.43 and, since phase 8a,
+  the floor's 2.34.1 differ). Since phase 8a (D420) a test that compares git's own words or depends
+  on git's version goes through `GitWords`, never through a literal; the expectations keep 2.36's
+  words, and the tests pinned to exactly 2.36 stay as they were.
 - xunit runs the tests of one class (or of one `[Collection]`) one after another and different
   ones side by side, so big test classes are split by subject: `ScenarioTests` and
   `Phase3ScenarioTests`, the pull parity classes by group of settings, and
@@ -7012,7 +8039,16 @@ Tests run on xunit.v3 with Microsoft Testing Platform (D24). The commands are in
   `VisualCommit.VisualTests.Phase7b`, so twelve; at its gate's counted round (`cb9af6d`'s code,
   2026-11-08, at most four projects at once through the script) the whole run passed 7,888 of 7,892
   tests, 4 skipped, in 1 h 31 min 48 s, and the real-window pass of phases 0 to 7b 77 tests in
-  33 min 35 s.
+  33 min 35 s. Phase 8a adds one project, `VisualCommit.VisualTests.Phase8a`, so thirteen (D416);
+  the stand-in for git is in the solution but is no test project, and the guide's pictures
+  (`VisualCommit.GuideShots`) are outside the solution and the default run. At its gate's counted
+  round (ruling 116) the whole run, on `0f9099a`, whose code is `e632e72`'s (2026-11-27, at most
+  four projects at once through the script, with nothing else running on the laptop, ruling 115's
+  rule), passed 8,929 of 8,936 tests in 1 h 53 min 8 s, 7 skipped (D270's four, `IconFilesTests`'
+  `iconutil` fact, D447, and two `SingleInstanceGuardTests` of Unix file modes), each project taking
+  from 4 min 59 s (part L's walk-through) to 1 h 35 min 25 s (`VisualCommit.App.Tests`) from its
+  start to its end; and the real-window pass of phases 0 to 8a, on `750eb33` (D246), passed 140 of
+  145 tests, the performance series' five skipped, in 40 min 56 s.
 - **Wait limits** (D341, phase 7a). D237's 60 s applies to every wait of the default run whose
   condition holds only once git, a refresh the watcher starts, a scenario's git or work that slows
   with the machine's load has finished, also where a call site, a helper's default, a field or a
@@ -7030,11 +8066,16 @@ Tests run on xunit.v3 with Microsoft Testing Platform (D24). The commands are in
   says once who holds the lock and looks again every 10 seconds; it takes over a lock whose holder
   and test process both no longer run (`tasklist` on Windows, `kill -0` elsewhere), or a lock folder
   without a holder file once that folder is more than a minute old, and places its own holder file
-  with `ln`, which never replaces one. TERM, INT and HUP stop the run's `dotnet test` and every
-  process it started (`taskkill /T /F` on Windows, the process group elsewhere) and free the lock.
+  with `ln`, which never replaces one. A run whose arguments name no `--project`, `--solution` or
+  `--max-parallel-test-modules` of their own, the whole default run, gets
+  `--max-parallel-test-modules 4`, so that at most four test projects run side by side (D343); a run
+  of one project, plain `dotnet test` and CI's runs take as many as the machine has processors.
+  TERM, INT and HUP stop the run's `dotnet test` and every process it started (`taskkill /T /F` on
+  Windows, the process group elsewhere) and free the lock.
   The exit code is `dotnet test`'s, 75 when `VISUALCOMMIT_HEAVY_RUN_WAIT_SECONDS` ran out, 1 when
   the script itself could not run. Builders and fixers run the classes they touch with plain `dotnet
-  test`; CI does not use the script, which has run only on Windows.
+  test`; CI does not use the script, which has run only on Windows. Since phase 8a's gate nothing
+  runs beside a counted run on the laptop: no agent, no browser, no download (ruling 115's rule).
 - **The lagged list** (R8, D262; design 0.4, 16 item 1). At each wave's merge the lead runs, through
   `scripts/heavy-run.sh` with `VISUALCOMMIT_WATCHER_LAG_MS=1500` (see "Watching and refreshing"):
   phases 0 to 2's `Phase2Checks`; App.Tests' `StageListRefreshTests`,
@@ -7052,7 +8093,15 @@ Tests run on xunit.v3 with Microsoft Testing Platform (D24). The commands are in
   `RequestOperationsProvidersTests`, `CreateRequestOperationProvidersTests`,
   `SignInBindingsWindowTests`), one command for the walk-through and one for the six; the lead's
   lagged runs on `6333de6` (2026-11-08) passed 179 tests of the walk-through, 75 of those six classes
-  and 51 of D334's six.
+  and 51 of D334's six. Phase 8a's list (its design 0.4 and 14.7), run at each wave's last merge and
+  at the merges of the first-run, keyboard, screen-reader and performance packages (design §5, §6,
+  §9 and §10), is seven commands: phase 2's checks; App.Tests' classes of 7b's list with those 8a
+  extends with real git (`DiffTextViewTests`, `WorkingChangesTests`, `StatusBarTests`,
+  `RepositoryViewModelTests`, `RepositoryViewModelFilterTests`, `RepositoryOperationsPullTests`,
+  `RepositoryOperationsBranchesTests`) and, since the restore order's merge,
+  `RestoreOrderShellTests`; phase 6's five; the whole 7a and 7b walk-throughs, one command each; the
+  twelve Hosting.Tests classes in one command; and the whole 8a project. On `640f728`'s code
+  (2026-11-24) it passed 1,114 tests, none failed, 341 of them 8a's project's (ruling 107).
 - **Timing tests under load** (phase 6): a test that compares how the work grows measures the
   thread's own work (`ThreadWork`), not a stopwatch, which the other projects' load stretches, and
   compares ratios of two runs on one thread, each the best of three, interleaved.
@@ -7103,10 +8152,14 @@ Tests run on xunit.v3 with Microsoft Testing Platform (D24). The commands are in
   `VisualCommit.Testing`, so it uses the same scenario repos, and compiles the scripted run's
   `Phase3Expectations*.cs`, `Phase4Expectations*.cs`, `Phase5Expectations*.cs`, since phase 6
   `..\VisualCommit.VisualTests.Phase6*\Phase6Expectations*.cs` (both phase 6 projects) and, since
-  phase 7a, `..\VisualCommit.VisualTests.Phase7a*\Phase7aExpectations*.cs` and, since phase 7b,
-  `..\VisualCommit.VisualTests.Phase7b*\Phase7bExpectations*.cs`, so both harnesses use the same
-  constants, texts and `PrepareAsync` and `PrepareRequestsAsync` calls. Its tests never
-  run in parallel (they share the desktop and the mouse).
+  phase 7a, `..\VisualCommit.VisualTests.Phase7a*\Phase7aExpectations*.cs`, since phase 7b
+  `..\VisualCommit.VisualTests.Phase7b*\Phase7bExpectations*.cs` and, since phase 8a,
+  `..\VisualCommit.VisualTests.Phase8a*\Phase8aExpectations*.cs`, so both harnesses use the same
+  constants, texts and `PrepareAsync` and `PrepareRequestsAsync` calls. Since phase 8a it also
+  references `tests/VisualCommit.GitStandIn`, whose app host lands in its output folder, where part
+  F's launches find it (`RealApp.StandInPath`), and `RealApp.Launch` and a second start beside it
+  (`RealApp.StartBeside`) build their process through one `StartInfoFor`, so both have the same
+  environment. Its tests never run in parallel (they share the desktop and the mouse).
 - **How the harness finds a window** (phase 8a's design 13.1, rulings 105 and 106): by its handle,
   never by a search of the desktop's children through UI Automation, which asks every program on
   the desktop, so that one that answers slowly holds the search, and the wait with it, for seconds.
@@ -7130,6 +8183,31 @@ Tests run on xunit.v3 with Microsoft Testing Platform (D24). The commands are in
   Automation's focused element only while the app's window is in front (`FocusedIdWhileInFront`):
   otherwise that element lies in another program, and the read would ask it. `SendKeys` reads the
   focus before it asserts the foreground (seen and left, ruling 106).
+- **How the harness waits** (D473; phase 8a's design 13.1, ruling 116). `RealApp.WaitFor` looks at
+  its condition every 100 ms (`PollInterval`) by the rule of `RealApp.Poll`, which is given the
+  clock, the app's exit and the pause: while the condition is false, an app that has exited ends the
+  wait at once, and a time that is up ends it with a `TimeoutException`. A look that fails in UI
+  Automation (`IsFailedLook`: a `COMException` of any HRESULT, FlaUI's
+  `ElementNotAvailableException`, and its `PatternNotSupportedException` around a `COMException`)
+  counts as "not yet", never as met, and the wait looks again: a read can fail while the app's
+  automation tree changes, as UI Automation's `FindAll` did with E_FAIL over the Remotes dialog
+  while it built its rows again (phase 3's check 22, at phase 8a's gate). A time-out after such
+  looks says how many looks failed and with what, and carries the last failure as its inner
+  exception; a wait in which no look failed has the message it always had. Any other exception of a
+  look leaves at once: `Find`'s `InvalidOperationException` for an element that is not in the
+  window, an assertion, a `TimeoutException`, a `Win32Exception` (so that a failed listing of the
+  windows never counts as a look that saw none). `WaitForMenu`'s "the same rectangle twice in a
+  row" stays two in a row across a failed look (`RealApp.SettlingRectangle`); a time-out's own read
+  of the window for its message cannot replace the time-out (`RealApp.StateForMessage` words a
+  failed read instead); and `WithoutToken` throws an assertion's exception, so that a typed token
+  found in such a read fails as a leak. `WaitForRuleTests` (21 tests) holds these rules with no app
+  and no window, on a fake clock and scripted looks; it runs in the whole pass and under its own
+  `--filter-class "*WaitForRuleTests"`. Left as they are, for plan.md's Backlog (D473): about 70
+  wait conditions that reach `Find` or a LINQ `Single`, and so still end a wait at once when an
+  element is briefly missing or listed twice; the loops that act and read between their actions
+  (`ScrollAccountsTo` and `ScrollAccountsToEnd` in `RealApp.Phase7b.cs` among them); the reads after
+  a time-out in some catch blocks; and FlaUI's `CheckBox.IsChecked` and `TextBox.Text` on an element
+  that has gone.
 - Phase 3's pass: `Phase3RealWindowPass.cs` (the run, `Phase3Run`, one folder and one `run.txt`
   for the whole pass; launching the app on a scenario and at a server; waiting for an operation's
   log line; `Compare(app, "<name>")` against the scripted picture of the same name) and
@@ -7141,9 +8219,10 @@ Tests run on xunit.v3 with Microsoft Testing Platform (D24). The commands are in
   in one jump so that it crosses no menu item, resting the pointer until a tooltip shows, replacing
   a box's text, rows below the banner from `ConflictBanner`'s bounds, left-panel rows by path, the
   status bar's progress, the window's close button). The graph's rows are not in UI Automation
-  (D49): the pass right-clicks and drags them at positions computed from `WindowLayout` and the
-  expectations. No step invokes an item that acts outside the window ("Copy …", "Open file",
-  "Show in folder").
+  (D49); since phase 8a only the selected one is, as one list item (`GraphSelectedRow`, D435; see
+  "Commit graph"), whose events part U's launch reads. The pass right-clicks and drags rows at
+  positions computed from `WindowLayout` and the expectations. No step invokes an item that acts
+  outside the window ("Copy …", "Open file", "Show in folder").
 - Phase 4's pass: `Phase4RealWindowPass.cs` (the run, `Phase4Run`, launching on a scenario,
   waiting for an operation's log line, `Compare`) and `.A.cs` (A1 to A3), `.B.cs` (B6, B7), `.C.cs`
   (C10, C11), `.C2.cs` (C14 to C16): 10 launches, one test method each, for the steps the report
@@ -7272,12 +8351,81 @@ Tests run on xunit.v3 with Microsoft Testing Platform (D24). The commands are in
   5 of 5 in 3 min 50 s and in 3 min 26 s, each of the 13 captures within 0.32 % to 0.86 % of its
   scripted twin; the whole pass of phases 0 to 7b then passed 77 of 77 in 33 min 35 s on `cb9af6d`'s
   code.
-- The whole pass, phases 0 to 7b, runs 77 tests: 73 test methods of the pass (phase 0 1, phase 1 5,
-  phase 2 8, phase 3 15, phase 4 10, phase 5 16, phase 6 8, phase 7a 5, phase 7b 5) and the 4 of
-  `Phase3ExpectationsTests`,
-  which the link pattern `Phase3Expectations*.cs` compiles in with phase 3's expectations. Phases 0
-  to 5 took about 25 minutes at phase 5's gate, phases 0 to 6 27 min 39 s at phase 6's, phases 0 to
-  7a 31 min 6 s at phase 7a's and phases 0 to 7b 33 min 35 s at phase 7b's. Phase 5 changed two
+- Phase 8a's pass (phase 8a's design 12; D442 to D446, D448 to D450, D459):
+  `Phase8aRealWindowPass.cs` (the run `Phase8aRun`, one folder and one `run.txt`; the order
+  `Phase8aOrder`; `Launch`, `Sized`; `Capture`, `Compare` and `CompareMasked`; the ink of a text in
+  a capture, `InkOf`; the guards of real input; run.txt's lines; and `Phase8aOrderTests`) and
+  `.L.cs`, `.AB.cs`, `.I.cs`, `.F.cs`, `.K.cs` and `.U.cs`: 13 test methods of one launch each
+  (D442), in the order part L's two, A and B's one, part I's three, part F's four, part K's two and
+  part U's one. Each launch's data folder holds exactly its scripted twins' tabs and starting theme,
+  written before the start, at 1100×700 unless the launch shows the notice, and every value a
+  launch asserts is first written to run.txt.
+  - **The guards** (design 12.3.1 to 12.3.3, D444). `Press` refuses what `AssertNeverPressed`
+    names, everything that leaves the app: the first-run screen's Download, its other ways to
+    install, its guide link, Copy, Show the file and Install the Command Line Tools, About's two
+    links, the text dialog's Copy all, winget's Install and Update, the palette's "Open the user
+    guide", and any "Copy …", "Open in browser", "Show in folder" or "Open in editor". `Keys`
+    refuses F1 and an Enter or Space on such an element, and no key goes while the app's window is
+    not the foreground window; an Enter meant for one element goes by `KeysOn`, only while that
+    element has the focus. A launch whose first input is a key makes sure of the foreground first
+    (`EnsureForegroundBeforeFirstKey`, see "How the harness finds a window"). The one key sent
+    outside the app's window, F4's Enter in Windows' Open dialog, goes only while that dialog is the
+    foreground window with its file name box focused (`ChooseFileInDialogGuarded`). After the winget
+    confirm's Cancel the launch asserts no `Started in a terminal:` line and no `cmd.exe` or
+    `winget.exe` started.
+  - **The comparison.** Each capture is compared with its scripted twin at 3 % (D33, D58), but the
+    single-instance notice's: `CompareMasked` holds the capture's height over the scaling within
+    3 px of the twin's, paints the folder line (`InstanceNoticeFolder`) one colour in a copy of the
+    capture and of the twin, the twin's in a temporary folder, and allows 5 %, the notice's words
+    being read through UI Automation and held to the twin's (D443, D448, D459). Part B's six
+    captures, of the title bar and the taskbar's button, have no twin and are inspected.
+  - **The launches** (design 12.3.4). Launch 3 holds the executable's and the window's icons
+    (`WM_GETICON`) to the `.ico`'s frames and opens About from the palette by real keys, its version
+    read against the built app's (`RealApp.BuiltVersionDisplay`), at 1920×1080 where that fits.
+    Launch 4 makes a second start on the same data folder (`RealApp.StartBeside`) with the first
+    window minimised: it exits 0 with no window shown, and the first comes back. In launches 5 and 6
+    the test holds the data folder's `instance.lock` itself: the notice, no answer and Close with
+    exit code 2, then the lock freed and Try again starting the app in that process. Launch 7 runs
+    with the stand-in at `none`, and its F4 chooses the machine's git (D446) in Windows' Open
+    dialog, which leaves an entry in the user's lists of recent files; launch 8 runs the stand-in
+    answering `git version 2.29.0`, launch 9 with a failure text, and launch 10, which takes no
+    capture, real git with a line of its global configuration it cannot read. Launches 7 and 8 look
+    for `winget` on the `PATH` first and fail without it, never "Not run" (D449, D453). Launches 11
+    and 12 are part K's hunk by the keys and blame run by the arrows. Launch 13 takes no capture: on
+    each real Up and Down it waits for a `LiveRegionChanged` from `GraphSelectedRow`, a Name change
+    alone failing (D445, D450), and it reads the fixed names of the resolver, the activity log, the
+    splitters, the search bar and a stage row's buttons.
+  - `RealApp.Phase8a.cs` holds the stand-in (`StandInPath`, `StandInEnvironment`), the second
+    start, the window's state (`Minimise`, `IsIconic`, `ForegroundIsThis`) and the focus
+    (`FocusedElement`, `FocusedId`, `WaitForFocusOn`), the window's icons, the title bar, captures
+    of the screen and the taskbar's buttons on the window's display (`TaskbarButtons`,
+    `DisplayBounds`), the built version
+    (`BuiltProductVersion`, `BuiltVersionDisplay`), the graph row's events
+    (`RecordSelectedRowEvents`) and the window lookups of "How the harness finds a window"; its
+    Win32 calls never wait on the app's thread without a limit (`WM_GETICON` by
+    `SendMessageTimeoutW`, the minimise posted). `Phase8aOrderTests` (10 tests) start no app: they
+    hold that the order names every fact of the pass once and that every capture's name matches the
+    pattern, the executable's icon as the built file gives it at three sizes, and the rules of the
+    steps that need no window (the taskbar's buttons, a failed read, the guard's focus, L6's
+    rectangles). They run in the whole pass and under their own
+    `--filter-class "*Phase8aOrderTests"`, not under the part's filter.
+  - At phase 8a's gate D246's two runs of the class alone (on `e4b323c`, 2026-11-26) passed 13 of
+    13, in 5 min 41 s and 5 min 5 s; they are made once and stand (ruling 115). In the gate's pass
+    that stands (on `750eb33`, 2026-11-27, ruling 116), at 200 % with a work area of 1500×952, so
+    that part A's 1920×1080 picture did not run, the 22 compared captures of the main window lay
+    within 0.14 % to 1.76 % of their twins (0.55 % to 3.66 % compared in place only), and the
+    notice's three, masked, within 2.90 % to 3.19 %.
+- The whole pass, phases 0 to 8a, runs 145 tests: 86 test methods of the pass (phase 0 1, phase 1
+  5, phase 2 8, phase 3 15, phase 4 10, phase 5 16, phase 6 8, phase 7a 5, phase 7b 5, phase 8a 13);
+  the 4 of `Phase3ExpectationsTests`, which the link pattern `Phase3Expectations*.cs` compiles in
+  with phase 3's expectations; the 10 of `Phase8aOrderTests`, the 19 of `PerformanceSeriesTests`
+  and the 21 of `WaitForRuleTests`, which start no app; and the 5 facts of the performance series
+  (`Phase8aPerformance`), skipped without `VISUALCOMMIT_PERF_RUNS` (see "Start-up, memory and reload
+  measures"). Phases 0 to 5 took about 25 minutes at phase 5's gate, phases 0 to 6 27 min 39 s at
+  phase 6's, phases 0 to 7a 31 min 6 s at phase 7a's, phases 0 to 7b 33 min 35 s at phase 7b's and
+  phases 0 to 8a 40 min 56 s at phase 8a's (on `750eb33`), where the 220 captures compared with
+  their twins at 3 % differed in at most 2.36 % of their pixels (4.09 % compared in place only).
+  Phase 5 changed two
   earlier passes: phase 2's rests the pointer at the
   neutral point at 1100×700 (it rested at (130, 687), on the status bar's operation text, which
   since phase 5 can carry a tooltip: the restore bar's Restore is the discard's Undo, and 17c
@@ -7301,7 +8449,27 @@ Tests run on xunit.v3 with Microsoft Testing Platform (D24). The commands are in
   pictures with references made on `master` (its design 0.7): 1,112 the same file, 320 changed and
   119 new, none in the references alone; its list, `docs/test-reports/phase-7b-pictures.sha256`,
   holds 1,551 pictures, 1,150 scripted and 401 real-window files, which the gate's inspection
-  passed with 45 of CI's (D247; the two it held in doubt were judged no defect).
+  passed with 45 of CI's (D247; the two it held in doubt were judged no defect). Phase 8a's list,
+  `docs/test-reports/phase-8a-pictures.sha256`, holds the counted round's 1,696 pictures, 1,239
+  scripted and 457 real-window files; its inspection judged each against the first round's, all of
+  which had been read, and passed them all with 45 of CI's (ruling 116). Since phase 8a
+  `--expected <file>`, given once or more (D419), tells the changes a merge is meant to make from
+  the rest: the file maps `phase-N/<folder>/<name>.png`, or an `fnmatch` pattern of such paths, to
+  boxes `[left, top, right, bottom]` in the picture's own pixels, and a picture's boxes are those of
+  every key that matches it, from every file, united. The summary then has four headings, in this
+  order: "Changed outside the expected regions" (per picture, the changed pixels outside its
+  boxes), "Changed, not expected", "Expected, not changed" and "Changed size" (a picture whose size
+  differs, unexpected whatever its boxes); its difference pictures draw a change inside the boxes in
+  amber, one outside them in red and each box's edge in blue. Without the option the output is as
+  before. `python -I scripts/scan-contrast.py <pictures folder> <output folder> [--jobs N]` is the
+  contrast round's pixel scan (D419): its detectors look for phase 7b's colours (the placeholder at
+  Fluent's opacity 0.5, the dark danger `#E5606B` and its button, the dark accent on a hovered or
+  selected row), each also under a dialog's backdrop, so it runs on phase 7b's references. It
+  writes `scan.json`, the eight lists `colours-<list>.txt` (`any`, `none`, `placeholder`,
+  `placeholder-double-backdrop`, `danger`, `danger-on-row`, `danger-button`, `accent-on-row`),
+  which `docs/test-reports/phase-8a-contrast/` holds as the scan wrote them, `report.txt` and
+  `expected.json`, the boxes in which the round may change each picture, for `--expected`. It needs
+  Pillow and NumPy too and is no part of the build or the tests.
 
 ### The fake of GitHub (D250, D265 to D267)
 
@@ -8158,25 +9326,40 @@ GitLab's `Check_2` stopped on stalls of the network to gitlab.com and passed on 
 that github.com now answers a commit it lacks beside `author` with 404, which the fake of GitHub
 copied before any picture (D394, with D395's change to the avatars). The counted round's run (on
 `3dc0887`, `cb9af6d`'s code) passed 596 of 596 in 2 min 20 s, with nothing new for the fakes.
+Phase 8a changed nothing in the command's project. At its gate the run before the pictures (on
+`fab4073`, 2026-11-26) and the counted round's (on `750eb33`, 2026-11-27, 3 min 4 s) each passed
+596 of 596, after the offline classes' 582 of 582 on the same commit.
 
 ### CI
 
 `.github/workflows/ci.yml` builds the solution in Release and runs `dotnet test` on
 `windows-latest`, `macos-latest` and `ubuntu-latest` for every push and pull request that changes
-more than docs. On Windows it also builds in Release, but does not run, the two projects the
-solution leaves out, in the step "Build the opt-in projects": the real-window pass and, since phase
-7a, the live command (D337), since phase 7b with its Azure DevOps and GitLab classes, so that neither
-goes stale unnoticed. The step runs in bash, so a failure of the first build fails it, and whenever
-the build passed and the run was not cancelled, also after a failed test or keychain step (7a design
-19 item 4), so a failing test does not hide a compile break. Each job uploads `artifacts/visual/` as
-`visual-<os>`, so the scripted screenshots of all three platforms can be downloaded and looked at;
-since phase 7b the folder also holds `git-url-user.txt`, what the job's git does with a URL's user
+more than docs. Since phase 8a `LICENSE`, `THIRD-PARTY-NOTICES.md` and `notices/` count as code,
+since the app embeds them and `ThirdPartyNoticesTests` reads them (D433): the trigger's `paths` list
+takes every file, leaves out `docs/**`, `**.md` and `LICENSE`, then takes those three back (a later
+pattern wins over an earlier `!`). Every job builds the icon's builder with the solution, and none
+runs it (D428); `IconFilesTests`' `iconutil` fact runs in the macOS job alone (D447; see "The app's
+icon"). On Windows it also builds in Release, but does not run, the projects the solution leaves
+out, in the step "Build the opt-in projects": the real-window pass, since phase 7a the live command
+(D337), since phase 7b with its Azure DevOps and GitLab classes, and since phase 8a the guide's
+pictures (`VisualCommit.GuideShots`, D439), which the guide's own workflow runs, so that none goes
+stale unnoticed. The step runs in bash, so a failure of the first build fails it, and whenever the
+build passed and the run was not cancelled, also after a failed test or keychain step (7a design 19
+item 4), so a failing test does not hide a compile break. Each of these jobs uploads
+`artifacts/visual/` as `visual-<os>` (`visual-windows-latest`, `visual-macos-latest`,
+`visual-ubuntu-latest`), and the containers below as `visual-bare-ubuntu-container-<id>`
+(`ubuntu-packages`, `microsoft-installer`) and `visual-ubuntu-22.04-git-floor`, so the scripted
+screenshots of all three platforms can be downloaded and looked at; since phase 7b the folder also
+holds `git-url-user.txt`, what the job's git does with a URL's user
 after a 401 (`GitUrlUser`, D389), and `palette-growth.txt`, a line per run of phase 6's palette
-growth test (7b design 16.3). A newer push to the same branch cancels the run before it
+growth test (7b design 16.3), and since phase 8a `pull-budget.txt`, a line per case of Pull's
+git-call budget with its count, budget and git's version (see "Start-up, memory and reload
+measures"). A newer push to the same branch cancels the run before it
 (`concurrency`). Time limits: 80 minutes for each of these jobs with 70 for its test step, and 25
-minutes for each container job with 14 for its test step, so that a hang cannot use up the job's
-time. Phase 7b's first code commit (`a88b84d`) raised the first two from D232's 65 and 55 (D377):
-the growth its two providers' tests were projected to bring would have taken macOS's test step past
+minutes for each bare container job with 14 for its test step (since phase 8a the floor's job,
+below, 35 and 25), so that a hang cannot use up the job's time. Phase 7b's first code commit
+(`a88b84d`) raised the first two from D232's 65 and 55 (D377): the growth its two providers' tests
+were projected to bring would have taken macOS's test step past
 D232's 44 minutes. Since D377 the lead raises a limit when a test step passes four fifths of it (56
 of 70 minutes, 11 min 12 s of a container's 14), on every job, and records it, but only at a merge
 before the counted round: no CI limit changes after the counted round's commit, and a run past four
@@ -8195,11 +9378,12 @@ layout") applies in full on the Windows job, whose Release build and real-window
 win-x64's, `win`'s and `any`'s native libraries; the macOS, Linux and container jobs lose only the
 packages' native `.pdb` files and keep every platform's libraries.
 
-Since phase 7a every job but `ubuntu-latest` also runs the real keychain store's own tests (D259,
-D270; see "Tokens and the keychains") in a step of its own after the Test step, with a limit of 5
-minutes, which runs whenever the build passed and the run was not cancelled, so that a failed Test
-step does not hide its result: on Windows "Keychain (Windows Credential Manager)"
-(`VISUALCOMMIT_KEYCHAIN_TESTS=windows`, `--filter-class "*WindowsTokenStoreRealTests"`; were the
+Since phase 7a every job but `ubuntu-latest` and, since phase 8a, the floor's (below) also runs the
+real keychain store's own tests (D259, D270; see "Tokens and the keychains") in a step of its own
+after the Test step, with a limit of 5 minutes, which runs whenever the build passed and the run was
+not cancelled, so that a failed Test step does not hide its result: on Windows "Keychain (Windows
+Credential Manager)" (`VISUALCOMMIT_KEYCHAIN_TESTS=windows`, `--filter-class
+"*WindowsTokenStoreRealTests"`; were the
 runner to refuse the Credential Manager with error 1312, D333 takes the class off the job's list and
 the phase's report records it), on macOS "Keychain (macOS keychain)" (`macos`,
 `*MacKeychainTokenStoreRealTests`, which makes and deletes a keychain file of its own), and in each
@@ -8229,6 +9413,20 @@ so no limit changed after D377's. On the code of the gate's counted round (`cb9a
 33 min 9 s on macOS and 6 min 23 s on `ubuntu-latest`, 5 min 51 s and 5 min 28 s in the containers,
 and "Build the opt-in projects" 19 s.
 
+Phase 8a's walk-through project and its tests lengthened them again: the longest Test steps in its
+runs were 45 min 28 s on Windows (run 46007767846, on the Gate commit) and 47 min 44 s on macOS
+(run 45528731262), under D377's 56 minutes; `ubuntu-latest`'s longest was 8 min 12 s (run
+45540349415) and the containers' 8 min 51 s (run 45515065583), under 11 min 12 s, so no limit
+changed. On the Gate commit (`750eb33`, run 46007767846) all six jobs passed at their first attempt:
+Windows with 8,936 tests and 7 skipped, macOS with 8,933 and 3, `ubuntu-latest` with 8,933 and 4,
+and the containers and the floor's job with 8,933 and 7. The Test step took 45 min 28 s on Windows,
+26 min 53 s on macOS, 6 min 47 s on `ubuntu-latest`, 7 min 3 s (Microsoft's installer) and 7 min 45
+s (Ubuntu's packages) in the containers and 7 min 14 s in the floor's job, and "Build the opt-in
+projects" 41 s; the jobs took 48 min 53 s, 28 min 7 s, 8 min 47 s, 9 min 49 s, 14 min 18 s and 9
+min 44 s. In the two runs before it the Windows Test step took 34 min 2 s (45917903492, with nine
+tests fewer) and 40 min 34 s (45965143178, on `e632e72`, the gate's app code, with the same tests):
+the runners' spread.
+
 Two more jobs, both named "bare ubuntu container", start from an empty `ubuntu:24.04`
 container, run `scripts/setup-linux.sh` in it twice (the second run has to find everything in
 place) and then build and test. The script installs the .NET 10 SDK and the system libraries
@@ -8243,17 +9441,46 @@ allowlist: a CI runner's network is open. The first way exists for that reason, 
 default allowlist names Ubuntu's package servers but not the server Microsoft's installer
 downloads from.
 
-CI's gits: Windows ran 2.56.0.windows.2 from 2026-10-15 and runs 2.56.0.windows.4, the development
+Since phase 8a a sixth job, "ubuntu 22.04 container, git 2.34 (the floor)" (`git-floor-container`),
+runs the default tests on the oldest git the app supports (D406, D420): an `ubuntu:22.04` container
+(`--cap-add=IPC_LOCK`) set up once by `scripts/setup-linux.sh`, with the SDK from Microsoft's
+installer (`SETUP_LINUX_SDK_SOURCE=installer`; 22.04's package servers have no .NET 10), then a step
+that shows the tools' versions and fails unless `git --version` starts with `git version 2.34.`, so
+that the job never passes on another git, a Release build, the Test step and the upload of
+`artifacts/visual/` as `visual-ubuntu-22.04-git-floor`. Its limits are 35 minutes for the job and 25
+for its Test step, and it has no keychain step. Its failure fails the run like any other job's since
+`bba59c7`, which moved `GitVersion.Minimum` to 2.34.1 after the job's first green run (44727459663,
+7,989 tests). Its pictures show git 2.34's words and are compared with nothing (phase 8a's design
+3.6).
+
+Since phase 8a a second workflow, `.github/workflows/guide.yml`, builds the user guide's site with
+its pictures and publishes it to GitHub Pages from `master` alone (see "The user guide and the
+app's links"). CI's trigger leaves `docs/**` out, so a push that changes only the guide's pages
+starts the guide's run alone, whose step "App's links" runs the two App.Tests classes that read
+those pages (D451); a push that changes `src/**` starts both. The guide's runs are read and recorded
+as CI's are (`gh run list --workflow guide.yml --branch <branch>`). Its run on the gate's app code,
+45965143205 on `e632e72`, passed; the push of the Gate commit changed nothing the workflow watches
+and started none, so the lead started one by hand (`gh workflow run guide.yml --ref <branch>`, D451:
+46024262689 on `6120f86`, docs alone after the Gate commit), whose site is the one the gate's check
+stands on.
+
+CI's gits: Windows ran 2.56.0.windows.2 from 2026-10-15 and 2.56.0.windows.4, the development
 machine's, from 2026-11-02 (run 41484799303 on; run 41414339419, that morning, still ran windows.2);
-macOS runs 2.56.0 (Homebrew's) and the two containers 2.43.0 (Ubuntu 24.04's); `ubuntu-latest` ran
-2.55.0 until 2026-10-28 (run 40679200453) and runs 2.56.0 on its `ubuntu-24.04` image from 2026-10-29
-(run 40848974456 on, phase 7a's gate's 41190572421 and every run of phase 7b among them). So no CI run
-of phase 7a or 7b ran 2.55, and only the containers' 2.43 differs from 2.56 in its version (plan risk
-26). macOS's git differs in what it does with a URL's user: it loses the user after the first 401,
-where the others keep it (D389, plan risk 43), as each job's `git-url-user.txt` records (`Lost` on
-macOS and `Kept` on the four others in run 42454621322, the first that wrote it). The development
-machine runs 2.56.0.windows.4 since 2026-10-28 (D248; 2.36 before). Tests must work on all of them;
-CI is the only check on 2.43 and on a git that loses a URL's user.
+macOS ran 2.56.0 (Homebrew's); `ubuntu-latest` ran 2.55.0 until 2026-10-28 (run 40679200453) and
+2.56.0 from 2026-10-29 (run 40848974456 on, phase 7a's gate's 41190572421 and every run of phase 7b
+among them), on its `ubuntu-24.04` image and, from phase 7b's run 42285038375, on `ubuntu-26.04`
+(plan risk 11). So no CI run of phase 7a or 7b ran 2.55, and in those runs only the containers' 2.43
+differed from 2.56 in its version (plan risk 26). In phase 8a's runs Windows ran 2.56.1.windows.1 on
+the runner image 20261116.315.1 in every Windows job but two of 2026-11-19 and 2026-11-20, which ran
+2.56.0.windows.4 (44479788558's first attempt and 44727459663); in the runs whose job logs were
+kept, from 45035307735 (2026-11-22) to 46007767846 (2026-11-27, on the Gate commit), macOS
+(Homebrew's) and `ubuntu-latest` ran 2.56.1, the two bare containers 2.43.0 (Ubuntu 24.04's) and the
+floor's job 2.34.1 (Ubuntu 22.04's, with Ubuntu's backports). What a job's git does with a URL's
+user after the first 401 (D389, plan risk 43) each job's `git-url-user.txt` records: in run
+42454621322, the first that wrote it, macOS's lost it and the four others kept it; in runs
+45917903492, 45965143178 and 46007767846 all six kept it, macOS's 2.56.1 among them, so no CI job
+then ran a git that loses it. The development machine runs 2.56.0.windows.4 since 2026-10-28 (D248;
+2.36 before). Tests must work on all of them; CI is the only check on 2.34.1 and 2.43.
 
 ### Package versions
 
@@ -8282,5 +9509,12 @@ the avatars, the fake of GitHub and the live command use .NET's own `HttpClient`
 Phase 7b added none: Azure DevOps' and GitLab's clients, their fakes and the live command's new
 classes use `HttpClient` and `System.Text.Json` too, and its walk-through project the test packages
 already there.
-`scripts/compare-pictures.py`, the gate's comparison of pictures, needs Python with Pillow and
-NumPy on the machine that runs it; nothing in the build or the tests does.
+Phase 8a added four packages, all for the icon's builder (`tools/VisualCommit.IconBuilder`, D428),
+which is never shipped, in a group "Tools" of `Directory.Packages.props`: Svg.Skia 4.9.1 (5.x needs
+SkiaSharp 4.x, which Avalonia 12.1.3 does not take), SkiaSharp 3.119.4, SkiaSharp.NativeAssets.Linux
+3.119.4 and HarfBuzzSharp.NativeAssets.Linux 8.3.1.3; the last three are the versions Avalonia.Skia
+12.1.3 resolves, so they move with `AvaloniaVersion`. Only the tool references them and no
+transitive pinning is set, so no other project's packages change.
+`scripts/compare-pictures.py`, the gate's comparison of pictures, and since phase 8a
+`scripts/scan-contrast.py`, the contrast round's scan, need Python with Pillow and NumPy on the
+machine that runs them; nothing in the build or the tests does.

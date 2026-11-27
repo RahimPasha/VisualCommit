@@ -62,8 +62,9 @@ machine".
    phase 8a", "Phase 8a accepted"); "Start phase 8" means "Start phase 8a" while 8a is not
    started. How the code and the test harness name them was settled for 7a by its design's 0.3
    (`docs/phase-7a-design.md`), the 7a handoff's "For the next phase", "Naming", gives 7b's
-   names, the 7b handoff's gives phase 8's, to be read with `8a` for `8`, and 8a's design's 0.3
-   (`docs/phase-8a-design.md`) settles them.
+   names, the 7b handoff's gives phase 8's, to be read with `8a` for `8`, 8a's design's 0.3
+   (`docs/phase-8a-design.md`) settles 8a's, and the 8a handoff's "For the next phase", "Naming",
+   gives 8b's.
 6. If code exists, see the state you inherited before changing anything: build it, run the test
    classes of the areas the latest commits changed, and read the result of CI's last run on the
    branch (a push that changes only docs starts none, so it is the run of the last commit that
@@ -104,7 +105,7 @@ To **resume a phase**: continue from "Next step" in `docs/status.md`.
 |---|---|
 | "Start phase N" | The start steps above, then build phase N through to its closing steps |
 | "Continue" | Resume the phase whose Progress checklist in `docs/status.md` still has unticked items (state "In progress" or "Blocked") |
-| "Phase N accepted" | First `git fetch origin`, check out the branch that `docs/status.md` names for the phase and fast-forward it (`git merge --ff-only origin/<branch>`), so that what is checked is what `origin` holds now. Only when `docs/status.md` on that branch says the phase is "Awaiting acceptance", and nothing but docs changed after the "Gate commit" it names, apart from the live command's project, whose fixes re-run only that command (D335; run at the repo root, `git diff --stat <gate commit> <branch> -- . ':(exclude)docs' ':(exclude)*.md' ':(exclude)tests/VisualCommit.LiveHostingTests'` prints nothing, and so does `git diff --stat <gate commit> <branch> -- LICENSE THIRD-PARTY-NOTICES.md notices`: the app embeds those files, so they are code since phase 8a's About, and the first command's `*.md` leaves two of them out, D433): check out `master`, fast-forward it to `origin/master`, `git merge --no-ff` that branch, set the phase to "Done" in `docs/status.md` and say in its handoff's "State of the repo" and "Waiting on the owner" that it is merged (with the merge commit), commit, push `master`. Setting it to "Done" also resets the file for the next phase, as phase 1's acceptance (`eb626ba`) did: "Current phase" says none is in progress and names the merge commit; Progress goes back to its paragraph on how the checklist is built (a phase's `docs/status.md` does not hold it: take it from `docs/status.md` on `master` before the merge, as phase 4's acceptance wrote it: `git show 50cf35c:docs/status.md`; phase 5's acceptance added a sentence that points at the phase's own checklist in the merge's second parent, `git show acdac12:docs/status.md`, and D241 added the weekly share of the plan's allowance on 2026-10-28; the current form is always the one on `master` before the merge, `git show HEAD^1:docs/status.md` once the merge is made); the CI section names the branch's last run; "Next step" says to wait for "Start phase N+1" and points to the handoff's "For the next phase"; the phase's working notes leave "Notes for whoever resumes". Then read the CI run that the push of `master` started and record it in the CI section (a docs-only commit). In any other case, change nothing more, say what is still open and ask |
+| "Phase N accepted" | First `git fetch origin`, check out the branch that `docs/status.md` names for the phase and fast-forward it (`git merge --ff-only origin/<branch>`), so that what is checked is what `origin` holds now. Only when `docs/status.md` on that branch says the phase is "Awaiting acceptance", and nothing but docs changed after the "Gate commit" it names, apart from the live command's project, whose fixes re-run only that command (D335; run at the repo root, `git diff --stat <gate commit> <branch> -- . ':(exclude)docs' ':(exclude)*.md' ':(exclude)tests/VisualCommit.LiveHostingTests'` prints nothing, and so does `git diff --stat <gate commit> <branch> -- LICENSE THIRD-PARTY-NOTICES.md notices`: the app embeds those files, so they are code since phase 8a's About, and the first command's `*.md` leaves two of them out, D433): check out `master`, fast-forward it to `origin/master`, `git merge --no-ff` that branch, set the phase to "Done" in `docs/status.md` and say in its handoff's "State of the repo" and "Waiting on the owner" that it is merged (with the merge commit), commit, push `master`. Setting it to "Done" also resets the file for the next phase, as phase 1's acceptance (`eb626ba`) did: "Current phase" says none is in progress and names the merge commit; Progress goes back to its paragraph on how the checklist is built (a phase's `docs/status.md` does not hold it: take it from `docs/status.md` on `master` before the merge, as phase 4's acceptance wrote it: `git show 50cf35c:docs/status.md`; phase 5's acceptance added a sentence that points at the phase's own checklist in the merge's second parent, `git show acdac12:docs/status.md`, and D241 added the weekly share of the plan's allowance on 2026-10-28; the current form is always the one on `master` before the merge, `git show HEAD^1:docs/status.md` once the merge is made); the CI section names the branch's last run; "Next step" says to wait for "Start phase N+1" and points to the handoff's "For the next phase"; the phase's working notes leave "Notes for whoever resumes". At phase 8a's acceptance GitHub Pages' source is set to "GitHub Actions" before `master` is pushed, by the owner or at the owner's word (D408, D451), and the guide workflow's run on `master` is read beside CI's. Then read the CI run that the push of `master` started and record it in the CI section (a docs-only commit). In any other case, change nothing more, say what is still open and ask |
 
 ## Rules
 
@@ -187,7 +188,8 @@ To **resume a phase**: continue from "Next step" in `docs/status.md`.
    The two runs are made once, not again before the rounds that follow a fix. Since phase 7a the
    gate also runs the live command against the real services (GitHub since phase 7a, Azure DevOps
    and GitLab since 7b), the owner told: once before the gate's pictures and once on the counted
-   round (D335; the same step 4).
+   round (D335; the same step 4). Since phase 8a the gate also takes the report's "Checks by hand"
+   on the Windows machine, with the owner where a check says so (D411, D451, D460).
 2. Update `docs/architecture.md` so it describes what is actually built.
 3. Update `docs/plan.md`: move anything this phase did not deliver into the phase that now owns it, and update the risks.
 4. Write `docs/handoffs/phase-N.md` from `docs/handoffs/TEMPLATE.md`.
@@ -197,7 +199,8 @@ To **resume a phase**: continue from "Next step" in `docs/status.md`.
    it how to build, run and test the app and how it would begin the next phase. Fix every gap it
    hits in the docs. Commit.
 6. Update `docs/status.md`: links to the handoff and report, the last CI run of the branch with
-   its result in each job, the "Gate commit" (the commit both passes of the gate ran on, or, by
+   its result in each job and, when `docs/guide/` or what its workflow watches changed, the guide
+   workflow's last run (D451), the "Gate commit" (the commit both passes of the gate ran on, or, by
    D246, the real-window pass's commit when it changes only `tests/VisualCommit.RealWindowTests`
    after the commit the default run ran on), and anything waiting on the owner.
    Set the phase to "Awaiting acceptance" only if the whole gate passed: a session on the
@@ -312,8 +315,9 @@ step 2 of "start a phase" and commit it there; `master` gets it with the phase.
 ## Commands
 
 Run them from the repo root. Each one was run on Windows when it was added here, except the
-Linux set-up script; CI runs the build and the default tests on Windows, macOS and Linux, and
-twice more in a bare Ubuntu container that it sets up with that script.
+Linux set-up script; CI runs the build and the default tests on Windows, macOS and Linux, twice
+more in a bare Ubuntu 24.04 container and once in a bare Ubuntu 22.04 container on git 2.34.1, the
+floor (D406, D420), and it sets up each container with that script.
 
 | Purpose | Command |
 |---|---|
@@ -325,24 +329,25 @@ twice more in a bare Ubuntu container that it sets up with that script.
 | Each test's time in a project run alone (xUnit's report; a heavy run, D245) | `bash scripts/heavy-run.sh --project tests/VisualCommit.Git.Tests --report-xunit --report-xunit-filename timing.xml --results-directory <folder>`: `<folder>/timing.xml` gives every test's `time` in seconds, a shared template's wait included (first run at phase 7a's gate, 2026-10-30: 2,495 tests in 22 min 30 s) |
 | Who holds the heavy-run lock, and stopping that run (Git Bash) | `cat "$(cygpath -u "$TMP")/VisualCommit.Tests/heavy-run.lock/holder"`; then `kill -TERM <pid>` (or `-INT`, `-HUP`), with the file's `pid=` (not its `windows_pid=`), stops that run's `dotnet test` and frees the lock |
 | Tests chosen by name | `dotnet test --project tests/VisualCommit.Git.Tests --filter-method "*Linear*"` |
-| One phase's scripted checks | `dotnet test --project tests/VisualCommit.VisualTests --filter-class "*Phase1Checks"` for phase 1 (`"*Phase2Checks"` for phase 2); phases 3 and 4 have a project each: `dotnet test --project tests/VisualCommit.VisualTests.Phase3` (one part of it: `--filter-class "*Phase3ChecksD"`), `dotnet test --project tests/VisualCommit.VisualTests.Phase4`; phase 5 has two: `dotnet test --project tests/VisualCommit.VisualTests.Phase5` (parts A, B, F and P) and `dotnet test --project tests/VisualCommit.VisualTests.Phase5Undo` (part U, the undo checks); phase 6 has two: `dotnet test --project tests/VisualCommit.VisualTests.Phase6` (parts W, K, S and G; one part of it: `--filter-class "*Phase6ChecksW"`) and `dotnet test --project tests/VisualCommit.VisualTests.Phase6Look` (part L, the look: one check `--filter-method "*Check_L27*"`); phase 7a has one: `dotnet test --project tests/VisualCommit.VisualTests.Phase7a` (one part of it: `--filter-class "*Phase7aChecksA"`); phase 7b has one: `dotnet test --project tests/VisualCommit.VisualTests.Phase7b` (one part of it: `--filter-class "*Phase7bChecksA"`); phase 8a has one: `dotnet test --project tests/VisualCommit.VisualTests.Phase8a` (one part of it, once its checks exist: `--filter-class "*Phase8aChecksL"`; until the first part is merged it holds only its support tests). To run one of phase 1's checks alone, name its class: `--filter-method "*Phase1Checks.Check_13*"` (phase 2 has a `Check_13` too) |
+| One phase's scripted checks | `dotnet test --project tests/VisualCommit.VisualTests --filter-class "*Phase1Checks"` for phase 1 (`"*Phase2Checks"` for phase 2); phases 3 and 4 have a project each: `dotnet test --project tests/VisualCommit.VisualTests.Phase3` (one part of it: `--filter-class "*Phase3ChecksD"`), `dotnet test --project tests/VisualCommit.VisualTests.Phase4`; phase 5 has two: `dotnet test --project tests/VisualCommit.VisualTests.Phase5` (parts A, B, F and P) and `dotnet test --project tests/VisualCommit.VisualTests.Phase5Undo` (part U, the undo checks); phase 6 has two: `dotnet test --project tests/VisualCommit.VisualTests.Phase6` (parts W, K, S and G; one part of it: `--filter-class "*Phase6ChecksW"`) and `dotnet test --project tests/VisualCommit.VisualTests.Phase6Look` (part L, the look: one check `--filter-method "*Check_L27*"`); phase 7a has one: `dotnet test --project tests/VisualCommit.VisualTests.Phase7a` (one part of it: `--filter-class "*Phase7aChecksA"`); phase 7b has one: `dotnet test --project tests/VisualCommit.VisualTests.Phase7b` (one part of it: `--filter-class "*Phase7bChecksA"`); phase 8a has one: `dotnet test --project tests/VisualCommit.VisualTests.Phase8a` (parts A, B, F, G, I, K, L and U, with its support tests and 8a's other tests that start the app through `ShellDriver`, D416; one part of it: `--filter-class "*Phase8aChecksL"`). To run one of phase 1's checks alone, name its class: `--filter-method "*Phase1Checks.Check_13*"` (phase 2 has a `Check_13` too) |
 | Scripted visual walk-through only | `dotnet test --project tests/VisualCommit.VisualTests` (phases 0 to 2), then `dotnet test --project tests/VisualCommit.VisualTests.Phase3` (phase 3), `dotnet test --project tests/VisualCommit.VisualTests.Phase4` (phase 4), `dotnet test --project tests/VisualCommit.VisualTests.Phase5` and `dotnet test --project tests/VisualCommit.VisualTests.Phase5Undo` (phase 5), `dotnet test --project tests/VisualCommit.VisualTests.Phase6` and `dotnet test --project tests/VisualCommit.VisualTests.Phase6Look` (phase 6; both save into phase 6's one folder, so run them one after the other: one `dotnet test` at the root empties the folder once for all its projects, two separate commands at once would each empty it), `dotnet test --project tests/VisualCommit.VisualTests.Phase7a` (phase 7a), `dotnet test --project tests/VisualCommit.VisualTests.Phase7b` (phase 7b), `dotnet test --project tests/VisualCommit.VisualTests.Phase8a` (phase 8a) |
 | Time scripted checks alone (step times from `artifacts/visual/phase-N/timings/`) | `bash scripts/time-scripted-check.sh "<method filter>" [phase]`, for example `bash scripts/time-scripted-check.sh "*Check_01_commit_menu" 3` (the phase is 8a when left out, which runs `VisualCommit.VisualTests.Phase8a`, so a check of phase 7b needs `7b` named; `7b` runs `VisualCommit.VisualTests.Phase7b` and `7a` runs `VisualCommit.VisualTests.Phase7a`; a phase it does not know, `7` and `8` among them, exits 2 before anything is built; for phase 6, given as `6`, it runs `VisualCommit.VisualTests.Phase6`, or `VisualCommit.VisualTests.Phase6Look` when the filter names part L, such as `"*Check_L27*"`; for phase 5, given as `5`, it runs `VisualCommit.VisualTests.Phase5Undo` when the filter names part U, such as `"*Check_U16*"`, and `VisualCommit.VisualTests.Phase5` otherwise) |
-| Tests with the watcher's events held back (R8, D262; the lead's lagged runs at a wave's merges) | `VISUALCOMMIT_WATCHER_LAG_MS=1500` in front of a test command: every repository watcher then holds each file-system event for 1.5 s (0 to 10,000 ms; the app logs it at Info). Each phase's design keeps the list of tests the lead runs so: phase 7a's is `docs/phase-7a-design.md` 0.4 (first run at WP1's merge, `a4a388e`, with plain `dotnet test`), phase 7b's `docs/phase-7b-design.md` 0.4 (run through `scripts/heavy-run.sh`, one command at a time), and a later phase's design names its own, with the walk-through and the classes that start the app which that phase adds. For example `VISUALCOMMIT_WATCHER_LAG_MS=1500 bash scripts/heavy-run.sh --project tests/VisualCommit.VisualTests --filter-class "*Phase2Checks"` |
+| Tests with the watcher's events held back (R8, D262; the lead's lagged runs at a wave's merges) | `VISUALCOMMIT_WATCHER_LAG_MS=1500` in front of a test command: every repository watcher then holds each file-system event for 1.5 s (0 to 10,000 ms; the app logs it at Info). Each phase's design keeps the list of tests the lead runs so: phase 7a's is `docs/phase-7a-design.md` 0.4 (first run at WP1's merge, `a4a388e`, with plain `dotnet test`), phase 7b's `docs/phase-7b-design.md` 0.4 (run through `scripts/heavy-run.sh`, one command at a time), phase 8a's `docs/phase-8a-design.md` 0.4 (run the same way, at each wave's last merge and at the merges of §5, §6, §9 and §10), and a later phase's design names its own, with the walk-through and the classes that start the app which that phase adds. For example `VISUALCOMMIT_WATCHER_LAG_MS=1500 bash scripts/heavy-run.sh --project tests/VisualCommit.VisualTests --filter-class "*Phase2Checks"` |
 | The real keychains' own tests (D270): on Windows and macOS only CI's steps "Keychain (…)" run them, because they write in the machine's real store, so never on the owner's laptop; on Linux the Secret Service's under a private bus with a throwaway keyring, safe on any machine (run so far only in CI's two containers, first on `8b02805`) | The Secret Service's command is under "What to know" below: a table cell cannot hold its pipe (it needs `dbus` and `gnome-keyring`, which `scripts/setup-linux.sh` installs; a container needs `--cap-add=IPC_LOCK`). CI's Windows and macOS steps run `--filter-class "*WindowsTokenStoreRealTests"` with `VISUALCOMMIT_KEYCHAIN_TESTS=windows` and `"*MacKeychainTokenStoreRealTests"` with `macos` |
-| Real-window pass (Windows only) | `bash scripts/heavy-run.sh --project tests/VisualCommit.RealWindowTests -c Release`: the pass is a whole-project run, so on the laptop it runs under the heavy-run lock (D245) and no other heavy run starts beside it; without the lock it is `dotnet test --project tests/VisualCommit.RealWindowTests -c Release` (run through the script at phase 7b's gate, 2026-11-08: 77 tests in 33 min 35 s; 72 in 31 min 6 s at phase 7a's) |
+| Real-window pass (Windows only) | `bash scripts/heavy-run.sh --project tests/VisualCommit.RealWindowTests -c Release`: the pass is a whole-project run, so on the laptop it runs under the heavy-run lock (D245) and no other heavy run starts beside it; without the lock it is `dotnet test --project tests/VisualCommit.RealWindowTests -c Release` (run through the script at phase 8a's gate, on `750eb33`, 2026-11-27: 145 tests in 40 min 56 s, 2,484 s with the lock and the build, `WaitForRuleTests`' 21 with no window among them and the performance series' five skipped without `VISUALCOMMIT_PERF_RUNS`; 77 in 33 min 35 s at phase 7b's gate) |
 | One real-window check alone (Windows only) | `dotnet test --project tests/VisualCommit.RealWindowTests -c Release --filter-method "*<test name>*"`, for example `--filter-method "*Check_S14*"` (run so at phase 6's gate for S14) |
-| A phase's own real-window checks alone (Windows only; D246's two runs) | `bash scripts/heavy-run.sh --project tests/VisualCommit.RealWindowTests -c Release --filter-class "*Phase7aRealWindowPass"`: it takes the mouse like the pass and empties `artifacts/visual/phase-7a/real-window/` (first run for D246's two runs at phase 7a's gate, 2026-10-30: 2 min 55 s, 3 min 17 s with the build); phase 7b's: `--filter-class "*Phase7bRealWindowPass"`, which empties `artifacts/visual/phase-7b/real-window/` (five launches, design 14; first run for D246's two runs at phase 7b's gate, 2026-11-08: 3 min 50 s and 3 min 26 s, 250 s and 214 s with the build and the lock); phase 8a's: `--filter-class "*Phase8aRealWindowPass"`, which empties `artifacts/visual/phase-8a/real-window/` (13 launches, design 12; run whole on the merged tree on 2026-11-24: 13 tests in 4 min 44 s, 294 s with the lock and the build up to date) |
+| A phase's own real-window checks alone (Windows only; D246's two runs) | `bash scripts/heavy-run.sh --project tests/VisualCommit.RealWindowTests -c Release --filter-class "*Phase7aRealWindowPass"`: it takes the mouse like the pass and empties `artifacts/visual/phase-7a/real-window/` (first run for D246's two runs at phase 7a's gate, 2026-10-30: 2 min 55 s, 3 min 17 s with the build); phase 7b's: `--filter-class "*Phase7bRealWindowPass"`, which empties `artifacts/visual/phase-7b/real-window/` (five launches, design 14; first run for D246's two runs at phase 7b's gate, 2026-11-08: 3 min 50 s and 3 min 26 s, 250 s and 214 s with the build and the lock); phase 8a's: `--filter-class "*Phase8aRealWindowPass"`, which empties `artifacts/visual/phase-8a/real-window/` (13 launches, design 12; run whole on the merged tree on 2026-11-24: 13 tests in 4 min 44 s, 294 s with the lock and the build up to date; D246's two runs at phase 8a's gate, 2026-11-26: 13 of 13 each, 5 min 41 s and 5 min 5 s) |
 | The performance series (Windows only; phase 8a's measures M2 to M7, its design 10.3.4 to 10.3.6, D457; the lead's, the owner told: it takes the desktop for about 8 minutes and clicks Fetch) | `VISUALCOMMIT_PERF_RUNS=5 bash scripts/heavy-run.sh --project tests/VisualCommit.RealWindowTests -c Release --filter-class "*Phase8aPerformance"` (five runs of each measure; `1` for one). Before it: `dotnet build tests/VisualCommit.RealWindowTests -c Release` on the very commit, at least ten minutes earlier, and nothing committed in between (after a new commit the command builds again, and a start straight after a build is slow); no agent at work; Windows' Task Scheduler read for what is due ("What to know"). It writes `artifacts/perf/phase-8a/series-<date>-<commit>.txt` and holds each counted run to the bounds in `Phase8aPerformance` (first taken on 2026-11-22, three times: 7 min 4 s, 433 s with the lock, with the build made beforehand; 549 s and 520 s when the command built first) |
-| The start-up measures alone, for two builds run alternately (Windows only; D436, D458, D461; the lead's, the owner told: each run of the command takes the desktop for about a minute and a half) | `VISUALCOMMIT_PERF_RUNS=1 bash scripts/heavy-run.sh --project tests/VisualCommit.RealWindowTests -c Release --filter-method "*Phase8aPerformance.M2_*" --filter-method "*Phase8aPerformance.M3_*"`, in each build's worktree by turns, the builds' order alternating by pair (odd pairs the base first, even pairs the other; D461): one counted run of M2 and one of M3 per command, each after a warm-up launch of its own (four starts of the app), written to that worktree's `artifacts/perf/phase-8a/series-<date>-<commit>.txt`. Both worktrees' Release builds are made at least ten minutes before and nothing is committed in either; before each run wait out what the scheduler has due within five minutes, any task that started in the last five minutes and still runs, and 90 s after any task's start, and after it read what ran from 60 s before its begin: a run that met a task is taken again with its pair. The lead's script for it is outside the repository (`D:/Projects/Personal/phase8-work/wave4/restore/series2/run_series2.sh <first pair> <last pair>`); the first series' script waited for less, and one of its kept runs could not be vouched for (D461) (first taken for the restore order on 2026-11-23: nine pairs in 67 minutes with the waits, four of them taken again, a run 62 to 112 s; taken again on 2026-11-24 with the second script, `run_series2.sh 1 10` and then one call for each void pair under its number plus ten: ten pairs and two taken again in 94 minutes, a run 43 to 83 s, D467) |
-| The opt-in live command against real GitHub, Azure DevOps and GitLab (Windows only; the owner's sandbox tokens, D250, D260, D346) | `bash scripts/heavy-run.sh --project tests/VisualCommit.LiveHostingTests -c Release`, the whole project (a gate's runs, D335); one provider's classes with `--filter-class "*GitHubLiveTests"`, `"*AzureDevOpsLiveTests"` or `"*GitLabLiveTests"` (phase 7b's stage 1 is the last two, `docs/phase-7b-design.md` 15.9). Always run the offline row below first, on the same commit: its failure stops the run with the tokens. GitHub's alone took about a minute with its build (63 s on 2026-10-30, 33 s with the build up to date), and Azure DevOps' and GitLab's classes with stage 2's `Check_3` 91 s together with the build up to date (11 tests in 1 min 26 s, 2026-11-08); the whole project, the gate's run, 596 tests in 2 min 20 s (146 s with the lock and the build up to date, 2026-11-08); its findings in `artifacts/live/github/run.txt`, `artifacts/live/azure-devops/run.txt` and `artifacts/live/gitlab/run.txt`; without the variables every live test fails at once by design (a session started before the owner set them: "What to know") |
-| The live command's offline safety tests (Windows; no variables, no network) | `dotnet test --project tests/VisualCommit.LiveHostingTests -c Release --filter-class "*LiveSafetyTests" --filter-class "*LiveScreenTests"`: the token search, the request log and D352's guard, the clean-up's selection, and the screen of the Azure DevOps organization's name, GitLab's namespace and addresses (D372, D384), with made-up values, in process (582 tests at phase 7b's gate, 404 at its stage 1) |
+| The start-up measures alone, for two builds run alternately (Windows only; D436, D458, D461; the lead's, the owner told: each run of the command takes the desktop for about a minute and a half) | `VISUALCOMMIT_PERF_RUNS=1 bash scripts/heavy-run.sh --project tests/VisualCommit.RealWindowTests -c Release --filter-method "*Phase8aPerformance.M2_*" --filter-method "*Phase8aPerformance.M3_*"`, in each build's worktree by turns, the builds' order alternating by pair (odd pairs the base first, even pairs the other; D461): one counted run of M2 and one of M3 per command, each after a warm-up launch of its own (four starts of the app), written to that worktree's `artifacts/perf/phase-8a/series-<date>-<commit>.txt`. Both worktrees' Release builds are made at least ten minutes before and nothing is committed in either; before each run wait out what the scheduler has due within five minutes, any task that started in the last five minutes and still runs, and 90 s after any task's start, and after it read what ran from 60 s before its begin: a run that met a task is taken again with its pair. The lead's script for it is outside the repository (`D:/Projects/Personal/phase8-work/wave4/restore/series2/run_series2.sh <first pair> <last pair>`; it expects the two builds' worktrees at `D:/Projects/Personal/vc-wt/p8a-restore-base` and `p8a-restore`, which are removed: make them again or change its `BASE` and `FIX`, as the 8a handoff's Known issues say); the first series' script waited for less, and one of its kept runs could not be vouched for (D461) (first taken for the restore order on 2026-11-23: nine pairs in 67 minutes with the waits, four of them taken again, a run 62 to 112 s; taken again on 2026-11-24 with the second script, `run_series2.sh 1 10` and then one call for each void pair under its number plus ten: ten pairs and two taken again in 94 minutes, a run 43 to 83 s, D467) |
+| The opt-in live command against real GitHub, Azure DevOps and GitLab (Windows only; the owner's sandbox tokens, D250, D260, D346) | `bash scripts/heavy-run.sh --project tests/VisualCommit.LiveHostingTests -c Release`, the whole project (a gate's runs, D335); one provider's classes with `--filter-class "*GitHubLiveTests"`, `"*AzureDevOpsLiveTests"` or `"*GitLabLiveTests"` (phase 7b's stage 1 is the last two, `docs/phase-7b-design.md` 15.9). Always run the offline row below first, on the same commit: its failure stops the run with the tokens. GitHub's alone took about a minute with its build (63 s on 2026-10-30, 33 s with the build up to date), and Azure DevOps' and GitLab's classes with stage 2's `Check_3` 91 s together with the build up to date (11 tests in 1 min 26 s, 2026-11-08); the whole project, the gate's run, 596 tests in 3 min 4 s at phase 8a's gate (195 s with the lock, 2026-11-27, on `750eb33`; 2 min 20 s at phase 7b's gate, 146 s with the lock and the build up to date, 2026-11-08); its findings in `artifacts/live/github/run.txt`, `artifacts/live/azure-devops/run.txt` and `artifacts/live/gitlab/run.txt`; without the variables every live test fails at once by design (a session started before the owner set them: "What to know") |
+| The live command's offline safety tests (Windows; no variables, no network) | `dotnet test --project tests/VisualCommit.LiveHostingTests -c Release --filter-class "*LiveSafetyTests" --filter-class "*LiveScreenTests"`: the token search, the request log and D352's guard, the clean-up's selection, and the screen of the Azure DevOps organization's name, GitLab's namespace and addresses (D372, D384), with made-up values, in process (582 tests at phase 8a's gate, as at phase 7b's; 404 at 7b's stage 1) |
 | Compare pictures with reference pictures (a gate's inspection; needs Python with Pillow and NumPy) | `python scripts/compare-pictures.py <reference folder> artifacts/visual <output folder>`: a difference picture per changed picture and `summary.md`, grouped by the window regions the changes lie in. With `--expected <file>`, given once or more (D419), the changes a merge is meant to make are told apart from the rest: the file maps `phase-N/<folder>/<name>.png`, or a pattern of such paths, to boxes `[left, top, right, bottom]`, and the summary's four headings are "Changed outside the expected regions", "Changed, not expected", "Expected, not changed" and "Changed size" (first run by the contrast round's builder on 2026-11-20: 326 changed pictures, 22 outside their regions, each explained) |
 | The contrast round's pixel scan of a gate's pictures (D419; needs Python with Pillow and NumPy) | `python -I scripts/scan-contrast.py <pictures folder> <output folder> --jobs 4`: on phase 7b's references (`D:/Projects/Personal/phase7b-work/gate/round-3dc0887/visual`) it writes the eight lists `colours-<list>.txt`, which equal `docs/test-reports/phase-8a-contrast/`'s line for line, `report.txt`, `scan.json` and `expected.json`, the boxes in which the round may change each picture, for `compare-pictures.py --expected` (about 12 minutes on the laptop with four jobs, first run on 2026-11-20) |
 | Make the icon's files, after a master in `assets/brand/` changes (D428, D447) | `dotnet run --project tools/VisualCommit.IconBuilder` from any folder of the repository: it checks the three masters (`icon.svg`, `icon-small.svg`, `icon-macos.svg`) against the masters' rules, renders them with Svg.Skia and writes the `.ico`, the app's two PNGs (`src/VisualCommit.App/Assets/Icon/`), Linux's PNGs, the `.iconset`, the `.icns` and `assets/brand/generated/manifest.json`, which holds the masters' hashes; a second run with nothing changed leaves `git status` clean, and a failure leaves the committed files as they were. `IconFilesTests` fails when a master changed and the files were not made again. No test and no CI job runs the tool (first run by the icon's builder on 2026-11-20) |
 | The user guide's pictures (D439, D440; headless, no desktop: 42 shots in both themes at scale 2 from demo data, `LeakGuard` on each) | `VISUALCOMMIT_GUIDE_ROOT='C:\demo' bash scripts/heavy-run.sh --project tests/VisualCommit.GuideShots -c Release`: the project is outside the solution and its whole run goes under the lock (D245). The root is where the demo's repositories and the app's data folder live while the pictures are taken, and its path shows in them: `C:\demo` on the laptop, `/home/demo` in the workflow; a run refuses a root that is neither empty nor marked as its own and deletes only its own folders there. The pictures go to `artifacts/guide/pictures/`; with `VISUALCOMMIT_GUIDE_PICTURES="<repo>/docs/guide/src/pictures"` as well they go where the book takes them from (ignored by git, never committed). One class: `--filter-class "*EverydayWorkShots"`; the catalogue's, the guard's and the settings' own tests need no root: `--filter-class "*GuideCatalogueTests" --filter-class "*LeakGuardTests" --filter-class "*GuideSettingsTests"` (run by the lead at §11's merge on 2026-11-23: 119 tests, the 84 shots among them, in 6 min 13 s, 441 s with the lock) |
 | The user guide's site, built locally (mdBook 0.5.4, D439) | `"D:/Projects/Personal/phase8-work/tools/mdbook-0.5.4/mdbook.exe" build docs/guide` writes `docs/guide/book/` (ignored by git), once the pictures are in `docs/guide/src/pictures/` (the row above); then `python -I scripts/check-guide-links.py --self-test` and `python -I scripts/check-guide-links.py docs/guide/book`: exit 0 when every link of the site resolves and nothing it loads comes from another host, 1 with findings, 2 for a wrong call. To look at it: `python -m http.server` in `docs/guide/book` (first run at §11's merge on 2026-11-23) |
 | The guide workflow's runs (`.github/workflows/guide.yml`) | `gh run list --workflow guide.yml --branch <branch> --limit 3`, then `gh run view <run id>`; the built site of a branch other than `master`: `gh run download <run id> -n guide-site -D <folder>` |
+| The guide's workflow started by hand (D451: a Gate commit whose push started none of its runs, as when it changes only `tests/VisualCommit.RealWindowTests`) | `gh workflow run guide.yml --ref <branch>`: it builds the branch's head; then read the run and download its `guide-site` as the row above says (first run at phase 8a's gate, 2026-11-27: 46024262689 on `6120f86`, 2 min 9 s) |
 | Prepare a Linux machine: .NET SDK and system libraries | `bash scripts/setup-linux.sh` |
 | Push on the Windows machine (while Git Credential Manager's sign-in there is not sorted, which is the owner's) | `git -c credential.helper= -c 'credential.helper=!gh auth git-credential' push origin <branch>` (`push -u origin <branch>` for a branch's first push, `push origin master` after a merge): since git 2.56 the install's system configuration sets `credential.helper=manager`, and a plain `git push` from Claude Code waits on Git Credential Manager's sign-in window. The first `-c` empties the list of helpers, the second uses `gh`'s login (`gh` signed in) for that one command; no git configuration changes (first used on 2026-10-28; `docs/status.md`'s "Waiting on the owner") |
 | CI result of a branch | `gh run list --branch <branch> --limit 3`, then `gh run view <run id>` |
@@ -357,10 +362,11 @@ What to know about them:
 - `global.json` accepts any 10.0 SDK, and its `version` has to stay in the first feature band
   (10.0.1xx): Ubuntu's packages, which a cloud session builds with, never leave that band,
   while the Windows machine and most CI jobs use newer ones.
-- The default tests take about 1 h 30 min on the Windows machine with nothing else running (1 h 31
-  min 48 s at phase 7b's gate on 2026-11-08, 7,892 tests at four projects at once through the script,
-  D343; 1 h 12 min 18 s at phase 7a's gate on 2026-10-31, rested, 5,952 tests; 56 min 25 s at phase
-  6's gate on 2026-10-24, 5,037 tests; 43 min 22 s at phase 5's, 3,233 tests).
+- The default tests take about 1 h 55 min on the Windows machine with nothing else running (1 h 53
+  min 8 s at phase 8a's gate on 2026-11-27, 8,936 tests at four projects at once through the script,
+  D343; 1 h 31 min 48 s at phase 7b's gate on 2026-11-08, 7,892 tests; 1 h 12 min 18 s at phase 7a's
+  gate on 2026-10-31, rested, 5,952 tests; 56 min 25 s at phase 6's gate on 2026-10-24, 5,037 tests;
+  43 min 22 s at phase 5's, 3,233 tests).
   Since D343 (phase 7a's gate) the whole run through `scripts/heavy-run.sh` runs at most four of
   the test projects side by side (thirteen since phase 8a's walk-through, twelve since phase 7b's, eleven before); plain `dotnet test` and CI run as many as the machine has
   processors (eight on the laptop). Before that,
@@ -368,41 +374,63 @@ What to know about them:
   and `.Phase6Look`), and the run is bound by the processors,
   which git's processes and the virus scanner keep busy: more tests side by side do not shorten
   it, and other load or a hot laptop lengthens it (a git call took 10 to 15 times as long as alone
-  at phase 6's gate, D237). In phase 7b's counted default run (on `cb9af6d`'s code, 2026-11-08
-  14:26 to 15:59, four projects at once; the report's "Run") the projects ended after about: phase
-  7a's walk-through 13 min 42 s, phase 6's (`VisualCommit.VisualTests.Phase6`) 38 min 18 s,
-  `VisualCommit.Hosting.Tests` 53 min 14 s (all of it its own; 12 min 44 s at phase 7a's gate),
-  phase 7b's walk-through 53 min 51 s (15 min 33 s of its own), phases 0 to 2's 65 min 56 s,
-  `VisualCommit.Git.Tests` 69 min 29 s, phase 4's 79 min 0 s, phase 3's 83 min 8 s, phase 5's
-  (`VisualCommit.VisualTests.Phase5`) 85 min 6 s, `VisualCommit.App.Tests` 85 min 59 s (all of it its
-  own), part L's walk-through (`VisualCommit.VisualTests.Phase6Look`) 87 min 0 s and phase 5's undo
-  walk-through (`VisualCommit.VisualTests.Phase5Undo`) 91 min 41 s. With four at once a project
-  after the first four starts only when another ends, so these are ends, not each project's own
-  time.
-  `dotnet build` at the root takes about 2 minutes on the laptop. At phase 7b's gate (run
-  42522049151, on `9b044af`, the gate's code `cb9af6d`) CI's jobs took 25 min 42 s on Windows (its
-  Test step 23 min 41 s), 35 min 9 s on macOS (Test step 33 min 9 s), 8 min 28 s on Linux (Test step
+  at phase 6's gate, D237). In the default run of phase 8a's gate (on `0f9099a`, whose code is
+  `e632e72`'s, 2026-11-27 02:36 to 04:33, four projects at once, with nothing else running on the
+  laptop) each project took about this long from its start to its end, with the others beside it:
+  `VisualCommit.App.Tests` 1 h 35 min 25 s, `VisualCommit.Git.Tests` 1 h 10 min 35 s,
+  `VisualCommit.Hosting.Tests` 1 h 9 min 54 s, phase 5's undo walk-through
+  (`VisualCommit.VisualTests.Phase5Undo`) 52 min 29 s, phase 8a's walk-through 33 min 53 s, phase
+  3's 24 min 1 s, phase 5's (`VisualCommit.VisualTests.Phase5`) 20 min 45 s, phase 7b's 16 min
+  24 s, phase 7a's 16 min 23 s, phase 6's (`VisualCommit.VisualTests.Phase6`) 16 min 17 s, phase
+  4's 13 min 9 s, phases 0 to 2's 7 min 3 s and part L's walk-through
+  (`VisualCommit.VisualTests.Phase6Look`) 4 min 59 s. With four at once a project after the first
+  four starts only when another ends.
+  `dotnet build` at the root takes about 2 minutes on the laptop. At phase 8a's gate (run
+  46007767846, on `750eb33`, the Gate commit) CI's jobs took 48 min 53 s on Windows (its Test step
+  45 min 28 s), 28 min 7 s on macOS (Test step 26 min 53 s), 8 min 47 s on Linux (Test step 6 min
+  47 s), 9 min 44 s in the floor's job on git 2.34.1 (Test step 7 min 14 s), and 9 min 49 s and
+  14 min 18 s in the bare containers (Test steps 7 min 3 s with Microsoft's installer and 7 min 45 s
+  with Ubuntu's packages); in the two runs before it, on 2026-11-26 and 2026-11-27, the Windows Test
+  step took 34 min 2 s with nine tests fewer (45917903492) and 40 min 34 s with the same tests
+  (45965143178). At phase 7b's gate (run 42522049151, on `9b044af`, the gate's code `cb9af6d`)
+  CI's jobs took 25 min 42 s on Windows (its Test step
+  23 min 41 s), 35 min 9 s on macOS (Test step 33 min 9 s), 8 min 28 s on Linux (Test step
   6 min 23 s) and 7 min 41 s and 8 min 19 s in the containers (Test steps 5 min 28 s and 5 min 51 s);
   at phase 7a's gate (run 41190572421) 24 min 6 s, 34 min 11 s, 6 min 26 s, 6 min 28 s and 6 min 6 s;
-  during phase 7b the Windows Test step took up to 41 min 6 s and macOS's up to 46 min 21 s
-  (`docs/plan.md`'s risk 8). The Test steps of Windows, macOS and Linux have a limit of 70 minutes and their jobs
-  80 (D377, amending D232); the containers' limits stay (14 and 25). The lead raises a limit when a
-  Test step passes four fifths of it, 56 minutes, or 11 min 12 s in a container, and records it,
-  but only at a merge before the counted round: no CI limit changes after the counted round's
+  during phase 7b the Windows Test step took up to 41 min 6 s and macOS's up to 46 min 21 s, and
+  during phase 8a up to 45 min 28 s on Windows (the gate's run), 47 min 44 s on macOS
+  (45528731262), 8 min 51 s in a bare container and 8 min 27 s in the floor's job
+  (`docs/plan.md`'s risk 8). The Test steps of Windows, macOS and Linux have a limit of 70 minutes
+  and their jobs 80 (D377, amending D232); the bare containers' limits stay (14 and 25), and the
+  floor's job has 25 and 35 (D420). The lead raises a limit when a Test step passes four fifths of
+  it, 56 minutes, or 11 min 12 s in a bare container and 20 minutes in the floor's job, and records
+  it, but only at a merge before the counted round: no CI limit changes after the counted round's
   commit (D377, amending D186's rule). Phase 1's checks load and clone a 100k-commit repo,
   built once into `%TEMP%/VisualCommit.Tests/shared/` and reused. They use real git and a temporary folder for
   every repo and data folder; they never open a window or touch the user's settings.
 - During a phase, builders and fixers run only the test classes they touch, with plain
   `dotnet test`. Whole-project runs and the run at the root are the lead's, one at a time on the
   laptop through `scripts/heavy-run.sh` (D245); the full default run runs at the gate, and when the
-  lead merges a wave. The script's lock is the folder `heavy-run.lock` in the tests' temporary root
-  (`VisualCommit.Tests` in `%TMP%` on Windows, `$TMPDIR` or `/tmp` elsewhere); a second run waits,
-  says once who holds the lock and looks again every 10 seconds, and takes over a lock whose
-  script and `dotnet test` have both ended. Its exit code is `dotnet test`'s, 75 when it gave up
-  waiting. Stop a run from Git Bash with `kill` (Commands): Claude Code's TaskStop ended only the
-  top shell of a background command on the laptop, and a run started with `&` from a shell
-  without job control ignores SIGINT. A run ended outright keeps the lock until its `dotnet test`
-  ends. CI does not use the script; it has not run on Linux or macOS yet.
+  lead merges a wave. Beside a gate's counted run nothing else runs on the laptop: no agent, not
+  even a read-only one, no browser and no download (design 13.1's ruling 115). On 2026-11-26 the
+  first attempt of the default run in phase 8a's first counted round (on `e4b323c`, a round that
+  does not stand) lost two projects to the hang watchdog, with no assertion failed, while eight
+  read-only agents, two picture inspectors, a download of CI's pictures and a headless browser ran
+  beside it (the cause is not established); the second attempt, with nothing else running, passed.
+  Before the second, five leftover `git fsmonitor--daemon` processes were stopped, as phase 3's and
+  4's handoffs say ("Running the visual gate"). Snagit's editor, found before that round's
+  real-window pass, had held a processor core for about 23 hours (81,887 s on one thread) and
+  stopped by itself between 22:23 and 22:35, so every run of 2026-11-26 before then was made under
+  it and the gate's counted round of 2026-11-27 without it (ruling 115; the performance series'
+  bullet below says how such a process is found). The script's lock is the folder `heavy-run.lock`
+  in the tests' temporary root (`VisualCommit.Tests` in `%TMP%` on Windows, `$TMPDIR` or `/tmp`
+  elsewhere); a second run waits, says once who holds the lock and looks again every 10 seconds,
+  and takes over a lock whose script and `dotnet test` have both ended. Its exit code is
+  `dotnet test`'s, 75 when it gave up waiting. Stop a run from Git Bash with `kill` (Commands):
+  Claude Code's TaskStop ended only the top shell of a background command on the laptop, and a run
+  started with `&` from a shell without job control ignores SIGINT. A run ended outright keeps the
+  lock until its `dotnet test` ends. CI does not use the script; it has not run on Linux or macOS
+  yet.
 - The build trims the platform-specific files that packages bring under `runtimes/`, above all
   SkiaSharp's and HarfBuzzSharp's native libraries for 21 platforms (`Directory.Build.targets`,
   D239): it copies no native `.pdb` file (all of them are those two packages'), and on Windows, in
@@ -431,13 +459,18 @@ What to know about them:
   (`tr -d '\r' < docs/test-reports/phase-N-pictures.sha256 | grep '/scripted/' | sha256sum -c --quiet`
   prints nothing); it writes the list again after that pass.
 - The real-window pass is Windows-only and is not part of `dotnet test` at the root. It opens the
-  app on the desktop and moves the real mouse for about 34 minutes (phases 0 to 7b; 33 min 35 s at phase 7b's gate, 31 min 6 s for phases 0 to 7a at phase 7a's): tell the
-  owner before starting it, and run it only as part of the gate. It needs an unlocked desktop,
-  Windows' high contrast off and the scripted screenshots, so run `dotnet test` first. The command builds the app and the
-  pass in Release; do not add `--no-build`: the solution leaves the pass's project out, so
-  `dotnet build` at the root does not rebuild it, and a stale build of the pass would run. Its
+  app on the desktop and moves the real mouse for about 41 minutes (phases 0 to 8a, 145 tests;
+  40 min 56 s at phase 8a's gate, 33 min 35 s for phases 0 to 7b at phase 7b's gate): tell the owner
+  before starting it, and run it only as part of the gate. It needs an unlocked desktop, Windows'
+  high contrast off and the scripted screenshots, so run `dotnet test` first. The command builds the
+  app and the pass in Release; do not add `--no-build`: the solution leaves the pass's project out,
+  so `dotnet build` at the root does not rebuild it, and a stale build of the pass would run. Its
   screenshots, the pictures of the differences and `run.txt` (scaling, sizes, how much each
-  screenshot differs from the scripted one) land under `artifacts/visual/phase-N/real-window/`.
+  screenshot differs from the scripted one) land under `artifacts/visual/phase-N/real-window/`. Its
+  waits (`RealApp.WaitFor`, by the rule of `RealApp.Poll`) take a look that fails in UI Automation
+  as "not yet", and a time-out after such looks says how many failed and with what (D473). The rule
+  is held with no window by `WaitForRuleTests` (21 tests): they run in the whole pass and under
+  their own `--filter-class "*WaitForRuleTests"`.
 - One real-window check run alone (`--filter-method`) empties its phase's `real-window/` folder,
   as the whole pass does, and takes over the mouse just the same: tell the owner before starting
   it, and run the whole pass again before a gate writes its list of pictures.
@@ -447,7 +480,10 @@ What to know about them:
   the pass. The part adds about 3 minutes (2 min 55 s alone in D246's second run). Run the pass
   rested and away from the night's scheduled tasks of other programs: at phase 7a's gate a pass at
   02:18 measured Q1 at 2,456 ms while they ran, and 1,400 ms an hour later; at phase 7b's, started
-  straight after the default run without a rest, 1,827 ms (plan.md's risk 10).
+  straight after the default run without a rest, 1,827 ms; at phase 8a's, on code that is the same
+  for Q1, 1,912 and 1,938 ms in the two passes that do not stand, started 14 and nine minutes after
+  a default run, and 1,626 ms in the pass that stands, started about an hour after the pass before
+  it ended (design 13.1's rulings 115 and 116; plan.md's risk 10).
 - Phase 7b's walk-through serves its three fakes, of Azure DevOps, GitLab and its own of GitHub, on
   ports 47397, 47398 and 47399, each falling back to a free port when its own is taken (D363, D265's
   fallback); 47396 stays reserved. Every other test uses port 0 or a fake in process.
@@ -456,15 +492,16 @@ What to know about them:
   runs beside it. It opens no browser and clicks no "Copy …", and it signs in by typing the
   scenario's made-up tokens into the real dialogs, with the keychain in memory.
 - Phase 8a's part of the real-window pass (`Phase8aRealWindowPass`, 13 launches, design 12) needs
-  `winget` on the PATH, or its launch 7 fails (D449). It starts a second process of the app beside
-  the first (the instance guard's launches), minimises the app's window and brings it back, and its
-  F4 confirms Windows' Open dialog on git's program, which leaves an entry in the user's lists of
-  recent files. The rules it holds with no window are `Phase8aOrderTests` (10 tests): they run in
-  the whole pass and under their own `--filter-class "*Phase8aOrderTests"`, not under the part's
-  filter. The harness finds every window by its handle (`RealApp.TopLevelElementsOf`, from Windows'
-  own list of windows), never by a search of the desktop's children through UI Automation: such a
-  search asks every program on the desktop, and on 2026-11-24 it held launch 6's wait past its 15 s
-  in about two runs of five (`docs/phase-8a-design.md` 13.1, ruling 105).
+  `winget` on the PATH, or its launches 7 and 8 fail (D449, D453). It starts a second process of
+  the app beside the first (the instance guard's launches), minimises the app's window and brings it
+  back, and its F4 confirms Windows' Open dialog on git's program, which leaves an entry in the
+  user's lists of recent files. The rules it holds with no window are `Phase8aOrderTests`
+  (10 tests): they run in the whole pass and under their own `--filter-class "*Phase8aOrderTests"`,
+  not under the part's filter. The harness finds every window by its handle
+  (`RealApp.TopLevelElementsOf`, from Windows' own list of windows), never by a search of the
+  desktop's children through UI Automation: such a search asks every program on the desktop, and on
+  2026-11-24 it held launch 6's wait past its 15 s in about two runs of five
+  (`docs/phase-8a-design.md` 13.1, ruling 105).
 - The performance series (`Phase8aPerformance`, opt-in through `VISUALCOMMIT_PERF_RUNS`; without the
   variable the real-window pass shows its five facts skipped) measures the start with one and with
   ten restored 100,000-commit tabs, memory, the reload after an outside commit and after a fetch,
@@ -529,17 +566,26 @@ What to know about them:
   `sh` takes the pipe as a plain character: `echo` prints `throwaway | gnome-keyring-daemon …` as
   text into /dev/null, no keyring is unlocked, and the tests run without one:
   `export XDG_DATA_HOME="$(mktemp -d)"; mkdir -p -m 700 "$XDG_DATA_HOME/keyrings"; VISUALCOMMIT_KEYCHAIN_TESTS=secret-service dbus-run-session -- sh -c 'echo throwaway | gnome-keyring-daemon --unlock --components=secrets >/dev/null && dotnet test --project tests/VisualCommit.Hosting.Tests --filter-class "*SecretServiceTokenStoreRealTests"'`
-- The first-run checks never use the machine's git for a git that is missing, too old or broken: they point the app
-  at a stand-in, `tests/VisualCommit.GitStandIn` (the program `visualcommit-git-stand-in`), through the test switch
-  `VISUALCOMMIT_GIT_STAND_IN` (a full path, or `none` for no git; `VISUALCOMMIT_GIT_STAND_IN_VERSION` and
-  `VISUALCOMMIT_GIT_STAND_IN_FAILURE` tell the stand-in what to answer), or give the session a fake probe. The
-  harness removes the three variables from every test process. A hand run that sets the first shows the first-run
-  screen without touching the machine's git: `VISUALCOMMIT_GIT_STAND_IN=none` with the isolating variables below.
-- One instance runs per data folder since phase 8a (D421): a second start on the same folder, `dotnet run` among them, asks
-  the running app to come forward and exits with code 0; if that app does not answer, a notice shows with "Try again" and
-  "Close", and the start exits with code 2 when the notice is closed. The data folder holds `instance.lock` and
-  `instance.json` for it. A hand run with `VISUALCOMMIT_DATA_DIR` set to a folder of its own never meets the owner's
-  running app. No test harness runs the guard: it sits in `Program.Main`.
+- The first-run checks never use the machine's git for a git that is missing or too old: they point
+  the app at a stand-in, `tests/VisualCommit.GitStandIn` (the program `visualcommit-git-stand-in`),
+  through the test switch `VISUALCOMMIT_GIT_STAND_IN` (a full path, or `none` for no git;
+  `VISUALCOMMIT_GIT_STAND_IN_VERSION` and `VISUALCOMMIT_GIT_STAND_IN_FAILURE` tell the stand-in what
+  to answer), or give the session a fake probe. So do the checks of a git that does not work, but
+  for phase 8a's F6b and the real-window launch 10: they run the machine's git against a
+  configuration line it cannot read (`[user` on line 1), written before the start into the session's
+  own global git file (`GitIsolation.SessionGlobalConfigFile`). The harness removes the three
+  variables from every test process. A hand run that sets the first shows the first-run screen
+  without touching the machine's git: `VISUALCOMMIT_GIT_STAND_IN=none` with the isolating variables
+  below.
+- One instance runs per data folder since phase 8a (D421): a second start on the same folder,
+  `dotnet run` among them, asks the running app to come forward and exits with code 0; if that app
+  does not answer, a notice shows with "Try again" and "Close", and the start exits with code 2 when
+  the notice is closed. The data folder holds `instance.lock` and `instance.json` for it. A hand run
+  with `VISUALCOMMIT_DATA_DIR` set to a folder of its own never meets the owner's running app. The
+  guard sits in `Program.Main`, which the headless harness never runs (it starts `AppSession`):
+  `SingleInstanceGuardTests` and `InstanceNoticeViewModelTests` (App.Tests) test the guard and its
+  notice on temporary data folders, and the real-window pass's phase 8a launches 4 to 6 start the
+  built app and meet the guard.
 - To run the app without touching the real settings, set the environment variable
   `VISUALCOMMIT_DATA_DIR` to an empty folder first. Without it the app uses the per-user data
   folder: `%APPDATA%\VisualCommit` on Windows, `~/.config/VisualCommit` on Linux,
@@ -582,7 +628,9 @@ What to know about them:
   `tests/<project>/bin/Debug/net10.0/<project>` elsewhere.
 - The user guide (`docs/guide/`, since phase 8a) is an mdBook site of 33 pages.
   `.github/workflows/guide.yml` builds it on every push that touches the guide, the app's source,
-  the shots or the links' check, and publishes it to GitHub Pages from `master` alone
+  the tests' support code (`tests/VisualCommit.Testing`), the shots, the links' check, the workflow
+  itself, the build's props and targets or `global.json`, and when it is started by hand
+  (`workflow_dispatch`, D451), and publishes it to GitHub Pages from `master` alone
   (`https://rahimpasha.github.io/VisualCommit/`, the address the app's F1, the palette's row, the
   first-run links and About open); on any other branch the site is the run's artifact `guide-site`.
   A push that changes only docs starts no CI run; one that touches `docs/guide/**` starts the
@@ -612,8 +660,9 @@ What to know about them:
 Prerequisites on any machine: .NET 10 SDK, Git 2.34.1 or newer (the app's minimum since phase 8a
 and the tests', D420), and a way to read CI results: the
 GitHub CLI (`gh`), signed in, or `curl`. `scripts/setup-linux.sh` installs what a Linux machine
-lacks. The Windows development machine runs Git 2.56.0.windows.4 since 2026-10-28, first on
-`PATH` (`C:/Program Files/Git/ucrt64/bin/git.exe` in Git Bash, `C:\Program Files\Git\cmd\git.exe`
+lacks, git only where there is none: it does not check git's version. The Windows development
+machine runs Git 2.56.0.windows.4 since 2026-10-28, first on `PATH`
+(`C:/Program Files/Git/ucrt64/bin/git.exe` in Git Bash, `C:\Program Files\Git\cmd\git.exe`
 from PowerShell, the same version), where it ran 2.36 before; CI runs 2.34.1 (the floor's job) and 2.43 to 2.56,
 so no machine runs 2.36 any more (D248).
 
@@ -630,11 +679,13 @@ so no machine runs 2.36 any more (D248).
 | `docs/test-reports/phase-N.md` | Visual checks for phase N: expected results, then outcomes |
 | `docs/cloud-sessions.md` | For the owner: working on the project from a Claude Code cloud session |
 | `docs/guide/` | The user guide's source: `book.toml`, `guide.css` and, under `src/`, `SUMMARY.md` and the 33 pages; built into a site by `.github/workflows/guide.yml` (D408, D439; `docs/phase-8a-design.md` 11) |
+| `docs/brand/icon/` | The icon's candidates as drawn for the owner's choice (D407, D447): `round-1/` the five first marks, `round-2/` the chosen one worked out into its drawings, each round with its `README.md` (the date, the owner's choice and the changes asked for) and `candidates.html`, a sheet of every size on dark and light. The masters the icon's files are made from are in `assets/brand/` (D428) |
+| `docs/test-reports/phase-8a-contrast/` | The contrast round's eight lists (D419; `docs/phase-8a-design.md` 2.2): which of phase 7b's pictures show which of the colours the round changed (`colours-any.txt`, `-danger` and five more), and in `colours-none.txt` the 17 that show none, one `phase-N/<folder>/<name>.png` per line; `scripts/scan-contrast.py` writes them again line for line |
 | `docs/phase-3-design.md` | Phase 3's design, kept as history; phase 3's decisions (D77 to D133), report and handoff cite its sections as "design N.N" |
 | `docs/phase-4-design.md` | Phase 4's design, kept as history; phase 4's decisions (D139 to D152), report, handoff, status and plan outcome cite its sections as "design N.N"; its sections 14.1 to 14.5 say what the build and the review settled |
 | `docs/phase-5-design.md` | Phase 5's design, kept as history; phase 5's decisions (D153 to D186), report, handoff, status and plan cite its sections as "design N.N"; its sections 15.8 and 15.9 say what the report, the build, the reviews and the gate settled |
 | `docs/phase-6-design.md` | Phase 6's design, kept as history; phase 6's decisions (the design's D203 to D230), report, handoff, status and plan cite its sections as "design N.N"; its "As built" notes and the lead's rulings say what the build and the review settled (what the gate found is in the report's "Found by the gate" and the handoff); its section 16.2 holds the plan's changes, section 18 the work packages |
 | `docs/phase-7a-design.md` | Phase 7a's design, kept as history: its decisions D265 to D338 and, in its sections 19 to 21, what D339 to D343 settled; its naming (0.3) and lagged list (0.4), the shared contracts (section 1), one section per work package (2 to 14) with its files, tests and "done when", the open points (15) and, as built, what each wave's build and reviews (16 to 18), the review before the gate (19), the live run (20) and the gate (21) settled; the phase's report, handoff and status cite its sections as "design N.N" |
 | `docs/phase-7b-design.md` | Phase 7b's design, kept as history: its decisions D357 to D372, its review's D377 and D378; its scope (0.1), naming (0.3), work packages and waves with the lagged list (0.4), the visual checks' parts (0.5), cost in time (0.6) and earlier pictures (0.7), the shared contracts (section 1), one section per work package (2 to 15) with its files, tests and "done when" and, as built, what its build, hunts and reviews settled (D379 to D390 among them), and the open points (16): what the live command, measurements and the lead settled, what was accepted with what would reopen it (D392 among them) and what waited on the owner; the phase's report, handoff, status and plan cite its sections as "design N.N" (what the gate found is in the report's "Found by the gate") |
-| `docs/phase-8a-design.md` | Phase 8a's design: its decisions D416 to D446, its review's D447 to D452 and D453, the owner's answer on winget; its scope against the plan's Delivers list (0.1), naming (0.3), work packages and waves with the lagged list (0.4), the visual checks' parts (0.5), cost in time (0.6) and earlier pictures (0.7), what it asks of the owner (0.8), the shared contracts (section 1, the lead's first package), one section per work package (2 to 12, and 14 for the restore order of ruling 76, written in wave 4, its 14.10 as built, proven and merged, the proof's series taken again by D461) with its files, behaviour, tests, checks and "done when", and in section 13 the lead's rulings in short form (75 before the build, 114 by 2026-11-26), what waits on the owner, the open points with what the lead settled and what the review of 2026-11-19 changed (13.5); the phase's report, handoff and status cite its sections as "design N.N" |
+| `docs/phase-8a-design.md` | Phase 8a's design, kept as history: its decisions D416 to D446, its review's D447 to D452 and D453, the owner's answer on winget, and, as built, D454 to D473 (D460 and D469 the owner's answers); its scope against the plan's Delivers list (0.1), naming (0.3), work packages and waves with the lagged list (0.4), the visual checks' parts (0.5), cost in time (0.6) and earlier pictures (0.7), what it asks of the owner (0.8), the shared contracts (section 1, the lead's first package), one section per work package (2 to 12, and 14 for the restore order of ruling 76, written in wave 4, its 14.10 as built, proven and merged, the proof's series taken again by D461) with its files, behaviour, tests, checks and "done when", and in section 13 the lead's rulings in short form (75 before the build, 116 by 2026-11-27), what waits on the owner, the open points with what the lead settled and what the review of 2026-11-19 changed (13.5); the phase's report, handoff and status cite its sections as "design N.N" |
 | `docs/review-before-phase-7.md` | The review of phase 6's cost in time, tokens and disk (2026-10-26), kept as history: what was measured, the causes and the ranked proposals; D239 to D248 cite its sections and proposal ids, and a proposal that no decision names is still only a proposal |

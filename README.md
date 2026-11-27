@@ -30,8 +30,15 @@ settings screen's Accounts section it signs in to GitHub, GitLab (gitlab.com) an
 git calls to those hosts over HTTPS then use the account's token, and it browses and clones the
 account's repositories, lists a repository's pull requests (GitLab's merge requests) in the left
 panel (open in the browser, check out, copy the link), creates one from a branch's menu, marks a
-branch's request with a badge in the graph and shows the authors' GitHub avatars. The installers
-and the public release come next.
+branch's request with a badge in the graph and shows the authors' GitHub avatars. When git is
+missing, too old or not working, a first-run screen says which and leads to a working git: the
+official download on Windows, the Command Line Tools or Homebrew on macOS, the distribution's
+package on Linux, a git chosen by hand, "Check again" without a restart and, on Windows where
+winget exists, an install or update through winget after a confirm. F1 opens the user guide's site
+in the browser, which the guide's workflow publishes from `master` to GitHub Pages; its pages are
+in `docs/guide/`. Every interactive control but the scroll bars has an accessible name, and the
+commit graph's selected row is exposed to screen readers. A second start on the same data folder
+brings the running window forward. The installers and the public release come next.
 [docs/status.md](docs/status.md) says which phase is being built and [docs/plan.md](docs/plan.md)
 what each phase adds.
 
@@ -39,7 +46,9 @@ what each phase adds.
 
 You need the [.NET 10 SDK](https://dotnet.microsoft.com/download) and Git 2.34.1 or newer. On an
 Ubuntu or Debian machine that lacks them, `bash scripts/setup-linux.sh` installs them together
-with the system libraries the tests use.
+with the system libraries the tests use. It installs the distribution's git only where there is
+none and does not check its version, so a machine whose git is older than 2.34.1 needs a newer one
+by other means.
 
 ```
 dotnet build
@@ -50,7 +59,7 @@ dotnet test
 `dotnet test` runs the unit and integration tests and a scripted walk-through of the whole app in
 a headless window; it saves screenshots under `artifacts/visual/`. It does not open a window and
 does not touch your settings or your keychain, and local fakes stand in for GitHub, GitLab and
-Azure DevOps. It takes about 1 h 30 min on the development laptop, with at most four test projects at once
+Azure DevOps. It takes about 1 h 55 min on the development laptop, with at most four test projects at once
 (`bash scripts/heavy-run.sh`, see CLAUDE.md), and the first run builds a 100,000-commit
 test repository in the temporary folder, which later runs reuse. The tests need Git 2.34.1
 or newer, as the app does. All commands, including the Windows-only real-window test pass, are
@@ -68,8 +77,11 @@ that changes more than documentation.
 | `src/VisualCommit.Hosting` | The hosting services: the API clients of GitHub, GitLab and Azure DevOps on a shared HTTP core, the signed-in accounts, pull and merge requests, avatars and the keychain stores; no UI and no git process |
 | `src/VisualCommit.App` | The Avalonia app: views, view models, theme |
 | `src/VisualCommit.AskPass` | The small helper git starts to ask the app for a password or passphrase, and, as git's credential helper, to hand git the signed-in account's token |
-| `tests/` | Unit and integration tests, headless UI tests, the two passes of the visual test gate, and an opt-in command against real GitHub, GitLab and Azure DevOps |
-| `docs/` | Requirements, plan, architecture, decisions, and a handoff and test report for each phase |
+| `tests/` | Unit and integration tests, headless UI tests, the two passes of the visual test gate, the user guide's pictures, a stand-in for git that the first-run checks use, and an opt-in command against real GitHub, GitLab and Azure DevOps |
+| `tools/VisualCommit.IconBuilder` | The tool that makes the icon's `.ico`, `.icns` and PNG files from its SVG masters; run by hand, never shipped |
+| `assets/brand/` | The icon's SVG masters and, in `generated/`, the `.icns`, the `.iconset` and Linux's PNGs made from them (the `.ico` and the app's two PNGs go to `src/VisualCommit.App/Assets/Icon/`) |
+| `notices/` | The notice files the third-party components ship themselves, which the app embeds and shows under Settings, About |
+| `docs/` | Requirements, plan, architecture, decisions, a handoff and test report for each phase, and the user guide's source (`docs/guide/`) |
 
 [docs/architecture.md](docs/architecture.md) describes how the app is built.
 

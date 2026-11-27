@@ -43,8 +43,9 @@ repository to it again. Two things are worth doing each time you start a session
 
 The session prepares its own machine: `CLAUDE.md` tells it to run `bash scripts/setup-linux.sh`,
 which installs the .NET 10 SDK and the few system libraries the tests need. In CI's empty
-container that takes about half a minute; how long it takes in a cloud session has not been
-measured.
+containers that took from 30 s to 4 min 26 s in CI's run of phase 8a's Gate commit (46007767846),
+the longest with the SDK from Ubuntu's package servers, as a cloud session would take it; how long
+it takes in a cloud session has not been measured.
 
 Optional, to save that time: a cloud environment can have a set-up script of its own. It runs
 by itself when a session's machine is made, before Claude starts, and its result is kept for
@@ -77,7 +78,7 @@ phase is next), or "Continue" for a phase that is under way.
 
 | It can | It cannot |
 |---|---|
-| Build, and run all default tests, including the scripted visual walk-through | Run the real-window pass (it drives the real app on a Windows desktop with the real mouse) or the live command against real GitHub, Azure DevOps and GitLab (Windows-only: it reads your sandbox tokens from Windows user variables on your machine, D250, D260, D346) |
+| Build, and run all default tests, including the scripted visual walk-through | Run the real-window pass or the performance series (both drive the real app on a Windows desktop with the real mouse), the live command against real GitHub, Azure DevOps and GitLab (Windows-only: it reads your sandbox tokens from Windows user variables on your machine, D250, D260, D346), or the checks the gate takes by hand on Windows, such as phase 8a's walk-through with Windows Narrator (D411) |
 | Inspect the walk-through's screenshots (drawn on Linux) | Start the app to look at it |
 | Push its commits and read CI, including CI's Windows and macOS jobs | Set a phase to "Awaiting acceptance" |
 
@@ -94,9 +95,10 @@ twice on their own, which take over the mouse, so it tells you and needs you pre
 Then it runs both passes of the gate on one commit (only the real-window pass again when a fix
 changes nothing but `tests/VisualCommit.RealWindowTests`), fixes what the real window shows,
 tells you and runs the live command again on the counted round, after the real-window pass,
-inspects the pictures of both, completes the report and the handoff, runs the cold-read check and
-sets the phase to "Awaiting acceptance". Then you accept it as usual, by saying "Phase N
-accepted".
+inspects the pictures of both, takes the checks by hand that the report lists, with you where a
+check needs your hand (phase 8a's walk-through with Narrator, D411, D460), completes the report and
+the handoff, runs the cold-read check and sets the phase to "Awaiting acceptance". Then you accept
+it as usual, by saying "Phase N accepted".
 
 Two things to leave alone:
 
@@ -118,7 +120,9 @@ Proven, by CI on every push that changes code (the latest run is in the CI secti
 - `scripts/setup-linux.sh` is enough on an Ubuntu 24.04 machine that has nothing, running as
   root: the two "bare ubuntu container" jobs run it in an empty container and then build and
   test there. One takes the SDK from Ubuntu's package servers, as a cloud session would; the
-  other takes it from Microsoft's installer.
+  other takes it from Microsoft's installer. Since phase 8a a third job, "ubuntu 22.04 container,
+  git 2.34 (the floor)", runs it in an empty Ubuntu 22.04 container, with the SDK from Microsoft's
+  installer, and tests there on git 2.34.1, the oldest git the app supports (D406, D420).
 
 Not proven by that: a CI runner's network is open, so CI cannot show that the downloads get
 through a cloud session's allowlist. That rests on the documentation's list of allowed servers.
@@ -146,3 +150,8 @@ needed, on the branch it is working on:
 - That `scripts/heavy-run.sh` (D245) works there: it has run only in Git Bash on the Windows
   machine, never on Linux, so its lock and its way of stopping a run (a process group there) are
   untried.
+- That the user guide's pictures (`tests/VisualCommit.GuideShots`, with `VISUALCOMMIT_GUIDE_ROOT`)
+  and its site can be made there. The guide's workflow makes both on Ubuntu on every push that
+  touches the guide, but mdBook is no part of the repository: the workflow downloads it from
+  GitHub's release page, and whether a cloud session's network lets that download through is not
+  known.
