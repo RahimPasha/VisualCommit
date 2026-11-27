@@ -149,10 +149,13 @@ public sealed partial class RealApp
     /// <paramref name="text"/>, read from the app, for an exception's message, after checking that it
     /// does not hold <paramref name="token"/>, the token typed into the dialog: when it does, throws
     /// naming <paramref name="place"/> instead, so that no message holds the token and the leak fails
-    /// by its place (design 13.2).
+    /// by its place (design 13.2). It throws an assertion's exception, which no read's catch takes
+    /// (<see cref="IsReadFailure"/>, <see cref="IsFailedLook"/>): read for a time-out's message
+    /// (<see cref="StateForMessage"/>, <see cref="ConfirmSignIn"/>), the leak is the failure, never a
+    /// window that could not be read (<see cref="WaitForRuleTests"/>).
     /// </summary>
-    private static string WithoutToken(string text, string token, string place) =>
-        text.Contains(token, StringComparison.Ordinal) ? throw new InvalidOperationException($"{place} holds the typed token.") : text;
+    internal static string WithoutToken(string text, string token, string place) =>
+        text.Contains(token, StringComparison.Ordinal) ? throw new Xunit.Sdk.XunitException($"{place} holds the typed token.") : text;
 
     /// <summary>
     /// A real click on the open dialog's own "Sign in" (<c>ConfirmButton</c>, found inside the dialog:
@@ -230,7 +233,9 @@ public sealed partial class RealApp
     /// <summary>
     /// Whether UI Automation's focused element is the window itself, on none of its controls: what it
     /// reports for the foreground window while the app's own focus is on the window or on nothing in
-    /// it. False when it cannot be read, and while another window has the focus.
+    /// it. False when it cannot be read (<see cref="IsReadFailure"/>, which takes the
+    /// <see cref="System.ComponentModel.Win32Exception"/> that FlaUI 5.0.0's <c>FocusedElement</c> makes of most
+    /// failed calls), and while another window has the focus.
     /// </summary>
     public bool FocusIsOnTheWindow()
     {
@@ -239,7 +244,7 @@ public sealed partial class RealApp
             return _automation.FocusedElement() is { } focused
                 && (focused.Equals(Window) || focused.Properties.NativeWindowHandle.ValueOrDefault == Handle);
         }
-        catch (Exception ex) when (ex is System.Runtime.InteropServices.COMException or FlaUI.Core.Exceptions.ElementNotAvailableException)
+        catch (Exception ex) when (IsReadFailure(ex))
         {
             return false;
         }

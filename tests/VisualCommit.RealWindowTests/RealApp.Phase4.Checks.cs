@@ -177,7 +177,7 @@ public sealed partial class RealApp
         return (bounds, inside);
     }
 
-    /// <summary>As <see cref="WaitFor"/>; a timeout's message ends with what <paramref name="state"/> says the window shows then.</summary>
+    /// <summary>As <see cref="WaitFor"/>; a timeout's message ends with what <paramref name="state"/> says the window shows then (<see cref="StateForMessage"/>).</summary>
     private void WaitForTelling(Func<bool> condition, string what, TimeSpan timeout, Func<string> state)
     {
         try
@@ -186,7 +186,26 @@ public sealed partial class RealApp
         }
         catch (TimeoutException ex)
         {
-            throw new TimeoutException($"{ex.Message} {state()}", ex);
+            throw new TimeoutException($"{ex.Message} {StateForMessage(state)}", ex);
+        }
+    }
+
+    /// <summary>
+    /// What <paramref name="state"/> says the window shows, read once for a time-out's message; when that read fails
+    /// (<see cref="IsReadFailure"/>), words that say so and with what, so that the time-out, with what
+    /// <see cref="Poll"/> says of its looks, is what the check reports, and not the failed read. Any other exception
+    /// leaves.
+    /// </summary>
+    internal static string StateForMessage(Func<string> state)
+    {
+        ArgumentNullException.ThrowIfNull(state);
+        try
+        {
+            return state();
+        }
+        catch (Exception ex) when (IsReadFailure(ex))
+        {
+            return $"What the window shows could not be read for this message: {FailureWords(ex)}.";
         }
     }
 }

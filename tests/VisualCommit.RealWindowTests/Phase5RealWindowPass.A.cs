@@ -615,12 +615,24 @@ public partial class Phase5RealWindowPass
         Assert.Single(app.ShownElements("ActivityLogClose"));
     }
 
-    /// <summary>Waits until the activity log's rows in the list's view are exactly <paramref name="names"/>, top to bottom.</summary>
-    private static void WaitForLogRowsInView(RealApp app, params string[] names) =>
-        app.WaitFor(
-            () => app.ActivityLogNamesInView().SequenceEqual(names),
-            $"the activity log's rows in view to be {string.Join(", ", names)} (they are {string.Join(", ", app.ActivityLogNamesInView())})",
-            StepTimeout);
+    /// <summary>
+    /// Waits until the activity log's rows in the list's view are exactly <paramref name="names"/>, top to bottom. What
+    /// they are is read for a time-out's message after the wait, not before it, where a read that fails would end the step.
+    /// </summary>
+    private static void WaitForLogRowsInView(RealApp app, params string[] names)
+    {
+        try
+        {
+            app.WaitFor(
+                () => app.ActivityLogNamesInView().SequenceEqual(names),
+                $"the activity log's rows in view to be {string.Join(", ", names)}",
+                StepTimeout);
+        }
+        catch (TimeoutException ex)
+        {
+            throw new TimeoutException($"{ex.Message} {RealApp.StateForMessage(() => $"They are {string.Join(", ", app.ActivityLogNamesInView())}.")}", ex);
+        }
+    }
 
     /// <summary>Waits until the activity log's operation or call row <paramref name="name"/> lies whole in the list's view and has the keyboard focus.</summary>
     private static void WaitForLogRowFocus(RealApp app, string name) =>

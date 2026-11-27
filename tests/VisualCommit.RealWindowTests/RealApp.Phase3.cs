@@ -152,25 +152,44 @@ public sealed partial class RealApp
     public AutomationElement WaitForMenu(TimeSpan? timeout = null)
     {
         AutomationElement? menu = null;
-        Rectangle? last = null;
+        var settling = new SettlingRectangle();
         WaitFor(
-            () =>
+            () => settling.Look(() =>
             {
                 var found = FindAll("ContextMenu");
                 if (found.Count != 1 || found[0].BoundingRectangle is not { Width: > 0, Height: > 0 } bounds)
                 {
-                    last = null;
-                    return false;
+                    return null;
                 }
 
-                var settled = last == bounds;
-                last = bounds;
                 menu = found[0];
-                return settled;
-            },
+                return bounds;
+            }),
             "a context menu to open and settle",
             timeout ?? TimeSpan.FromSeconds(10));
         return menu!;
+    }
+
+    /// <summary>
+    /// <see cref="WaitForMenu"/>'s rule for a settled menu, held with no window (<see cref="WaitForRuleTests"/>): one look
+    /// reads the menu's rectangle, null when there is no one menu with a non-empty rectangle, and the menu has settled
+    /// when two looks in a row read the same rectangle. The rectangle kept is cleared before each read, so that a read
+    /// that fails in UI Automation, which <see cref="Poll"/> takes as "not yet" (<see cref="IsFailedLook"/>), leaves
+    /// none, and the looks either side of it are not taken as two in a row.
+    /// </summary>
+    internal sealed class SettlingRectangle
+    {
+        private Rectangle? _last;
+
+        /// <summary>One look: <paramref name="read"/>'s rectangle, and whether the look before this one read the same.</summary>
+        public bool Look(Func<Rectangle?> read)
+        {
+            ArgumentNullException.ThrowIfNull(read);
+            var previous = _last;
+            _last = null;
+            _last = read();
+            return _last is { } bounds && previous == bounds;
+        }
     }
 
     /// <summary>The names (labels) of the open menu's items, in order, the header and separators left out. Waits for the menu (<see cref="WaitForMenu"/>).</summary>

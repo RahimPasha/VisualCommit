@@ -292,7 +292,7 @@ public partial class Phase7aRealWindowPass(Phase7aRun fixture) : IClassFixture<P
             NetworkTimeout);
     }
 
-    /// <summary>Waits for <paramref name="condition"/> as <see cref="RealApp.WaitFor"/> does, at most <paramref name="timeout"/> (<see cref="StepTimeout"/> when null); on a timeout the message adds what <paramref name="state"/> reads then. As phase 6's.</summary>
+    /// <summary>Waits for <paramref name="condition"/> as <see cref="RealApp.WaitFor"/> does, at most <paramref name="timeout"/> (<see cref="StepTimeout"/> when null); on a timeout the message adds what <paramref name="state"/> reads then (<see cref="RealApp.StateForMessage"/>). As phase 6's.</summary>
     private static void WaitTelling(RealApp app, Func<bool> condition, string what, Func<string> state, TimeSpan? timeout = null)
     {
         try
@@ -301,7 +301,7 @@ public partial class Phase7aRealWindowPass(Phase7aRun fixture) : IClassFixture<P
         }
         catch (TimeoutException ex)
         {
-            throw new TimeoutException($"{ex.Message} {state()}", ex);
+            throw new TimeoutException($"{ex.Message} {RealApp.StateForMessage(state)}", ex);
         }
     }
 

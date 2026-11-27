@@ -399,9 +399,23 @@ public partial class Phase3RealWindowPass
             return app.Find(automationId);
         }
 
-        /// <summary>Waits until the status bar's operation text is <paramref name="text"/> (it follows the queue's log line on the UI thread).</summary>
-        public static void WaitForStatus(RealApp app, string text) =>
-            app.WaitFor(() => app.OperationStatusText() == text, $"the status bar to say \"{text}\" (it says \"{app.OperationStatusText()}\")", OperationTimeout);
+        /// <summary>
+        /// Waits until the status bar's operation text is <paramref name="text"/> (it follows the queue's log line on the
+        /// UI thread). What it says is read for a time-out's message after the wait, as phases 4 and 5 read it, not before
+        /// it: check 22 calls this right after a click that makes the Remotes dialog build its rows again, and a read that
+        /// failed there would end the check before its first look.
+        /// </summary>
+        public static void WaitForStatus(RealApp app, string text)
+        {
+            try
+            {
+                app.WaitFor(() => app.OperationStatusText() == text, $"the status bar to say \"{text}\"", OperationTimeout);
+            }
+            catch (TimeoutException ex)
+            {
+                throw new TimeoutException($"{ex.Message} {RealApp.StateForMessage(() => $"It says \"{app.OperationStatusText()}\".")}", ex);
+            }
+        }
 
         /// <summary>The Remotes dialog's rows (<c>RemoteRow</c>, named by the remote), top to bottom.</summary>
         public static IReadOnlyList<string> RemoteRowNames(RealApp app) =>

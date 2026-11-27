@@ -36,8 +36,8 @@ public sealed partial class RealApp : IDisposable
     /// <summary>The pause between two steps of <see cref="DragWithMouse"/>, so the app sees a movement and not a jump.</summary>
     private static readonly TimeSpan DragStepInterval = TimeSpan.FromMilliseconds(20);
 
-    /// <summary>How often <see cref="WaitFor"/> looks at its condition.</summary>
-    private static readonly TimeSpan PollInterval = TimeSpan.FromMilliseconds(100);
+    /// <summary>How often <see cref="WaitFor"/> looks at its condition (<see cref="Poll"/>).</summary>
+    internal static readonly TimeSpan PollInterval = TimeSpan.FromMilliseconds(100);
 
     private readonly Process _process;
     private readonly UIA3Automation _automation;
@@ -359,12 +359,13 @@ public sealed partial class RealApp : IDisposable
 
     /// <summary>
     /// Waits until <paramref name="condition"/> is true, looking every 100 ms: for work that the
-    /// app finishes after the input that started it, such as loading a repository.
+    /// app finishes after the input that started it, such as loading a repository. The looks
+    /// follow <see cref="Poll"/>'s rule, on this app's clock, exit and a real pause.
     /// </summary>
     /// <param name="condition">What to wait for; it may ask UI Automation or read the log.</param>
     /// <param name="what">What is awaited, in words, for the message when it does not come.</param>
     /// <param name="timeout">How long to wait.</param>
-    /// <exception cref="TimeoutException">The condition was still false when the time was up.</exception>
+    /// <exception cref="TimeoutException">The condition was still false, or its look failed in UI Automation, when the time was up.</exception>
     /// <exception cref="InvalidOperationException">The app exited while the test waited.</exception>
     public void WaitFor(Func<bool> condition, string what, TimeSpan timeout)
     {
@@ -372,22 +373,145 @@ public sealed partial class RealApp : IDisposable
         ArgumentException.ThrowIfNullOrWhiteSpace(what);
 
         var clock = Stopwatch.StartNew();
-        while (!condition())
+        Poll(condition, what, timeout, () => clock.Elapsed, () => _process.HasExited ? _process.ExitCode : null, Thread.Sleep);
+    }
+
+    /// <summary>
+    /// The rule of <see cref="WaitFor"/>'s looks, with the clock, the app's exit and the pause handed in, so that
+    /// it is held with no window and no real waiting (<see cref="WaitForRuleTests"/>): <paramref name="condition"/>
+    /// is looked at; while it is false, an app that has exited ends the wait at once, a time that is up ends it
+    /// with a <see cref="TimeoutException"/>, and otherwise <paramref name="pause"/> is asked for
+    /// <see cref="PollInterval"/> before the next look. A look that fails as <see cref="IsFailedLook"/> says, a read
+    /// through UI Automation while the app's automation tree changes, counts as false: never as met, so that no
+    /// wait ends on a look that could not see. When the time is up after such looks, the message says whether the
+    /// last look failed or read false, how many of the looks failed and with what the last of them did, which is
+    /// the exception's inner one; a wait in which no look failed has the message it always had. Any other
+    /// exception of a look leaves at once, as before: <see cref="Find"/>'s <see cref="InvalidOperationException"/>
+    /// for an element that is not in the window, an assertion, an exception of the test's own code.
+    /// </summary>
+    /// <param name="condition">What to wait for.</param>
+    /// <param name="what">What is awaited, in words, for the messages.</param>
+    /// <param name="timeout">How long to wait.</param>
+    /// <param name="elapsed">The time since the wait began.</param>
+    /// <param name="exitCode">The app's exit code once it has exited; null while it runs.</param>
+    /// <param name="pause">The pause between two looks.</param>
+    /// <exception cref="TimeoutException">The condition was still false, or its look failed, when the time was up.</exception>
+    /// <exception cref="InvalidOperationException">The app exited while the test waited.</exception>
+    internal static void Poll(Func<bool> condition, string what, TimeSpan timeout, Func<TimeSpan> elapsed, Func<int?> exitCode, Action<TimeSpan> pause)
+    {
+        ArgumentNullException.ThrowIfNull(condition);
+        ArgumentException.ThrowIfNullOrWhiteSpace(what);
+        ArgumentNullException.ThrowIfNull(elapsed);
+        ArgumentNullException.ThrowIfNull(exitCode);
+        ArgumentNullException.ThrowIfNull(pause);
+
+        var looks = 0;
+        var failedLooks = 0;
+        Exception? lastFailure = null;
+        var lastLookFailed = false;
+        while (true)
         {
-            if (_process.HasExited)
+            looks++;
+            bool met;
+            try
             {
-                throw new InvalidOperationException($"The app exited with code {_process.ExitCode} while waiting for {what}.");
+                met = condition();
+                lastLookFailed = false;
+            }
+            catch (Exception ex) when (IsFailedLook(ex))
+            {
+                met = false;
+                failedLooks++;
+                lastFailure = ex;
+                lastLookFailed = true;
             }
 
-            if (clock.Elapsed >= timeout)
+            if (met)
             {
-                throw new TimeoutException(string.Create(
+                return;
+            }
+
+            if (exitCode() is { } code)
+            {
+                throw new InvalidOperationException($"The app exited with code {code} while waiting for {what}.");
+            }
+
+            if (elapsed() >= timeout)
+            {
+                var message = string.Create(
                     System.Globalization.CultureInfo.InvariantCulture,
-                    $"Timed out after {timeout.TotalSeconds:0.###} s waiting for {what}."));
+                    $"Timed out after {timeout.TotalSeconds:0.###} s waiting for {what}.");
+                if (lastFailure is not null && lastLookFailed)
+                {
+                    message = string.Create(
+                        System.Globalization.CultureInfo.InvariantCulture,
+                        $"{message} The last look failed in UI Automation with {FailureWords(lastFailure)}; {failedLooks} of {looks} looks failed.");
+                }
+                else if (lastFailure is not null)
+                {
+                    message = string.Create(
+                        System.Globalization.CultureInfo.InvariantCulture,
+                        $"{message} The last look read false; {failedLooks} of {looks} looks failed in UI Automation, the last of them with {FailureWords(lastFailure)}.");
+                }
+
+                throw new TimeoutException(message, lastFailure);
             }
 
-            Thread.Sleep(PollInterval);
+            pause(PollInterval);
         }
+    }
+
+    /// <summary>
+    /// Whether <paramref name="exception"/> is how one look of <see cref="Poll"/> fails while the app's automation tree
+    /// changes, a look that is then taken as "not yet" and made again. Three forms, as FlaUI 5.0.0 hands a failed call
+    /// into UI Automation on:
+    /// <list type="bullet">
+    /// <item>a <see cref="System.Runtime.InteropServices.COMException"/>, whatever its HRESULT, from every call FlaUI does
+    /// not wrap (<c>FindAll</c>, <c>FindFirst</c> and every property read): the gate's <c>FindAll</c> failed so with E_FAIL
+    /// (.NET 10's "Unexpected HRESULT" message), and UIA_E_ELEMENTNOTAVAILABLE and a raw call's time-out (COR_E_TIMEOUT,
+    /// 0x80131505, which .NET 10 hands on as a COMException, not a <see cref="TimeoutException"/>) come so too: a wait on an
+    /// app that does not answer then lasts its own time-out and at most one of UI Automation's, and fails naming it;</item>
+    /// <item>FlaUI's own <see cref="FlaUI.Core.Exceptions.ElementNotAvailableException"/>, which its <c>Com.Call</c>
+    /// (<c>FocusedElement</c>, <c>FromHandle</c>) makes of UIA_E_ELEMENTNOTAVAILABLE;</item>
+    /// <item>FlaUI's <see cref="FlaUI.Core.Exceptions.PatternNotSupportedException"/> around a COMException: a pattern's
+    /// <c>Pattern</c> wraps every failure of its read so. A pattern that the element does not give comes around FlaUI's own
+    /// <see cref="InvalidOperationException"/> ("Native pattern is null") and does not count.</item>
+    /// </list>
+    /// Nothing else, though <see cref="IsReadFailure"/>, made for one read whose failure is noted, takes more: not an
+    /// <see cref="InvalidOperationException"/>, which <see cref="Find"/> throws for an element that is not in the window,
+    /// and a look that throws it must end the wait as it always did; not a <see cref="TimeoutException"/>, which
+    /// <c>Com.Call</c> makes of UI Automation's time-out ("UIA Timeout": the app did not answer, its tree did not change)
+    /// and a wait inside a look would throw too, which a caller that catches a wait's time-out could not tell from the
+    /// wait's own; not a <see cref="System.ComponentModel.Win32Exception"/>, which <c>Com.Call</c> makes of every other
+    /// HRESULT but the harness throws too when Windows does not list its windows, a failure that I1's second start must
+    /// fail on and never count as a look that found no window (<c>Win32.Enumerate</c>); and no other exception of
+    /// FlaUI's, though those <c>Com.Call</c> makes come around a COMException too: they say that an element is not
+    /// enabled, gives no clickable point or does not support what was asked, an action's failure or a lasting state.
+    /// </summary>
+    internal static bool IsFailedLook(Exception exception)
+    {
+        ArgumentNullException.ThrowIfNull(exception);
+        return exception is System.Runtime.InteropServices.COMException
+            or FlaUI.Core.Exceptions.ElementNotAvailableException
+            or FlaUI.Core.Exceptions.PatternNotSupportedException { InnerException: System.Runtime.InteropServices.COMException };
+    }
+
+    /// <summary>
+    /// A failure in words for a message: its type, a <see cref="System.Runtime.InteropServices.COMException"/>'s HRESULT,
+    /// and its message (left out when empty, as FlaUI 5.0.0's <c>Com.Call</c> leaves its own exceptions' messages); for
+    /// any other exception around a COMException, as FlaUI wraps one, that COMException's words after it.
+    /// </summary>
+    private static string FailureWords(Exception exception)
+    {
+        var code = exception is System.Runtime.InteropServices.COMException com
+            ? string.Create(System.Globalization.CultureInfo.InvariantCulture, $" (HRESULT 0x{com.ErrorCode:X8})")
+            : string.Empty;
+        var message = string.IsNullOrEmpty(exception.Message) ? string.Empty : $" \"{exception.Message}\"";
+        var words = $"{exception.GetType().Name}{code}{message}";
+        return exception is not System.Runtime.InteropServices.COMException
+            && exception.InnerException is System.Runtime.InteropServices.COMException inner
+            ? $"{words}, which wraps {FailureWords(inner)}"
+            : words;
     }
 
     /// <summary>

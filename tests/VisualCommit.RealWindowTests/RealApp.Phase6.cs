@@ -191,7 +191,9 @@ public sealed partial class RealApp
     /// <summary>
     /// The automation id of the element UI Automation reports as having the keyboard focus (its
     /// focused element, K10's <c>FilterBox</c> and <c>GraphRows</c>), or null when there is none or it
-    /// cannot be read.
+    /// cannot be read (<see cref="IsReadFailure"/>): FlaUI 5.0.0's <c>FocusedElement</c> goes through its
+    /// <c>Com.Call</c>, which hands a failed call on as an exception of FlaUI's or a
+    /// <see cref="System.ComponentModel.Win32Exception"/>, not as a <see cref="System.Runtime.InteropServices.COMException"/>.
     /// </summary>
     public string? FocusedAutomationId()
     {
@@ -199,7 +201,7 @@ public sealed partial class RealApp
         {
             return _automation.FocusedElement()?.Properties.AutomationId.ValueOrDefault;
         }
-        catch (System.Runtime.InteropServices.COMException)
+        catch (Exception ex) when (IsReadFailure(ex))
         {
             return null;
         }

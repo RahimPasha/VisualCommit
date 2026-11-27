@@ -458,12 +458,16 @@ public partial class Phase6RealWindowPass(Phase6Run fixture) : IClassFixture<Pha
         }
     }
 
-    /// <summary>The column headings at 1100 (2.6), left to right, in the band below the header (y 124 to 152).</summary>
+    /// <summary>
+    /// The column headings at 1100 (2.6), left to right, in the band below the header (y 124 to 152). What they are
+    /// is read for a time-out's message after the wait, not before it, where a read that fails would end the step.
+    /// </summary>
     private static void AssertHeadings(RealApp app) =>
-        app.WaitFor(
+        WaitTelling(
+            app,
             () => app.DashboardTextsBetween((float)PartW.HeaderBottom, (float)PartW.HeadingsBottom).SequenceEqual(PartW.Headings1100),
-            $"the column headings {string.Join(", ", PartW.Headings1100)} (they are {string.Join(", ", app.DashboardTextsBetween((float)PartW.HeaderBottom, (float)PartW.HeadingsBottom))})",
-            StepTimeout);
+            $"the column headings {string.Join(", ", PartW.Headings1100)}",
+            () => $"They are {string.Join(", ", app.DashboardTextsBetween((float)PartW.HeaderBottom, (float)PartW.HeadingsBottom))}.");
 
     /// <summary>No dialog of the dialog layer is open (phase 3's "Absence"), phase 6's included.</summary>
     private static void AssertNoDialog(RealApp app)
@@ -474,7 +478,7 @@ public partial class Phase6RealWindowPass(Phase6Run fixture) : IClassFixture<Pha
         }
     }
 
-    /// <summary>Waits for <paramref name="condition"/> as <see cref="RealApp.WaitFor"/> does, at most <paramref name="timeout"/> (<see cref="StepTimeout"/> when null); on a timeout the message adds what <paramref name="state"/> reads then.</summary>
+    /// <summary>Waits for <paramref name="condition"/> as <see cref="RealApp.WaitFor"/> does, at most <paramref name="timeout"/> (<see cref="StepTimeout"/> when null); on a timeout the message adds what <paramref name="state"/> reads then (<see cref="RealApp.StateForMessage"/>).</summary>
     private static void WaitTelling(RealApp app, Func<bool> condition, string what, Func<string> state, TimeSpan? timeout = null)
     {
         try
@@ -483,7 +487,7 @@ public partial class Phase6RealWindowPass(Phase6Run fixture) : IClassFixture<Pha
         }
         catch (TimeoutException ex)
         {
-            throw new TimeoutException($"{ex.Message} {state()}", ex);
+            throw new TimeoutException($"{ex.Message} {RealApp.StateForMessage(state)}", ex);
         }
     }
 
