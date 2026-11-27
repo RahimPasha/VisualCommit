@@ -473,6 +473,22 @@ Phase 8a's runs on `phase/8a-release-readiness`, the newest first. CI has six jo
 `e04762b`: the sixth, "ubuntu 22.04 container, git 2.34 (the floor)", did not fail the run until
 `bba59c7`, which made it required after its first green run.
 
+- [46007767846](https://github.com/RahimPasha/VisualCommit/actions/runs/46007767846), for `750eb33`
+  (the real-window harness's wait that takes a failed look as "not yet", test code in
+  `tests/VisualCommit.RealWindowTests` alone; **the Gate commit**): **success in all six jobs**, at
+  its first attempt. `windows-latest`: 8,936 tests, 8,929 passed, 7 skipped, Test step 45 min 28 s
+  of 70 (the step that builds the opt-in projects, the real-window project among them, 41 s).
+  `macos-latest`: 8,933 tests, 8,930 passed, 3 skipped, Test step 26 min 53 s. `ubuntu-latest`:
+  8,933 tests, 8,929 passed, 4 skipped, Test step 6 min 47 s. The floor's job (git 2.34.1): 8,933
+  tests, 8,926 passed, 7 skipped, Test step 7 min 14 s; the two containers 8,933 tests with 7
+  skipped each, Test steps 7 min 3 s with Microsoft's installer and 7 min 45 s with Ubuntu's
+  packages, the Secret Service's test passed in both; the Windows and macOS keychain steps passed.
+  The same tests as the run before: the default run does not hold the real-window project's. The
+  Windows Test step took 34 min 2 s, 40 min 34 s and 45 min 28 s in this day's three runs of the
+  same tests but nine, which is the runners' spread; it stays under the 56 minutes at which a limit
+  is raised (D377). The push changed nothing the guide's workflow watches, so it started none. The
+  jobs' logs are in `D:/Projects/Personal/phase8-work/gate/ci-46007767846-logs/`, the pictures of
+  each job in `…/gate/ci-46007767846/`.
 - [45965143178](https://github.com/RahimPasha/VisualCommit/actions/runs/45965143178), for `e632e72`
   (the gate's fix, the first-run screen's path drawn as one path, merged at `ee3cdc4`, with D472 and
   ruling 115): **success in all six jobs**, at its first attempt. `windows-latest`: 8,936 tests,
@@ -1365,19 +1381,29 @@ the check. It is a weakness of the harness, not a fault of the app; the check pa
 earlier pass. Q1 read 1,938 ms of 2,000. **The lead has the harness's wait made to take a failed
 look as "not yet"** (worktree `D:/Projects/Personal/phase8-work/gate/fix/p8a-uia-poll`, local branch
 `wip/p8a-uia-poll`: a builder, two readers, a fixer; test code in
-`tests/VisualCommit.RealWindowTests` alone, whose tests no agent runs). **Next:** read and merge it,
-run its tests that need no window, read CI's Windows job, which compiles the project; then the
-real-window pass alone on the merge's commit, as D246 and plan.md's Visual test gate, step 6, allow:
-the default run on `0f9099a` stands while nothing but that project and docs changed after it and the
-scripted pictures are still the files of the list written after the failed pass
-(`D:/Projects/Personal/phase8-work/gate/round-0f9099a/pictures-after-failed-pass.sha256`; the failed
-pass's pictures are beside it in `visual-failed-pass/`). Then the list of pictures, the live command
-(by 2026-11-28) and the inspection; then the report, the checks by hand with the owner (the Narrator
-walk-through of 21 steps, phase 6's System step, the icon beside its look-alikes, a second start
-from the lead's isolating start file; their session and start files are in
-`D:/Projects/Personal/phase8-work/gate/hand/`, built and verified, and a page with the steps is the
-owner's at https://claude.ai/artifact/BE3ha6qo5uM1Vozpympouh), and the closing steps 22 to 27. The
-closing docs' drafts are written (a workflow of the lead's: seven writers, two readers for each
+`tests/VisualCommit.RealWindowTests` alone, whose tests no agent runs). **The harness fix is
+merged** (`750eb33`, five commits of the package: `RealApp.Poll`, `IsFailedLook`;
+`WaitForRuleTests`, 21 tests with no window, which the lead ran at the final commit, 21 pass, and at
+the two commits whose tests come before their fix, 6 fail at each). CI's run of that push is green
+in all six jobs at its first attempt (46007767846; the CI section). **The real-window pass passed on
+`750eb33`** (2026-11-27, 06:31 to 07:12, the owner told in the chat: 145 tests, 140 passed, the 5 of
+the opt-in performance series skipped, 40 min 56 s; Q1 at 1,626 ms), alone, as D246 and plan.md's
+Visual test gate, step 6, allow: nothing but `tests/VisualCommit.RealWindowTests` and docs changed
+since `0f9099a`, the default run's commit, and the 1,239 scripted pictures are still the files of
+the list written after the failed pass. The list of pictures is written (1,696: 1,239 scripted and
+457 real-window files; committed when the inspection has passed), and the live command passed on the
+counted round (07:13 to 07:18: 582 offline tests, then 596 of 596; its three `run.txt` hold no
+token, organization or namespace). **So the gate's two passes stand: the default run on `0f9099a`
+and the real-window pass on `750eb33`, the Gate commit; only docs change after it.** In the pass's
+captures `f5a-too-old` and `f6a-config-fault` the path breaks after its separators alone, as D472
+means. **Next:** the inspection of every picture of the round (under way: 28 Opus inspectors against
+the first round's pictures, and 45 of CI's from run 46007767846;
+`D:/Projects/Personal/phase8-work/gate/round-0f9099a/`); then the report, the checks by hand with
+the owner (the Narrator walk-through of 21 steps, phase 6's System step, the icon beside its
+look-alikes, a second start from the lead's isolating start file; their session and start files are
+in `D:/Projects/Personal/phase8-work/gate/hand/`, built and verified, and a page with the steps is
+the owner's at https://claude.ai/artifact/BE3ha6qo5uM1Vozpympouh), and the closing steps 22 to 27.
+The closing docs' drafts are written (a workflow of the lead's: seven writers, two readers for each
 file, a fixer each) and are kept outside the repository, in
 `D:/Projects/Personal/phase8-work/gate/closing-drafts/`: byte copies of `CLAUDE.md`, `README.md`,
 `docs/architecture.md`, `docs/cloud-sessions.md`, `docs/plan.md` and the new
