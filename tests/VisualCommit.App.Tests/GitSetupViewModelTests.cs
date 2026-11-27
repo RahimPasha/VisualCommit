@@ -480,9 +480,9 @@ public class GitSetupViewModelTests
     /// <summary>
     /// The view in the graph area's 440 × 586 of the window at 1100 × 700 with the path of phase 8a's
     /// real-window launches 8 and 9, the stand-in's, which holds a space: <c>GitSetupPath</c> is one
-    /// path, so that every line it draws but the last ends with a separator (the gate saw it break at
-    /// the space of <c>Visual Git</c> and after the hyphen of <c>net10.0-windows</c>); its text and its
-    /// automation name stay the plain path.
+    /// path, so that every line it draws but the last ends with a separator and holds as many names as
+    /// fit (the gate saw it break at the space of <c>Visual Git</c> and after the hyphen of
+    /// <c>net10.0-windows</c>); its text and its automation name stay the plain path.
     /// </summary>
     [AvaloniaFact]
     public async Task The_screens_path_breaks_only_after_a_separator_also_across_a_space_and_a_hyphen()
@@ -502,6 +502,10 @@ public class GitSetupViewModelTests
         Assert.True(lines.Count > 1, $"Expected the path to need two lines or more: {string.Join(" | ", lines)}");
         Assert.All(lines.Take(lines.Count - 1), line => Assert.True(line.EndsWith('\\'), $"The line \"{line}\" ends inside a name."));
         Assert.Equal(StandIn, string.Concat(lines));
+
+        // Each line as full as the column allows: a break at an earlier separator would also end
+        // every line with one.
+        Assert.Equal([@"D:\Projects\Personal\Visual Git\tests\", @"VisualCommit.RealWindowTests\bin\Release\net10.0-windows\", "visualcommit-git-stand-in.exe"], lines);
         Assert.Equal(StandIn, path.Text);
         Assert.Equal(StandIn, ControlAutomationPeer.CreatePeerForElement(path).GetName());
         TestPictures.Save(host, "git-setup-path");

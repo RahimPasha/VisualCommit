@@ -211,6 +211,10 @@ public class PathTextBlockTests
             Assert.Equal(StandInPath, string.Concat(lines));
             Assert.Contains(lines, line => line.Contains("Visual Git", StringComparison.Ordinal));
             Assert.Contains(lines, line => line.Contains("net10.0-windows", StringComparison.Ordinal));
+
+            // Each line as full as the line allows: a break at an earlier separator would also end
+            // every line with one.
+            Assert.Equal([@"D:\Projects\Personal\Visual Git\tests\", @"VisualCommit.RealWindowTests\bin\Release\net10.0-windows\", "visualcommit-git-stand-in.exe"], lines);
             Assert.Equal(StandInPath, block.Text);
             Assert.Equal(StandInPath, ControlAutomationPeer.CreatePeerForElement(block).GetName());
             TestPictures.Save(host, "path-one-392");
