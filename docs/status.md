@@ -401,30 +401,30 @@ Wave 4 and the review:
   right, one summary that says more than the guard reads, and gaps in what the guard's scan sees; a
   second fix round answered them (run `wf_fec5b4c5-7b1`: twenty commits, tests only, verified by two
   readers and corrected once), **merged at `15beabd`**. CI's run of the first merge failed in the
-  Windows job alone, on phase 3's check 17 (a held fetch that showed no percentage in 60 s, as once
-  on 2026-11-25), and passed when run again. **The package that answers it is merged at `4370039`**
-  (run `wf_5fc2df5a-3bc`, tests only). Its probe on the laptop found that Git for Windows 2.56
-  writes a progress line of odd length in two writes, its last byte apart (600 of 600 runs), and
-  that once in 510 recorded fetches the tests' server ended its hold between the two, so that git
-  had no whole line with a percentage to show. A hold with no chosen percentage now ends with the
-  packet that completes the first whole line with one, never earlier than before, and the default
-  run's waits for such a hold's percentage say in their timeout's message whether the hold began and
-  what the server sent. That this is what failed in CI is likely and not shown. On the merged tree
-  (14:33 to 14:52 on 2026-11-26): build 0 warnings, `AuthRemoteServerTests` 52,
+  Windows job alone, on phase 3's check 17 (a fetch the tests' server was asked to hold showed no
+  percentage in 60 s, as once on 2026-11-25), and passed when run again. **The package that answers
+  it is merged at `4370039`** (run `wf_5fc2df5a-3bc`, tests only). Its probe on the laptop found
+  that Git for Windows 2.56 writes a progress line of odd length in two writes, its last byte apart
+  (600 of 600 runs), and that once in 510 recorded fetches the tests' server ended its hold between
+  the two, so that git had no whole line with a percentage to show. A hold with no chosen percentage
+  now ends with the packet that completes the first whole line with one, never earlier than before,
+  and the default run's waits for such a hold's percentage say in their timeout's message whether
+  the hold began and what the server sent. That this is what failed in CI is likely and not shown.
+  On the merged tree (14:33 to 14:52 on 2026-11-26): build 0 warnings, `AuthRemoteServerTests` 52,
   `RemoteOperationTests` 24, `RepositoryOperationsFetchTests` 17, `RepositoryOperationsPullTests`
   20, `RepositoryOperationsQueueTests` 11, `ShellDriverCheckSupportTests` 15, `ThemeTokensTests` 14
   and phase 3's part D 17, none failed; part D's 58 pictures against `references/step19/`: 46 the
   same file, 12 changed, each by what differs from run to run (the held percentage, the moving bar,
   the caret, a temporary path's name, 1 or 2 px), and the package changes nothing under `src/`. Two
   more verifiers read the package's final form, which its correcting pass had changed after its
-  readers: sound, notes only. **The last round on the diagnostics is merged at `72993a7`** (run
-  `wf_2ffd22ff-0bc`, tests only: six commits, read by a reader, tested by a mutation runner and
-  corrected once). A server's description now gives its open connections and how each hold stands
-  (waiting, dropped, taken, begun, let go), and phase 3's part D waits for the server to hold each
-  of its five fetches before it waits for the percentage, so a timeout says which of the two did not
-  come. Two more verifiers read the corrector's commits (run `wf_d7040931-b89`): the tests are
-  sound, and four older doc sentences were untrue, which the lead made true in a commit of comments
-  only (`2a52897`). On the merged tree (17:13 to 17:33 on 2026-11-26): build 0 warnings,
+  readers: sound, no defect, three risks and fourteen notes. **The last round on the diagnostics is
+  merged at `72993a7`** (run `wf_2ffd22ff-0bc`, tests only: six commits, read by a reader, tested by
+  a mutation runner and corrected once). A server's description now gives its open connections and
+  how each hold stands (waiting, dropped, taken, begun, let go), and phase 3's part D waits for the
+  server to hold each fetch it holds before it waits for the percentage, so a timeout says which of
+  the two did not come. Two more verifiers read the corrector's commits (run `wf_d7040931-b89`): the
+  tests are sound, and four older doc sentences were untrue, which the lead made true in a commit of
+  comments only (`2a52897`). On the merged tree (17:13 to 17:33 on 2026-11-26): build 0 warnings,
   `AuthRemoteServerTests` 54, `RemoteOperationTests` 24, `RepositoryOperationsFetchTests` 17,
   `RepositoryOperationsPullTests` 20, `RepositoryOperationsQueueTests` 11,
   `ShellDriverCheckSupportTests` 16 and phase 3's part D 17, none failed; part D's 58 pictures
@@ -1278,13 +1278,13 @@ done**: the live command ran at 11:00 on `fab4073`, the owner told in the chat: 
 then 596 tests, none failed; nothing to correct in the fakes; its output and the three `run.txt` are
 in `D:/Projects/Personal/phase8-work/gate/live-before/`. **CI's run 45871534398** on `fab4073`
 failed at its first attempt in `windows-latest` alone, on phase 3's check 17, which the push does
-not touch: no percentage in 60 s while the tests' server held the fetch (the CI section); the
-package's eight facts passed in all six jobs, the render of the graph on macOS among them. It is the
-failure of run 45586070342 again, in another test, so the lead takes back ruling 109's "no change
-before the gate" for that hold. **Both packages are merged** (`15beabd`, the second fix round of the
-D469 tests; `4370039`, the hold that ends with a whole line of progress and what a wait says; step
-19's item), and the classes they touch pass on the merged tree. Two verifiers read the second
-package's final form: sound, notes only
+not touch: no percentage in 60 s after the check had asked the tests' server to hold the fetch (the
+CI section); the package's eight facts passed in all six jobs, the render of the graph on macOS
+among them. It is the failure of run 45586070342 again, in another test, so the lead takes back
+ruling 109's "no change before the gate" for that hold. **Both packages are merged** (`15beabd`, the
+second fix round of the D469 tests; `4370039`, the hold that ends with a whole line of progress and
+what a wait says; step 19's item), and the classes they touch pass on the merged tree. Two verifiers
+read the second package's final form: sound, no defect, three risks and fourteen notes
 (`D:/Projects/Personal/phase8-work/wave4/review/fetch-hold-final-read.json`; the count of CI's
 Windows jobs by runner image beside it, in `wave4/fetch-hold/ci-census/`). **The last round, on the
 hold's diagnostics alone, is merged too** (`72993a7`, run `wf_2ffd22ff-0bc`, tests only; its
