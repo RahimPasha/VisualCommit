@@ -7744,6 +7744,104 @@ the decision on the second.
 - *What would reopen it.* A picture of the guide that a browser shows at another size than the
   app's.
 
+**The gate's first round: a default run that did not count, the round on `e4b323c`, its one finding
+and the fix (the lead, 2026-11-27).** 115. The gate's first counted round ran on `e4b323c` on
+2026-11-26 and passed in every test, and its inspection found one fault of the app. The fault is
+fixed (D472, merged at `ee3cdc4`), so that round does not stand as the gate's and a new one runs on
+the merge's commit. What the round showed, in its order; the round's logs, pictures, batches and
+verdicts are in `D:/Projects/Personal/phase8-work/gate/round-e4b323c/`.
+
+- *D246's two runs* of phase 8a's real-window checks, 18:17 to 18:36, the owner told in the chat
+  before each: 13 of 13 passed twice (5 min 41 s, 396 s with the lock and the build; 5 min 5 s, 314
+  s). The 22 captures compared differ from their scripted twins in 0.14 % to 1.76 % of their pixels
+  (0.55 % to 3.66 % compared in place only), in both runs alike. During the first, Windows ran
+  Zoom's updater, OneDrive's reporting task and Adobe's `AdobeGCInvoker`. The two runs are made once
+  and stand (`…/gate/d246/`).
+- *The default run's first attempt did not pass, though no assertion failed* (18:36 to 20:29,
+  `…/round-e4b323c/default-run-attempt1.log`). The hang watchdog stopped two projects after 180 s
+  without a test event: phase 3's walk-through in `Phase3ChecksD.Check_19_push_rejected`, at about
+  19:18 to 19:21, and `VisualCommit.App.Tests` in
+  `RepositoryOperationsProtectTests.Merge_pick_and_revert_refused_for_a_changed_file_count_it_and_for_a_staged_one_say_so`,
+  at about 19:26 to 19:29 (its message: the queue ran "Revert f39ea2d" with nothing waiting, and 100
+  git calls had ended since the open). 7,254 tests ran, 7,250 passed and 4 were skipped. Beside the
+  run the lead had started eight read-only agents (the closing docs' auditors), two inspectors of
+  the guide's pictures, a download of CI's pictures and, from about 19:16, a headless browser with a
+  process poll every second; each hang began within a minute of a browser start, and the owner's own
+  Edge started its background processes at 19:26:18. Windows' Application, System and Defender logs
+  and the Task Scheduler show nothing else in those minutes. The cause is not established. The
+  lead's rule from it: **nothing runs beside a counted run on the laptop**, no agent, no browser, no
+  download. Five leftover `git fsmonitor--daemon` processes were stopped before the next attempt, as
+  the earlier handoffs' gate step says.
+- *The second attempt, alone* (20:32 to 22:22): 8,927 tests, 8,920 passed, 7 skipped (the three real
+  keychains' tests, `WindowsCredentialStoreTests`' off-Windows test, `iconutil`'s and the two of
+  Unix file modes), none failed, 1 h 48 min 52 s (6,569 s with the build and the lock), no watchdog
+  stop.
+- *The laptop before the pass.* Snagit Editor, the owner's program, was found with one thread at a
+  full processor core: 81,887 s of processor time on that thread, about 23 hours. The lead left it
+  alone and told the owner; it stopped by itself between 22:23 and 22:35. Every run of 2026-11-26
+  before that was made under it, as the measures before 2026-11-24 were made under Adobe's service
+  (D467).
+- *The real-window pass* (22:36 to 23:17, after a rest of 14 minutes, the owner told in the chat):
+  124 tests, 119 passed, the 5 facts of the opt-in performance series skipped, 41 min 34 s (2,504
+  s). Display scaling 200 %, the work area 1500×952, so phase 0's 1920×1080 window was not run, as
+  the plan allows. Q1's first rows after 1,912 ms of 2,000, its 459 frames at a 95th percentile of 1
+  ms and the longest 13.4 ms. The 220 captures compared differ from their twins in at most 2.36 % of
+  their pixels (4.08 % in place). Eight scheduled tasks of Windows and of other programs ran during
+  the pass, one of them (`Location\Notifications`, 23:12:13) in the minute phase 1's part wrote its
+  record.
+- *The list of pictures and the live command.* 1,696 pictures, 1,239 scripted and 457 real-window
+  files, listed at once. The live command's offline classes passed 582 of 582, then the whole
+  project 596 of 596 in 3 min 0 s; its three `run.txt` hold no token, organization or namespace and
+  differ from the run before the pictures only in what changes from run to run (ids, times, a rate
+  limit's count, and one of GitLab's conditional requests answered whole where it had been answered
+  "not modified").
+- *The inspection* (D247): 28 Opus inspectors in three groups. Phase 8a's 89 scripted pictures in
+  four batches by part against the report, its 56 real-window files in two with their scripted
+  twins, 45 of CI's pictures in one; phases 0 to 7b's 1,150 scripted pictures in ten, against the
+  references of step 19; their 401 real-window files in eleven, against phase 7b's gate with the
+  regions phase 8a changed on purpose. Every batch gave one verdict for each of its pictures. 1,694
+  of the 1,696 passed, and CI's 45. The two in doubt, the real-window `f5a-too-old` and
+  `f6a-config-fault`, went to three second looks each, with their own lenses (the pixels, the
+  expected result, the cause): five of the six judged a fault of the app, the sixth that no expected
+  result covers how the path wraps.
+- *The finding and its fix* (D472). On the first-run screen the stand-in's path,
+  `D:\Projects\Personal\Visual
+  Git\tests\VisualCommit.RealWindowTests\bin\Release\net10.0-windows\visualcommit-git-stand-in.exe`,
+  was drawn as three lines that broke at the space of `Visual Git` and after the hyphen of
+  `net10.0-windows`: `PathTextBlock` ends a path at white space, and `GitSetupPath` holds a path
+  alone. The scripted twins could not show it, since their paths are short. The fix was built as a
+  package in a worktree (`wip/p8a-path-wrap`: a builder, two readers, a fixer, a final check; three
+  commits, `fe3f35d`, `f337fbf`, `6fa567f`; merged at `ee3cdc4`): `IsOnePath` on the control, set on
+  `GitSetupPath`. `PathTextBlockTests` has 17 tests, 8 of them new, and `GitSetupViewModelTests` one
+  new test of the view at the screen's real width, 392 of the graph area's 440; six of the nine fail
+  without the fix, the other three pin the default mode and two guarantees. With the fix the path
+  draws as `D:\Projects\Personal\Visual Git\tests\`,
+  `VisualCommit.RealWindowTests\bin\Release\net10.0-windows\` and `visualcommit-git-stand-in.exe`,
+  still three lines, so nothing else on the screen moves. Parts F and G of the walk-through, run in
+  the worktree, wrote 23 pictures that are the same files as the round's. On the merged tree the
+  three classes the fix touches pass, 64 of 64 (`PathTextBlockTests`, `GitSetupViewModelTests`,
+  `AddRepositoriesDialogViewModelTests`), built with no warning.
+- *So the round on `e4b323c` does not count.* The new round, on the merge's commit: the default run
+  alone on the laptop, the real-window pass, the list of pictures, the live command (GitHub's token
+  serves until 2026-11-29) and the inspection of every picture again. D246's two runs and the live
+  command's run before the pictures are made once and stand.
+- *Two faults of the lead's own agents, told to the owner.* The builder of the session for the
+  checks by hand started the app on the owner's desktop by mistake (2026-11-27, 00:06:49, two
+  windows on throwaway data folders for about 35 s): its dry run of the start files had meant to cut
+  the start line with `sed`, whose pattern ended in a carriage return that Git Bash's `sed` had
+  already taken away. It closed both windows and removed what they wrote. And the fix's two readers
+  ran their experiments in one worktree at the same time, so that one found the other's unfinished
+  probe; the final check ran alone afterwards and repeated every mutation. A reader that changes
+  files to prove a test gets a worktree of its own, or the readers run one after the other.
+- *Limits.* (1) The cause of the first attempt's two stops is not known; the second attempt shows
+  only that the run passes alone. (2) Q1 passed at 1,912 ms with 88 ms to spare, on a laptop that
+  had just run the default run and rested 14 minutes (plan.md's risk 10). (3) No scripted picture
+  shows the fix: the walk-through's paths are short, and the real-window `f5a` and `f6a` of the new
+  round are where it is seen. (4) The other places D472 names stay as they are until phase 8b.
+- *What would reopen it.* A watchdog stop in a counted run that ran alone: then the stops are the
+  tests' or the app's, and the first attempt's two are read again with it. A path on the first-run
+  screen that breaks inside a name in the new round's captures.
+
 ### 13.2 What the integration settled
 
 Beyond moving the packages' contracts into section 1: the broker's `gitVersion` goes at §3's merge,

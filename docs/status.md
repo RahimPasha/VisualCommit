@@ -1327,24 +1327,29 @@ that did not are one finding, which five of six second looks judged a fault of t
 real-window captures `f5a-too-old` and `f6a-config-fault` the first-run screen's path
 (`GitSetupPath`, a `PathTextBlock` whose text is a path alone) breaks inside the folder name
 `net10.0-windows`: the control ends a path at its first space, D227's rule for a path inside running
-text, and the stand-in's path holds one (`…\Visual Git\…`). **The lead has it fixed in the app**
-(worktree `D:/Projects/Personal/phase8-work/gate/fix/p8a-path-wrap`, local branch
-`wip/p8a-path-wrap`: a builder, two readers, a fixer and a final check), **so the round on `e4b323c`
-does not stand as the gate's.** After the fix's merge a new counted round runs on the merge's
-commit: the default run alone on the laptop, the real-window pass, the list of pictures, the live
-command (by 2026-11-28) and the inspection. D246's two runs and the live command's run before the
-pictures are made once and stand. **Next:** read and merge the fix, read CI's run of it, the new
-round; then the report, the checks by hand with the owner (the Narrator walk-through of 21 steps,
-phase 6's System step, the icon beside its look-alikes, a second start from the lead's isolating
-start file; their session and start files are being made under
-`D:/Projects/Personal/phase8-work/gate/hand/`), and the closing steps 22 to 27. The closing docs are
-being drafted meanwhile by a workflow of the lead's: its changes to `docs/architecture.md`,
-`docs/plan.md`, `CLAUDE.md` and the new `docs/handoffs/phase-8a.md` lie uncommitted in the main tree
-and are drafts until the lead has read them; `docs/test-reports/phase-8a-pictures.sha256`,
-untracked, is the list of the round on `e4b323c` and is written again by the new round. The package
-is reviewed with the rest in step 19 and merged last, in that step. The three finished worktrees
-(`p8a-restore`, `p8a-restore-base`, `p8a-guide`) are removed; their `wip/` branches stay local
-(D396). §11's builders got with their briefs: mdBook at
+text, and the stand-in's path holds one (`…\Visual Git\…`). **The fix is merged** (`ee3cdc4`; D472,
+ruling 115: `PathTextBlock.IsOnePath`, set on `GitSetupPath`; a package of a builder, two readers, a
+fixer and a final check on the local branch `wip/p8a-path-wrap`, whose worktree
+`D:/Projects/Personal/phase8-work/gate/fix/p8a-path-wrap` is still there). On the merged tree the
+three classes the fix touches pass, 64 of 64 (`PathTextBlockTests`, `GitSetupViewModelTests`,
+`AddRepositoriesDialogViewModelTests`), built with no warning. **So the round on `e4b323c` does not
+stand as the gate's.** A new counted round runs on the merge's commit: the default run alone on the
+laptop (nothing beside a counted run, ruling 115), the real-window pass, the list of pictures, the
+live command (by 2026-11-28) and the inspection. D246's two runs and the live command's run before
+the pictures are made once and stand. **Next:** read CI's run of the push that carries the merge,
+then the new round; then the report, the checks by hand with the owner (the Narrator walk-through of
+21 steps, phase 6's System step, the icon beside its look-alikes, a second start from the lead's
+isolating start file; their session and start files are in
+`D:/Projects/Personal/phase8-work/gate/hand/`, built and verified, and a page with the steps is the
+owner's at https://claude.ai/artifact/BE3ha6qo5uM1Vozpympouh), and the closing steps 22 to 27. The
+closing docs are being drafted meanwhile by a workflow of the lead's: its changes to
+`docs/architecture.md`, `docs/plan.md`, `CLAUDE.md`, `README.md`, `docs/cloud-sessions.md` and the
+new `docs/handoffs/phase-8a.md` lie uncommitted in the main tree and are drafts until the lead has
+read them and brought them up to date with the new round;
+`docs/test-reports/phase-8a-pictures.sha256`, untracked, is the list of the round on `e4b323c` and
+is written again by the new round. The package is reviewed with the rest in step 19 and merged last,
+in that step. The three finished worktrees (`p8a-restore`, `p8a-restore-base`, `p8a-guide`) are
+removed; their `wip/` branches stay local (D396). §11's builders got with their briefs: mdBook at
 `D:/Projects/Personal/phase8-work/tools/mdbook-0.5.4/mdbook.exe` and the Linux archive's SHA-256 for
 `guide.yml` (Notes, "Wave 4"); the references `D:/Projects/Personal/phase8-work/references/wave3/`;
 rulings 80 (stop and report if the first-run link's frame touches its ink), 82 (the facts no check
