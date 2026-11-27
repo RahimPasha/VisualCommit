@@ -454,12 +454,16 @@ Gate:
 
 Closing (CLAUDE.md's "Closing a phase"):
 
-- [ ] 22. `docs/architecture.md` describes what is built.
-- [ ] 23. `docs/plan.md`: what 8a did not deliver moved to the phase that owns it, the risks
-  updated.
-- [ ] 24. `docs/handoffs/phase-8a.md` written from the template.
+- [x] 22. `docs/architecture.md` describes what is built (`ec731cf`).
+- [x] 23. `docs/plan.md`: what 8a did not deliver moved to the phase that owns it, the risks updated
+  (`ec731cf`). Three marks, `[LEAD: …]`, wait in its phase 8a Outcome for the checks by hand and the
+  gate's last word.
+- [x] 24. `docs/handoffs/phase-8a.md` written from the template (`ec731cf`). Five marks, `[LEAD:
+  …]`, wait in it for the owner's checks by hand, the cold-read check, the gate's last word and the
+  merge.
 - [ ] 25. The cold-read check, and its gaps fixed.
-- [ ] 26. The CI run of the gate's commit read and recorded here, with each job's result.
+- [x] 26. The CI run of the gate's commit read and recorded here, with each job's result:
+  46007767846 on `750eb33`, success in all six jobs at its first attempt (the CI section).
 - [ ] 27. This file: links to the handoff and the report, the "Gate commit", what waits on the
   owner, and the state "Awaiting acceptance" or "Blocked"; the owner told what passed, what did not
   and what needs a decision.
@@ -1405,23 +1409,27 @@ passed** (07:20 to 07:46: 28 Opus inspectors, the one for CI's pictures among th
 against the first round's: all 1,696 pass, and the 45 of CI's from run 46007767846; no doubt, no
 second look; ruling 116; the verdicts in
 `D:/Projects/Personal/phase8-work/gate/round-0f9099a/inspect/verdicts/`), and the list of pictures
-is committed. **What is left of step 21:** the report (being completed by a writer and its readers
-from `D:/Projects/Personal/phase8-work/gate/report-facts.md`) and the checks by hand with the owner,
-on the Release build of `750eb33` that the pass made (`0.1.0+750eb33…`). **Next:** the report, the
-checks by hand with the owner (the Narrator walk-through of 21 steps, phase 6's System step, the
-icon beside its look-alikes, a second start from the lead's isolating start file; their session and
-start files are in `D:/Projects/Personal/phase8-work/gate/hand/`, built and verified, and a page
-with the steps is the owner's at https://claude.ai/artifact/BE3ha6qo5uM1Vozpympouh), and the closing
-steps 22 to 27. The closing docs' drafts are written (a workflow of the lead's: seven writers, two
-readers for each file, a fixer each) and are kept outside the repository, in
-`D:/Projects/Personal/phase8-work/gate/closing-drafts/`: byte copies of `CLAUDE.md`, `README.md`,
-`docs/architecture.md`, `docs/cloud-sessions.md`, `docs/plan.md` and the new
-`docs/handoffs/phase-8a.md`, each as changed from `0f9099a`, with their hashes in `drafts.sha256`.
-The tree was put back to the commit for the round. The lead copies them back, brings them up to date
-with what the rounds showed and reads them before any commit; what the writers left for the lead is
-in `…/gate/closing-docs-result.json`. The list of pictures of the round on `e4b323c` is
-`…/gate/round-e4b323c/pictures.sha256`; `docs/test-reports/phase-8a-pictures.sha256`, untracked, is
-the failed pass's and is written again by the next pass. The package is reviewed with the rest in
+is committed. **The report is completed** (`543ea31`: a writer from the logs, the pass's records and
+the verdicts, two readers, a fixer, then the lead's own points), with the guide's site checked by
+the lead on a run started by hand on the branch (46024262689, D451; ruling 116). **What is left of
+step 21: the owner's four checks by hand**, on the Release build of `750eb33` that the pass made
+(`0.1.0+750eb33…`): the Narrator walk-through of 21 steps and step 21a, phase 6's System step, the
+icon beside its look-alikes, and a second start from the lead's isolating start file. Their session
+and start files are in `D:/Projects/Personal/phase8-work/gate/hand/`, built and verified (its
+`README.txt` says what each is), and a page with the steps and what to expect at each is the owner's
+at https://claude.ai/artifact/BE3ha6qo5uM1Vozpympouh; the owner pastes its summary into the chat.
+**The closing docs are committed** (`ec731cf`: steps 22 to 24; seven writers from eight auditors'
+digests, each file read by two readers against the code, brought up to date with the counted round
+and read again, then by the lead), and CI's run of the Gate commit is recorded (step 26). **Next:**
+step 25, the cold-read check, on the docs as they stand; then, when the owner's results are in: the
+report's four rows under "Checks by hand" (each marked `[LEAD: the owner's results]`), the marks
+`[LEAD: …]` in `docs/handoffs/phase-8a.md` (five) and in `docs/plan.md`'s phase 8a Outcome (three),
+and step 27 with the state. If a check by hand shows a fault of the app, its fix is code: the state
+stays "In progress", and the passes run again on the new commit (CLAUDE.md's rule for a change after
+the gate). The round's working files stay outside the repository in
+`D:/Projects/Personal/phase8-work/gate/` (the two rounds' logs, pictures, batches and verdicts; the
+fixes' two worktrees under `fix/`, whose branches `wip/p8a-path-wrap` and `wip/p8a-uia-poll` are
+merged; the drafts' copies and the workflows' results). The package is reviewed with the rest in
 step 19 and merged last, in that step. The three finished worktrees (`p8a-restore`,
 `p8a-restore-base`, `p8a-guide`) are removed; their `wip/` branches stay local (D396). §11's
 builders got with their briefs: mdBook at
@@ -2543,6 +2551,23 @@ every commit.
 
 ## Waiting on the owner
 
+- **The gate's four checks by hand (asked on 2026-11-27, when the gate's automated part had
+  passed).** They are all that is left of step 21, and the phase cannot be set to "Awaiting
+  acceptance" before them. (1) The Narrator walk-through, 21 steps and step 21a, about 20 minutes:
+  start `D:\Projects\Personal\phase8-work\gate\hand arrator arrator-walk.cmd`, turn Narrator on
+  (Ctrl+Win+Enter) and follow the steps; for step 20 close the app and start
+  `narrator-walk-no-git.cmd` beside it. (2) A second start behind another window:
+  `…\gate\hand\second-start\second-start.cmd` twice, the second time with another window in front;
+  what came to the front. (3) Phase 6's System step: in that app, Theme set to System, then Windows'
+  app mode switched (Settings, Personalization, Colors); the window follows within a second;
+  switched back. (4) The icon beside its look-alikes, by eye, with no image search. The steps and
+  what to expect at each are on the owner's page, https://claude.ai/artifact/BE3ha6qo5uM1Vozpympouh,
+  which gives a summary to paste into the chat; the report's part U has the walk-through's full text
+  ("The Narrator walk-through by hand"). The build under test is the pass's Release build of
+  `750eb33` (About reads 0.1.0 and that commit). Each result goes into the report's "Checks by
+  hand"; a silence where a row's name is expected is a finding (D460). Also for the owner to say:
+  whether they were at the machine during D246's two runs on 2026-11-26 at 18:17 and 18:31, which
+  D246 asks for and the report leaves open.
 - **Phase 8a, from the owner** (2026-11-19; the owner's answers D399 to D415 are below, under "For
   phase 8, before its design"): - **The C: drive is nearly full, and Windows cleans the temp folder
   under the tests** (found on 2026-11-24 at step 19's whole default run; "Next step"). C: had 4.7 GB
