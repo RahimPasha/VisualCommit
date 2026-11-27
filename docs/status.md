@@ -339,7 +339,7 @@ Wave 4 and the review:
   read for what real input could reach, never run by an agent; the lead ran each method alone twice,
   11 of 13 green at 21:15 and, after the fixes, 13 of 13 with phase 0's method at 22:28; the
   captures inspected. It is reviewed in step 19 and merged last, in that step.
-- [ ] 19. (With it, the lead's ruling of 2026-11-20, amended by ruling 99: a focus left on nothing
+- [x] 19. (With it, the lead's ruling of 2026-11-20, amended by ruling 99: a focus left on nothing
   by a tab change goes to its region's target in the new tab, the graph area's when the new tab
   shows no stage row; Notes, "Wave 2 is built and merged".) An independent review of the code before
   the gate, each finding verified, the confirmed ones fixed with tests; then §12's merge, the lagged
@@ -431,7 +431,9 @@ Wave 4 and the review:
   against `references/step19/`: 49 the same file, 9 changed, each by what differs from run to run.
   **Ruling 113 and D470 record the hold's rule**, what was found, what was not shown and the limits
   accepted; phase 3's report ("Percentages") and `docs/architecture.md`'s row of `AuthRemoteServer`
-  say what changed. Still open: CI's run of this push; then this step is ticked.
+  say what changed. CI's run of that push, 45917903492, is green in all six jobs at its first
+  attempt, and the records were checked against their sources and corrected (`5cfc58a`, docs only):
+  **step 19 is closed** (2026-11-26, 18:16).
 
 Gate:
 
@@ -471,6 +473,22 @@ Phase 8a's runs on `phase/8a-release-readiness`, the newest first. CI has six jo
 `e04762b`: the sixth, "ubuntu 22.04 container, git 2.34 (the floor)", did not fail the run until
 `bba59c7`, which made it required after its first green run.
 
+- [45917903492](https://github.com/RahimPasha/VisualCommit/actions/runs/45917903492), for `53e07c4`
+  (the last round on the held fetch's diagnostics, `72993a7`, the four doc sentences made true,
+  `2a52897`, and ruling 113 with D470): **success in all six jobs**, at its first attempt.
+  `windows-latest`: 8,927 tests, 8,920 passed, 7 skipped, Test step 34 min 2 s of 70 (git
+  2.56.1.windows.1, runner image 20261116.315.1); every held fetch showed its percentage.
+  `macos-latest`: 8,924 tests, 8,921 passed, 3 skipped, Test step 34 min 28 s of 70.
+  `ubuntu-latest`: 8,924 tests, 8,920 passed, 4 skipped, Test step 5 min 50 s. The floor's job (git
+  2.34.1): 8,924 tests, 8,917 passed, 7 skipped, Test step 7 min 2 s; the two containers 8,924 tests
+  with 7 skipped each, Test steps 6 min 48 s with Microsoft's installer and 6 min 47 s with Ubuntu's
+  packages, the Secret Service's test passed in both; the Windows and macOS keychain steps passed.
+  Three tests more than the run before in every job: the test server's two facts on the servers
+  found by their ports and on the last 20 requests, and the test of what the two waits say when they
+  time out. **The guide's workflow** on the same push,
+  [45917903593](https://github.com/RahimPasha/VisualCommit/actions/runs/45917903593): **success**.
+  The push after it, `5cfc58a`, changes only docs and started no run. The jobs' logs are in
+  `D:/Projects/Personal/phase8-work/wave4/review/ci-45917903492/`.
 - [45901582611](https://github.com/RahimPasha/VisualCommit/actions/runs/45901582611), for `ff6bf53`
   (the second fix round of the D469 tests, `15beabd`, and the hold that ends with a whole line of
   progress with what a wait says, `4370039`): **success in all six jobs**, at its first attempt.
@@ -1290,16 +1308,16 @@ Windows jobs by runner image beside it, in `wave4/fetch-hold/ci-census/`). **The
 hold's diagnostics alone, is merged too** (`72993a7`, run `wf_2ffd22ff-0bc`, tests only; its
 corrector's commits read by two verifiers, and four older doc sentences made true in `2a52897`;
 ruling 113, D470), and the classes it touches pass on the merged tree. CI's run of the first two
-merges is green in all six jobs at its first attempt (45901582611; the CI section). **Next for the
-lead, in this order:** (1) read CI's run of the push that carries `72993a7`, `2a52897` and the
-records, and record it in the CI section; tick step 19; (2) step 21, the gate, each takeover of the
-desktop announced in the chat just before it starts: D246's two runs of phase 8a's real-window
-checks, the whole default run and the real-window pass on one commit, the list of pictures, the live
-command on the counted round (by 2026-11-28, while GitHub's token serves), every picture of both
-passes inspected against `references/step19/`, the guide's site, the checks by hand with the
-Narrator walk-through. The package is reviewed with the rest in step 19 and merged last, in that
-step. The three finished worktrees (`p8a-restore`, `p8a-restore-base`, `p8a-guide`) are removed;
-their `wip/` branches stay local (D396). §11's builders got with their briefs: mdBook at
+merges is green in all six jobs at its first attempt (45901582611; the CI section). CI's run of the
+push that carries `72993a7`, `2a52897` and the records is green too (45917903492), and **step 19 is
+closed**. **Next: step 21, the gate,** each takeover of the desktop announced in the chat just
+before it starts: D246's two runs of phase 8a's real-window checks, the whole default run and the
+real-window pass on one commit, the list of pictures, the live command on the counted round (by
+2026-11-28, while GitHub's token serves), every picture of both passes inspected against
+`references/step19/`, the guide's site, the checks by hand with the Narrator walk-through. The
+package is reviewed with the rest in step 19 and merged last, in that step. The three finished
+worktrees (`p8a-restore`, `p8a-restore-base`, `p8a-guide`) are removed; their `wip/` branches stay
+local (D396). §11's builders got with their briefs: mdBook at
 `D:/Projects/Personal/phase8-work/tools/mdbook-0.5.4/mdbook.exe` and the Linux archive's SHA-256 for
 `guide.yml` (Notes, "Wave 4"); the references `D:/Projects/Personal/phase8-work/references/wave3/`;
 rulings 80 (stop and report if the first-run link's frame touches its ink), 82 (the facts no check
