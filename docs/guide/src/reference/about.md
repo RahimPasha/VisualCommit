@@ -8,8 +8,8 @@ its source code and to this guide. Open it with **Settings** in the toolbar, the
 with **About VisualCommit…** in the command palette. On macOS it is also in the application menu,
 as **About VisualCommit**.
 
-<img src="../pictures/about-section-light.png" srcset="../pictures/about-section-light.png 2x" alt="The settings screen's About section: the VisualCommit icon and name, Created by Rahim Khajei, Version 0.1.0 (1a2b3c4), Copyright (c) 2026 Rahim Khajei, License MIT License with Show license…, Notices with Show third-party notices…, Source code github.com/RahimPasha/VisualCommit, and User guide Open the user guide.">
-<img src="../pictures/about-section-dark.png" srcset="../pictures/about-section-dark.png 2x" alt="The settings screen's About section: the VisualCommit icon and name, Created by Rahim Khajei, Version 0.1.0 (1a2b3c4), Copyright (c) 2026 Rahim Khajei, License MIT License with Show license…, Notices with Show third-party notices…, Source code github.com/RahimPasha/VisualCommit, and User guide Open the user guide.">
+<img src="../pictures/about-section-light.png" srcset="../pictures/about-section-light.png 2x" width="868" alt="The settings screen's About section: the VisualCommit icon and name, Created by Rahim Khajei, Version 0.1.0 (1a2b3c4), Copyright (c) 2026 Rahim Khajei, License MIT License with Show license…, Notices with Show third-party notices…, Source code github.com/RahimPasha/VisualCommit, and User guide Open the user guide.">
+<img src="../pictures/about-section-dark.png" srcset="../pictures/about-section-dark.png 2x" width="868" alt="The settings screen's About section: the VisualCommit icon and name, Created by Rahim Khajei, Version 0.1.0 (1a2b3c4), Copyright (c) 2026 Rahim Khajei, License MIT License with Show license…, Notices with Show third-party notices…, Source code github.com/RahimPasha/VisualCommit, and User guide Open the user guide.">
 
 - **Version**: the version number, and in parentheses the first seven characters of the commit the
   build was made from. Give both when you report a problem.

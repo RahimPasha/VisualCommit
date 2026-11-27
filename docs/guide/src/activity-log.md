@@ -7,8 +7,8 @@ is cut off, and when older commands have to make room, their operation reads
 `Its git commands are no longer kept.` Open or close it with the **Activity log** button at the
 right of the status bar, or with Ctrl+J (Cmd+J on macOS). It opens below the graph.
 
-<img src="pictures/activity-log-light.png" srcset="pictures/activity-log-light.png 2x" alt="The activity log below the graph, headed Activity log weather-station, with the check box Show reads and a close button; one row with a check mark: 09:00:00, Create branch try/larger…, Created try/larger-font, 0 ms.">
-<img src="pictures/activity-log-dark.png" srcset="pictures/activity-log-dark.png 2x" alt="The activity log below the graph, headed Activity log weather-station, with the check box Show reads and a close button; one row with a check mark: 09:00:00, Create branch try/larger…, Created try/larger-font, 0 ms.">
+<img src="pictures/activity-log-light.png" srcset="pictures/activity-log-light.png 2x" width="440" alt="The activity log below the graph, headed Activity log weather-station, with the check box Show reads and a close button; one row with a check mark: 09:00:00, Create branch try/larger…, Created try/larger-font, 0 ms.">
+<img src="pictures/activity-log-dark.png" srcset="pictures/activity-log-dark.png 2x" width="440" alt="The activity log below the graph, headed Activity log weather-station, with the check box Show reads and a close button; one row with a check mark: 09:00:00, Create branch try/larger…, Created try/larger-font, 0 ms.">
 
 ## What a row shows
 

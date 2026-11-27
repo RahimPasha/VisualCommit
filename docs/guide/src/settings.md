@@ -7,8 +7,8 @@ and signing out take effect at once, and Cancel does not undo them.
 
 ## General
 
-<img src="pictures/settings-general-light.png" srcset="pictures/settings-general-light.png 2x" alt="The settings screen's General section: Theme with Dark, Light and System, the theme in use chosen; Fetching with Fetch in the background every 5 minutes ticked; Working tree with Keep ignored files and Include untracked files when stashing ticked; Opening files with the extensions Open file asks about first and the box Also ask for.">
-<img src="pictures/settings-general-dark.png" srcset="pictures/settings-general-dark.png 2x" alt="The settings screen's General section: Theme with Dark, Light and System, the theme in use chosen; Fetching with Fetch in the background every 5 minutes ticked; Working tree with Keep ignored files and Include untracked files when stashing ticked; Opening files with the extensions Open file asks about first and the box Also ask for.">
+<img src="pictures/settings-general-light.png" srcset="pictures/settings-general-light.png 2x" width="868" alt="The settings screen's General section: Theme with Dark, Light and System, the theme in use chosen; Fetching with Fetch in the background every 5 minutes ticked; Working tree with Keep ignored files and Include untracked files when stashing ticked; Opening files with the extensions Open file asks about first and the box Also ask for.">
+<img src="pictures/settings-general-dark.png" srcset="pictures/settings-general-dark.png 2x" width="868" alt="The settings screen's General section: Theme with Dark, Light and System, the theme in use chosen; Fetching with Fetch in the background every 5 minutes ticked; Working tree with Keep ignored files and Include untracked files when stashing ticked; Opening files with the extensions Open file asks about first and the box Also ask for.">
 
 - **Theme**: **Dark**, **Light**, or **System**, which follows your operating system's light or
   dark mode. The toolbar's **Theme** button switches between dark and light at once and keeps your
@@ -29,8 +29,8 @@ global git configuration; **This repository**, on a repository's tab, in that re
 `.git/config`, and they win over the global ones. **Git program**, last under
 **All repositories (global)**, is VisualCommit's own setting, which git in a terminal does not use.
 
-<img src="pictures/settings-git-light.png" srcset="pictures/settings-git-light.png 2x" alt="The settings screen's Git section on All repositories (global): Name and Email Not set, each with a note that weather-station sets its own; Pull with Not set chosen among six choices; Merge tool Not set with Choose…; and Git program C:\Program Files\Git\cmd\git.exe, Found on the PATH, with Browse….">
-<img src="pictures/settings-git-dark.png" srcset="pictures/settings-git-dark.png 2x" alt="The settings screen's Git section on All repositories (global): Name and Email Not set, each with a note that weather-station sets its own; Pull with Not set chosen among six choices; Merge tool Not set with Choose…; and Git program C:\Program Files\Git\cmd\git.exe, Found on the PATH, with Browse….">
+<img src="pictures/settings-git-light.png" srcset="pictures/settings-git-light.png 2x" width="868" alt="The settings screen's Git section on All repositories (global): Name and Email Not set, each with a note that weather-station sets its own; Pull with Not set chosen among six choices; Merge tool Not set with Choose…; and Git program with the path of the git that was found, Found on the PATH, with Browse….">
+<img src="pictures/settings-git-dark.png" srcset="pictures/settings-git-dark.png 2x" width="868" alt="The settings screen's Git section on All repositories (global): Name and Email Not set, each with a note that weather-station sets its own; Pull with Not set chosen among six choices; Merge tool Not set with Choose…; and Git program with the path of the git that was found, Found on the PATH, with Browse….">
 
 - **Name** and **Email**: who your commits are made by. A note says when the open repository sets
   its own, or when git could not make commits as things stand.
@@ -71,8 +71,8 @@ repositories, the repositories of your workspaces and the workspaces themselves.
 name, move with the arrows and press Enter. A command's key, if it has one, stands at its right,
 and its detail, such as the branch it acts on, beside its name.
 
-<img src="pictures/palette-light.png" srcset="pictures/palette-light.png 2x" alt="The command palette with branch typed: Create branch… with Ctrl+B, Filter branches and tags with Ctrl+Shift+E, then Create branch here… and Copy branch name for main, feature/forecast, feature/units, fix/rounding and origin/feature/forecast.">
-<img src="pictures/palette-dark.png" srcset="pictures/palette-dark.png 2x" alt="The command palette with branch typed: Create branch… with Ctrl+B, Filter branches and tags with Ctrl+Shift+E, then Create branch here… and Copy branch name for main, feature/forecast, feature/units, fix/rounding and origin/feature/forecast.">
+<img src="pictures/palette-light.png" srcset="pictures/palette-light.png 2x" width="600" alt="The command palette with branch typed: Create branch… with Ctrl+B, Filter branches and tags with Ctrl+Shift+E, then Create branch here… and Copy branch name for main, feature/forecast, feature/units, fix/rounding and origin/feature/forecast.">
+<img src="pictures/palette-dark.png" srcset="pictures/palette-dark.png 2x" width="600" alt="The command palette with branch typed: Create branch… with Ctrl+B, Filter branches and tags with Ctrl+Shift+E, then Create branch here… and Copy branch name for main, feature/forecast, feature/units, fix/rounding and origin/feature/forecast.">
 
 It also has commands with no key, such as **Use the dark theme**, **Use the light theme** and
 **Follow the system's theme** (all but the one in use), **Show backups**, **Manage remotes…** and

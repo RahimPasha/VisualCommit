@@ -8,8 +8,8 @@ names both organizations and lists nothing; to see its pull requests, sign out a
 organization in Settings, **Accounts**. On GitLab they are merge requests, and the section and its
 items say so; GitHub numbers them `#12`, GitLab and Azure DevOps `!12`.
 
-<img src="pictures/pull-requests-light.png" srcset="pictures/pull-requests-light.png 2x" alt="The left panel's Pull requests section with one open pull request, #12 Predict rain fro… by demo--alex, and in the graph the branch feature/forecast's label carrying the badge #12.">
-<img src="pictures/pull-requests-dark.png" srcset="pictures/pull-requests-dark.png 2x" alt="The left panel's Pull requests section with one open pull request, #12 Predict rain fro… by demo--alex, and in the graph the branch feature/forecast's label carrying the badge #12.">
+<img src="pictures/pull-requests-light.png" srcset="pictures/pull-requests-light.png 2x" width="700" alt="The left panel's Pull requests section with one open pull request, #12 Predict rain fro… by demo--alex, and in the graph the branch feature/forecast's label carrying the badge #12.">
+<img src="pictures/pull-requests-dark.png" srcset="pictures/pull-requests-dark.png 2x" width="700" alt="The left panel's Pull requests section with one open pull request, #12 Predict rain fro… by demo--alex, and in the graph the branch feature/forecast's label carrying the badge #12.">
 
 Each row shows the request's number, title and author; point at it for its branches. A branch
 whose pull request is open carries the request's number on its label in the graph.

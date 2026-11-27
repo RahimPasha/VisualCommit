@@ -34,8 +34,8 @@ replayed. Open it with:
 The list takes the graph's place. It is headed with the branch and its base, such as
 `Interactive rebase of main from 9ca23e8`, newest commit first, with the base at the bottom.
 
-<img src="pictures/interactive-list-light.png" srcset="pictures/interactive-list-light.png 2x" alt="The interactive list headed Interactive rebase of main from 9ca23e8, 4 commits: four rows each with a drag handle, the action Pick, its short SHA and its subject, from Show the battery level, which is selected, down to Tidy the display code, then the Base row 9ca23e8 Cache sensor readings, and the buttons Cancel and a dimmed Start rebase.">
-<img src="pictures/interactive-list-dark.png" srcset="pictures/interactive-list-dark.png 2x" alt="The interactive list headed Interactive rebase of main from 9ca23e8, 4 commits: four rows each with a drag handle, the action Pick, its short SHA and its subject, from Show the battery level, which is selected, down to Tidy the display code, then the Base row 9ca23e8 Cache sensor readings, and the buttons Cancel and a dimmed Start rebase.">
+<img src="pictures/interactive-list-light.png" srcset="pictures/interactive-list-light.png 2x" width="440" alt="The interactive list headed Interactive rebase of main from 9ca23e8, 4 commits: four rows each with a drag handle, the action Pick, its short SHA and its subject, from Show the battery level, which is selected, down to Tidy the display code, then the Base row 9ca23e8 Cache sensor readings, and the buttons Cancel and a dimmed Start rebase.">
+<img src="pictures/interactive-list-dark.png" srcset="pictures/interactive-list-dark.png 2x" width="440" alt="The interactive list headed Interactive rebase of main from 9ca23e8, 4 commits: four rows each with a drag handle, the action Pick, its short SHA and its subject, from Show the battery level, which is selected, down to Tidy the display code, then the Base row 9ca23e8 Cache sensor readings, and the buttons Cancel and a dimmed Start rebase.">
 
 For each commit:
 

@@ -4,8 +4,8 @@ Press **Search** in the toolbar, or Ctrl+F (Cmd+F on macOS), to open the search 
 graph. Type what you look for: VisualCommit searches as you type and marks the commits that match.
 The other rows, except **Working changes**, are dimmed, and the bar counts the matches.
 
-<img src="pictures/search-bar-light.png" srcset="pictures/search-bar-light.png 2x" alt="The search bar above the graph in the mode Commits with readme typed and 2 matches, its previous, next and close buttons; in the graph the two matching commits, Add a French readme and Update the readme, are in bold and marked at the left, and the other rows, except Working changes, are dimmed.">
-<img src="pictures/search-bar-dark.png" srcset="pictures/search-bar-dark.png 2x" alt="The search bar above the graph in the mode Commits with readme typed and 2 matches, its previous, next and close buttons; in the graph the two matching commits, Add a French readme and Update the readme, are in bold and marked at the left, and the other rows, except Working changes, are dimmed.">
+<img src="pictures/search-bar-light.png" srcset="pictures/search-bar-light.png 2x" width="440" alt="The search bar above the graph in the mode Commits with readme typed and 2 matches, its previous, next and close buttons; in the graph the two matching commits, Add a French readme and Update the readme, are in bold and marked at the left, and the other rows, except Working changes, are dimmed.">
+<img src="pictures/search-bar-dark.png" srcset="pictures/search-bar-dark.png 2x" width="440" alt="The search bar above the graph in the mode Commits with readme typed and 2 matches, its previous, next and close buttons; in the graph the two matching commits, Add a French readme and Update the readme, are in bold and marked at the left, and the other rows, except Working changes, are dimmed.">
 
 ## What it searches
 

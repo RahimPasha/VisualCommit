@@ -42,8 +42,8 @@ The screen **VisualCommit needs Git** means that no Git was found in any of the 
 If Git is installed somewhere else, press **Choose git.exe…** (**Choose the git program…** on macOS
 and Linux) and pick it.
 
-<img src="../pictures/first-run-missing-light.png" srcset="../pictures/first-run-missing-light.png 2x" alt="The first-run screen on Windows titled VisualCommit needs Git, with the buttons Install with winget…, Download Git for Windows, Choose git.exe… and Check again, and the link How VisualCommit finds Git.">
-<img src="../pictures/first-run-missing-dark.png" srcset="../pictures/first-run-missing-dark.png 2x" alt="The first-run screen on Windows titled VisualCommit needs Git, with the buttons Install with winget…, Download Git for Windows, Choose git.exe… and Check again, and the link How VisualCommit finds Git.">
+<img src="../pictures/first-run-missing-light.png" srcset="../pictures/first-run-missing-light.png 2x" width="1100" alt="The first-run screen on Windows titled VisualCommit needs Git, with the buttons Install with winget…, Download Git for Windows, Choose git.exe… and Check again, and the link How VisualCommit finds Git.">
+<img src="../pictures/first-run-missing-dark.png" srcset="../pictures/first-run-missing-dark.png 2x" width="1100" alt="The first-run screen on Windows titled VisualCommit needs Git, with the buttons Install with winget…, Download Git for Windows, Choose git.exe… and Check again, and the link How VisualCommit finds Git.">
 
 ## The chosen Git is gone { #git-chosen-missing }
 
@@ -72,8 +72,8 @@ The screen's title names the version, such as **Git 2.29.0 is too old**: VisualC
 Or choose a newer Git that is already on this computer: VisualCommit checks it, saves it as your
 choice and looks for Git again at once. After an update, press **Check again**.
 
-<img src="../pictures/first-run-too-old-light.png" srcset="../pictures/first-run-too-old-light.png 2x" alt="The first-run screen titled Git 2.29.0 is too old, saying that VisualCommit needs Git 2.34.1 or newer and found Git 2.29.0 at C:\Program Files\Git\cmd\git.exe, with the buttons Update with winget…, Download Git for Windows, Choose git.exe… and Check again.">
-<img src="../pictures/first-run-too-old-dark.png" srcset="../pictures/first-run-too-old-dark.png 2x" alt="The first-run screen titled Git 2.29.0 is too old, saying that VisualCommit needs Git 2.34.1 or newer and found Git 2.29.0 at C:\Program Files\Git\cmd\git.exe, with the buttons Update with winget…, Download Git for Windows, Choose git.exe… and Check again.">
+<img src="../pictures/first-run-too-old-light.png" srcset="../pictures/first-run-too-old-light.png 2x" width="1100" alt="The first-run screen titled Git 2.29.0 is too old, saying that VisualCommit needs Git 2.34.1 or newer and found Git 2.29.0 at C:\Program Files\Git\cmd\git.exe, with the buttons Update with winget…, Download Git for Windows, Choose git.exe… and Check again.">
+<img src="../pictures/first-run-too-old-dark.png" srcset="../pictures/first-run-too-old-dark.png 2x" width="1100" alt="The first-run screen titled Git 2.29.0 is too old, saying that VisualCommit needs Git 2.34.1 or newer and found Git 2.29.0 at C:\Program Files\Git\cmd\git.exe, with the buttons Update with winget…, Download Git for Windows, Choose git.exe… and Check again.">
 
 ## Git does not work { #git-not-working }
 
@@ -88,8 +88,8 @@ configuration file, such as `~/.gitconfig`. Git then names the file and the line
 "Git cannot read line 3 of" the file: correct that line, or rename the file. **Show the file**
 shows it in your file manager. Then press **Check again**.
 
-<img src="../pictures/first-run-not-working-light.png" srcset="../pictures/first-run-not-working-light.png 2x" alt="The first-run screen titled Git is not working, with Git's words fatal: bad config line 3 in file C:/Users/demo/.gitconfig under Git said:, the advice to correct line 3 of that file or rename it, and the buttons Download Git for Windows, Show the file, Choose git.exe… and Check again.">
-<img src="../pictures/first-run-not-working-dark.png" srcset="../pictures/first-run-not-working-dark.png 2x" alt="The first-run screen titled Git is not working, with Git's words fatal: bad config line 3 in file C:/Users/demo/.gitconfig under Git said:, the advice to correct line 3 of that file or rename it, and the buttons Download Git for Windows, Show the file, Choose git.exe… and Check again.">
+<img src="../pictures/first-run-not-working-light.png" srcset="../pictures/first-run-not-working-light.png 2x" width="1100" alt="The first-run screen titled Git is not working, with Git's words fatal: bad config line 3 in file C:/Users/demo/.gitconfig under Git said:, the advice to correct line 3 of that file or rename it, and the buttons Download Git for Windows, Show the file, Choose git.exe… and Check again.">
+<img src="../pictures/first-run-not-working-dark.png" srcset="../pictures/first-run-not-working-dark.png 2x" width="1100" alt="The first-run screen titled Git is not working, with Git's words fatal: bad config line 3 in file C:/Users/demo/.gitconfig under Git said:, the advice to correct line 3 of that file or rename it, and the buttons Download Git for Windows, Show the file, Choose git.exe… and Check again.">
 
 **Otherwise**, repair or reinstall Git: on Windows Git for Windows, on Linux the package `git`. On
 macOS, Apple's Command Line Tools can be damaged or half installed; the screen then offers to

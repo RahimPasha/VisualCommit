@@ -9,8 +9,8 @@ such as the commit message, these keys undo and redo your typing instead. Point 
 what it would undo, such as `Undo commit "Fix the parser"`. Afterwards the status bar says what
 happened, such as `Undid creation of try/larger-font`.
 
-<img src="pictures/undo-done-light.png" srcset="pictures/undo-done-light.png 2x" alt="The window after an undo: the status bar reads Undid creation of try/larger-font, the toolbar's Undo is dimmed and its Redo is enabled, and the graph shows main without the branch that was undone.">
-<img src="pictures/undo-done-dark.png" srcset="pictures/undo-done-dark.png 2x" alt="The window after an undo: the status bar reads Undid creation of try/larger-font, the toolbar's Undo is dimmed and its Redo is enabled, and the graph shows main without the branch that was undone.">
+<img src="pictures/undo-done-light.png" srcset="pictures/undo-done-light.png 2x" width="1100" alt="The window after an undo: the status bar reads Undid creation of try/larger-font, the toolbar's Undo is dimmed and its Redo is enabled, and the graph shows main without the branch that was undone.">
+<img src="pictures/undo-done-dark.png" srcset="pictures/undo-done-dark.png 2x" width="1100" alt="The window after an undo: the status bar reads Undid creation of try/larger-font, the toolbar's Undo is dimmed and its Redo is enabled, and the graph shows main without the branch that was undone.">
 
 Undo reaches many steps back: up to the last 100 actions in each repository since VisualCommit
 started. They include commits and amends, checkouts, branches created, renamed or deleted, merges,
@@ -46,8 +46,8 @@ command palette, or Ctrl+Shift+R (Cmd+Shift+R on macOS), opens it in place of th
 branch's menu has **Show reflog of** the branch. The box at the top left switches between
 **HEAD**, each local branch and **Backups**.
 
-<img src="pictures/reflog-light.png" srcset="pictures/reflog-light.png 2x" alt="The reflog of HEAD: rows from HEAD@{0} down to HEAD@{20}, each with its date, what moved HEAD, such as reset: moving to HEAD, commit: Show the battery level or checkout: moving from fix/rounding to main, the commit's short SHA and its subject; the source box HEAD at the top left and a close button at the top right.">
-<img src="pictures/reflog-dark.png" srcset="pictures/reflog-dark.png 2x" alt="The reflog of HEAD: rows from HEAD@{0} down to HEAD@{20}, each with its date, what moved HEAD, such as reset: moving to HEAD, commit: Show the battery level or checkout: moving from fix/rounding to main, the commit's short SHA and its subject; the source box HEAD at the top left and a close button at the top right.">
+<img src="pictures/reflog-light.png" srcset="pictures/reflog-light.png 2x" width="780" alt="The reflog of HEAD: rows from HEAD@{0} down to HEAD@{20}, each with its date, what moved HEAD, such as reset: moving to HEAD, commit: Show the battery level or checkout: moving from fix/rounding to main, the commit's short SHA and its subject; the source box HEAD at the top left and a close button at the top right.">
+<img src="pictures/reflog-dark.png" srcset="pictures/reflog-dark.png 2x" width="780" alt="The reflog of HEAD: rows from HEAD@{0} down to HEAD@{20}, each with its date, what moved HEAD, such as reset: moving to HEAD, commit: Show the battery level or checkout: moving from fix/rounding to main, the commit's short SHA and its subject; the source box HEAD at the top left and a close button at the top right.">
 
 Each row says what moved HEAD or the branch, to which commit. Right-click a row to bring a commit
 back: **Create branch here…**, **Check out this commit**, **Reset** your branch **to this

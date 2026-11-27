@@ -1310,12 +1310,22 @@ corrector's commits read by two verifiers, and four older doc sentences made tru
 ruling 113, D470), and the classes it touches pass on the merged tree. CI's run of the first two
 merges is green in all six jobs at its first attempt (45901582611; the CI section). CI's run of the
 push that carries `72993a7`, `2a52897` and the records is green too (45917903492), and **step 19 is
-closed**. **Next: step 21, the gate,** each takeover of the desktop announced in the chat just
-before it starts: D246's two runs of phase 8a's real-window checks, the whole default run and the
-real-window pass on one commit, the list of pictures, the live command on the counted round (by
-2026-11-28, while GitHub's token serves), every picture of both passes inspected against
-`references/step19/`, the guide's site, the checks by hand with the Narrator walk-through. The
-package is reviewed with the rest in step 19 and merged last, in that step. The three finished
+closed**. **Step 21, the gate, is under way** (2026-11-26). D246's two runs of phase 8a's
+real-window checks passed, 13 of 13 each. The counted round ran on `e4b323c`: the whole default run
+passed at its second attempt (8,927 tests, 8,920 passed, 7 skipped, 1 h 48 min 52 s, nothing else
+running on the laptop; the first attempt lost two projects to the hang watchdog while other work of
+the lead's ran beside it, no assertion failed and the cause is not established), then the
+real-window pass (124 tests, 119 passed, the 5 of the opt-in performance series skipped, 41 min 34
+s; Q1 at 1,912 ms), the list of pictures (1,696, written at once and committed when the inspection
+has passed) and the live command (582 offline tests, then 596, none failed; its three `run.txt` hold
+no token, organization or namespace). **`e4b323c` is the gate's commit: only docs change after it.**
+The guide's site was checked on the artifact of the gate's code, and two faults of its pages are
+corrected in docs (ruling 114, D471). **Next:** every picture of both passes inspected (the round's
+pictures, logs, batches and the inspectors' results are in
+`D:/Projects/Personal/phase8-work/gate/round-e4b323c/`), the report completed, the checks by hand
+with the owner (the Narrator walk-through of 21 steps, phase 6's System step, the icon beside its
+look-alikes, a second start from the lead's isolating start file), then the closing steps 22 to 27.
+The package is reviewed with the rest in step 19 and merged last, in that step. The three finished
 worktrees (`p8a-restore`, `p8a-restore-base`, `p8a-guide`) are removed; their `wip/` branches stay
 local (D396). §11's builders got with their briefs: mdBook at
 `D:/Projects/Personal/phase8-work/tools/mdbook-0.5.4/mdbook.exe` and the Linux archive's SHA-256 for

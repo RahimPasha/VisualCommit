@@ -30,8 +30,8 @@ Drag a branch's label in the graph, or its row in the left panel, and drop it on
 branch. A menu headed with both names, such as `fix/rounding → main`, offers what can be done with
 the two:
 
-<img src="pictures/drag-menu-light.png" srcset="pictures/drag-menu-light.png 2x" alt="The menu after dropping fix/rounding onto main, headed fix/rounding → main: Merge fix/rounding into main, Merge fix/rounding into main (create a merge commit), a dimmed Fast-forward main to fix/rounding, Check out fix/rounding and rebase it onto main, Check out fix/rounding and rebase it onto main interactively…, and Compare fix/rounding with main.">
-<img src="pictures/drag-menu-dark.png" srcset="pictures/drag-menu-dark.png 2x" alt="The menu after dropping fix/rounding onto main, headed fix/rounding → main: Merge fix/rounding into main, Merge fix/rounding into main (create a merge commit), a dimmed Fast-forward main to fix/rounding, Check out fix/rounding and rebase it onto main, Check out fix/rounding and rebase it onto main interactively…, and Compare fix/rounding with main.">
+<img src="pictures/drag-menu-light.png" srcset="pictures/drag-menu-light.png 2x" width="780" alt="The menu after dropping fix/rounding onto main, headed fix/rounding → main: Merge fix/rounding into main, Merge fix/rounding into main (create a merge commit), a dimmed Fast-forward main to fix/rounding, Check out fix/rounding and rebase it onto main, Check out fix/rounding and rebase it onto main interactively…, and Compare fix/rounding with main.">
+<img src="pictures/drag-menu-dark.png" srcset="pictures/drag-menu-dark.png 2x" width="780" alt="The menu after dropping fix/rounding onto main, headed fix/rounding → main: Merge fix/rounding into main, Merge fix/rounding into main (create a merge commit), a dimmed Fast-forward main to fix/rounding, Check out fix/rounding and rebase it onto main, Check out fix/rounding and rebase it onto main interactively…, and Compare fix/rounding with main.">
 
 - The two **Merge** items merge the dragged branch into the target when the target is the branch
   you are on. When it is not, **Check out** the target **and merge** the dragged branch **into it**

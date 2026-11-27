@@ -39,8 +39,8 @@ A workspace's dashboard lists its repositories, one row each, with their **Branc
 and behind their upstream they are (**Ahead / behind**), their uncommitted **Changes**, their
 **State** (such as a merge in progress) and the **Operation** that runs on them.
 
-<img src="pictures/dashboard-light.png" srcset="pictures/dashboard-light.png 2x" alt="The dashboard tab of the workspace Home projects, 2 repositories, with the buttons Add repository…, Fetch all, Pull all and Refresh and a … menu; the rows weather-station on main, ↑1 ↓1, 3 unstaged, and recipe-box on main, Up to date, 1 unstaged.">
-<img src="pictures/dashboard-dark.png" srcset="pictures/dashboard-dark.png 2x" alt="The dashboard tab of the workspace Home projects, 2 repositories, with the buttons Add repository…, Fetch all, Pull all and Refresh and a … menu; the rows weather-station on main, ↑1 ↓1, 3 unstaged, and recipe-box on main, Up to date, 1 unstaged.">
+<img src="pictures/dashboard-light.png" srcset="pictures/dashboard-light.png 2x" width="1100" alt="The dashboard tab of the workspace Home projects, 2 repositories, with the buttons Add repository…, Fetch all, Pull all and Refresh and a … menu; the rows weather-station on main, ↑1 ↓1, 3 unstaged, and recipe-box on main, Up to date, 1 unstaged.">
+<img src="pictures/dashboard-dark.png" srcset="pictures/dashboard-dark.png 2x" width="1100" alt="The dashboard tab of the workspace Home projects, 2 repositories, with the buttons Add repository…, Fetch all, Pull all and Refresh and a … menu; the rows weather-station on main, ↑1 ↓1, 3 unstaged, and recipe-box on main, Up to date, 1 unstaged.">
 
 - **Add repository…** adds repositories to the workspace; **Add open tabs**, in the **…** menu, adds
   the repositories open in tabs.

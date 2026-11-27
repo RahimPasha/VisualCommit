@@ -4,8 +4,8 @@ A tab with no repository shows the welcome page: **No repository open**, with th
 **Open**, **Clone** and **Init**, your workspaces, and your recent repositories. Press
 Ctrl+T (Cmd+T on macOS) for a new tab, which starts on the welcome page.
 
-<img src="pictures/welcome-page-light.png" srcset="pictures/welcome-page-light.png 2x" alt="The welcome page: No repository open, the buttons Open, Clone and Init, the Workspaces heading with New workspace… and No workspaces, and Recent repositories listing weather-station and recipe-box with their folders.">
-<img src="pictures/welcome-page-dark.png" srcset="pictures/welcome-page-dark.png 2x" alt="The welcome page: No repository open, the buttons Open, Clone and Init, the Workspaces heading with New workspace… and No workspaces, and Recent repositories listing weather-station and recipe-box with their folders.">
+<img src="pictures/welcome-page-light.png" srcset="pictures/welcome-page-light.png 2x" width="440" alt="The welcome page: No repository open, the buttons Open, Clone and Init, the Workspaces heading with New workspace… and No workspaces, and Recent repositories listing weather-station and recipe-box with their folders.">
+<img src="pictures/welcome-page-dark.png" srcset="pictures/welcome-page-dark.png 2x" width="440" alt="The welcome page: No repository open, the buttons Open, Clone and Init, the Workspaces heading with New workspace… and No workspaces, and Recent repositories listing weather-station and recipe-box with their folders.">
 
 ## Open a repository
 
@@ -29,8 +29,8 @@ repositories you opened, newest first, with their folders.
 4. Check the **Folder name**, which VisualCommit fills in from the URL.
 5. Press **Clone**. The clone opens in the tab when it has finished.
 
-<img src="pictures/clone-form-light.png" srcset="pictures/clone-form-light.png 2x" alt="The form Clone a repository on the welcome page, with the Repository URL https://github.com/demo--alex/garden-lights.git, a Parent folder with its Browse button, the Folder name garden-lights, and the buttons Clone and Cancel.">
-<img src="pictures/clone-form-dark.png" srcset="pictures/clone-form-dark.png 2x" alt="The form Clone a repository on the welcome page, with the Repository URL https://github.com/demo--alex/garden-lights.git, a Parent folder with its Browse button, the Folder name garden-lights, and the buttons Clone and Cancel.">
+<img src="pictures/clone-form-light.png" srcset="pictures/clone-form-light.png 2x" width="440" alt="The form Clone a repository on the welcome page, with the Repository URL https://github.com/demo--alex/garden-lights.git, a Parent folder with its Browse button, the Folder name garden-lights, and the buttons Clone and Cancel.">
+<img src="pictures/clone-form-dark.png" srcset="pictures/clone-form-dark.png 2x" width="440" alt="The form Clone a repository on the welcome page, with the Repository URL https://github.com/demo--alex/garden-lights.git, a Parent folder with its Browse button, the Folder name garden-lights, and the buttons Clone and Cancel.">
 
 When you are signed in to GitHub, GitLab or Azure DevOps, the form also has a button such as
 **From GitHub…** (**From an account…** when you are signed in to more than one service), which

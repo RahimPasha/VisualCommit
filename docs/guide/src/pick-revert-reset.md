@@ -2,8 +2,8 @@
 
 All three start from a commit's menu: right-click a commit's row in the graph.
 
-<img src="pictures/commit-menu-light.png" srcset="pictures/commit-menu-light.png 2x" alt="The menu of the commit dd8e6e1 Round to the configured digits: Check out this commit, Create branch here…, Create tag here…, a dimmed Cherry-pick onto main, Revert this commit, a dimmed Rebase main onto this commit, Interactive rebase of main from here…, Reset main to this commit… and Copy SHA.">
-<img src="pictures/commit-menu-dark.png" srcset="pictures/commit-menu-dark.png 2x" alt="The menu of the commit dd8e6e1 Round to the configured digits: Check out this commit, Create branch here…, Create tag here…, a dimmed Cherry-pick onto main, Revert this commit, a dimmed Rebase main onto this commit, Interactive rebase of main from here…, Reset main to this commit… and Copy SHA.">
+<img src="pictures/commit-menu-light.png" srcset="pictures/commit-menu-light.png 2x" width="440" alt="The menu of the commit dd8e6e1 Round to the configured digits: Check out this commit, Create branch here…, Create tag here…, a dimmed Cherry-pick onto main, Revert this commit, a dimmed Rebase main onto this commit, Interactive rebase of main from here…, Reset main to this commit… and Copy SHA.">
+<img src="pictures/commit-menu-dark.png" srcset="pictures/commit-menu-dark.png 2x" width="440" alt="The menu of the commit dd8e6e1 Round to the configured digits: Check out this commit, Create branch here…, Create tag here…, a dimmed Cherry-pick onto main, Revert this commit, a dimmed Rebase main onto this commit, Interactive rebase of main from here…, Reset main to this commit… and Copy SHA.">
 
 An item that cannot run is dimmed; point at it to see why. In the picture, the commit is already on
 `main`, so it cannot be cherry-picked onto it.
@@ -31,8 +31,8 @@ A cherry-pick or a revert that stops with conflicts shows a banner over the grap
 **Reset** *your branch* **to this commit…** moves the branch you are on to the commit. The question
 **Reset** *branch* **to** *commit*? asks how:
 
-<img src="pictures/reset-question-light.png" srcset="pictures/reset-question-light.png 2x" alt="The question Reset main to dd8e6e1?, Move main to Round to the configured digits (dd8e6e1), with three choices: Soft, Keep every change; the changes of the commits after it are staged. Mixed, selected, Keep every change; nothing is staged. Hard, with Discard every change to tracked files in red. Below: A backup is saved first, so this can be undone, and the buttons Cancel and Reset.">
-<img src="pictures/reset-question-dark.png" srcset="pictures/reset-question-dark.png 2x" alt="The question Reset main to dd8e6e1?, Move main to Round to the configured digits (dd8e6e1), with three choices: Soft, Keep every change; the changes of the commits after it are staged. Mixed, selected, Keep every change; nothing is staged. Hard, with Discard every change to tracked files in red. Below: A backup is saved first, so this can be undone, and the buttons Cancel and Reset.">
+<img src="pictures/reset-question-light.png" srcset="pictures/reset-question-light.png 2x" width="408" alt="The question Reset main to dd8e6e1?, Move main to Round to the configured digits (dd8e6e1), with three choices: Soft, Keep every change; the changes of the commits after it are staged. Mixed, selected, Keep every change; nothing is staged. Hard, with Discard every change to tracked files in red. Below: A backup is saved first, so this can be undone, and the buttons Cancel and Reset.">
+<img src="pictures/reset-question-dark.png" srcset="pictures/reset-question-dark.png 2x" width="408" alt="The question Reset main to dd8e6e1?, Move main to Round to the configured digits (dd8e6e1), with three choices: Soft, Keep every change; the changes of the commits after it are staged. Mixed, selected, Keep every change; nothing is staged. Hard, with Discard every change to tracked files in red. Below: A backup is saved first, so this can be undone, and the buttons Cancel and Reset.">
 
 - **Soft**: keep every change; the changes of the commits after it are staged.
 - **Mixed**: keep every change; nothing is staged.

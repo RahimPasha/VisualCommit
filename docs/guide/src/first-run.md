@@ -18,8 +18,8 @@ The status bar at the bottom of the window names the Git in use, such as `Git 2.
 to see where that Git is and how it was found, for example `found on the PATH` or
 `chosen in Settings`. While VisualCommit looks, the box reads `Looking for Git...`.
 
-<img src="pictures/status-bar-git-light.png" srcset="pictures/status-bar-git-light.png 2x" alt="The status bar: the current branch main and the status Ready on the left, Git 2.43.0 and the Activity log button on the right.">
-<img src="pictures/status-bar-git-dark.png" srcset="pictures/status-bar-git-dark.png 2x" alt="The status bar: the current branch main and the status Ready on the left, Git 2.43.0 and the Activity log button on the right.">
+<img src="pictures/status-bar-git-light.png" srcset="pictures/status-bar-git-light.png 2x" width="1100" alt="The status bar: the current branch main and the status Ready on the left, Git 2.43.0 and the Activity log button on the right.">
+<img src="pictures/status-bar-git-dark.png" srcset="pictures/status-bar-git-dark.png 2x" width="1100" alt="The status bar: the current branch main and the status Ready on the left, Git 2.43.0 and the Activity log button on the right.">
 
 When Git cannot be used, the box says why (`Git not found`, `Chosen Git not found`,
 `Git 2.29.0 is too old (needs 2.34.1 or newer)` or `Git is not working`), and a **Set up Git…**
@@ -40,19 +40,19 @@ On **Windows** it offers:
 - **Choose git.exe…**, to pick a Git program yourself (see below).
 - **Check again**.
 
-<img src="pictures/first-run-missing-light.png" srcset="pictures/first-run-missing-light.png 2x" alt="The first-run screen on Windows titled VisualCommit needs Git, saying that no Git was found on the PATH or in Git for Windows' usual install folders, with the buttons Install with winget…, Download Git for Windows, Choose git.exe… and Check again, and the link How VisualCommit finds Git. The status bar reads Set up Git… and Git not found.">
-<img src="pictures/first-run-missing-dark.png" srcset="pictures/first-run-missing-dark.png 2x" alt="The first-run screen on Windows titled VisualCommit needs Git, saying that no Git was found on the PATH or in Git for Windows' usual install folders, with the buttons Install with winget…, Download Git for Windows, Choose git.exe… and Check again, and the link How VisualCommit finds Git. The status bar reads Set up Git… and Git not found.">
+<img src="pictures/first-run-missing-light.png" srcset="pictures/first-run-missing-light.png 2x" width="1100" alt="The first-run screen on Windows titled VisualCommit needs Git, saying that no Git was found on the PATH or in Git for Windows' usual install folders, with the buttons Install with winget…, Download Git for Windows, Choose git.exe… and Check again, and the link How VisualCommit finds Git. The status bar reads Set up Git… and Git not found.">
+<img src="pictures/first-run-missing-dark.png" srcset="pictures/first-run-missing-dark.png 2x" width="1100" alt="The first-run screen on Windows titled VisualCommit needs Git, saying that no Git was found on the PATH or in Git for Windows' usual install folders, with the buttons Install with winget…, Download Git for Windows, Choose git.exe… and Check again, and the link How VisualCommit finds Git. The status bar reads Set up Git… and Git not found.">
 
-<img src="pictures/first-run-winget-confirm-light.png" srcset="pictures/first-run-winget-confirm-light.png 2x" alt="The question Install Git with winget?, which says that VisualCommit opens a terminal window that runs winget install --id Git.Git -e --source winget, that winget downloads Git for Windows from its community repository and runs the installer, and to press Check again when it has finished; with the buttons Cancel and Install.">
-<img src="pictures/first-run-winget-confirm-dark.png" srcset="pictures/first-run-winget-confirm-dark.png 2x" alt="The question Install Git with winget?, which says that VisualCommit opens a terminal window that runs winget install --id Git.Git -e --source winget, that winget downloads Git for Windows from its community repository and runs the installer, and to press Check again when it has finished; with the buttons Cancel and Install.">
+<img src="pictures/first-run-winget-confirm-light.png" srcset="pictures/first-run-winget-confirm-light.png 2x" width="408" alt="The question Install Git with winget?, which says that VisualCommit opens a terminal window that runs winget install --id Git.Git -e --source winget, that winget downloads Git for Windows from its community repository and runs the installer, and to press Check again when it has finished; with the buttons Cancel and Install.">
+<img src="pictures/first-run-winget-confirm-dark.png" srcset="pictures/first-run-winget-confirm-dark.png 2x" width="408" alt="The question Install Git with winget?, which says that VisualCommit opens a terminal window that runs winget install --id Git.Git -e --source winget, that winget downloads Git for Windows from its community repository and runs the installer, and to press Check again when it has finished; with the buttons Cancel and Install.">
 
 On **macOS**, Git comes with Apple's Command Line Tools. When they are not installed, the screen
 offers **Install the Command Line Tools**, which asks macOS to install them (macOS asks you to
 confirm), or Homebrew's command `brew install git` with a **Copy** button, to run in Terminal.
 Then press **Check again**. The link **Other ways to install Git** opens Git's page for macOS.
 
-<img src="pictures/first-run-missing-macos-light.png" srcset="pictures/first-run-missing-macos-light.png 2x" alt="The first-run screen on macOS titled VisualCommit needs Git, saying that Apple's Command Line Tools, which include Git, are not installed, with the command brew install git and its Copy button, the buttons Install the Command Line Tools, Choose the git program… and Check again, and the links Other ways to install Git and How VisualCommit finds Git.">
-<img src="pictures/first-run-missing-macos-dark.png" srcset="pictures/first-run-missing-macos-dark.png 2x" alt="The first-run screen on macOS titled VisualCommit needs Git, saying that Apple's Command Line Tools, which include Git, are not installed, with the command brew install git and its Copy button, the buttons Install the Command Line Tools, Choose the git program… and Check again, and the links Other ways to install Git and How VisualCommit finds Git.">
+<img src="pictures/first-run-missing-macos-light.png" srcset="pictures/first-run-missing-macos-light.png 2x" width="1100" alt="The first-run screen on macOS titled VisualCommit needs Git, saying that Apple's Command Line Tools, which include Git, are not installed, with the command brew install git and its Copy button, the buttons Install the Command Line Tools, Choose the git program… and Check again, and the links Other ways to install Git and How VisualCommit finds Git.">
+<img src="pictures/first-run-missing-macos-dark.png" srcset="pictures/first-run-missing-macos-dark.png 2x" width="1100" alt="The first-run screen on macOS titled VisualCommit needs Git, saying that Apple's Command Line Tools, which include Git, are not installed, with the command brew install git and its Copy button, the buttons Install the Command Line Tools, Choose the git program… and Check again, and the links Other ways to install Git and How VisualCommit finds Git.">
 
 On **Linux**, the screen names your distribution and its command, with a **Copy** button, to run
 in a terminal:
@@ -68,8 +68,8 @@ For any other distribution it says: "Install the package named git with your dis
 package manager, then press Check again." The link **Other ways to install Git** opens Git's page
 for Linux.
 
-<img src="pictures/first-run-missing-linux-light.png" srcset="pictures/first-run-missing-linux-light.png 2x" alt="The first-run screen on Ubuntu titled VisualCommit needs Git, asking to install Git with the distribution's package manager, with the command sudo apt install git and its Copy button, the buttons Choose the git program… and Check again, and the links Other ways to install Git and How VisualCommit finds Git.">
-<img src="pictures/first-run-missing-linux-dark.png" srcset="pictures/first-run-missing-linux-dark.png 2x" alt="The first-run screen on Ubuntu titled VisualCommit needs Git, asking to install Git with the distribution's package manager, with the command sudo apt install git and its Copy button, the buttons Choose the git program… and Check again, and the links Other ways to install Git and How VisualCommit finds Git.">
+<img src="pictures/first-run-missing-linux-light.png" srcset="pictures/first-run-missing-linux-light.png 2x" width="1100" alt="The first-run screen on Ubuntu titled VisualCommit needs Git, asking to install Git with the distribution's package manager, with the command sudo apt install git and its Copy button, the buttons Choose the git program… and Check again, and the links Other ways to install Git and How VisualCommit finds Git.">
+<img src="pictures/first-run-missing-linux-dark.png" srcset="pictures/first-run-missing-linux-dark.png 2x" width="1100" alt="The first-run screen on Ubuntu titled VisualCommit needs Git, asking to install Git with the distribution's package manager, with the command sudo apt install git and its Copy button, the buttons Choose the git program… and Check again, and the links Other ways to install Git and How VisualCommit finds Git.">
 
 ## When Git is too old
 
@@ -90,8 +90,8 @@ as your choice and looks for Git again at once, without **Check again**.
 When the Git that is too old is the one you chose in Settings, the screen offers
 **Use the Git on the PATH** in place of winget, which removes your choice.
 
-<img src="pictures/first-run-too-old-light.png" srcset="pictures/first-run-too-old-light.png 2x" alt="The first-run screen titled Git 2.29.0 is too old, saying that VisualCommit needs Git 2.34.1 or newer and found Git 2.29.0 at C:\Program Files\Git\cmd\git.exe, with the buttons Update with winget…, Download Git for Windows, Choose git.exe… and Check again. The status bar reads Git 2.29.0 is too old (needs 2.34.1 or newer).">
-<img src="pictures/first-run-too-old-dark.png" srcset="pictures/first-run-too-old-dark.png 2x" alt="The first-run screen titled Git 2.29.0 is too old, saying that VisualCommit needs Git 2.34.1 or newer and found Git 2.29.0 at C:\Program Files\Git\cmd\git.exe, with the buttons Update with winget…, Download Git for Windows, Choose git.exe… and Check again. The status bar reads Git 2.29.0 is too old (needs 2.34.1 or newer).">
+<img src="pictures/first-run-too-old-light.png" srcset="pictures/first-run-too-old-light.png 2x" width="1100" alt="The first-run screen titled Git 2.29.0 is too old, saying that VisualCommit needs Git 2.34.1 or newer and found Git 2.29.0 at C:\Program Files\Git\cmd\git.exe, with the buttons Update with winget…, Download Git for Windows, Choose git.exe… and Check again. The status bar reads Git 2.29.0 is too old (needs 2.34.1 or newer).">
+<img src="pictures/first-run-too-old-dark.png" srcset="pictures/first-run-too-old-dark.png 2x" width="1100" alt="The first-run screen titled Git 2.29.0 is too old, saying that VisualCommit needs Git 2.34.1 or newer and found Git 2.29.0 at C:\Program Files\Git\cmd\git.exe, with the buttons Update with winget…, Download Git for Windows, Choose git.exe… and Check again. The status bar reads Git 2.29.0 is too old (needs 2.34.1 or newer).">
 
 ## When Git does not work
 
@@ -105,8 +105,8 @@ and the command that selects them, `sudo xcode-select --switch /Library/Develope
 with a **Copy** button. When the Git that does not work is the one you chose in Settings, the screen
 also offers **Use the Git on the PATH**, which removes your choice.
 
-<img src="pictures/first-run-not-working-light.png" srcset="pictures/first-run-not-working-light.png 2x" alt="The first-run screen titled Git is not working, with Git's words fatal: bad config line 3 in file C:/Users/demo/.gitconfig under Git said:, the advice to correct line 3 of that file or rename it, and the buttons Download Git for Windows, Show the file, Choose git.exe… and Check again.">
-<img src="pictures/first-run-not-working-dark.png" srcset="pictures/first-run-not-working-dark.png 2x" alt="The first-run screen titled Git is not working, with Git's words fatal: bad config line 3 in file C:/Users/demo/.gitconfig under Git said:, the advice to correct line 3 of that file or rename it, and the buttons Download Git for Windows, Show the file, Choose git.exe… and Check again.">
+<img src="pictures/first-run-not-working-light.png" srcset="pictures/first-run-not-working-light.png 2x" width="1100" alt="The first-run screen titled Git is not working, with Git's words fatal: bad config line 3 in file C:/Users/demo/.gitconfig under Git said:, the advice to correct line 3 of that file or rename it, and the buttons Download Git for Windows, Show the file, Choose git.exe… and Check again.">
+<img src="pictures/first-run-not-working-dark.png" srcset="pictures/first-run-not-working-dark.png 2x" width="1100" alt="The first-run screen titled Git is not working, with Git's words fatal: bad config line 3 in file C:/Users/demo/.gitconfig under Git said:, the advice to correct line 3 of that file or rename it, and the buttons Download Git for Windows, Show the file, Choose git.exe… and Check again.">
 
 ## When the chosen Git is gone
 

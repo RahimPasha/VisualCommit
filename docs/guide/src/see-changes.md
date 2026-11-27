@@ -16,14 +16,14 @@ such as the commit message, and the graph comes back.
 new: removed lines are marked `-` and have only their old number, added lines are marked `+` and
 have only their new one, and unchanged lines have both.
 
-<img src="pictures/diff-inline-light.png" srcset="pictures/diff-inline-light.png 2x" alt="The inline diff of station/units.py, unstaged, with Inline selected: two hunks, the first replacing the module's first line with three lines, the second adding a function kilometers_per_hour_to_knots; each hunk's bar has the buttons Stage hunk and Discard hunk, and the toolbar has Stage file and Discard file.">
-<img src="pictures/diff-inline-dark.png" srcset="pictures/diff-inline-dark.png 2x" alt="The inline diff of station/units.py, unstaged, with Inline selected: two hunks, the first replacing the module's first line with three lines, the second adding a function kilometers_per_hour_to_knots; each hunk's bar has the buttons Stage hunk and Discard hunk, and the toolbar has Stage file and Discard file.">
+<img src="pictures/diff-inline-light.png" srcset="pictures/diff-inline-light.png 2x" width="780" alt="The inline diff of station/units.py, unstaged, with Inline selected: two hunks, the first replacing the module's first line with three lines, the second adding a function kilometers_per_hour_to_knots; each hunk's bar has the buttons Stage hunk and Discard hunk, and the toolbar has Stage file and Discard file.">
+<img src="pictures/diff-inline-dark.png" srcset="pictures/diff-inline-dark.png 2x" width="780" alt="The inline diff of station/units.py, unstaged, with Inline selected: two hunks, the first replacing the module's first line with three lines, the second adding a function kilometers_per_hour_to_knots; each hunk's bar has the buttons Stage hunk and Discard hunk, and the toolbar has Stage file and Discard file.">
 
 **Side by side** shows the old lines on the left and the new ones on the right, with the lines lined
 up. Both views show each change with a few unchanged lines around it, not the whole file.
 
-<img src="pictures/diff-side-by-side-light.png" srcset="pictures/diff-side-by-side-light.png 2x" alt="The same diff of station/units.py with Side by side selected: the old lines on the left, the new lines on the right, removed lines red and added lines green, and the hunks' Stage hunk and Discard hunk buttons on the right side.">
-<img src="pictures/diff-side-by-side-dark.png" srcset="pictures/diff-side-by-side-dark.png 2x" alt="The same diff of station/units.py with Side by side selected: the old lines on the left, the new lines on the right, removed lines red and added lines green, and the hunks' Stage hunk and Discard hunk buttons on the right side.">
+<img src="pictures/diff-side-by-side-light.png" srcset="pictures/diff-side-by-side-light.png 2x" width="780" alt="The same diff of station/units.py with Side by side selected: the old lines on the left, the new lines on the right, removed lines red and added lines green, and the hunks' Stage hunk and Discard hunk buttons on the right side.">
+<img src="pictures/diff-side-by-side-dark.png" srcset="pictures/diff-side-by-side-dark.png 2x" width="780" alt="The same diff of station/units.py with Side by side selected: the old lines on the left, the new lines on the right, removed lines red and added lines green, and the hunks' Stage hunk and Discard hunk buttons on the right side.">
 
 Switch between them with the two buttons under the header; VisualCommit keeps your choice for the
 next diff. Words that changed within a line are marked more strongly.

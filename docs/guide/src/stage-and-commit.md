@@ -4,8 +4,8 @@ Select the **Working changes** row at the top of the graph. The right panel then
 uncommitted changes in two lists, **Unstaged files** and **Staged files**, and below them the boxes
 for the commit message.
 
-<img src="pictures/working-changes-light.png" srcset="pictures/working-changes-light.png 2x" alt="The Working changes panel: Unstaged files (3) with README.md, assets/icon.png and station/units.py, the buttons Stage all and Discard all, Staged files (0) with No staged changes, the summary Explain the units in the readme with 41 characters left, an empty Description box, the check box Amend previous commit, and the dimmed button Stage files to commit.">
-<img src="pictures/working-changes-dark.png" srcset="pictures/working-changes-dark.png 2x" alt="The Working changes panel: Unstaged files (3) with README.md, assets/icon.png and station/units.py, the buttons Stage all and Discard all, Staged files (0) with No staged changes, the summary Explain the units in the readme with 41 characters left, an empty Description box, the check box Amend previous commit, and the dimmed button Stage files to commit.">
+<img src="pictures/working-changes-light.png" srcset="pictures/working-changes-light.png 2x" width="400" alt="The Working changes panel: Unstaged files (3) with README.md, assets/icon.png and station/units.py, the buttons Stage all and Discard all, Staged files (0) with No staged changes, the summary Explain the units in the readme with 41 characters left, an empty Description box, the check box Amend previous commit, and the dimmed button Stage files to commit.">
+<img src="pictures/working-changes-dark.png" srcset="pictures/working-changes-dark.png 2x" width="400" alt="The Working changes panel: Unstaged files (3) with README.md, assets/icon.png and station/units.py, the buttons Stage all and Discard all, Staged files (0) with No staged changes, the summary Explain the units in the readme with 41 characters left, an empty Description box, the check box Amend previous commit, and the dimmed button Stage files to commit.">
 
 **Flat** lists the files with their folders; **Tree** shows them in a tree of folders. Click a file
 to see its diff.
@@ -24,8 +24,8 @@ to see its diff.
 Open a file's diff. Each hunk's bar has **Stage hunk** and **Discard hunk**; in a diff of a staged
 file, **Unstage hunk**.
 
-<img src="pictures/stage-hunk-light.png" srcset="pictures/stage-hunk-light.png 2x" alt="The inline diff of station/units.py with the first hunk's Stage hunk button highlighted, as under the pointer; the second hunk has its own Stage hunk and Discard hunk buttons.">
-<img src="pictures/stage-hunk-dark.png" srcset="pictures/stage-hunk-dark.png 2x" alt="The inline diff of station/units.py with the first hunk's Stage hunk button highlighted, as under the pointer; the second hunk has its own Stage hunk and Discard hunk buttons.">
+<img src="pictures/stage-hunk-light.png" srcset="pictures/stage-hunk-light.png 2x" width="780" alt="The inline diff of station/units.py with the first hunk's Stage hunk button highlighted, as under the pointer; the second hunk has its own Stage hunk and Discard hunk buttons.">
+<img src="pictures/stage-hunk-dark.png" srcset="pictures/stage-hunk-dark.png 2x" width="780" alt="The inline diff of station/units.py with the first hunk's Stage hunk button highlighted, as under the pointer; the second hunk has its own Stage hunk and Discard hunk buttons.">
 
 ## Stage chosen lines
 

@@ -6,8 +6,8 @@ merge, rebase, resolve conflicts, fetch, pull and push with clicks, right-clicks
 and drag and drop. It drives the real `git` program installed on your computer, so a terminal sees
 the same repository.
 
-<img src="pictures/main-window-light.png" srcset="pictures/main-window-light.png 2x" alt="The main window with the weather-station repository open: the tab and toolbar at the top, the left panel with local branches, remotes, tags and the stash, the commit graph in the middle with the commit Show the battery level selected on main, and its commit details on the right.">
-<img src="pictures/main-window-dark.png" srcset="pictures/main-window-dark.png 2x" alt="The main window with the weather-station repository open: the tab and toolbar at the top, the left panel with local branches, remotes, tags and the stash, the commit graph in the middle with the commit Show the battery level selected on main, and its commit details on the right.">
+<img src="pictures/main-window-light.png" srcset="pictures/main-window-light.png 2x" width="1100" alt="The main window with the weather-station repository open: the tab and toolbar at the top, the left panel with local branches, remotes, tags and the stash, the commit graph in the middle with the commit Show the battery level selected on main, and its commit details on the right.">
+<img src="pictures/main-window-dark.png" srcset="pictures/main-window-dark.png 2x" width="1100" alt="The main window with the weather-station repository open: the tab and toolbar at the top, the left panel with local branches, remotes, tags and the stash, the commit graph in the middle with the commit Show the battery level selected on main, and its commit details on the right.">
 
 What it does:
 

@@ -6,8 +6,8 @@ Select two commits in the graph: click the first, then Ctrl-click the second (Cm
 macOS). The right panel turns into **Compare**: **From** the lower of the two rows in the graph
 **To** the upper one, and the files that differ between them.
 
-<img src="pictures/compare-light.png" srcset="pictures/compare-light.png 2x" alt="The window with the commits Show the battery level and Prepare release 1.1 selected in the graph, and the right panel Compare: From 0ce815d Prepare release 1.1, To c8a5135 Show the battery level, and Changed files (4): README.md, display.py, sensors.py and units.py.">
-<img src="pictures/compare-dark.png" srcset="pictures/compare-dark.png 2x" alt="The window with the commits Show the battery level and Prepare release 1.1 selected in the graph, and the right panel Compare: From 0ce815d Prepare release 1.1, To c8a5135 Show the battery level, and Changed files (4): README.md, display.py, sensors.py and units.py.">
+<img src="pictures/compare-light.png" srcset="pictures/compare-light.png 2x" width="1100" alt="The window with the commits Show the battery level and Prepare release 1.1 selected in the graph, and the right panel Compare: From 0ce815d Prepare release 1.1, To c8a5135 Show the battery level, and Changed files (4): README.md, display.py, sensors.py and units.py.">
+<img src="pictures/compare-dark.png" srcset="pictures/compare-dark.png 2x" width="1100" alt="The window with the commits Show the battery level and Prepare release 1.1 selected in the graph, and the right panel Compare: From 0ce815d Prepare release 1.1, To c8a5135 Show the battery level, and Changed files (4): README.md, display.py, sensors.py and units.py.">
 
 - Click a file to see its diff from **From** to **To**.
 - Click **From** or **To** to scroll the graph to that commit without losing the comparison.

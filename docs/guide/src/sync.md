@@ -6,8 +6,8 @@ A local branch that tracks a remote branch, its upstream, shows in the left pane
 it has that the upstream lacks (↑, ahead) and how many the upstream has that it lacks (↓, behind),
 as of the last fetch.
 
-<img src="pictures/ahead-behind-light.png" srcset="pictures/ahead-behind-light.png 2x" alt="The left panel's Local branches with the folders feature and fix and the branch main marked ↑1 ↓1, and Remotes with origin, its folder feature and its branch main.">
-<img src="pictures/ahead-behind-dark.png" srcset="pictures/ahead-behind-dark.png 2x" alt="The left panel's Local branches with the folders feature and fix and the branch main marked ↑1 ↓1, and Remotes with origin, its folder feature and its branch main.">
+<img src="pictures/ahead-behind-light.png" srcset="pictures/ahead-behind-light.png 2x" width="260" alt="The left panel's Local branches with the folders feature and fix and the branch main marked ↑1 ↓1, and Remotes with origin, its folder feature and its branch main.">
+<img src="pictures/ahead-behind-dark.png" srcset="pictures/ahead-behind-dark.png 2x" width="260" alt="The left panel's Local branches with the folders feature and fix and the branch main marked ↑1 ↓1, and Remotes with origin, its folder feature and its branch main.">
 
 ## Fetch
 
@@ -72,8 +72,8 @@ unseen.
 graph's empty area, opens the dialog **Remotes**: **Edit** a remote's name or URL, **Remove** it,
 or **Add remote** with a name and a URL. When adding, **Fetch now** fetches it at once.
 
-<img src="pictures/manage-remotes-light.png" srcset="pictures/manage-remotes-light.png 2x" alt="The dialog Remotes with the remote origin at https://github.com/demo--alex/weather-station…, its buttons Edit and Remove, the button Add remote and the button Close.">
-<img src="pictures/manage-remotes-dark.png" srcset="pictures/manage-remotes-dark.png 2x" alt="The dialog Remotes with the remote origin at https://github.com/demo--alex/weather-station…, its buttons Edit and Remove, the button Add remote and the button Close.">
+<img src="pictures/manage-remotes-light.png" srcset="pictures/manage-remotes-light.png 2x" width="468" alt="The dialog Remotes with the remote origin at https://github.com/demo--alex/weather-station…, its buttons Edit and Remove, the button Add remote and the button Close.">
+<img src="pictures/manage-remotes-dark.png" srcset="pictures/manage-remotes-dark.png 2x" width="468" alt="The dialog Remotes with the remote origin at https://github.com/demo--alex/weather-station…, its buttons Edit and Remove, the button Add remote and the button Close.">
 
 Removing a remote asks first, keeps your local branches, and saves a backup.
 

@@ -5312,7 +5312,8 @@ analytics, no font from another host (ruling 18). `guide.css`: `--content-max-wi
 hide `img[src$="-light.png"]`. A picture is two images, light first (D440):
 `<img src="pictures/stage-hunk-light.png" srcset="pictures/stage-hunk-light.png 2x" alt="…">`, the
 path relative to the page: `pictures/` from a page at the root of `src`, `../pictures/` from
-`troubleshooting/` and `reference/`.
+`troubleshooting/` and `reference/`. Since the gate each image also carries `width`, half its
+picture's pixel width (D471, ruling 114).
 
 **11.3.4 `guide.yml`** (guide.md 2's outline). Triggers: `push` on `docs/guide/**`, the workflow,
 `scripts/check-guide-links.py`, `src/**`, `tests/VisualCommit.Testing/**`,
@@ -7701,6 +7702,47 @@ nothing goes to plan.md's Backlog for it.
   whether the hold began, how many bytes went before it, git's progress in the first part and the
   last whole line git could show: read that first. A hold that began with a whole line with a
   percentage, and a status bar without one, would point at the app or at git, not at the server.
+
+**The guide's site at the gate: each image's width, and one alt text (the lead, 2026-11-26).** 114.
+The gate's check of the guide's site was made on the `guide-site` artifact of the guide workflow's
+run 45917903593 (on `53e07c4`, the gate's code; kept in
+`D:/Projects/Personal/phase8-work/gate/guide-site-45917903593/`). It found two faults, both in the
+pages, and both are corrected in docs alone, after the counted round's two passes had ended. D471 is
+the decision on the second.
+
+- *What was checked.* By files: the links' check has no finding on the downloaded site; the 42 shots
+  are there in both themes, 84 pictures; the search index holds "rebase"; the five anchors the app
+  links to exist. In a browser, headless Edge on throwaway profiles with the site served from the
+  laptop: a page shows the light pictures in the light theme and the dark ones in navy, and the
+  search lists "22 search results for 'rebase'". The page asked for nothing outside the laptop's own
+  server; Edge itself contacted Microsoft's services, as it does at any start. Two Opus inspectors
+  read the 42 shots in both themes against their pages (`…/gate/guide-site-pictures-result.json`):
+  38 passed at once.
+- *Three doubts, none a fault.* `first-run-not-working` and `first-run-too-old` show Windows paths
+  in a site built on Ubuntu: they are the made-up paths of the fake probe (design 11.3.5, ruling
+  63), no leak. `resolver`: the scroll bar across the last line is on ruling 95's list, and the
+  Result pane's first line, cut in half, is the app's own scrolling.
+- *One alt text was wrong.* The settings page described its Git picture with `C:\Program
+  Files\Git\cmd\git.exe`, the path on a Windows machine, while the workflow's picture, made on
+  Ubuntu, shows `/usr/bin/git`. Both images' alt text now says "Git program with the path of the git
+  that was found".
+- *The pictures showed at twice the app's size on a display at 100 %* (D471). An image whose only
+  `srcset` candidate is "2x" is drawn from its `src`, at density 1, where the display's scale is 1:
+  a picture 880 pixels wide was 880 CSS pixels wide at scale 1 and 440 at 1.25, 1.5 and 2. Each of
+  the 92 image tags now carries `width`, half its picture's pixel width, rounded up for the one
+  picture of an odd width (`branch-menu`, 1,095 pixels); with it the picture was 440 wide at 1, 1.25
+  and 2. A `zoom` rule under a media query was tried first and failed (D471).
+- *Checked after the change.* mdBook built the site on the laptop from the changed pages, the links'
+  check has no finding on it, each of the 92 picture tags of the built pages carries its width, and
+  the settings page no longer names the path. `GuideCatalogueTests`, `LeakGuardTests` and
+  `GuideSettingsTests` pass, 35 tests. The push starts the guide's workflow, whose run is read as
+  CI's.
+- *Limits.* No test holds the widths, so a picture added to a page needs its two widths by hand
+  (CLAUDE.md's note on the guide; the test goes to plan.md's Backlog for phase 8b). The laptop's
+  display runs at 200 %, where the fault does not show, so it was found only by the measure in
+  headless Edge. Firefox and Safari were not measured.
+- *What would reopen it.* A picture of the guide that a browser shows at another size than the
+  app's.
 
 ### 13.2 What the integration settled
 

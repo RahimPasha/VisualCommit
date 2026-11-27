@@ -11,8 +11,8 @@ only.
 
 Open Settings, Ctrl+, (Cmd+, on macOS), and choose **Accounts**.
 
-<img src="pictures/accounts-section-light.png" srcset="pictures/accounts-section-light.png 2x" alt="The settings screen's Accounts section: GitHub signed in as demo--alex, The token is kept in this computer's keychain, with Sign out…; under Git the ticked check box Use for git over HTTPS and its note; GitLab and Azure DevOps each Not signed in, with Sign in….">
-<img src="pictures/accounts-section-dark.png" srcset="pictures/accounts-section-dark.png 2x" alt="The settings screen's Accounts section: GitHub signed in as demo--alex, The token is kept in this computer's keychain, with Sign out…; under Git the ticked check box Use for git over HTTPS and its note; GitLab and Azure DevOps each Not signed in, with Sign in….">
+<img src="pictures/accounts-section-light.png" srcset="pictures/accounts-section-light.png 2x" width="868" alt="The settings screen's Accounts section: GitHub signed in as demo--alex, The token is kept in this computer's keychain, with Sign out…; under Git the ticked check box Use for git over HTTPS and its note; GitLab and Azure DevOps each Not signed in, with Sign in….">
+<img src="pictures/accounts-section-dark.png" srcset="pictures/accounts-section-dark.png 2x" width="868" alt="The settings screen's Accounts section: GitHub signed in as demo--alex, The token is kept in this computer's keychain, with Sign out…; under Git the ticked check box Use for git over HTTPS and its note; GitLab and Azure DevOps each Not signed in, with Sign in….">
 
 ## Sign in with a token
 
@@ -33,8 +33,8 @@ paste into VisualCommit. Press **Sign in…** beside the service.
   with the scope Code (Read & write). **Create a token on Azure DevOps** opens the organization's
   page for new tokens.
 
-<img src="pictures/sign-in-dialog-light.png" srcset="pictures/sign-in-dialog-light.png 2x" alt="The dialog Add GitHub account: the help on which token to paste, the link Create a token on GitHub, an empty Token box, and the buttons Cancel and a dimmed Sign in.">
-<img src="pictures/sign-in-dialog-dark.png" srcset="pictures/sign-in-dialog-dark.png 2x" alt="The dialog Add GitHub account: the help on which token to paste, the link Create a token on GitHub, an empty Token box, and the buttons Cancel and a dimmed Sign in.">
+<img src="pictures/sign-in-dialog-light.png" srcset="pictures/sign-in-dialog-light.png 2x" width="408" alt="The dialog Add GitHub account: the help on which token to paste, the link Create a token on GitHub, an empty Token box, and the buttons Cancel and a dimmed Sign in.">
+<img src="pictures/sign-in-dialog-dark.png" srcset="pictures/sign-in-dialog-dark.png 2x" width="408" alt="The dialog Add GitHub account: the help on which token to paste, the link Create a token on GitHub, an empty Token box, and the buttons Cancel and a dimmed Sign in.">
 
 Paste the token into **Token** and press **Sign in**. VisualCommit checks the token with the
 service before it keeps it, and says what the service answered when it refuses it. Signing in,
