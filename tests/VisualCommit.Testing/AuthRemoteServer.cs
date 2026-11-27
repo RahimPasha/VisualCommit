@@ -160,7 +160,7 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
     private readonly List<Task> _connections = [];
     private readonly List<Hold> _activeHolds = [];
 
-    /// <summary>The holds asked for and not begun yet, by the served folder name they wait for.</summary>
+    /// <summary>The holds that wait for a response with a pack (asked, and neither taken nor dropped yet), by the served folder name they wait for.</summary>
     private readonly Dictionary<string, Hold> _pendingHolds = new(StringComparer.Ordinal);
 
     /// <summary>Every hold asked of the server, in the order asked (<see cref="Holds"/>).</summary>
@@ -312,9 +312,10 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
     /// <see cref="DescribedRequests"/>), each with its method, path, protocol v2 command, status and
     /// whether it was held; how many errors it had (<see cref="Errors"/>); and how many of its
     /// connections have not ended. A request is listed only once its response was decided
-    /// (<see cref="Requests"/>), so one whose response is not decided yet (its body still being
-    /// read, or http-backend still running) counts only among the connections; a request reads
-    /// held from the moment its response takes the hold, before the hold's first part is sent.
+    /// (<see cref="Requests"/>), so one whose response is not decided yet (for example its body
+    /// still being read, or http-backend still running) counts only among the connections; a
+    /// request reads held from the moment its response takes the hold, before the hold's first
+    /// part is sent.
     /// <para>
     /// Then each hold asked of it (<see cref="Holds"/>), in a line of its own: when it was asked,
     /// its repository and percentage, and how it stands. It waits for a response with a pack; or
@@ -326,7 +327,9 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
     /// it has none. A taken or begun hold that was let go ends with <c>; let go</c> and the time:
     /// of the release or the disposal, or of its response's end when the write of its first part
     /// failed before either. A failed write of the headers leaves it taken until a release or the
-    /// disposal.
+    /// disposal. After a release that comes between a response's take and its first part, the
+    /// response goes on without waiting: once its first part has gone, the hold's line reads
+    /// begun, with a let-go time before its start.
     /// </para>
     /// </summary>
     public string DescribeHoldsAndRequests()
@@ -835,8 +838,9 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
     /// without a terminal), or no line reaches the percentage, only the headers go first. At 0,
     /// when a progress pkt-line holds a <c>%</c> but no line with a percentage ends before the
     /// response does, the first part ends with the first such pkt-line. Each hold asked is kept,
-    /// with what it sent once it began, among <see cref="Holds"/>. Calling it again before a
-    /// response was held changes nothing, the percentage included.
+    /// with what it sent once it began, among <see cref="Holds"/>. Calling it again while the
+    /// hold waits for a response changes nothing, the percentage included; once a response has
+    /// taken the hold, or a release has dropped it, a call asks for a new one.
     /// </para>
     /// </summary>
     /// <param name="atPercent">0, or the percentage, 1 to 100, of the progress line to hold at.</param>
@@ -853,7 +857,7 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
     /// (docs/phase-6-design.md 17.2): each repository has a hold of its own, taken by its own next
     /// pack response, so that a folder server holds several fetches at their own percentages and
     /// releases them one at a time (<see cref="Release(string)"/>). Calling it again for the same
-    /// repository before a response was held changes nothing.
+    /// repository while its hold waits for a response changes nothing.
     /// </summary>
     /// <exception cref="ArgumentException">The server serves no such repository.</exception>
     public Task HoldNextFetchPack(string repository, int atPercent = 0)
@@ -2359,7 +2363,7 @@ public sealed record AuthRemoteHoldPart(DateTimeOffset At, int SentBytes, int Bo
 /// <param name="Command">A protocol v2 request's command (<c>ls-refs</c>, <c>fetch</c>); null for other requests.</param>
 /// <param name="UserName">The user the request signed in as; null when it gave no valid credentials.</param>
 /// <param name="Status">The response's status code.</param>
-/// <param name="Held">Whether the response was held (<see cref="AuthRemoteServer.HoldNextFetchPack"/>).</param>
+/// <param name="Held">Whether the response took a hold (<see cref="AuthRemoteServer.HoldNextFetchPack"/>): true from the moment it did (<see cref="AuthRemoteHold.Taken"/>), also when its first part was then never sent.</param>
 /// <param name="Chunked">Whether the body came chunked.</param>
 /// <param name="Compressed">Whether the body came compressed with gzip.</param>
 /// <param name="GivenUserName">A host's (<see cref="AuthRemoteServer.StartForHostAsync"/>): the user name a request gave with its token (<c>x-access-token</c>), signed in or refused for an unknown token; never the token.</param>

@@ -295,9 +295,10 @@ public sealed partial class ShellDriver
     /// percentage" (checks 17, 18 and 31, with the server holding the fetch).
     /// </summary>
     /// <exception cref="TimeoutException">No percentage showed in time; the message adds what the
-    /// status bar showed then and, for each server of the tests that the active tab's remotes reach
-    /// on 127.0.0.1, its requests and holds (<see cref="AuthRemoteServer.DescribeServersOn"/>):
-    /// whether the hold began, and what it sent.</exception>
+    /// status bar showed then and, for each port that the active tab's remotes name in a URL on
+    /// http://127.0.0.1, its server's requests and holds, or that no server of the tests runs on
+    /// it (<see cref="AuthRemoteServer.DescribeServersOn"/>): how each hold stands, and what it
+    /// sent once it began.</exception>
     public async Task<int> WaitForProgressPercentAsync(TimeSpan? timeout = null)
     {
         var status = Session.Shell.ActiveTab.OperationStatus;
