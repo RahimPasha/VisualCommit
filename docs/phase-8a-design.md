@@ -7901,6 +7901,19 @@ logs, pictures, batches and verdicts are in `D:/Projects/Personal/phase8-work/ga
   from the gate's app code (run 45965143205 on `e632e72`) holds the same 84 picture files and the
   same pages as the site the lead read for ruling 114, and the links' check has no finding on it, so
   that reading stands for the Gate commit.
+- *The inspection* (D247; 07:20 to 07:46). 28 Opus inspectors in three groups, as in the first
+  round, and one for CI; each batch gave one verdict for each of its pictures. Every picture was
+  judged again, against the first round's, all of which had been read: 1,257 of this round's 1,696
+  are the same files, 353 real-window files differ only in the window's two bottom corners, where
+  the desktop's wallpaper shows through and had changed in the night, and 86 differ elsewhere, each
+  with a sheet of the capture, the reference and the changed pixels. **All 1,696 passed, and the 45
+  of CI's from run 46007767846**; none was in doubt, so no second look was called. The two captures
+  of the finding passed with their three lines read character by character; outside the path's block
+  they are pixel for pixel the first round's. The other changed pictures differ by what differs from
+  run to run: carets, temporary folders' names, a fake's port, the progress bar's segment and a held
+  fetch's percentage (17d read 20 %, 18b 50 %, 31a and 31b 60 %), a few anti-aliasing pixels,
+  About's version line, which names the build's commit, and the title bar's tint and the taskbar
+  button's ground over the new wallpaper. The verdicts are in `…/round-0f9099a/inspect/verdicts/`.
 - *Limits.* (1) The two rounds took three default runs and three real-window passes to get the one
   of each that stands: one default run was stopped by the watchdog for a cause that is not known,
   one pass failed in the harness, and one round fell to the app's fault. Q1 read 1,912, 1,938 and

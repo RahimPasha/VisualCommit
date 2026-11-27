@@ -1396,15 +1396,19 @@ counted round (07:13 to 07:18: 582 offline tests, then 596 of 596; its three `ru
 token, organization or namespace). **So the gate's two passes stand: the default run on `0f9099a`
 and the real-window pass on `750eb33`, the Gate commit; only docs change after it.** In the pass's
 captures `f5a-too-old` and `f6a-config-fault` the path breaks after its separators alone, as D472
-means. **Next:** the inspection of every picture of the round (under way: 28 Opus inspectors against
-the first round's pictures, and 45 of CI's from run 46007767846;
-`D:/Projects/Personal/phase8-work/gate/round-0f9099a/`); then the report, the checks by hand with
-the owner (the Narrator walk-through of 21 steps, phase 6's System step, the icon beside its
-look-alikes, a second start from the lead's isolating start file; their session and start files are
-in `D:/Projects/Personal/phase8-work/gate/hand/`, built and verified, and a page with the steps is
-the owner's at https://claude.ai/artifact/BE3ha6qo5uM1Vozpympouh), and the closing steps 22 to 27.
-The closing docs' drafts are written (a workflow of the lead's: seven writers, two readers for each
-file, a fixer each) and are kept outside the repository, in
+means. **The inspection passed** (07:20 to 07:46: 28 Opus inspectors and one for CI, every picture
+against the first round's: all 1,696 pass, and the 45 of CI's from run 46007767846; no doubt, no
+second look; ruling 116; the verdicts in
+`D:/Projects/Personal/phase8-work/gate/round-0f9099a/inspect/verdicts/`), and the list of pictures
+is committed. **What is left of step 21:** the report (being completed by a writer and its readers
+from `D:/Projects/Personal/phase8-work/gate/report-facts.md`) and the checks by hand with the owner,
+on the Release build of `750eb33` that the pass made (`0.1.0+750eb33…`). **Next:** the report, the
+checks by hand with the owner (the Narrator walk-through of 21 steps, phase 6's System step, the
+icon beside its look-alikes, a second start from the lead's isolating start file; their session and
+start files are in `D:/Projects/Personal/phase8-work/gate/hand/`, built and verified, and a page
+with the steps is the owner's at https://claude.ai/artifact/BE3ha6qo5uM1Vozpympouh), and the closing
+steps 22 to 27. The closing docs' drafts are written (a workflow of the lead's: seven writers, two
+readers for each file, a fixer each) and are kept outside the repository, in
 `D:/Projects/Personal/phase8-work/gate/closing-drafts/`: byte copies of `CLAUDE.md`, `README.md`,
 `docs/architecture.md`, `docs/cloud-sessions.md`, `docs/plan.md` and the new
 `docs/handoffs/phase-8a.md`, each as changed from `0f9099a`, with their hashes in `drafts.sha256`.
