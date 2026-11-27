@@ -110,8 +110,8 @@ real-window pass on `750eb33`, which merges the harness's fix (D473) and changes
 Gate commit is `750eb33`.** At it the branch holds 591 commits on `66063f3`, 45 of them merges.
 After it only docs change: `d6dbe33` (status.md), `ca0460c` (ruling 116 and D473), `6120f86` (the
 inspection's outcome in ruling 116 and status.md, and the list of pictures committed) and the
-close's commits of docs.
-[LEAD: the merge into `master`, once the phase is accepted, with its merge commit.]
+close's commits of docs. Not merged into `master` yet: "Phase 8a accepted" adds the merge commit
+here.
 
 Before the merges, in the main checkout: `e04762b`, the phase's first code commit (CI's floor job,
 D397's `Authors` and `Copyright`, the `.slnx` comment), and WP0 `fc8a063`. The merges: wave 1
@@ -132,9 +132,11 @@ checklist and Notes of status.md on the phase's branch give the rest
 (`git show origin/phase/8a-release-readiness:docs/status.md`, the merge's second parent once 8a is
 merged; the acceptance resets `master`'s).
 
-- **D246's two runs** of `Phase8aRealWindowPass` (13 launches, design 12), the owner present, on
-  `e4b323c`, 2026-11-26: 13 of 13 at 18:17 in 5 min 41 s and 13 of 13 at 18:31 in 5 min 5 s (396 and
-  314 s with the lock). Made once; they stand for the gate.
+- **D246's two runs** of `Phase8aRealWindowPass` (13 launches, design 12), on `e4b323c`,
+  2026-11-26, the owner told in the chat before each: 13 of 13 at 18:17 in 5 min 41 s and 13 of 13
+  at 18:31 in 5 min 5 s (396 and 314 s with the lock). Made once; they stand for the gate. Whether
+  the owner was at the machine, as D246's "told and present" asks, is not on record (the report's
+  "Run"); the owner's answer is written there and here.
 - **The live command before the pictures** (D335; status step 20): 2026-11-26, 11:00 to 11:04, on
   `fab4073`, the owner told: the offline classes 582 of 582 (1 min 36 s), then the whole project 596
   of 596 in 3 min 31 s (218 s with the lock). The three `run.txt` hold no token, organization or
@@ -250,8 +252,9 @@ merged; the acceptance resets `master`'s).
   pages. The Gate commit's push, a change to the real-window project alone, started no guide run, so
   the lead started one by hand, as D451 says (`gh workflow run guide.yml --ref
   phase/8a-release-readiness`: 46024262689 on `6120f86`, docs alone after the Gate commit): its site
-  holds the same 84 pictures and the same 35 pages again, each picture tag with its width, and the
-  links' check has no finding on it, so the lead's reading is the gate's check of the guide's site
+  holds the same 84 pictures and the same 35 HTML files again (the guide's 33 pages with mdBook's
+  `404.html` and `toc.html`), each picture tag with its width, and the links' check has no finding
+  on it, so the lead's reading is the gate's check of the guide's site
   (ruling 116). The 1920×1080 real window does not fit this screen, so the real window's checks at
   that size, screenshot D of phase 0's check 8 and A1's second capture among them, are proven
   scripted only, as the plan allows. No pass touches a real keychain (CI's steps do), and no real
@@ -266,13 +269,34 @@ merged; the acceptance resets `master`'s).
   lines read character by character. The verdicts are in
   `D:/Projects/Personal/phase8-work/gate/round-0f9099a/inspect/verdicts/`.
   [LEAD: whether the whole gate passed, with anything that could not run.]
-- **Checks by hand**, with the owner, from the lead's start files in
-  `D:/Projects/Personal/phase8-work/gate/hand/` (outside the repo): the Narrator walk-through of 21
-  steps and step 21a (D411, D450), phase 6's System step (D224), the icon beside its look-alikes by
-  eye, and a second start while another window is in front (design 4.6).
-  [LEAD: each check by hand's result, as the report's "Checks by hand" records it.]
-- **The cold-read check** (CLAUDE.md's closing step 5), made on the finished docs.
-  [LEAD: what the fresh agent hit and what it changed in the docs.]
+- **Checks by hand**: with the owner, from the lead's start files in
+  `D:/Projects/Personal/phase8-work/gate/hand/` (outside the repo), the Narrator walk-through of 21
+  steps and step 21a (D411, D450), phase 6's System step (D224) and a second start while another
+  window is in front (design 4.6); by the lead, the icon beside its look-alikes (design 13.4 item
+  11), made on 2026-11-27 from memory of the other marks, with no picture of them at hand: no
+  look-alike found (the report's row, with its limit). [LEAD: each check by hand's result, as the
+  report's "Checks by hand" records it.]
+- **The cold-read check** (CLAUDE.md's closing step 5), made on 2026-11-27 on the docs as committed
+  at `de48c81`: three fresh Opus readers with the repository alone, a session on the Windows machine
+  told "Start phase 8b", a cloud session told the same, and a session told "Phase 8a accepted". They
+  hit 63 gaps (`D:/Projects/Personal/phase8-work/gate/cold-read-result.json`, outside the repo).
+  Fixed in the docs: status.md's "Next step", which had grown into the phase's chronicle, names one
+  next thing again, and the chronicle is the first of its Notes; a start file's path under "Waiting
+  on the owner" that had lost two characters, and stale decision numbers there; the icon's
+  look-alike check, which the docs gave to the owner in one place and to the lead in another, and
+  which the lead then made; CLAUDE.md's row for "Phase N accepted", which now puts GitHub Pages'
+  source before the push, and its Commands' note on Git Bash; this handoff's order of "Do first",
+  its way to tell a changed machine, its isolated start of the app, the leftovers, the acceptance
+  bullet and the open questions for 8b's design; plan.md's risks 34 and 41 and the Backlog's rows
+  for 8b; the two templates ("Checks by hand", CI's six jobs, "Naming"); architecture.md's packaging
+  line, which read as decided; and the research's recommendations for 8b's questions, which lay
+  outside the repository alone, are now `docs/phase-8b-questions.md`. Left, each for its reason:
+  CLAUDE.md's step 4 names two files that no session reads whole any more, a rule and the owner's to
+  change (status.md's "Waiting on the owner"); what a cloud session does of a phase like 8b, the
+  regression's shape and the beta's commit are 8b's questions ("Open questions" below); risk 43's
+  macOS case stays the owner's (D413); the `gh api` call that sets Pages' source is untried and gets
+  its Commands row when it first works; `scripts/setup-linux.sh`'s stale header is code and goes
+  with 8b's first code commit.
 
 ## Environment
 
@@ -288,6 +312,21 @@ merged; the acceptance resets `master`'s).
 | Outside the repo | mdBook 0.5.4 for Windows at `D:/Projects/Personal/phase8-work/tools/mdbook-0.5.4/mdbook.exe` (design 13.4 item 20 has the hashes; `guide.yml` downloads the Linux archive and checks its SHA-256); the guide's demo root `C:\demo`; winget v1.29.380, an app execution alias at `%LOCALAPPDATA%\Microsoft\WindowsApps\winget.exe`, on the `PATH` (8a's real-window launches 7 and 8 fail without it, D449) |
 | Sandboxes | As in 7b: GitHub's token expires on 2026-11-29, Azure DevOps' and GitLab's on 2026-12-04; 8a made none again |
 | Screenshots | Scripted: scaling 1. Real window: 200 % and a work area of 1500×952, as `run.txt` records them. The guide's 84 pictures (42 shots in both themes): scale 2 from demo data, made on every build of the guide and never committed (D439, D440) |
+
+Whether the machine changed since the gate, which decides whether a session's start runs the whole
+default run (CLAUDE.md's "Start of every session", step 6): compare `git --version` (in Git Bash)
+and `dotnet --version` (at the repo root) with the Git and .NET SDK rows above, 2.56.0.windows.4 and
+10.0.303, and list the Windows updates installed since the gate in PowerShell with
+`Get-HotFix | Where-Object InstalledOn -ge (Get-Date '2026-11-27')` (read only), or read Settings,
+Windows Update, Update history. `InstalledOn` holds the date alone, at 00:00, so `-ge` keeps the
+gate's own day, which `-gt` would leave out. Run at 09:52 on 2026-11-27, after the counted round
+(its pass ended at 07:12, its inspection at 07:46), the command listed none, the newest updates
+being KB5132061 and KB5132688 of 2026-11-11; so an update dated 2026-11-27 that it lists later came
+after the counted round.
+
+The clock times in phase 8a's docs are the laptop's local time, UTC-07:00 throughout the phase. The
+allowance's weekly reset (D241; plan.md's Workflow), Thursdays at 2:00, is in the owner's local
+time too.
 
 ## Build, run and test
 
@@ -325,10 +364,45 @@ python -I scripts/scan-contrast.py <pictures folder> <output folder> --jobs 4
   series' facts skip); `VISUALCOMMIT_GUIDE_ROOT` and `VISUALCOMMIT_GUIDE_PICTURES` (GuideShots). The
   data folder gains `instance.lock`, `instance.json` and, only when set, `settings.json`'s
   `gitExecutable`.
-- A hand run: CLAUDE.md's isolating variables as before; `VISUALCOMMIT_GIT_STAND_IN=none` shows the
-  first-run screen without touching the machine's git. Since D421 a second start on the same data
-  folder, `dotnet run` among them, hands over to the running app and exits 0, so a hand run with a
-  `VISUALCOMMIT_DATA_DIR` of its own never meets the owner's app.
+- A hand run: CLAUDE.md's isolating variables as before. Their working form is the one the checks
+  by hand's start files use (`D:/Projects/Personal/phase8-work/gate/hand/`, outside the repo), a
+  Windows `.cmd` file; here `<folder>` is a folder of your own that holds an empty folder `data`, an
+  empty file `gitconfig-empty` and an empty folder `xdg`, made first, and `<repo>` the repo root:
+
+  ```
+  setlocal
+  set "W=<folder>"
+  set "VISUALCOMMIT_DATA_DIR=%W%\data"
+  set "GIT_CONFIG_NOSYSTEM=1"
+  set "GIT_CONFIG_GLOBAL=%W%\gitconfig-empty"
+  set "XDG_CONFIG_HOME=%W%\xdg"
+  set "VISUALCOMMIT_KEYCHAIN=memory"
+  set "VISUALCOMMIT_GITHUB_URL=none"
+  set "VISUALCOMMIT_AZURE_DEVOPS_URL=none"
+  set "VISUALCOMMIT_GITLAB_URL=none"
+  rem The machine's own git: no stand-in, whatever this console inherited.
+  set "VISUALCOMMIT_GIT_STAND_IN="
+  rem The live command's six variables do not reach the app or its git.
+  set "VISUALCOMMIT_LIVE_GITHUB_TOKEN="
+  set "VISUALCOMMIT_LIVE_GITHUB_REPO="
+  set "VISUALCOMMIT_LIVE_AZURE_DEVOPS_TOKEN="
+  set "VISUALCOMMIT_LIVE_AZURE_DEVOPS_REPO="
+  set "VISUALCOMMIT_LIVE_GITLAB_TOKEN="
+  set "VISUALCOMMIT_LIVE_GITLAB_REPO="
+  start "" "<repo>\src\VisualCommit.App\bin\Release\net10.0\VisualCommit.exe"
+  endlocal
+  ```
+
+  The `start` line runs the Release build that the real-window pass's command last made (its
+  project references the app's project). `dotnet run --project src/VisualCommit.App` in place of
+  the `start` line, before `endlocal`, with the file run from the repo root, starts a Debug build
+  instead; after `endlocal` the console no longer isolates the app.
+  `VISUALCOMMIT_GIT_STAND_IN=none` in place of the empty one shows the first-run screen without
+  touching the machine's git. Starting the app opens a window on the owner's desktop, so the owner
+  is told first, as for any takeover of the desktop (an agent's start by mistake is under Things
+  that cost time). Since D421 a second start on the same data folder, `dotnet run` among them,
+  hands over to the running app and exits 0, so a hand run with a `VISUALCOMMIT_DATA_DIR` of its
+  own never meets the owner's app.
 - A run of `guide.yml` started by hand (`workflow_dispatch`, D451) is made for a gate commit whose
   push starts no guide run, as one that changes only the real-window project does: at 8a's gate it
   was `gh workflow run guide.yml --ref phase/8a-release-readiness` (46024262689), which has its row
@@ -541,7 +615,7 @@ Rules worth keeping:
 | Phase 8 split into 8a and 8b, the phases' names and branches the lead's (amends D241); 8b's first answers: GitHub Releases with the owner's approval of each release, the update check asked at the first start, Windows' beta unsigned with its route chosen before the first stable release, macOS signed and notarised | D399 to D403 |
 | The README's note; no git bundled and a first-run screen; the floor 2.34 (amends D2); the icon drafted by the lead and chosen by the owner; the guide on GitHub Pages; About as a settings section, a palette command and the macOS menu's item; the three contrast fixes in one round (amends D198); names, the graph's row and one Narrator walk-through, no high-contrast palette; the name's search and the README's "Name" note | D404 to D412 |
 | Risks 39, 40 and 43 left recorded; phase 6's design 17.5 closed; 8a's start through the weekly reset | D413 to D415 |
-| The design 305 KB drafted, 356 KB after its review and about 775 KB at the Gate commit with its as-built notes and 115 rulings, against D243's 150 to 200 (§5's brief over D242's 25 KB) | D242, D243 |
+| The design 305 KB drafted, 356 KB after its review, 774,830 bytes at the Gate commit with its as-built notes and 115 rulings (`git show 750eb33:docs/phase-8a-design.md \| wc -c`), and 783,175 bytes with 116 rulings at the close (`git show HEAD:docs/phase-8a-design.md \| wc -c` on `de48c81`; 792,403 bytes on disk in the Windows checkout, whose lines end in CRLF), against D243's 150 to 200 KB (§5's brief over D242's 25 KB). 8b's design takes 8a's as the model for its structure, not for its size ("Do first", step 6) | D242, D243 |
 | The design's mechanisms: tests that start the app in 8a's project; the palette's three commands and F1 (amends D192, D199, D213); the tokens (amends D198); the scan and the masked comparison; the floor's code (amends D2, D406's "2.34"); the guard; the first run's setting and lookup; no ssh probe and the netrc note; the stage rows' buttons on focus; Tab out of read-only views; splitters by keys; the icon's masters, tool and checks; About, the notices, the text dialog and the notices as build inputs; American spelling in the notices and the guide; the graph as a List with one spoken row (amends D49); the measures and the series; mdBook and GuideShots; the real window's launches, masked notice and never-pressed list | D416 to D446 |
 | The review's: the tool writes the `.icns` (amends D429); the notice's folder line and the guard's server for the user alone (amends D443); winget by its full path, no third-party package source (amends D423); the row proven by `LiveRegionChanged` (amends D445); the guide workflow's "App's links" and the hand check's artifact; "Cancel {title}" only while its operation runs (amends D417) | D447 to D452 |
 | winget for a missing and a too-old git, not one that does not work (the owner; amends D405, D423 and ruling 44); the owner's mark chosen before §7 was built, so the placeholder D428 named was never written | D453; design 7.8 |
@@ -584,7 +658,7 @@ Rules worth keeping:
 | Pictures that vary by nature, besides 7b's kinds (a caret's blink, a temporary folder's random name, a fake's fallback port, a progress bar, edge pixels): the held fetch's percentage and bar in phase 3's `17b`, `17d`, `18b`, `31a` and `31b` and their real-window twins (N is not fixed; ruling 113); phase 3's `18b` lane edge in three forms; phase 2's `17c-restored`, which flips between two files; phase 0's `06c-restarted-first-frame` by its first-frame race; part F's real-window captures with the stand-in's path (ruling 47) | Ordinary: an inspection expects them | rulings 107, 109, 111 and 113; the report's "Run" |
 | The run time: the default run 1 h 53 min 8 s for 8,936 tests at 8a's counted round (1 h 48 min 52 s for 8,927 at its first round; 1 h 31 min 48 s for 7,892 at 7b's gate), `VisualCommit.App.Tests` the longest project, 1 h 35 min 25 s from its start to its end beside the others; the real-window pass 40 min 56 s for 145 tests, the first round's 124 and `WaitForRuleTests`' 21, which start no app (41 min 34 s for the 124 at the first round; 33 min 35 s for 77 at 7b's); CI's Test steps during the phase up to 45 min 28 s on Windows (the Gate commit's run) and 47 min 44 s on macOS, against the 56 at which D377 raises the limit; the Windows step read 34 min 2 s, 40 min 34 s and 45 min 28 s in the three runs of 2026-11-26 and 27, on the same tests but nine | Every full run, the gate and CI | plan risks 8, 12, 18; D343, D377 |
 | Q1 1,626 ms of 2,000 in the pass that stands, after about an hour without input; 1,912 ms and 1,938 ms in the two passes that did not count, after rests of 14 and 9 minutes straight after a default run, on code that is the same for Q1 (1,827 ms at 7b's gate, 1,400 ms at 7a's); the pass starts the app from Git Bash, whose `PATH` finds `ucrt64\bin\git.exe`, where a user's desktop finds `cmd\git.exe`, Git for Windows' launcher, which costs a process more per git call (S19-22 kept the test host's `PATH` in 8a) | A hot or busy laptop fails a gate by itself | plan risk 10 |
-| Leftovers at this writing (2026-11-27): 42 local `wip/p8a-*` branches, each merged into the phase's branch, never pushed: `about` `120df7e`, `after-browse` `e2aa0e9`, `after-frames` `e742475`, `after-hide` `8af7590`, `after-order` `1382040`, `after-speech` `7010e55`, `ci-sweep05` `996b9fc`, `ci-underline` `8f50a34`, `close-docs` `13d36a6`, `colours` `a1a4064`, `copy-walk` `4fe7bd3`, `dimmed` `315b902`, `docs` `5c7e215`, `docs-34` `affbd6f`, `docs-56` `47fd7ed`, `docs-after` `519fb10`, `docs-fixes` `bc14009`, `fetch-hold` `e305acc`, `firstrun` `1daecda`, `fix-firstrun` `a733f68`, `fix-focus` `947f24a`, `fix-git` `23dd655`, `fix-harness` `8be5582`, `fix-instance` `8f793ce`, `fix-speech` `83e36f6`, `floor` `3e6f89e`, `guide` `bc24568`, `hold` `f019688`, `hold-notes` `fdf7414`, `icon` `a8f1dfb`, `keyboard` `87adae7`, `linkframe` `5177cec`, `path-wrap` `6fa567f` (the gate's fix of the app, merged at `ee3cdc4`), `perf` `62e031c`, `realwindow` `902288e`, `restore` `aa83146`, `rows-scroll` `a9a7847`, `rw-handles` `418ab68`, `single` `894829a`, `temp-cleaner` `d576558`, `uia` `eab8dc6`, `uia-poll` `df263aa` (the gate's fix of the harness, merged at `750eb33`); the last two fixes' worktrees, `D:/Projects/Personal/phase8-work/gate/fix/p8a-path-wrap` and `p8a-uia-poll`, are still there, and the gate's step 1 wants no worktree but the main checkout before a heavy run; and, unmerged, `wip/p7b-palette-growth` at `c90b862` (7b's refuted fix, plan risk 46), `backup/phase-before-split` at `d3a5780` and `backup/p7b-accounts-before-split` at `bf6383c` (WP-A's commits from before the token-shaped literals were split, never to be pushed). `D:/Projects/Personal/vc-wt/` is empty | Clutter; CLAUDE.md's step 1 leaves every `wip/` and `backup/` branch out (D396), and whether they go is the owner's | For the next phase, "Do first" |
+| Leftovers at this writing (2026-11-27): 42 local `wip/p8a-*` branches, each merged into the phase's branch, never pushed: `about` `120df7e`, `after-browse` `e2aa0e9`, `after-frames` `e742475`, `after-hide` `8af7590`, `after-order` `1382040`, `after-speech` `7010e55`, `ci-sweep05` `996b9fc`, `ci-underline` `8f50a34`, `close-docs` `13d36a6`, `colours` `a1a4064`, `copy-walk` `4fe7bd3`, `dimmed` `315b902`, `docs` `5c7e215`, `docs-34` `affbd6f`, `docs-56` `47fd7ed`, `docs-after` `519fb10`, `docs-fixes` `bc14009`, `fetch-hold` `e305acc`, `firstrun` `1daecda`, `fix-firstrun` `a733f68`, `fix-focus` `947f24a`, `fix-git` `23dd655`, `fix-harness` `8be5582`, `fix-instance` `8f793ce`, `fix-speech` `83e36f6`, `floor` `3e6f89e`, `guide` `bc24568`, `hold` `f019688`, `hold-notes` `fdf7414`, `icon` `a8f1dfb`, `keyboard` `87adae7`, `linkframe` `5177cec`, `path-wrap` `6fa567f` (the gate's fix of the app, merged at `ee3cdc4`), `perf` `62e031c`, `realwindow` `902288e`, `restore` `aa83146`, `rows-scroll` `a9a7847`, `rw-handles` `418ab68`, `single` `894829a`, `temp-cleaner` `d576558`, `uia` `eab8dc6`, `uia-poll` `df263aa` (the gate's fix of the harness, merged at `750eb33`); the gate's two fixes' worktrees, `D:/Projects/Personal/phase8-work/gate/fix/p8a-path-wrap` and `p8a-uia-poll`, were removed by the lead on 2026-11-27, and their branches `wip/p8a-path-wrap` and `wip/p8a-uia-poll` stay, merged (D396): at this writing `git worktree list` shows the main checkout alone, and `git branch --list 'wip/*' 'backup/*'` shows 45 branches, the 42 `wip/p8a-*` ones and the three below; and, unmerged, `wip/p7b-palette-growth` at `c90b862` (7b's refuted fix, plan risk 46), `backup/phase-before-split` at `d3a5780` and `backup/p7b-accounts-before-split` at `bf6383c` (WP-A's commits from before the token-shaped literals were split, never to be pushed). `D:/Projects/Personal/vc-wt/` is empty | Clutter; CLAUDE.md's step 1 leaves every `wip/` and `backup/` branch out (D396), and whether they go is the owner's | For the next phase, "Do first" |
 | Working folders outside the repo. Needed later: `D:/Projects/Personal/phase8-work/research/` (plan.md's "Phase 8b" cites its briefs), `tools/mdbook-0.5.4/` (CLAUDE.md's row for a local build of the guide), `wave4/restore/series2/run_series2.sh` (CLAUDE.md's row for the alternated series; it expects its two builds' worktrees at `D:/Projects/Personal/vc-wt/p8a-restore-base` and `p8a-restore`, which are removed, so make them again or change its `BASE` and `FIX`) and `gate/` (8a's gate). History once 8a is accepted: the waves' folders, `wp0/`, `ci/`, `icon/` (the drafts; the owner's choice is kept in `docs/brand/icon/`), `references/`, `baseline/`, `design/` and `research2/`, and `D:/Projects/Personal/phase7b-work/` (about 6 GB) and `phase7a-work/` (1.2 GB). But `phase7b-work/`'s `research/scratch-g3-git/` and `verify/git243/` hold the gits kept for runs with another git first on `PATH` (Environment, the 7b handoff's): they are needed while such a run may come, or are moved first | Disk: D: had 3.3 GB free on 2026-11-27 after the counted round; what goes is the owner's word | Waiting on the owner |
 | Phase 7b's known issues still stand, but for the `.slnx` comment (fixed in `e04762b`) and phase 2's commit boxes (K7, D392); a netrc entry still answers a bound call first on git 2.34 to 2.45, and the Accounts section now says so (F14); risks 39, 40 and 43 the owner left recorded (D413). Risk 43's macOS case: CI's macOS git is Homebrew's 2.56.1, whose `git-url-user.txt` reads Kept in runs 45917903492, 45965143178 and 46007767846; risk 43's last column names a 2.56.1 in Homebrew as what retires that case, and the risk stays as the owner left it (D413) | As there | [phase 7b's handoff](phase-7b.md) |
 
@@ -749,14 +823,16 @@ Reuse:
   `RealApp.Phase8b.cs` and the csproj link
   `..\VisualCommit.VisualTests.Phase8b*\Phase8bExpectations*.cs` as
   `Phase8b\%(Filename)%(Extension)`; parts avoid C, O, Q, R and T (D230); branches `wip/p8b-<key>`
-  from `phase/8b-packaging-beta`, worktrees `D:/Projects/Personal/vc-wt/p8b-<key>`. Ports 47391 to
+  from `phase/8b-packaging-beta`, worktrees `D:/Projects/Personal/vc-wt/p8b-<key>` on the Windows
+  machine (where a cloud session puts its worktrees is for 8b's design to name). Ports 47391 to
   47399 are taken or reserved, and 8a added none: a new one takes 47400 or later, pinned in
   `AuthRemoteServerTests`, by a decision that amends D97 as D265 and D363 did.
 - **The lagged list** (D262): 8b's design names its own, from 8a's (design 0.4's seven commands with
   `RestoreOrderShellTests` in the App.Tests command) and the classes 8b adds that start the app with
   real git.
 
-Do first:
+Do first, on "Start phase 8b", in this order (CLAUDE.md's "Start of every session" and "start a
+phase"; plan.md's Workflow):
 
 1. The start-of-session steps. CLAUDE.md's step 4 names `architecture.md` and `decisions.md` whole
    (about 1.0 MB and 0.47 MB at 8a's close; 828 and 353 KB at 7b's merge; whether to read them by an
@@ -769,23 +845,68 @@ Do first:
    risks 1, 6, 14, 34 and 41, with 8, 10, 12, 18, 26, 27, 42, 46 and 48 to 53; the Known issues
    above and 7b's; CI's run on `master` after the merge. On the Windows machine push in the form
    CLAUDE.md's Commands give until the owner settles Git Credential Manager.
-2. Before the design, the owner's answers to plan.md's "Phase 8b" questions, each with the
-   research's recommendation (`D:/Projects/Personal/phase8-work/research/`: `web-installers.md`,
-   `web-macos.md`, `web-channels.md`, `repo-ship.md`, `repo-gate.md`, `repo-critic.md`), each
-   recorded as a decision and carried into plan.md; with them the Windows route, a month before the
-   first stable release if it is to be Azure Artifact Signing (D402), the week's share (D241) and
-   the three live tokens made again.
-3. The leftovers in Known issues, if the closing session did not remove them: the worktrees
-   `D:/Projects/Personal/phase8-work/gate/fix/p8a-path-wrap` and `p8a-uia-poll`, if still there, go
-   with `git worktree remove`; the merged `wip/p8a-*` branches, `wip/p7b-palette-growth` and the two
-   `backup/*` branches stay local or go, never pushed (D396); fsmonitor daemons; room on C: and D:.
-   A baseline whole run only as D245 allows. In 8b's first code commit, `scripts/setup-linux.sh`'s
-   header (Known issues), which is code and so was left past 8a's Gate commit.
-4. The design: 8a's is the model (section 0 with the naming in 0.3, the lagged list in 0.4, the cost
-   in 0.6 and the earlier pictures in 0.7; section 1's contracts; a brief per package). Estimate
-   what the phase adds to the default run (1 h 53 min 8 s for 8,936 tests at 8a's counted round)
-   and to the real-window pass (40 min 56 s for 145 tests), and how the regression against the
-   installed build runs beside them, before writing the checks.
+2. The week's share (D241): ask the owner how much of the plan's weekly allowance is left, before
+   anything of the phase starts. The phase, and each of its stages after (the design, a part's
+   checks, a wave of packages, the review, the gate), starts only when the share left covers it,
+   and the Progress checklist records each answer.
+3. The branch and the checklist, as CLAUDE.md's "start a phase", steps 1 to 3, say: 8a merged into
+   `master`; `git switch -c phase/8b-packaging-beta --no-track origin/master`; `docs/status.md` set
+   to "In progress" with its Progress checklist; commit and push (`git push -u origin
+   phase/8b-packaging-beta`, on the Windows machine in the form of CLAUDE.md's Commands row "Push on
+   the Windows machine"), so that a machine lost later loses nothing.
+4. The questions to the owner, before the design (D243 asks the owner's rulings before drafting):
+   plan.md's "Phase 8b" questions, each with the research's recommendation. Each question's
+   recommendation and its source are in `docs/phase-8b-questions.md`, so that a session without the
+   owner's disk has them. The files it cites are 13 of the 17 in
+   `D:/Projects/Personal/phase8-work/research/`, outside the repository: `web-installers.md`,
+   `web-macos.md`, `web-channels.md`, `web-winsign.md`, `web-git.md`, `repo-ship.md`,
+   `repo-gate.md`, `repo-owed.md`, `repo-about.md` and `repo-critic.md`, and three skeptics' files,
+   `web-verify-installers-channels.md`, `web-verify-winsign-macos.md` and `web-verify-git-brand.md`,
+   whose corrections win over the briefs. With the questions comes the Windows route, a month before
+   the first stable release if it is to be Azure Artifact Signing (D402). Each answer is recorded as
+   a decision, from D474 on (the next free number at this writing), on the phase's branch, and
+   carried into plan.md. Before 8b's gate the three live tokens are made again (Risks to watch).
+5. The leftovers in Known issues, on the Windows machine: `git worktree list` should show the main
+   checkout alone (the gate's two fixes' worktrees were removed on 2026-11-27); the merged
+   `wip/p8a-*` branches, `wip/p7b-palette-growth` and the two `backup/*` branches stay local or go,
+   never pushed (D396); fsmonitor daemons; room on C: and D:. A baseline whole run only as D245
+   allows. In 8b's first code commit, `scripts/setup-linux.sh`'s header (Known issues), which is
+   code and so was left past 8a's Gate commit.
+6. The design: 8a's is the model for its structure, not for its size (section 0 with the naming in
+   0.3, the lagged list in 0.4, the cost in 0.6 and the earlier pictures in 0.7; section 1's
+   contracts; a brief per package). D243 asks about 150 to 200 KB for the design, its decisions in
+   `decisions.md` alone, and D242 a brief of at most about 25 KB per package; 8a's was 305 KB as
+   drafted, 356 KB after its review and 774,830 bytes at the Gate commit (Deviations from the plan).
+   Estimate what the phase adds to the default run (1 h 53 min 8 s for 8,936 tests at 8a's counted
+   round) and to the real-window pass (40 min 56 s for 145 tests), and how the regression against
+   the installed build runs beside them, before writing the checks.
+
+Open questions that 8b's design settles with the owner. The cold-read check at 8a's close found no
+answer to them in plan.md, and none is answered here:
+
+- **What the regression against the installed build runs.** plan.md's phase 8b visual check is
+  "every check from phases 0–8a re-run against the installed build". The scripted walk-through runs
+  the app inside the test process, in Avalonia's headless mode, and only the real-window pass starts
+  a built app: `RealApp` (`tests/VisualCommit.RealWindowTests/RealApp.cs`) starts the file that its
+  csproj's `AppExecutable` metadata names, fixed at build time (Reuse, above). What that check runs
+  on each platform, and what stands for it where no real-window pass runs (macOS, Linux), is open;
+  plan.md's question on "the shape of the regression against the installed build" is where it is
+  asked.
+- **How the beta release is published before the acceptance.** "The beta release" is one of 8b's
+  Delivers items, which CLAUDE.md's Rules ask to be proven by a test or a check like any other,
+  while phase work reaches `master` only at the acceptance and every release waits for the owner's
+  approval in GitHub (D400). From which commit, branch and tag the beta is built and published, and
+  what of "receive an update" is proven before the merge, is open; plan.md asks "from which commit a
+  public beta is built".
+- **What a Linux cloud session can build and prove in 8b.** CLAUDE.md's "Sessions away from the
+  Windows machine" was written for a phase whose Windows-only parts are the real-window pass and
+  the live command. 8b's Delivers reach further: packages built and signed, macOS's notarised on
+  GitHub's macOS runners with the owner's certificate (D403), a release that waits for the owner
+  (D400), install, first run and update on Windows, the macOS checklist on a Mac and Linux by hand.
+  Which of them a cloud session can build and prove, and what its "Blocked" hand-over then lists for
+  the Windows session, a Mac and the owner, is open; so is what such a session compares its
+  pictures with, since 8a's references are on the laptop's disk, drawn on Windows (Running the
+  visual gate).
 
 Risks to watch:
 
@@ -811,19 +932,43 @@ Risks to watch:
   (risk 43).
 - The live tokens (risk 42): GitHub's expires on 2026-11-29, Azure DevOps' and GitLab's on
   2026-12-04. A gate runs the live command twice (D335), so 8b's gate needs all three made again
-  first, as 7a's design 14.6 and 7b's design 15.8 say, set through a script that never shows a token
-  and checked as CLAUDE.md's "What to know" says.
+  first. 7a's design 14.6 and 7b's design 15.8 say how: the owner makes each token on its service
+  (GitHub's a fine-grained token for the private sandbox alone; Azure DevOps' for D352's
+  organization alone; GitLab's a fine-grained one for the account's own projects), and enters it as
+  a Windows user variable in Windows' Environment Variables dialog, never typed in a shell, then
+  restarts VS Code; the lead checks the six variables only as 15.8 and CLAUDE.md's "What to know"
+  say, printing no token. On 2026-11-05 the owner set the four new ones instead with a PowerShell
+  script of the lead's that reads each token from the clipboard (CLAUDE.md's "What to know"); it
+  lies outside the repository, and its path is not recorded.
 
 ## Waiting on the owner
 
-- **Acceptance of phase 8a.** The Gate commit is `750eb33` (State of the repo).
-  [LEAD: the phase's state, and, once given, the acceptance's date and the merge commit.]
+- **Acceptance of phase 8a.** The Gate commit is `750eb33` (State of the repo). Not given yet: the
+  phase's state is in `docs/status.md` on the phase's branch, and "Phase 8a accepted" adds the
+  acceptance's date and the merge commit here. Of that file's "Waiting on the owner", the gate
+  closes what it asked of the owner for itself: its checks by hand and the takeovers of the desktop
+  told first. Still waiting after the acceptance: GitHub Pages (below) until the guide's first
+  deploy is read and the environment's branch rule settled, the live tokens for 8b's gate, the
+  lead's rulings and the decisions made without the owner to look over, the questions for phase
+  8b, the click that carries the frame (ruling 107) and the machine's Storage Sense and working
+  folders (below), beside the older items under "Still open from earlier" below.
 - **GitHub Pages** (D408, D451; ruling 64): at "Phase 8a accepted", before `master` is pushed, its
   source is set to "GitHub Actions", by the owner or by the lead through `gh api` at the owner's
   word. After the push the guide's run on `master` is read, and run again by `workflow_dispatch` if
   it ran before the setting; then `https://rahimpasha.github.io/VisualCommit/` is checked, and the
   `github-pages` environment's branch rule read: if it admits more than `master`, the owner's leave
-  is asked to set it.
+  is asked to set it. That run is the first run ever of the workflow's Pages steps, which no run on
+  a branch takes: `actions/upload-pages-artifact@v5` (the build job's step "Upload the site for
+  GitHub Pages") and the deploy job's `actions/configure-pages@v6` and `actions/deploy-pages@v5`
+  (its step "Deploy"). If it fails to deploy, the merge is already on `master` and the app's links
+  to the guide answer "not found" until a deploy (design 11.9); the fix is a change to `guide.yml`
+  committed on `master` outside a phase, at the owner's word, as CLAUDE.md's Rules say of a change
+  to the project's tooling, and its runs are read and recorded in `docs/status.md` like any other.
+  The docs-only commit that records `master`'s CI run (CLAUDE.md's "Phase N accepted") records the
+  guide's run beside it, and also sets the report's "After the merge" row under "Checks by hand",
+  this bullet, the Result table's "the live site after "Phase 8a accepted"", Reuse's line on the
+  guide's links above, and plan.md's lines on GitHub Pages (phase 8a's Outcome, "Left to the
+  owner").
 - **The live tokens**: GitHub's expires on 2026-11-29, Azure DevOps' and GitLab's on 2026-12-04;
   before 8b's gate the owner makes all three again, with an expiry that covers it.
 - **A click that carries the frame** (ruling 107): after a click on the banner's framed Continue a
@@ -851,7 +996,12 @@ Risks to watch:
   owner's own Windows profile; what an uninstall removes; the channels for bug and security reports;
   and when a Mac is at hand for the macOS checklists. With them the Windows route, a month before
   the first stable release if it is to be Azure Artifact Signing, and the publisher name it shows
-  (D402).
+  (D402). Each question's recommendation is in `docs/phase-8b-questions.md` ("Do first", step 4).
+  Before the release workflow's first run the owner's accounts are needed too: the Developer ID
+  certificate and the notarisation's credentials as the repository's secrets, and the protected
+  environment that waits for the owner's approval (D400, D403); their form is 8b's design's, and the
+  secrets and the environment are GitHub settings, which the owner makes or allows (CLAUDE.md's
+  Rules).
 - **The machine**: Storage Sense is still on; with C: out of its low state it has no cause to run
   (ruling 111), and switching its temporary-file cleaning off is the owner's (the lead changes no
   Windows setting). D: had 3.3 GB free on 2026-11-27 after the counted round; which working folders

@@ -50,6 +50,17 @@ Result values: Pass, Fail, Not run (with the reason in Notes).
 "Real window" is filled in only for the checks repeated in the real-window pass; the others say "n/a".
 Say for each check, when writing it, whether it is repeated there.
 
+## Checks by hand
+
+What the gate checks by hand, outside the scripted run and the real-window pass, by the lead or the
+owner: one row per check, with the part, design section or earlier phase it comes from, recorded
+when the gate runs. Since phase 8a they are part of the gate (CLAUDE.md's "Closing a phase", step
+1). Result values as under "Checks".
+
+| Check by hand | From | Result | Notes |
+|---|---|---|---|
+| | | | |
+
 ## What proves each Delivers item
 
 `docs/plan.md`'s "Delivers" list for the phase, one row per item, the items carried in from
@@ -81,8 +92,11 @@ unfinished until a Windows session has run it.
 
 ## Other platforms
 
-The CI run of the gate's commit and its result in each job (the three platforms and the two
-bare Ubuntu containers), and which of the screenshots CI took on macOS and Linux were opened.
+The CI run of the gate's commit and its result in each of CI's six jobs (`windows-latest`,
+`macos-latest` and `ubuntu-latest`; the two bare Ubuntu 24.04 containers, "bare ubuntu container,
+SDK from ubuntu packages" and "bare ubuntu container, SDK from microsoft installer"; and the Ubuntu
+22.04 container on git 2.34.1, the floor, "ubuntu 22.04 container, git 2.34 (the floor)", since
+phase 8a), and which of the screenshots CI took on macOS and Linux were opened.
 
 ## macOS checklist for the owner
 

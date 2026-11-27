@@ -58,7 +58,9 @@ Tool quirks, dead ends and surprises the next session should not rediscover.
 
 ## For the next phase
 
-What to reuse, what to do first, and the risks to watch.
+What to reuse, how the next phase names its docs, projects, classes, branch and folders
+("Naming", which CLAUDE.md's "Start of every session", step 5, relies on), what to do first, and
+the risks to watch.
 
 ## Waiting on the owner
 

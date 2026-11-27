@@ -79,7 +79,12 @@ it are not built yet, and "As built" says which are. The reasons behind the main
   own runs the tests on git 2.34.1, the oldest the app supports, in an Ubuntu 22.04 container
   (D406, D420). Since phase 8a a second workflow, `guide.yml`, builds the user guide's site with
   its pictures, checks its links and publishes it to GitHub Pages from `master` alone (D408, D439).
-- **Packaging.** Velopack for installers and auto-update on all three platforms.
+- **Packaging.** Not decided: the installers and the updater are phase 8b's first question to the
+  owner (plan.md's "Phase 8b"); the research of 2026-11-18 recommends Velopack, a recommendation
+  only ([phase-8b-questions.md](phase-8b-questions.md)). Decided so far: the installers, the updates
+  and the beta on GitHub Releases, each release approved by the owner (D400); the update check asked
+  at the first start (D401); Windows' beta unsigned (D402); macOS signed with the owner's Developer
+  ID and notarised (D403).
 
 ## Solution layout
 

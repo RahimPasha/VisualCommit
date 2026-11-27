@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-11-18
+Last updated: 2026-11-27
 
 Remote: `origin` is https://github.com/RahimPasha/VisualCommit.git, a public repository. The local
 folder on the development machine is still named "Visual Git"; that has no effect on the build.
@@ -18,7 +18,7 @@ folder on the development machine is still named "Visual Git"; that has no effec
 | 6. Multi-repo and productivity | Done | `phase/6-multi-repo` | [phase-6](handoffs/phase-6.md) | [phase-6](test-reports/phase-6.md) |
 | 7a. Hosting foundation and GitHub | Done | `phase/7a-hosting-github` | [phase-7a](handoffs/phase-7a.md) | [phase-7a](test-reports/phase-7a.md) |
 | 7b. Azure DevOps and GitLab | Done | `phase/7b-hosting-azure-gitlab` | [phase-7b](handoffs/phase-7b.md) | [phase-7b](test-reports/phase-7b.md) |
-| 8a. Release readiness in the app | In progress | `phase/8a-release-readiness` | | |
+| 8a. Release readiness in the app | Blocked | `phase/8a-release-readiness` | [phase-8a](handoffs/phase-8a.md) | [phase-8a](test-reports/phase-8a.md) |
 | 8b. Packaging and public beta | Not started | `phase/8b-packaging-beta` | | |
 
 States: Not started, In progress, Blocked (cannot continue or close without the owner, or without
@@ -27,19 +27,25 @@ acceptance (whole gate passed, not yet merged), Done (merged).
 
 ## Current phase
 
-Phase 8a, "Release readiness in the app" (plan.md's "Phase 8a"; D399), is in progress on
-`phase/8a-release-readiness`, started on 2026-11-19 from `master` at `66063f3`. It is the in-app
-half of the public release; 8b, the packaging, follows it. Phase 7b was accepted by the owner on
-2026-11-08 and merged into `master` (merge commit `3dc7f79`); its gate ran on `cb9af6d`. Phase 7a was accepted on 2026-10-31 (merge commit
-`019e68a`), phase 6 on 2026-10-24 (merge commit `3f34c87`), phase 5 on 2026-10-17 (merge commit
-`c299939`), phase 4 on 2026-10-12 (merge commit `ce5f337`), phase 3 on 2026-10-11 (merge commit
-`8b33745`), phase 2 on 2026-10-10 (merge commit `e039070`), phase 1 on 2026-10-10 (merge commit
-`b5eb1ed`) and phase 0 on 2026-10-06 (merge commit `b5f4723`).
+Phase 8a, "Release readiness in the app" (plan.md's "Phase 8a"; D399), is **Blocked** on
+`phase/8a-release-readiness`, started on 2026-11-19 from `master` at `66063f3`: the automated part
+of its gate passed on 2026-11-27, every picture was inspected, and the report, the closing docs and
+the cold-read check are in; three checks by hand of the gate need the owner ("Waiting on the owner",
+first bullet; "Next step"). It is the in-app half of the public release; 8b, the packaging, follows
+it. Phase 7b was accepted by the owner on 2026-11-08 and merged into `master` (merge commit
+`3dc7f79`); its gate ran on `cb9af6d`. Phase 7a was accepted on 2026-10-31 (merge commit `019e68a`),
+phase 6 on 2026-10-24 (merge commit `3f34c87`), phase 5 on 2026-10-17 (merge commit `c299939`),
+phase 4 on 2026-10-12 (merge commit `ce5f337`), phase 3 on 2026-10-11 (merge commit `8b33745`),
+phase 2 on 2026-10-10 (merge commit `e039070`), phase 1 on 2026-10-10 (merge commit `b5eb1ed`) and
+phase 0 on 2026-10-06 (merge commit `b5f4723`).
 
-Gate commit: none yet. When a phase is set to "Awaiting acceptance", this line names the commit
-that both passes of the gate ran on (or, by D246, the real-window pass's commit when it changes
-only `tests/VisualCommit.RealWindowTests` after the commit the default run ran on); "Phase N accepted" checks that
-nothing but docs changed after it.
+Gate commit: `750eb33`, the commit of the gate's real-window pass, which changes only
+`tests/VisualCommit.RealWindowTests` after `0f9099a`, the commit its default run ran on (D246;
+design 13.1's ruling 116). The phase is set to "Awaiting acceptance" on it when the owner's checks
+by hand are in. When a phase is set to "Awaiting acceptance", this line names the commit that both
+passes of the gate ran on (or, by D246, the real-window pass's commit when it changes only
+`tests/VisualCommit.RealWindowTests` after the commit the default run ran on); "Phase N accepted"
+checks that nothing but docs changed after it.
 
 ### Progress
 
@@ -461,12 +467,21 @@ Closing (CLAUDE.md's "Closing a phase"):
 - [x] 24. `docs/handoffs/phase-8a.md` written from the template (`ec731cf`). Five marks, `[LEAD:
   …]`, wait in it for the owner's checks by hand, the cold-read check, the gate's last word and the
   merge.
-- [ ] 25. The cold-read check, and its gaps fixed.
+- [x] 25. The cold-read check, and its gaps fixed (2026-11-27). Three fresh Opus readers with the
+  repository alone: a session on the Windows machine told "Start phase 8b", a cloud session told the
+  same, and a session told "Phase 8a accepted". They hit 63 gaps
+  (`D:/Projects/Personal/phase8-work/gate/cold-read-result.json`); each is fixed in the docs or left
+  with its reason (the handoff's "The cold-read check"). Among them: this file's "Next step" had
+  grown into the phase's chronicle; a start file's path in "Waiting on the owner" was misspelt; the
+  research's recommendations for phase 8b's questions lay outside the repository alone, and are now
+  in `docs/phase-8b-questions.md`; the two templates lacked "Checks by hand" and "Naming".
 - [x] 26. The CI run of the gate's commit read and recorded here, with each job's result:
   46007767846 on `750eb33`, success in all six jobs at its first attempt (the CI section).
 - [ ] 27. This file: links to the handoff and the report, the "Gate commit", what waits on the
   owner, and the state "Awaiting acceptance" or "Blocked"; the owner told what passed, what did not
-  and what needs a decision.
+  and what needs a decision. Done on 2026-11-27 in its "Blocked" form (the links, the Gate commit,
+  the owner's bullet, the owner told); done again with "Awaiting acceptance" when step 21's checks
+  by hand are in.
 
 ### CI
 
@@ -1099,6 +1114,49 @@ Test step for minutes again, read "Known issues" in the phase 0 handoff first.
 
 ### Next step
 
+**The owner's three checks by hand, then step 27.** Everything else of phase 8a's gate and close is
+done (2026-11-27), and the phase is "Blocked" on these alone:
+
+- *What stands.* The gate's counted round (design 13.1's rulings 115 and 116; the report's "Run"):
+  the default run on `0f9099a`, the real-window pass on `750eb33`, **the Gate commit**, the list of
+  pictures, the live command, every one of the 1,696 pictures inspected and 45 of CI's, the guide's
+  site, CI's run 46007767846 green in all six jobs. Only docs changed after `750eb33`. The report
+  (step 21 but for the three checks), architecture.md, plan.md and the handoff (steps 22 to 24), the
+  cold-read check (step 25) and CI's record (step 26) are in.
+- *What waits* ("Waiting on the owner", first bullet): the Narrator walk-through of 21 steps and
+  step 21a, a second start behind another window, and phase 6's System step, on the pass's Release
+  build of `750eb33`. Their start files are in `D:/Projects/Personal/phase8-work/gate/hand/` (its
+  `README.txt` says what each is), outside the repository; the steps and what to expect at each are
+  on the owner's page, https://claude.ai/artifact/BE3ha6qo5uM1Vozpympouh, and in the report's part U
+  ("The Narrator walk-through by hand"). The owner pastes the page's summary into the chat.
+- *When the results are in* (a session told "Continue" does this): (1) write each result into the
+  report's "Checks by hand", in the three rows marked `[LEAD: the owner's results]`, with the words
+  heard where they differ from the expected ones, and the owner's answer on D246's two runs into the
+  report's "Run" ("Waiting on the owner"). (2) If each check is as expected: fill the marks `[LEAD:
+  …]` on the whole gate and on the checks by hand in `docs/handoffs/phase-8a.md` (two) and in
+  `docs/plan.md`'s phase 8a Outcome (three); tick step 21; then step 27: the state "Awaiting
+  acceptance" in the Phases table and under "Current phase", "Waiting on the owner" brought down to
+  what waits after the gate; commit, push, and tell the owner what passed and what needs their
+  decision. `git grep -n "\[LEAD" -- docs` then prints nothing. (3) If a check shows a fault of the
+  app, and silence where a row's name is expected is one (D460): its fix is code, built as a
+  package; the state goes to "In progress", and the gate's passes run again on the new commit, the
+  real-window pass alone when only that project changes (D246; CLAUDE.md's rule for a change after
+  the gate). The live command then runs on the new round too: GitHub's token serves until
+  2026-11-29.
+- *Nothing else of phase 8a is open, and phase 8b is not started unasked.* How the phase went, step
+  by step, is the first of the Notes below; the gate's working files (the two rounds' logs,
+  pictures, batches and verdicts, the drafts' copies, the workflows' results) are outside the
+  repository in `D:/Projects/Personal/phase8-work/gate/`.
+
+Once a phase is running, this always names the single next thing to do and is kept accurate in
+every commit.
+
+### Notes for whoever resumes
+
+**How the steps went.** The account that stood under "Next step" until 2026-11-27, moved here
+unchanged when that section went back to naming one next thing; it runs from the phase's start to
+the gate, the newest last, and its own "Next:" sentences are each of their day.
+
 The owner said "Start phase 8" on 2026-11-09 and gave the first answers before its design ("Waiting
 on the owner", "For phase 8, before its design"). On 2026-11-18 the owner reconsidered the licence
 and kept MIT with the owner's name in the copyright line (D397), and asked for an About screen
@@ -1462,11 +1520,6 @@ chose "Later, at the gate" (D460); it is no longer asked before the gate, where 
 takes its place, and step 21 says what a silent Narrator then costs. The [phase 7b
 handoff](handoffs/phase-7b.md), "For the next phase", says what to reuse, what to do first and which
 risks to watch.
-
-Once a phase is running, this always names the single next thing to do and is kept accurate in
-every commit.
-
-### Notes for whoever resumes
 
 - **Wave 4 (begun 2026-11-23).** The owner's word that day, asked for the week's share with wave 3's
   cost and wave 4's estimate before them: "All of wave 4 now"; the Narrator listen "Later, before
@@ -2551,23 +2604,36 @@ every commit.
 
 ## Waiting on the owner
 
-- **The gate's four checks by hand (asked on 2026-11-27, when the gate's automated part had
-  passed).** They are all that is left of step 21, and the phase cannot be set to "Awaiting
-  acceptance" before them. (1) The Narrator walk-through, 21 steps and step 21a, about 20 minutes:
-  start `D:\Projects\Personal\phase8-work\gate\hand arrator arrator-walk.cmd`, turn Narrator on
-  (Ctrl+Win+Enter) and follow the steps; for step 20 close the app and start
-  `narrator-walk-no-git.cmd` beside it. (2) A second start behind another window:
-  `…\gate\hand\second-start\second-start.cmd` twice, the second time with another window in front;
-  what came to the front. (3) Phase 6's System step: in that app, Theme set to System, then Windows'
-  app mode switched (Settings, Personalization, Colors); the window follows within a second;
-  switched back. (4) The icon beside its look-alikes, by eye, with no image search. The steps and
-  what to expect at each are on the owner's page, https://claude.ai/artifact/BE3ha6qo5uM1Vozpympouh,
-  which gives a summary to paste into the chat; the report's part U has the walk-through's full text
-  ("The Narrator walk-through by hand"). The build under test is the pass's Release build of
-  `750eb33` (About reads 0.1.0 and that commit). Each result goes into the report's "Checks by
-  hand"; a silence where a row's name is expected is a finding (D460). Also for the owner to say:
+- **The gate's three checks by hand (asked on 2026-11-27, when the gate's automated part had
+  passed).** They are all that is left of step 21, and the phase is "Blocked" on them: it cannot be
+  set to "Awaiting acceptance" before them. (1) The Narrator walk-through, 21 steps and step 21a,
+  about 20 minutes: start `D:/Projects/Personal/phase8-work/gate/hand/narrator/narrator-walk.cmd`,
+  turn Narrator on (Ctrl+Win+Enter) and follow the steps; for step 20 close the app and start
+  `narrator-walk-no-git.cmd` beside it. (2) A second start behind another window: start
+  `D:/Projects/Personal/phase8-work/gate/hand/second-start/second-start.cmd` twice, the second time
+  with another window in front; say what came to the front. (3) Phase 6's System step: in that app,
+  Theme set to System, then Windows' app mode switched (Settings, Personalization, Colors); the
+  window follows within a second; switched back. The steps and what to expect at each are on the
+  owner's page, https://claude.ai/artifact/BE3ha6qo5uM1Vozpympouh, which gives a summary to paste
+  into the chat; the report's part U has the walk-through's full text ("The Narrator walk-through by
+  hand"). The build under test is the pass's Release build of `750eb33` (About reads 0.1.0 and that
+  commit). Each result goes into the report's "Checks by hand"; a silence where a row's name is
+  expected is a finding (D460). The icon's look-alike check is not among them: it is the lead's
+  (design 13.4 item 11) and is recorded in the report as made from memory, with no picture of the
+  other icons at hand, which the owner, who chose the mark, can overrule. Also for the owner to say:
   whether they were at the machine during D246's two runs on 2026-11-26 at 18:17 and 18:31, which
-  D246 asks for and the report leaves open.
+  D246 asks for and the report's "Run" leaves open; the answer is written there and into the
+  handoff.
+- **CLAUDE.md's step 4 and two files that have outgrown it (found by the cold-read check,
+  2026-11-27).** "Start of every session", step 4, tells a session to read `docs/architecture.md`
+  and `docs/decisions.md`. They hold about 1.0 MB and 0.47 MB now, more than a session reads whole,
+  and the 8a handoff's "Do first", step 1, names the sections and decisions phase 8b needs. Whether
+  the rule should say "the sections and decisions the previous handoff names, and any other where it
+  is cited" is the owner's: it is a rule of CLAUDE.md, and the review before phase 7 raised the
+  docs' size as its proposal P6. Until then a session follows the handoff's list and reads further
+  by heading and by number. The same check asked for rules that are 8b's to settle with the owner:
+  what a cloud session does of a phase whose gate needs installers, signing and a Mac, and how it
+  hands over (the handoff's "Open questions").
 - **Phase 8a, from the owner** (2026-11-19; the owner's answers D399 to D415 are below, under "For
   phase 8, before its design"): - **The C: drive is nearly full, and Windows cleans the temp folder
   under the tests** (found on 2026-11-24 at step 19's whole default run; "Next step"). C: had 4.7 GB
@@ -2679,30 +2745,32 @@ every commit.
   and D469, on the dimmed texts, are the owner's answers.) The handoff's "Waiting on the owner"
   names each. - **The three live tokens** expire on 2026-11-29 (GitHub's) and 2026-12-04 (Azure
   DevOps' and GitLab's). Phase 8a's three live runs all came before (2026-11-26 and 27; the counted
-  round's on `750eb33`), so 8a made none again. Before 8b's gate the owner makes all three again, as
-  phase 7a's design 14.6 and phase 7b's design 15.8 say, through the script that never shows a token
-  (D335). - **The icon** (D407, D447): settled on 2026-11-20. The owner chose A, Lens, and said yes
-  to round 2's masters with the outlined eye at the small sizes; the blue stays `#4C5BE0`. Nothing
-  more is asked unless the owner wants a change after seeing it in the app. - **The desktop, told
-  first each time** (design 13.3): the lead's try of the winget terminal window before §5's merge
-  (done on 2026-11-20: the window stays open); two earlier real-window checks alone at §6's merge
-  (about 2 minutes); §9's spike (a minute of keys and clicks) and a short listen with Narrator at
-  §9's merge (about 5 minutes); the performance series after wave 3 (12 to 18 minutes a run,
-  rested); §12's build (each of its 13 methods alone, about 15 minutes in all); D246's two runs and
-  the pass at the gate. - **By hand, at the gate**: one walk-through with Windows Narrator, with the
-  lead's 21 steps, the first-run screen among them (D411, D450); phase 6's System step (switch
-  Windows' app mode while the app runs with System chosen, D224); a second start of the app from the
-  lead's isolating start file while another window is in front (design 4.6). - **GitHub Pages**
-  (D408, D451): the owner allowed it. Its source is set to "GitHub Actions" at "Phase 8a accepted",
-  before `master` is pushed, by the owner or by the lead with `gh` at the owner's word; if the
-  `github-pages` environment then admits more than `master`, the owner's leave is asked to set its
-  branch rule. - **The icon's look-alike check**: settled on 2026-11-20. The owner wants no image
-  search; the lead compares by eye against Git's logo and the well-known clients' icons and records
-  it in the report. - **Left to 8a's design, now ruled**: the points the readers left to the design
-  (one instance per data folder, the git program setting, the netrc note, the OpenSSH line, the
-  guide's tested sizes and its generator, risk 44 left alone, no writes to a user's repository for
-  speed, the fixed set of keys) are the lead's rulings 1 to 23 and the decisions D416 to D446, which
-  the owner has above to look over.
+  round's on `750eb33`), so 8a made none again. Before 8b's gate, which runs the live command twice
+  (D335), the owner makes all three again and sets each as a Windows user variable, as phase 7a's
+  design 14.6 and phase 7b's design 15.8 say (the Environment Variables dialog; on 2026-11-05 a
+  script of the lead's, outside the repository, read each token from the clipboard instead): never
+  typed in a shell, never pasted into a chat. - **The icon** (D407, D447): settled on 2026-11-20.
+  The owner chose A, Lens, and said yes to round 2's masters with the outlined eye at the small
+  sizes; the blue stays `#4C5BE0`. Nothing more is asked unless the owner wants a change after
+  seeing it in the app. - **The desktop, told first each time** (design 13.3): the lead's try of the
+  winget terminal window before §5's merge (done on 2026-11-20: the window stays open); two earlier
+  real-window checks alone at §6's merge (about 2 minutes); §9's spike (a minute of keys and clicks)
+  and a short listen with Narrator at §9's merge (about 5 minutes); the performance series after
+  wave 3 (12 to 18 minutes a run, rested); §12's build (each of its 13 methods alone, about 15
+  minutes in all); D246's two runs and the pass at the gate. - **By hand, at the gate**: one
+  walk-through with Windows Narrator, with the lead's 21 steps, the first-run screen among them
+  (D411, D450); phase 6's System step (switch Windows' app mode while the app runs with System
+  chosen, D224); a second start of the app from the lead's isolating start file while another window
+  is in front (design 4.6). - **GitHub Pages** (D408, D451): the owner allowed it. Its source is set
+  to "GitHub Actions" at "Phase 8a accepted", before `master` is pushed, by the owner or by the lead
+  with `gh` at the owner's word; if the `github-pages` environment then admits more than `master`,
+  the owner's leave is asked to set its branch rule. - **The icon's look-alike check**: settled on
+  2026-11-20. The owner wants no image search; the lead compares by eye against Git's logo and the
+  well-known clients' icons and records it in the report. - **Left to 8a's design, now ruled**: the
+  points the readers left to the design (one instance per data folder, the git program setting, the
+  netrc note, the OpenSSH line, the guide's tested sizes and its generator, risk 44 left alone, no
+  writes to a user's repository for speed, the fixed set of keys) are the lead's rulings 1 to 23 and
+  the decisions D416 to D446, which the owner has above to look over.
 - **Phase 8b, to ask before its design**: plan.md's "Phase 8b" lists the questions, each with the
   research's recommendation: the installers per platform, the macOS token store (risk 34), the
   platforms and oldest systems, the version scheme, what proves "receive an update" and when the
@@ -2718,7 +2786,7 @@ every commit.
   it. The live command closed and deleted what it made in the three sandboxes. Before a later live run: GitHub's token expires on 2026-11-29, Azure
   DevOps' and GitLab's on 2026-12-04 (below, "The Azure DevOps sandbox's organization").
 - **For phase 8, before its design** (the 7b handoff's "For the next phase", "Do first", step 2;
-  each answer becomes a decision, D399 on, carried into plan.md): the code-signing certificate and
+  each answer became a decision, D399 to D415, carried into plan.md): the code-signing certificate and
   the Apple Developer membership (risk 6); the installers per platform and where the installers,
   the updates and the beta are published (a release on GitHub is the owner's to allow); whether to
   bundle git on Windows and the git versions the release supports (risks 15, 31, 35); the macOS
@@ -2729,7 +2797,7 @@ every commit.
   2:00), and the phase is to be split, 8a the in-app work (the first-run Git check, the
   accessibility and performance passes, the small fixes, icons, notices and the user guide) and 8b
   the packaging (installers, auto-update, signing, notarisation, the beta and the full regression
-  against the installed build). The split's decision (the next free number, amending D241) is still to be written,
+  against the installed build). The split's decision is D399 (2026-11-19, amending D241),
   with the phases' names and branches and CLAUDE.md's counting of phases in the same commit. **On
   hold at the owner's word**: the Windows code signing and the Apple Developer membership, until
   the owner has talked through some legal and professional points with the lead. **Lifted on
@@ -2916,7 +2984,7 @@ every commit.
   the owner's choice of 2026-11-18 (MIT stays, the copyright line names the owner) and D398 the
   owner's answer of the same day (an About screen that names the owner). D399 to D415 are the
   owner's answers of 2026-11-18 and 19 at phase 8's start; in D399 the two phases' names and
-  branches are the lead's. The next decision number is D416.
+  branches are the lead's. Phase 8a's own run to D473; the next decision number is D474.
 - **Answered 2026-11-19: left as a recorded risk (D413).** **A sign-in dialog in a bound tab** (plan.md's risk 39, design 19 item 8; no answer needed
   for the gate): when the session refuses a bound account through the API, or it signs out,
   just after an operation started, git's "Sign in to github.com" dialog opens instead of D273's
@@ -2983,7 +3051,7 @@ every commit.
   the connectors switched off on claude.ai) is the owner's.
 - **Phase 6's acceptance**: given on 2026-10-24; merged into `master` (`3f34c87`); its gate ran on
   `b561b7c`. Still open, asked at acceptance and not yet answered (the handoff's "Waiting on the
-  owner"; each answer becomes a decision, D399 on, since D239 to D248 went to the review before
+  owner"; each answer becomes a decision, D474 on, since D239 to D248 went to the review before
   phase 7, D249 to D264 to phase 7a's start, D265 to D338 to its design, D339 to D343 to its build
   and gate, D344 to D356 to 7b's start and its research, D357 to D378 to its design, D379 to D395 to
   its build, review and gate, D396 to its close, and D397 and D398 to the owner's name in the licence and the app): design 17.5's reading of "ten repos can be checked and
@@ -3021,7 +3089,7 @@ every commit.
   a commit after the counted round that changes only the live project re-runs only the live command
   (extends D246), and the live command also runs once before the counted round.
 - **Still open from the review before phase 7** ([review-before-phase-7.md](review-before-phase-7.md);
-  each answer becomes a decision, D399 on): its questions 1 (how the plan's limits count tokens),
+  each answer becomes a decision, D474 on): its questions 1 (how the plan's limits count tokens),
   10 (CI split into shards, S5, which reopens D134 and D232) and 12 (the machine: the page file,
   the space on C:, and how long to keep transcripts, D8; the reboot was made on 2026-10-28); and
   the proposals that no decision names: D5, T10/P7, R4, R9, R1/R6, R10, S6, S7, S10, R7, D3, D4,

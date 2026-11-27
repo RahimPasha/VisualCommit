@@ -7905,10 +7905,11 @@ logs, pictures, batches and verdicts are in `D:/Projects/Personal/phase8-work/ga
   changed nothing the guide's workflow watches and started no run of it, so the lead started one by
   hand, as D451 says for that case (`gh workflow run guide.yml --ref phase/8a-release-readiness`:
   run 46024262689 on `6120f86`, docs alone after the Gate commit). Its site holds the same 84
-  picture files and the same 35 pages as the site the lead read for ruling 114 (run 45953481558),
-  each of the 92 picture tags with its width and the five first-run anchors in place, and the links'
-  check has no finding on it: that reading is the gate's check of the guide's site. The run on the
-  app's fix (45965143205 on `e632e72`) had given the same files.
+  picture files and the same 35 HTML files (the guide's 33 pages with mdBook's `404.html` and
+  `toc.html`) as the site the lead read for ruling 114 (run 45953481558), each of the 92 picture
+  tags with its width and the five first-run anchors in place, and the links' check has no finding
+  on it: that reading is the gate's check of the guide's site. The run on the app's fix (45965143205
+  on `e632e72`) had given the same files.
 - *The inspection* (D247; 07:20 to 07:46). 28 Opus inspectors, 27 in three groups and one for CI's
   pictures; each batch gave one verdict for each of its pictures. Every picture was judged again,
   against the first round's, all of which had been read: 1,257 of this round's 1,696 are the same
