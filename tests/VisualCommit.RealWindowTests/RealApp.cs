@@ -36,8 +36,8 @@ public sealed partial class RealApp : IDisposable
     /// <summary>The pause between two steps of <see cref="DragWithMouse"/>, so the app sees a movement and not a jump.</summary>
     private static readonly TimeSpan DragStepInterval = TimeSpan.FromMilliseconds(20);
 
-    /// <summary>How often <see cref="WaitFor"/> looks at its condition.</summary>
-    private static readonly TimeSpan PollInterval = TimeSpan.FromMilliseconds(100);
+    /// <summary>How often <see cref="WaitFor"/> looks at its condition (<see cref="Poll"/>).</summary>
+    internal static readonly TimeSpan PollInterval = TimeSpan.FromMilliseconds(100);
 
     private readonly Process _process;
     private readonly UIA3Automation _automation;
@@ -359,7 +359,8 @@ public sealed partial class RealApp : IDisposable
 
     /// <summary>
     /// Waits until <paramref name="condition"/> is true, looking every 100 ms: for work that the
-    /// app finishes after the input that started it, such as loading a repository.
+    /// app finishes after the input that started it, such as loading a repository. The looks
+    /// follow <see cref="Poll"/>'s rule, on this app's clock, exit and a real pause.
     /// </summary>
     /// <param name="condition">What to wait for; it may ask UI Automation or read the log.</param>
     /// <param name="what">What is awaited, in words, for the message when it does not come.</param>
@@ -372,22 +373,58 @@ public sealed partial class RealApp : IDisposable
         ArgumentException.ThrowIfNullOrWhiteSpace(what);
 
         var clock = Stopwatch.StartNew();
+        Poll(condition, what, timeout, () => clock.Elapsed, () => _process.HasExited ? _process.ExitCode : null, Thread.Sleep);
+    }
+
+    /// <summary>
+    /// The rule of <see cref="WaitFor"/>'s looks, with the clock, the app's exit and the pause handed in, so that
+    /// it is held with no window and no real waiting (<see cref="WaitForRuleTests"/>): <paramref name="condition"/>
+    /// is looked at; while it is false, an app that has exited ends the wait at once, a time that is up ends it
+    /// with a <see cref="TimeoutException"/>, and otherwise <paramref name="pause"/> is asked for
+    /// <see cref="PollInterval"/> before the next look.
+    /// </summary>
+    /// <param name="condition">What to wait for.</param>
+    /// <param name="what">What is awaited, in words, for the messages.</param>
+    /// <param name="timeout">How long to wait.</param>
+    /// <param name="elapsed">The time since the wait began.</param>
+    /// <param name="exitCode">The app's exit code once it has exited; null while it runs.</param>
+    /// <param name="pause">The pause between two looks.</param>
+    /// <exception cref="TimeoutException">The condition was still false when the time was up.</exception>
+    /// <exception cref="InvalidOperationException">The app exited while the test waited.</exception>
+    internal static void Poll(Func<bool> condition, string what, TimeSpan timeout, Func<TimeSpan> elapsed, Func<int?> exitCode, Action<TimeSpan> pause)
+    {
+        ArgumentNullException.ThrowIfNull(condition);
+        ArgumentException.ThrowIfNullOrWhiteSpace(what);
+        ArgumentNullException.ThrowIfNull(elapsed);
+        ArgumentNullException.ThrowIfNull(exitCode);
+        ArgumentNullException.ThrowIfNull(pause);
+
         while (!condition())
         {
-            if (_process.HasExited)
+            if (exitCode() is { } code)
             {
-                throw new InvalidOperationException($"The app exited with code {_process.ExitCode} while waiting for {what}.");
+                throw new InvalidOperationException($"The app exited with code {code} while waiting for {what}.");
             }
 
-            if (clock.Elapsed >= timeout)
+            if (elapsed() >= timeout)
             {
                 throw new TimeoutException(string.Create(
                     System.Globalization.CultureInfo.InvariantCulture,
                     $"Timed out after {timeout.TotalSeconds:0.###} s waiting for {what}."));
             }
 
-            Thread.Sleep(PollInterval);
+            pause(PollInterval);
         }
+    }
+
+    /// <summary>
+    /// Whether <paramref name="exception"/> is how one look of <see cref="Poll"/> fails while the app's automation
+    /// tree changes, a look that is then taken as "not yet". Not decided yet: none counts.
+    /// </summary>
+    internal static bool IsFailedLook(Exception exception)
+    {
+        ArgumentNullException.ThrowIfNull(exception);
+        return false;
     }
 
     /// <summary>
