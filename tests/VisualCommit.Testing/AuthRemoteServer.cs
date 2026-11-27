@@ -292,7 +292,7 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
     /// <summary>
     /// Every hold asked of this server (<see cref="HoldNextFetchPack(string, int)"/>), in the order
     /// asked: when a response took it, what it sent once it began and when it was let go; asking
-    /// again before a response took it adds none.
+    /// again while it waits adds none.
     /// </summary>
     public IReadOnlyList<AuthRemoteHold> Holds
     {
@@ -312,9 +312,9 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
     /// <see cref="DescribedRequests"/>), each with its method, path, protocol v2 command, status and
     /// whether it was held; how many errors it had (<see cref="Errors"/>); and how many of its
     /// connections have not ended. A request is listed only once its response was decided
-    /// (<see cref="Requests"/>), so one that is still being read or answered counts only among the
-    /// connections; a request reads held from the moment its response takes the hold, before the
-    /// hold's first part is sent.
+    /// (<see cref="Requests"/>), so one whose response is not decided yet (its body still being
+    /// read, or http-backend still running) counts only among the connections; a request reads
+    /// held from the moment its response takes the hold, before the hold's first part is sent.
     /// <para>
     /// Then each hold asked of it (<see cref="Holds"/>), in a line of its own: when it was asked,
     /// its repository and percentage, and how it stands. It waits for a response with a pack; or
@@ -324,8 +324,9 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
     /// <c>\r</c> and <c>\n</c> written out (the first and last characters of a long one) and the
     /// last whole line with a percentage in it, which is the last such line git can show, or that
     /// it has none. A taken or begun hold that was let go ends with <c>; let go</c> and the time:
-    /// of the release, of the disposal, or of its response's end when that came first, as when the
-    /// write of its first part failed.
+    /// of the release or the disposal, or of its response's end when the write of its first part
+    /// failed before either. A failed write of the headers leaves it taken until a release or the
+    /// disposal.
     /// </para>
     /// </summary>
     public string DescribeHoldsAndRequests()
@@ -874,10 +875,10 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
         }
     }
 
-    /// <summary>Sends the rest of every held response, of every served repository, and drops every hold that has not begun.</summary>
+    /// <summary>Sends the rest of every held response, of every served repository, and drops every hold that no response has taken yet.</summary>
     public void Release() => ReleaseHolds(null);
 
-    /// <summary>Sends the rest of the held responses of <paramref name="repository"/> (its name or folder name) and drops its hold that has not begun; the other repositories' stay held.</summary>
+    /// <summary>Sends the rest of the held responses of <paramref name="repository"/> (its name or folder name) and drops its hold that no response has taken yet; the other repositories' stay held.</summary>
     /// <exception cref="ArgumentException">The server serves no such repository.</exception>
     public void Release(string repository) => ReleaseHolds(FolderOf(repository));
 
@@ -2130,8 +2131,9 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
 
     /// <summary>
     /// One hold: taken by a response with a pack, begun when the first part of the response is
-    /// sent, and let go by a release (<see cref="Release()"/>, <see cref="Release(string)"/>), the
-    /// server's disposal or its response's end, whichever comes first.
+    /// sent, and let go by a release (<see cref="Release()"/>, <see cref="Release(string)"/>) or the
+    /// server's disposal, or at its response's end when the write of its first part fails before
+    /// either; a failed write of the headers leaves it taken until a release or the disposal.
     /// </summary>
     private sealed class Hold(string folder, int atPercent)
     {
@@ -2339,7 +2341,7 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
 /// <param name="AtPercent">0, or the percentage it was asked for.</param>
 /// <param name="Taken">When a response with a pack took it, in UTC: its request reads held from then (<see cref="AuthRemoteRequest.Held"/>); null while it waits for one, and when it was dropped before.</param>
 /// <param name="Part">What it sent once it began; null when it has not begun.</param>
-/// <param name="LetGo">When it was let go, in UTC: by a release (<see cref="AuthRemoteServer.Release()"/>), by the server's disposal, or at its response's end when that came first (the write of its first part failed); null until then. A hold let go before a response took it was dropped.</param>
+/// <param name="LetGo">When it was let go, in UTC: by a release (<see cref="AuthRemoteServer.Release()"/>) or the server's disposal, or at its response's end when the write of its first part failed before either (a failed write of the headers leaves it to a release or the disposal); null until then. A hold let go before a response took it was dropped.</param>
 public sealed record AuthRemoteHold(DateTimeOffset Asked, string Repository, int AtPercent, DateTimeOffset? Taken, AuthRemoteHoldPart? Part, DateTimeOffset? LetGo);
 
 /// <summary>What a held response sent before it held (<see cref="AuthRemoteHold.Part"/>).</summary>

@@ -320,9 +320,9 @@ public sealed partial class ShellDriver
     /// Waits, as <see cref="WaitForAsync"/> does, until <paramref name="held"/> has completed: the
     /// task a server of the tests returned for a hold
     /// (<see cref="AuthRemoteServer.HoldNextFetchPack(int)"/>), which completes once the server
-    /// holds the fetch, or is cancelled when a release, the server's disposal or a failed write
-    /// comes first. For a check that asks for a hold, starts the fetch and then waits for its
-    /// percentage (<see cref="WaitForProgressPercentAsync"/>).
+    /// holds the fetch, or is cancelled when a release, the server's disposal or a failed write of
+    /// the response's first part comes first. For a check that asks for a hold, starts the fetch
+    /// and then waits for its percentage (<see cref="WaitForProgressPercentAsync"/>).
     /// </summary>
     /// <exception cref="TimeoutException">The task had not completed in time; the message adds what
     /// the status bar showed then and the servers' requests and holds, as
