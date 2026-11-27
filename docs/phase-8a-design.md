@@ -7543,6 +7543,150 @@ partial. Nothing under `src/` changes and no picture changes. D469 is the decisi
   more, which the tokens still serve if it runs by 2026-11-28; the owner makes them again before
   8b's gate in any case.
 
+**The dimmed texts' second round, the held fetch that showed no percentage, and the hold's rule (the
+lead, 2026-11-26).** 113. Step 19's last three merges, all of them test code only: the second fix
+round of the dimmed texts' tests (`15beabd`), the hold that ends with a whole line of progress
+(`4370039`) and how each hold stands in a server's description (`72993a7`). D470 is the decision on
+the hold's rule. It takes back, for the held fetch, ruling 109's "no change before the gate":
+nothing goes to plan.md's Backlog for it.
+
+- *The dimmed texts' second fix round* (run `wf_fec5b4c5-7b1`, in the worktree and branch of ruling
+  112; its result `D:/Projects/Personal/phase8-work/wave4/review/dimmed-round2-result.json`; twenty
+  commits on `fab4073`, thirteen a fixer's and seven a corrector's, the last `315b902`; merged at
+  `15beabd`). It answers the final read of ruling 112: the two views' control themes are read
+  without an earlier lookup of their keys; the scan sees a colour written channel by channel with a
+  cast alpha, a qualified type or a target-typed `new(`; the tie between the classes' table and the
+  listed styles reads the classes of every listed style's selector; the render fact also reads the
+  labels' column outside a label, and the guard's summary says what it reads and no more. Two
+  verifiers read the fix (the render, the guard) and one pass corrected what they found. 14 of 14 in
+  `ThemeTokensTests` on the merged tree, no pinned figure and no listed use changed, nothing under
+  `src/`. Left as they are, for the handoff: two message lines of 179 and 188 characters and three
+  `…` characters in one summary; a problem the guard did not expect shows only its first 50
+  characters in xUnit's output; the C# rule for a disabled state asks only that `IsEnabled` is
+  named; a colour inside a char literal, and CSS channels written as percentages or with a decimal
+  point, are named as unseen in the scan's summary.
+- *CI's Windows job failed a second time on a held fetch.* Run 45871534398 on `fab4073` failed in
+  the Windows job alone, in phase 3's check 17: the status bar showed no percentage in 60 s while
+  the tests' server held the fetch. The job passed when run again. Run 45586070342 had failed so on
+  2026-11-25 in `RemoteOperationTests` (ruling 109), another caller of the same hold. Counted on
+  2026-11-26 (`D:/Projects/Personal/phase8-work/wave4/fetch-hold/ci-census/census.md`): 2 of the 29
+  Windows jobs of the phase's CI runs, both among the 27 on the runner image 20261116.315.1 with git
+  2.56.1.windows.1. Ruling 109 had left a harder hold for the Backlog. With a second caller failing,
+  and the gate's default run and CI's run of the gate's commit each making about 15 such holds,
+  **the lead had the cause looked for before the gate**.
+- *The probe* (run `wf_5fc2df5a-3bc`; its files in
+  `D:/Projects/Personal/phase8-work/wave4/fetch-hold/`). On the laptop, Git for Windows
+  2.56.0.windows.4 writes every progress line of odd length in two writes, its last byte, the `\r`
+  or `\n`, apart from the rest (600 of 600 runs; a line of even length goes in one). upload-pack
+  sends each read of that progress, at most 128 bytes, as a side-band packet of its own. In 1 of 510
+  recorded fetches a read ended between the two writes: a packet of 58 bytes ended `20% (1/5)` and
+  the next began with the `\r`. A hold with no chosen percentage ended its first part with the first
+  packet that held a `%`, so git then had no whole line with a percentage to show for as long as the
+  server held, which is the symptom. The one case came in a quiet run; none came in 184 fetches
+  beside four busy processes or in 26 beside twelve, so **no dependence on load was shown either
+  way**. The lead's first guesses, that git writes character by character and that the busier
+  machine fails more often, were both refuted by the package's readers. **That this is what failed
+  in CI is likely and not shown:** the rate fits (about 0.2 % a hold on the laptop, and up to 1.1 %
+  by what 510 fetches can show), and the runner's git, 2.56.1, was not measured.
+- *The change* (`AuthRemoteServer.ScanPktLines`). A hold at 0 gathers the progress across packets,
+  as the holds at a percentage do (D150), and ends its first part with the packet in which the first
+  whole line with a percentage ends. No packet is split. The end is never earlier than before: the
+  same packet in 509 of the 510 recorded bodies and one packet later in the one. Without such a line
+  it ends where it did, with the first packet that holds a `%`. `SplitAtProgress`, the holds at a
+  percentage, is untouched, and so is everything under `src/`.
+- *What a wait says.* A server keeps every hold asked of it (`Holds`) and describes them with its
+  requests (`DescribeHoldsAndRequests()`; `DescribeServersOn(ports)` for a test that knows a server
+  only by the port in a remote's URL). The default run's waits for the percentage of a hold at 0 add
+  that to their timeout's message: `ShellDriver.WaitForProgressPercentAsync`, the fetch and pull
+  tests' helpers in `VisualCommit.App.Tests`, `RemoteOperationTests` and the server's own tests. The
+  first package (`wip/p8a-fetch-hold`, six commits on `4cf2420`, merged at `4370039`) was read by
+  two readers, one of the change and one of the cause, and corrected; two more verifiers read its
+  final form and the CI census was made beside them
+  (`D:/Projects/Personal/phase8-work/wave4/review/fetch-hold-final-read.json`): sound, no defect,
+  three risks and fourteen notes.
+- *The last round* (run `wf_2ffd22ff-0bc`, 14:55 to 17:10, four Opus agents, 1.11M tokens; its
+  result `D:/Projects/Personal/phase8-work/wave4/review/fetch-hold-notes-round.json`;
+  `wip/p8a-hold-notes`, six commits on `4370039`, the last `fdf7414`; **merged at `72993a7`**). The
+  lead ruled it the last round on the package and gave the fixer each note worth an answer. As
+  built: a server's description is read under one lock, so it is of one moment, and gives the open
+  connections and how each hold stands. A hold waits for a response with a pack; or it was dropped
+  before it began; or a response took it and its first part is not sent; or it began, with the bytes
+  that went before the hold, git's progress and the last whole line git could show; and a taken or
+  begun hold that was let go says when. A request reads held from the moment its response takes the
+  hold. A hold's task is cancelled when the write of its first part fails.
+  `ShellDriver.WaitForHeldFetchAsync` waits for the server to hold a fetch, and phase 3's part D
+  waits so at its five holds before it waits for the percentage, so a timeout says which of the two
+  did not come; no step, picture name or assertion of part D changes. The driver's message names
+  only the remotes over http on 127.0.0.1. Three tests more (`AuthRemoteServerTests` 54,
+  `ShellDriverCheckSupportTests` 16). A reader found three defects, all in words (four doc sentences
+  untrue when the write of the headers fails, a message that said "held" of a cancelled hold, a
+  comment), one risk (a freed port taken by another test's server) and five notes. A mutation runner
+  made 26 mutations beside the fixer's 16: 15 were caught and 11 not, one of them a risk (the test
+  did not pin which whole line a hold names). The corrector answered the three defects, both risks
+  and four notes, each of its five mutations caught by the test it was made for. Of the mutation
+  runner's eleven, two are now caught and nine stand under the limits below.
+- *The corrector's commits read* (run `wf_d7040931-b89`, 17:12 to 17:24, two Opus agents, read only,
+  0.41M tokens;
+  `D:/Projects/Personal/phase8-work/wave4/review/fetch-hold-notes-corrector-read.json`). No one had
+  read the corrector's three commits, so the lead had two verifiers try to refute them, one for the
+  truth of every changed word and one for the soundness of the changed tests. The tests: sound, four
+  notes, none that needs a change. The words: the three commits change only comments in the server
+  and the driver, and every sentence they wrote is true of the code. Four older sentences are not.
+  Three were loose before the package: the request's `Held` ("whether the response was held", where
+  it is true from the moment the response takes the hold), "calling it again before a response was
+  held changes nothing" in both forms of `HoldNextFetchPack` (true only while the hold waits), and
+  the doc of the server's waiting holds. One became untrue in this round, when the driver's message
+  was narrowed to the remotes on http://127.0.0.1: the exception doc of
+  `WaitForProgressPercentAsync`. **The lead made the four true in a commit of comments only**
+  (`2a52897`), with two of the verifier's notes: the list of requests that are not decided yet reads
+  as examples, and a release that comes between a response's take and its first part is said to
+  leave a line that reads begun, with a let-go time before its start. No agent built on the package
+  again: the round stays the last.
+- *On the merged tree* (`72993a7`, 17:13 to 17:33 on 2026-11-26, one class at a time): `dotnet
+  build` with 0 warnings and 0 errors; `AuthRemoteServerTests` 54, `RemoteOperationTests` 24,
+  `RepositoryOperationsFetchTests` 17, `RepositoryOperationsPullTests` 20,
+  `RepositoryOperationsQueueTests` 11, `ShellDriverCheckSupportTests` 16 and phase 3's part D 17,
+  none failed. Part D's 58 pictures against the gate's references
+  (`…/wave4/fetch-hold/notes-round/compare-merged-72993a7/`): 49 the same file, 9 changed, each by
+  what differs from run to run: the held percentage (`17b`, `18b`, `31a`, `31b`), the moving part of
+  the bar (`21a`, `21b1`, `21b3`), the caret (`21b3`), a temporary path's name (`30g`), one pixel
+  two levels apart (`27d`), and three edge pixels of a lane in `18b`, which 54 older pictures since
+  phase 7a's gate show in three forms. The comments' commit `2a52897` was built after the runs, with
+  0 warnings, and changes only `///` lines, so the runs stand for it.
+- *The percentage in part D's pictures.* The held fetch reads 60 % in `17b`, `17d`, `31a` and `31b`
+  and the held pull 50 % in `18b`, where the gate's references read 80 and 66. This is not the rule:
+  it moves the hold's end only when a line was cut between two packets. N was never fixed (phase 3's
+  report, "Percentages": how many of git's lines fall into the held packet depends on timing), the
+  checks assert any N from 1 to 100, and both pairs were seen before. The gate's inspection takes
+  these five pictures, and their real-window twins, as differing in N and in the bar's fill, as
+  phase 3's report allows.
+- *Accepted as limits, for the handoff.* (1) A failed write of a held response's headers leaves its
+  hold taken, and its task pending, until a release or the server's disposal; the docs say so and
+  the code is as it was. (2) No committed test reaches the states that only a race reaches: a hold
+  taken with its first part not sent, the cancel of the task when the first part's write fails
+  (shown once by a mutation, pinned by none), the one lock of the description, and the count of
+  errors, which is 0 in every test. (3) The times in a hold's line are pinned to within a second and
+  to the record they are written from: a tighter bound had brought a wall-clock flake. (4) The
+  description's test tells the last whole line from the first only in a run whose first part carries
+  two whole lines with a percentage, the usual case on the laptop. (5) Three tests' exact texts (0
+  or 23 requests, no connection open) assume that nothing else connects to a server's port; two
+  tests allow a freed port to be taken by another test's server, and in such a run they would not
+  see a disposed server left in the list; the tests' own wait for a description measures its 60 s on
+  the wall clock. (6) `WaitForHeldFetchAsync` returns when the hold's task is cancelled; the wait
+  for the percentage after it then runs to its limit and its message says "let go". No test pins
+  that path. (7) The test of the two waits' messages costs about 17 s of
+  `ShellDriverCheckSupportTests`. (8) The real-window pass's two waits for a held fetch
+  (`Phase3RealWindowPass.D.cs`) get the new rule, since they use the same server, but neither waits
+  for the hold first nor adds the server's description: `tests/VisualCommit.RealWindowTests` was
+  outside the package. The walk-throughs' waits for a hold at a percentage (phases 1 and 6) are as
+  they were. (9) Two commit messages of the round say a little more than their diffs: `078402d` that
+  a server naming the first whole line fails the test, which holds as (4) says, and `3d6cf02`'s body
+  counts the driver's doc among those that named the response's end.
+- *What would reopen it.* A third failure of this kind in CI or at the gate. Its message now says
+  whether the hold began, how many bytes went before it, git's progress in the first part and the
+  last whole line git could show: read that first. A hold that began with a whole line with a
+  percentage, and a status bar without one, would point at the app or at git, not at the server.
+
 ### 13.2 What the integration settled
 
 Beyond moving the packages' contracts into section 1: the broker's `gitVersion` goes at §3's merge,

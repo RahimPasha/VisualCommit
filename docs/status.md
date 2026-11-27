@@ -417,10 +417,21 @@ Wave 4 and the review:
   same file, 12 changed, each by what differs from run to run (the held percentage, the moving bar,
   the caret, a temporary path's name, 1 or 2 px), and the package changes nothing under `src/`. Two
   more verifiers read the package's final form, which its correcting pass had changed after its
-  readers: sound, notes only. A last round answers the notes worth it, in the diagnostics alone (run
-  `wf_2ffd22ff-0bc`, in `D:/Projects/Personal/vc-wt/p8a-hold-notes` on `wip/p8a-hold-notes`). Still
-  open: that round's merge, the ruling after 112 with the decision on the hold's rule, and CI's runs
-  of the merges; then this step is ticked.
+  readers: sound, notes only. **The last round on the diagnostics is merged at `72993a7`** (run
+  `wf_2ffd22ff-0bc`, tests only: six commits, read by a reader, tested by a mutation runner and
+  corrected once). A server's description now gives its open connections and how each hold stands
+  (waiting, dropped, taken, begun, let go), and phase 3's part D waits for the server to hold each
+  of its five fetches before it waits for the percentage, so a timeout says which of the two did not
+  come. Two more verifiers read the corrector's commits (run `wf_d7040931-b89`): the tests are
+  sound, and four older doc sentences were untrue, which the lead made true in a commit of comments
+  only (`2a52897`). On the merged tree (17:13 to 17:33 on 2026-11-26): build 0 warnings,
+  `AuthRemoteServerTests` 54, `RemoteOperationTests` 24, `RepositoryOperationsFetchTests` 17,
+  `RepositoryOperationsPullTests` 20, `RepositoryOperationsQueueTests` 11,
+  `ShellDriverCheckSupportTests` 16 and phase 3's part D 17, none failed; part D's 58 pictures
+  against `references/step19/`: 49 the same file, 9 changed, each by what differs from run to run.
+  **Ruling 113 and D470 record the hold's rule**, what was found, what was not shown and the limits
+  accepted; phase 3's report ("Percentages") and `docs/architecture.md`'s row of `AuthRemoteServer`
+  say what changed. Still open: CI's run of this push; then this step is ticked.
 
 Gate:
 
@@ -1275,27 +1286,20 @@ D469 tests; `4370039`, the hold that ends with a whole line of progress and what
 19's item), and the classes they touch pass on the merged tree. Two verifiers read the second
 package's final form: sound, notes only
 (`D:/Projects/Personal/phase8-work/wave4/review/fetch-hold-final-read.json`; the count of CI's
-Windows jobs by runner image beside it, in `wave4/fetch-hold/ci-census/`). **One last round is under
-way, tests only** (run `wf_2ffd22ff-0bc`: a fixer in `D:/Projects/Personal/vc-wt/p8a-hold-notes` on
-`wip/p8a-hold-notes`, from `4370039`; then a reader and a mutation runner; then a correcting pass if
-they find a defect or a risk): a server's description says how each hold ended and how many
-connections are open, its words are made true in every state, phase 3's part D waits for its hold
-before it waits for the percentage, and the messages get a committed test. CI's run of the two
+Windows jobs by runner image beside it, in `wave4/fetch-hold/ci-census/`). **The last round, on the
+hold's diagnostics alone, is merged too** (`72993a7`, run `wf_2ffd22ff-0bc`, tests only; its
+corrector's commits read by two verifiers, and four older doc sentences made true in `2a52897`;
+ruling 113, D470), and the classes it touches pass on the merged tree. CI's run of the first two
 merges is green in all six jobs at its first attempt (45901582611; the CI section). **Next for the
-lead, in this order:** (1) read the round's result and its diff, merge `wip/p8a-hold-notes` with
-`--no-ff`, build, and run on the merged tree `AuthRemoteServerTests`, `RemoteOperationTests`, the
-fetch, pull and queue classes and `ShellDriverCheckSupportTests` of `VisualCommit.App.Tests` and
-phase 3's part D, its pictures compared with `references/step19/` (only what differs from run to run
-may differ); write the ruling after 112 and the decision on the hold's rule (D470), with a note in
-phase 3's report ("Percentages") and in `docs/architecture.md`'s row of `AuthRemoteServer`; push,
-read CI's run and record it; tick step 19; (2) step 21, the gate, each takeover of the desktop
-announced in the chat just before it starts: D246's two runs of phase 8a's real-window checks, the
-whole default run and the real-window pass on one commit, the list of pictures, the live command on
-the counted round (by 2026-11-28, while GitHub's token serves), every picture of both passes
-inspected against `references/step19/`, the guide's site, the checks by hand with the Narrator
-walk-through. The package is reviewed with the rest in step 19 and merged last, in that step. The
-three finished worktrees (`p8a-restore`, `p8a-restore-base`, `p8a-guide`) are removed; their `wip/`
-branches stay local (D396). §11's builders got with their briefs: mdBook at
+lead, in this order:** (1) read CI's run of the push that carries `72993a7`, `2a52897` and the
+records, and record it in the CI section; tick step 19; (2) step 21, the gate, each takeover of the
+desktop announced in the chat just before it starts: D246's two runs of phase 8a's real-window
+checks, the whole default run and the real-window pass on one commit, the list of pictures, the live
+command on the counted round (by 2026-11-28, while GitHub's token serves), every picture of both
+passes inspected against `references/step19/`, the guide's site, the checks by hand with the
+Narrator walk-through. The package is reviewed with the rest in step 19 and merged last, in that
+step. The three finished worktrees (`p8a-restore`, `p8a-restore-base`, `p8a-guide`) are removed;
+their `wip/` branches stay local (D396). §11's builders got with their briefs: mdBook at
 `D:/Projects/Personal/phase8-work/tools/mdbook-0.5.4/mdbook.exe` and the Linux archive's SHA-256 for
 `guide.yml` (Notes, "Wave 4"); the references `D:/Projects/Personal/phase8-work/references/wave3/`;
 rulings 80 (stop and report if the first-run link's frame touches its ink), 82 (the facts no check

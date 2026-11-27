@@ -757,7 +757,15 @@ Conventions:
   with a determinate bar at N%. Over repeated runs with Git 2.36, auth's fetch held at 60 most
   often and at 40 once; sync's pull at 50 most often and at 66 once. A real-window picture of a
   held fetch (checks 17 and 31) may therefore differ from the scripted one in N and in the bar's
-  fill: the comparison notes that difference as expected, and only there.
+  fill: the comparison notes that difference as expected, and only there. **Since phase 8a
+  (2026-11-26, D470)** the first part of the held response ends with the packet in which the first
+  whole progress line with a percentage ends: the same packet as before unless git's line was cut
+  between two packets, as Git for Windows 2.56 was seen to do once in 510 fetches, and then the
+  packet in which that line ends, so that git has a whole line with a percentage to show whenever
+  the response holds one. N is still not fixed: with Git 2.56 on the laptop auth's fetch held at 60
+  and at 80, sync's pull at 50 and at 66. The scripted checks 17, 17b, 18 and 31 also wait for the
+  server to hold the fetch before they wait for the percentage, so that a failure says which of the
+  two did not come; no step and no expected result changes.
 - **Waiting.**
   - "Wait until idle" means `ShellDriver.WaitForIdleAsync`: the queue is idle and its refresh is
     done. The real-window pass instead waits for the queue's log line,
