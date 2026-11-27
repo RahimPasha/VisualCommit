@@ -487,7 +487,10 @@ Phase 8a's runs on `phase/8a-release-readiness`, the newest first. CI has six jo
   Windows Test step took 34 min 2 s, 40 min 34 s and 45 min 28 s in the three runs of 2026-11-26 and
   27 (local time), the same tests but nine, which is the runners' spread; it stays under the 56
   minutes at which a limit is raised (D377). The push changed nothing the guide's workflow watches,
-  so it started none. The jobs' logs are in
+  so it started none; the lead started one by hand on the branch, as D451 says for the gate
+  ([46024262689](https://github.com/RahimPasha/VisualCommit/actions/runs/46024262689) on `6120f86`,
+  docs alone after the Gate commit: **success**; its site holds the same pictures and pages as the
+  one the lead read, ruling 116). The jobs' logs are in
   `D:/Projects/Personal/phase8-work/gate/ci-46007767846-logs/`, the pictures of each job in
   `…/gate/ci-46007767846/`.
 - [45965143178](https://github.com/RahimPasha/VisualCommit/actions/runs/45965143178), for `e632e72`

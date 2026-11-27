@@ -7758,9 +7758,10 @@ verdicts are in `D:/Projects/Personal/phase8-work/gate/round-e4b323c/`.
   Zoom's updater, OneDrive's reporting task and Adobe's `AdobeGCInvoker`. The two runs are made once
   and stand (`…/gate/d246/`).
 - *The default run's first attempt did not pass, though no assertion failed* (18:36 to 20:29,
-  `…/round-e4b323c/default-run-attempt1.log`). The hang watchdog stopped two projects after 180 s
-  without a test event: phase 3's walk-through in `Phase3ChecksD.Check_19_push_rejected`, at about
-  19:18 to 19:21, and `VisualCommit.App.Tests` in
+  `…/round-e4b323c/default-run-attempt1.log`). The hang watchdog (limit 180 s) stopped two projects:
+  phase 3's walk-through, 180 s after its last test event, in
+  `Phase3ChecksD.Check_19_push_rejected`, at about 19:18 to 19:21, and `VisualCommit.App.Tests`, 14
+  s after an event, when one test had run 181 s of its own counted time,
   `RepositoryOperationsProtectTests.Merge_pick_and_revert_refused_for_a_changed_file_count_it_and_for_a_staged_one_say_so`,
   at about 19:26 to 19:29 (its message: the queue ran "Revert f39ea2d" with nothing waiting, and 100
   git calls had ended since the open). 7,254 tests ran, 7,250 passed and 4 were skipped. Beside the
@@ -7881,13 +7882,16 @@ logs, pictures, batches and verdicts are in `D:/Projects/Personal/phase8-work/ga
 - *The pass on `750eb33`* (06:31 to 07:12, the owner told in the chat; Windows' count of the time
   since the last input read 65 minutes before it, back to the failed pass's own end): 145 tests, the
   124 of before and the 21 new, 140 passed, the 5 facts of the opt-in performance series skipped,
-  none failed, 40 min 56 s (2,484 s with the lock and the build). D246's two conditions were checked
-  before it: `git diff --stat 0f9099a 750eb33 -- . ':(exclude)tests/VisualCommit.RealWindowTests'
-  ':(exclude)docs' ':(exclude)*.md'` prints nothing, and the 1,239 scripted pictures were still the
-  files of the list written after the failed pass; they were again after it. Display scaling 200 %,
-  the work area 1500×952, so phase 0's 1920×1080 window was not run, as the plan allows. Q1's first
-  rows after 1,626 ms of 2,000, its 468 frames at a 95th percentile of 0.9 ms and the longest 4.8
-  ms. In `f5a-too-old` and `f6a-config-fault` the lead read the path's three lines,
+  none failed, 40 min 56 s (2,484 s with the lock and the build). Two of D246's conditions were
+  checked before it: `git diff --stat 0f9099a 750eb33 -- .
+  ':(exclude)tests/VisualCommit.RealWindowTests' ':(exclude)docs' ':(exclude)*.md'` prints nothing,
+  and the 1,239 scripted pictures were still the files of the list written after the failed pass;
+  they were again after it. The third, D433's, was run for the report afterwards and holds too: `git
+  diff --stat 0f9099a 750eb33 -- LICENSE THIRD-PARTY-NOTICES.md notices` prints nothing. The tree
+  held one untracked file at the pass's start, the failed pass's list of pictures. Display scaling
+  200 %, the work area 1500×952, so phase 0's 1920×1080 window was not run, as the plan allows. Q1's
+  first rows after 1,626 ms of 2,000, its 468 frames at a 95th percentile of 0.9 ms and the longest
+  4.8 ms. In `f5a-too-old` and `f6a-config-fault` the lead read the path's three lines,
   `D:\Projects\Personal\Visual Git\tests\`,
   `VisualCommit.RealWindowTests\bin\Release\net10.0-windows\` and `visualcommit-git-stand-in.exe`:
   D472's fix as it shows in the real window.
