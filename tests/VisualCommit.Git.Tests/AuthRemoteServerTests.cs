@@ -415,8 +415,11 @@ public partial class AuthRemoteServerTests
         lines = description.Split('\n');
         Assert.Equal(2, lines.Length);
         Assert.Matches($@"^The server on port {server.Port} \(times in UTC\) had \d+ request\(s\): .*POST /remote\.git/git-upload-pack fetch 200 held, 0 error\(s\) and 1 connection\(s\) open; the holds asked of it, oldest first:$", lines[0]);
+
+        // The hold's line names the last whole line of what it sent, the last that git can show.
+        var lastWhole = part.Progress.Split('\r', '\n')[^2];
         Assert.Matches(
-            $@"^  asked {Regex.Escape(askedAt)} for remote\.git at 0%: began {Regex.Escape(Time(part.At))}, held after {part.SentBytes} of {part.BodyBytes} bytes, progress ""Enumerating objects: 5, done\.\\nCounting objects: .*""; last whole line with a percentage ""Counting objects: +\d+% \(\d/5\)""$",
+            $@"^  asked {Regex.Escape(askedAt)} for remote\.git at 0%: began {Regex.Escape(Time(part.At))}, held after {part.SentBytes} of {part.BodyBytes} bytes, progress ""Enumerating objects: 5, done\.\\nCounting objects: .*""; last whole line with a percentage ""{Regex.Escape(lastWhole)}""$",
             lines[1]);
         Assert.DoesNotContain('\r', description);
 
@@ -505,10 +508,12 @@ public partial class AuthRemoteServerTests
             Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
         }
 
+        // Once the last response has gone, no connection is open: the last one counts no more,
+        // though no later accept took it off the server's list.
         var last = string.Join("; ", paths.Skip(3).Select(path => $"GET {path} 404"));
         Assert.Matches(
-            $@"^The server on port {server.Port} \(times in UTC\) had 23 request\(s\), the last 20: {Regex.Escape(last)}, 0 error\(s\) and \d+ connection\(s\) open; no hold was asked of it\.$",
-            server.DescribeHoldsAndRequests());
+            $@"^The server on port {server.Port} \(times in UTC\) had 23 request\(s\), the last 20: {Regex.Escape(last)}, 0 error\(s\) and 0 connection\(s\) open; no hold was asked of it\.$",
+            await DescriptionWithAsync(server, ", 0 error(s) and 0 connection(s) open;"));
     }
 
     [Fact]
@@ -1231,7 +1236,7 @@ public partial class AuthRemoteServerTests
 
     /// <summary>
     /// The server's description once it holds <paramref name="text"/>, looked at every 20 ms: a
-    /// connection that has ended for git may count as open for a moment more. Fails after
+    /// connection that has ended for its client may count as open for a moment more. Fails after
     /// <see cref="StepTimeout"/> with the last description.
     /// </summary>
     private static async Task<string> DescriptionWithAsync(AuthRemoteServer server, string text)
