@@ -473,6 +473,23 @@ Phase 8a's runs on `phase/8a-release-readiness`, the newest first. CI has six jo
 `e04762b`: the sixth, "ubuntu 22.04 container, git 2.34 (the floor)", did not fail the run until
 `bba59c7`, which made it required after its first green run.
 
+- [45965143178](https://github.com/RahimPasha/VisualCommit/actions/runs/45965143178), for `e632e72`
+  (the gate's fix, the first-run screen's path drawn as one path, merged at `ee3cdc4`, with D472 and
+  ruling 115): **success in all six jobs**, at its first attempt. `windows-latest`: 8,936 tests,
+  8,929 passed, 7 skipped, Test step 40 min 34 s of 70 (git 2.56.1.windows.1). `macos-latest`: 8,933
+  tests, 8,930 passed, 3 skipped, Test step 44 min 0 s of 70. `ubuntu-latest`: 8,933 tests, 8,929
+  passed, 4 skipped, Test step 6 min 34 s. The floor's job (git 2.34.1): 8,933 tests, 8,926 passed,
+  7 skipped, Test step 6 min 17 s; the two containers 8,933 tests with 7 skipped each, Test steps 5
+  min 50 s with Microsoft's installer and 6 min 10 s with Ubuntu's packages, the Secret Service's
+  test passed in both; the Windows and macOS keychain steps passed. Nine tests more than the run
+  before in every job, the fix's. The Windows and macOS Test steps took six and ten minutes more
+  than in the run before, with the same tests but nine; both stay under the 56 minutes at which a
+  limit is raised (D377). **The guide's workflow** on the same push,
+  [45965143205](https://github.com/RahimPasha/VisualCommit/actions/runs/45965143205): **success**;
+  and on `6035e71`, the guide's fix (D471),
+  [45953481558](https://github.com/RahimPasha/VisualCommit/actions/runs/45953481558): **success**,
+  its site checked by the lead (ruling 114). The jobs' logs are in
+  `D:/Projects/Personal/phase8-work/gate/ci-45965143178-logs/`.
 - [45917903492](https://github.com/RahimPasha/VisualCommit/actions/runs/45917903492), for `53e07c4`
   (the last round on the held fetch's diagnostics, `72993a7`, the four doc sentences made true,
   `2a52897`, and ruling 113 with D470): **success in all six jobs**, at its first attempt.
@@ -1336,16 +1353,17 @@ three classes the fix touches pass, 64 of 64 (`PathTextBlockTests`, `GitSetupVie
 stand as the gate's.** A new counted round runs on the merge's commit: the default run alone on the
 laptop (nothing beside a counted run, ruling 115), the real-window pass, the list of pictures, the
 live command (by 2026-11-28) and the inspection. D246's two runs and the live command's run before
-the pictures are made once and stand. **Next:** read CI's run of the push that carries the merge,
-then the new round; then the report, the checks by hand with the owner (the Narrator walk-through of
-21 steps, phase 6's System step, the icon beside its look-alikes, a second start from the lead's
-isolating start file; their session and start files are in
-`D:/Projects/Personal/phase8-work/gate/hand/`, built and verified, and a page with the steps is the
-owner's at https://claude.ai/artifact/BE3ha6qo5uM1Vozpympouh), and the closing steps 22 to 27. The
-closing docs are being drafted meanwhile by a workflow of the lead's: its changes to
-`docs/architecture.md`, `docs/plan.md`, `CLAUDE.md`, `README.md`, `docs/cloud-sessions.md` and the
-new `docs/handoffs/phase-8a.md` lie uncommitted in the main tree and are drafts until the lead has
-read them and brought them up to date with the new round;
+the pictures are made once and stand. CI's run of the push that carries the merge is green in all
+six jobs at its first attempt (45965143178; the CI section). **Next:** the new round, on `e632e72`,
+as soon as the closing docs' workflow has ended, so that nothing runs beside it; then the report,
+the checks by hand with the owner (the Narrator walk-through of 21 steps, phase 6's System step, the
+icon beside its look-alikes, a second start from the lead's isolating start file; their session and
+start files are in `D:/Projects/Personal/phase8-work/gate/hand/`, built and verified, and a page
+with the steps is the owner's at https://claude.ai/artifact/BE3ha6qo5uM1Vozpympouh), and the closing
+steps 22 to 27. The closing docs are being drafted meanwhile by a workflow of the lead's: its
+changes to `docs/architecture.md`, `docs/plan.md`, `CLAUDE.md`, `README.md`,
+`docs/cloud-sessions.md` and the new `docs/handoffs/phase-8a.md` lie uncommitted in the main tree
+and are drafts until the lead has read them and brought them up to date with the new round;
 `docs/test-reports/phase-8a-pictures.sha256`, untracked, is the list of the round on `e4b323c` and
 is written again by the new round. The package is reviewed with the rest in step 19 and merged last,
 in that step. The three finished worktrees (`p8a-restore`, `p8a-restore-base`, `p8a-guide`) are
