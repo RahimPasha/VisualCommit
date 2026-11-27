@@ -7897,20 +7897,24 @@ logs, pictures, batches and verdicts are in `D:/Projects/Personal/phase8-work/ga
   of 596 in 3 min 4 s; its three `run.txt` hold no token, organization or namespace and differ from
   the two runs before only in what changes from run to run.
 - *CI and the guide.* Run 46007767846 on `750eb33` is green in all six jobs at its first attempt
-  (status.md's CI section); its Windows job compiles the real-window project. The guide's site built
-  from the gate's app code (run 45965143205 on `e632e72`) holds the same 84 picture files and the
-  same pages as the site the lead read for ruling 114, and the links' check has no finding on it, so
-  that reading stands for the Gate commit.
-- *The inspection* (D247; 07:20 to 07:46). 28 Opus inspectors in three groups, as in the first
-  round, and one for CI; each batch gave one verdict for each of its pictures. Every picture was
-  judged again, against the first round's, all of which had been read: 1,257 of this round's 1,696
-  are the same files, 353 real-window files differ only in the window's two bottom corners, where
-  the desktop's wallpaper shows through and had changed in the night, and 86 differ elsewhere, each
-  with a sheet of the capture, the reference and the changed pixels. **All 1,696 passed, and the 45
-  of CI's from run 46007767846**; none was in doubt, so no second look was called. The two captures
-  of the finding passed with their three lines read character by character; outside the path's block
-  they are pixel for pixel the first round's. The other changed pictures differ by what differs from
-  run to run: carets, temporary folders' names, a fake's port, the progress bar's segment and a held
+  (status.md's CI section); its Windows job compiles the real-window project. The Gate commit's push
+  changed nothing the guide's workflow watches and started no run of it, so the lead started one by
+  hand, as D451 says for that case (`gh workflow run guide.yml --ref phase/8a-release-readiness`:
+  run 46024262689 on `6120f86`, docs alone after the Gate commit). Its site holds the same 84
+  picture files and the same 35 pages as the site the lead read for ruling 114 (run 45953481558),
+  each of the 92 picture tags with its width and the five first-run anchors in place, and the links'
+  check has no finding on it: that reading is the gate's check of the guide's site. The run on the
+  app's fix (45965143205 on `e632e72`) had given the same files.
+- *The inspection* (D247; 07:20 to 07:46). 28 Opus inspectors, 27 in three groups and one for CI's
+  pictures; each batch gave one verdict for each of its pictures. Every picture was judged again,
+  against the first round's, all of which had been read: 1,257 of this round's 1,696 are the same
+  files, 353 real-window files differ only in the window's two bottom corners, where the desktop's
+  wallpaper shows through and had changed in the night, and 86 differ elsewhere, each with a sheet
+  of the capture, the reference and the changed pixels. **All 1,696 passed, and the 45 of CI's from
+  run 46007767846**; none was in doubt, so no second look was called. The two captures of the
+  finding passed with their three lines read character by character; outside the path's block they
+  are pixel for pixel the first round's. The other changed pictures differ by what differs from run
+  to run: carets, temporary folders' names, a fake's port, the progress bar's segment and a held
   fetch's percentage (17d read 20 %, 18b 50 %, 31a and 31b 60 %), a few anti-aliasing pixels,
   About's version line, which names the build's commit, and the title bar's tint and the taskbar
   button's ground over the new wallpaper. The verdicts are in `…/round-0f9099a/inspect/verdicts/`.

@@ -484,11 +484,12 @@ Phase 8a's runs on `phase/8a-release-readiness`, the newest first. CI has six jo
   skipped each, Test steps 7 min 3 s with Microsoft's installer and 7 min 45 s with Ubuntu's
   packages, the Secret Service's test passed in both; the Windows and macOS keychain steps passed.
   The same tests as the run before: the default run does not hold the real-window project's. The
-  Windows Test step took 34 min 2 s, 40 min 34 s and 45 min 28 s in this day's three runs of the
-  same tests but nine, which is the runners' spread; it stays under the 56 minutes at which a limit
-  is raised (D377). The push changed nothing the guide's workflow watches, so it started none. The
-  jobs' logs are in `D:/Projects/Personal/phase8-work/gate/ci-46007767846-logs/`, the pictures of
-  each job in `…/gate/ci-46007767846/`.
+  Windows Test step took 34 min 2 s, 40 min 34 s and 45 min 28 s in the three runs of 2026-11-26 and
+  27 (local time), the same tests but nine, which is the runners' spread; it stays under the 56
+  minutes at which a limit is raised (D377). The push changed nothing the guide's workflow watches,
+  so it started none. The jobs' logs are in
+  `D:/Projects/Personal/phase8-work/gate/ci-46007767846-logs/`, the pictures of each job in
+  `…/gate/ci-46007767846/`.
 - [45965143178](https://github.com/RahimPasha/VisualCommit/actions/runs/45965143178), for `e632e72`
   (the gate's fix, the first-run screen's path drawn as one path, merged at `ee3cdc4`, with D472 and
   ruling 115): **success in all six jobs**, at its first attempt. `windows-latest`: 8,936 tests,
@@ -1351,52 +1352,53 @@ the lead's ran beside it, no assertion failed and the cause is not established),
 real-window pass (124 tests, 119 passed, the 5 of the opt-in performance series skipped, 41 min 34
 s; Q1 at 1,912 ms), the list of pictures (1,696, written at once and committed when the inspection
 has passed) and the live command (582 offline tests, then 596, none failed; its three `run.txt` hold
-no token, organization or namespace). **`e4b323c` is the gate's commit: only docs change after it.**
-The guide's site was checked on the artifact of the gate's code, and two faults of its pages are
-corrected in docs (ruling 114, D471). The inspection read every picture of the round (28 Opus
-inspectors in three groups, D247: 1,696 pictures and 45 of CI's; their verdicts in
-`D:/Projects/Personal/phase8-work/gate/round-e4b323c/inspect/verdicts/`): 1,694 passed, and the two
-that did not are one finding, which five of six second looks judged a fault of the app. In the
-real-window captures `f5a-too-old` and `f6a-config-fault` the first-run screen's path
-(`GitSetupPath`, a `PathTextBlock` whose text is a path alone) breaks inside the folder name
-`net10.0-windows`: the control ends a path at its first space, D227's rule for a path inside running
-text, and the stand-in's path holds one (`…\Visual Git\…`). **The fix is merged** (`ee3cdc4`; D472,
-ruling 115: `PathTextBlock.IsOnePath`, set on `GitSetupPath`; a package of a builder, two readers, a
-fixer and a final check on the local branch `wip/p8a-path-wrap`, whose worktree
-`D:/Projects/Personal/phase8-work/gate/fix/p8a-path-wrap` is still there). On the merged tree the
-three classes the fix touches pass, 64 of 64 (`PathTextBlockTests`, `GitSetupViewModelTests`,
-`AddRepositoriesDialogViewModelTests`), built with no warning. **So the round on `e4b323c` does not
-stand as the gate's.** A new counted round runs on the merge's commit: the default run alone on the
-laptop (nothing beside a counted run, ruling 115), the real-window pass, the list of pictures, the
-live command (by 2026-11-28) and the inspection. D246's two runs and the live command's run before
-the pictures are made once and stand. CI's run of the push that carries the merge is green in all
-six jobs at its first attempt (45965143178; the CI section). **The new round's default run passed**
-on `0f9099a`, whose code is the merge's (2026-11-27, 02:36 to 04:33, alone on the laptop: 8,936
-tests, 8,929 passed, 7 skipped, none failed, 1 h 53 min 8 s, no watchdog stop). **Its real-window
-pass did not** (04:42 to 05:25: 124 tests, 118 passed, 5 skipped, 1 failed). Phase 3's
-`Check_22_remotes_dialog` ended on a `COMException` from UI Automation's `FindAll`, in the poll that
-waits for the Remotes dialog's rows after the remote's URL was changed: one look walked the app's
-automation tree while the dialog built its rows again, and `RealApp.WaitFor` lets a failed look end
-the check. It is a weakness of the harness, not a fault of the app; the check passed in every
-earlier pass. Q1 read 1,938 ms of 2,000. **The lead has the harness's wait made to take a failed
-look as "not yet"** (worktree `D:/Projects/Personal/phase8-work/gate/fix/p8a-uia-poll`, local branch
-`wip/p8a-uia-poll`: a builder, two readers, a fixer; test code in
-`tests/VisualCommit.RealWindowTests` alone, whose tests no agent runs). **The harness fix is
-merged** (`750eb33`, five commits of the package: `RealApp.Poll`, `IsFailedLook`;
-`WaitForRuleTests`, 21 tests with no window, which the lead ran at the final commit, 21 pass, and at
-the two commits whose tests come before their fix, 6 fail at each). CI's run of that push is green
-in all six jobs at its first attempt (46007767846; the CI section). **The real-window pass passed on
-`750eb33`** (2026-11-27, 06:31 to 07:12, the owner told in the chat: 145 tests, 140 passed, the 5 of
-the opt-in performance series skipped, 40 min 56 s; Q1 at 1,626 ms), alone, as D246 and plan.md's
-Visual test gate, step 6, allow: nothing but `tests/VisualCommit.RealWindowTests` and docs changed
-since `0f9099a`, the default run's commit, and the 1,239 scripted pictures are still the files of
-the list written after the failed pass. The list of pictures is written (1,696: 1,239 scripted and
-457 real-window files; committed when the inspection has passed), and the live command passed on the
-counted round (07:13 to 07:18: 582 offline tests, then 596 of 596; its three `run.txt` hold no
-token, organization or namespace). **So the gate's two passes stand: the default run on `0f9099a`
-and the real-window pass on `750eb33`, the Gate commit; only docs change after it.** In the pass's
-captures `f5a-too-old` and `f6a-config-fault` the path breaks after its separators alone, as D472
-means. **The inspection passed** (07:20 to 07:46: 28 Opus inspectors and one for CI, every picture
+no token, organization or namespace). That round was then taken for the gate's, with `e4b323c` as
+its commit; it did not stand (below). The guide's site was checked on the artifact of the gate's
+code, and two faults of its pages are corrected in docs (ruling 114, D471). The inspection read
+every picture of the round (28 Opus inspectors in three groups, D247: 1,696 pictures and 45 of CI's;
+their verdicts in `D:/Projects/Personal/phase8-work/gate/round-e4b323c/inspect/verdicts/`): 1,694
+passed, and the two that did not are one finding, which five of six second looks judged a fault of
+the app. In the real-window captures `f5a-too-old` and `f6a-config-fault` the first-run screen's
+path (`GitSetupPath`, a `PathTextBlock` whose text is a path alone) broke at the space of `Visual
+Git` and after the hyphen of `net10.0-windows`: the control ends a path at white space, D227's rule
+for a path inside running text, and the stand-in's path holds a space. **The fix is merged**
+(`ee3cdc4`; D472, ruling 115: `PathTextBlock.IsOnePath`, set on `GitSetupPath`; a package of a
+builder, two readers, a fixer and a final check on the local branch `wip/p8a-path-wrap`, whose
+worktree `D:/Projects/Personal/phase8-work/gate/fix/p8a-path-wrap` is still there). On the merged
+tree the three classes the fix touches pass, 64 of 64 (`PathTextBlockTests`,
+`GitSetupViewModelTests`, `AddRepositoriesDialogViewModelTests`), built with no warning. **So the
+round on `e4b323c` does not stand as the gate's.** A new counted round runs on the merge's commit:
+the default run alone on the laptop (nothing beside a counted run, ruling 115), the real-window
+pass, the list of pictures, the live command (by 2026-11-28) and the inspection. D246's two runs and
+the live command's run before the pictures are made once and stand. CI's run of the push that
+carries the merge is green in all six jobs at its first attempt (45965143178; the CI section). **The
+new round's default run passed** on `0f9099a`, whose code is the merge's (2026-11-27, 02:36 to
+04:33, alone on the laptop: 8,936 tests, 8,929 passed, 7 skipped, none failed, 1 h 53 min 8 s, no
+watchdog stop). **Its real-window pass did not** (04:42 to 05:25: 124 tests, 118 passed, 5 skipped,
+1 failed). Phase 3's `Check_22_remotes_dialog` ended on a `COMException` from UI Automation's
+`FindAll`, in the poll that waits for the Remotes dialog's rows after the remote's URL was changed:
+one look walked the app's automation tree while the dialog built its rows again, and
+`RealApp.WaitFor` lets a failed look end the check. It is a weakness of the harness, not a fault of
+the app; the check passed in every earlier pass. Q1 read 1,938 ms of 2,000. **The lead has the
+harness's wait made to take a failed look as "not yet"** (worktree
+`D:/Projects/Personal/phase8-work/gate/fix/p8a-uia-poll`, local branch `wip/p8a-uia-poll`: a
+builder, two readers, a fixer; test code in `tests/VisualCommit.RealWindowTests` alone, whose tests
+no agent runs). **The harness fix is merged** (`750eb33`, five commits of the package:
+`RealApp.Poll`, `IsFailedLook`; `WaitForRuleTests`, 21 tests with no window, which the lead ran at
+the final commit, 21 pass, and at the two commits whose tests come before their fix, 6 fail at
+each). CI's run of that push is green in all six jobs at its first attempt (46007767846; the CI
+section). **The real-window pass passed on `750eb33`** (2026-11-27, 06:31 to 07:12, the owner told
+in the chat: 145 tests, 140 passed, the 5 of the opt-in performance series skipped, 40 min 56 s; Q1
+at 1,626 ms), alone, as D246 and plan.md's Visual test gate, step 6, allow: nothing but
+`tests/VisualCommit.RealWindowTests` and docs changed since `0f9099a`, the default run's commit, and
+the 1,239 scripted pictures are still the files of the list written after the failed pass. The list
+of pictures is written (1,696: 1,239 scripted and 457 real-window files; committed when the
+inspection has passed), and the live command passed on the counted round (07:13 to 07:18: 582
+offline tests, then 596 of 596; its three `run.txt` hold no token, organization or namespace). **So
+the gate's two passes stand: the default run on `0f9099a` and the real-window pass on `750eb33`, the
+Gate commit; only docs change after it.** In the pass's captures `f5a-too-old` and
+`f6a-config-fault` the path breaks after its separators alone, as D472 means. **The inspection
+passed** (07:20 to 07:46: 28 Opus inspectors, the one for CI's pictures among them, every picture
 against the first round's: all 1,696 pass, and the 45 of CI's from run 46007767846; no doubt, no
 second look; ruling 116; the verdicts in
 `D:/Projects/Personal/phase8-work/gate/round-0f9099a/inspect/verdicts/`), and the list of pictures
@@ -2539,149 +2541,140 @@ every commit.
 ## Waiting on the owner
 
 - **Phase 8a, from the owner** (2026-11-19; the owner's answers D399 to D415 are below, under "For
-  phase 8, before its design"):
-  - **The C: drive is nearly full, and Windows cleans the temp folder under the tests** (found on
-    2026-11-24 at step 19's whole default run; "Next step"). C: had 4.7 GB free of 350 GB (1.3 %);
-    D:, which holds the repository, 17.2 GB of 125 GB. Storage Sense is on, set to run when the disk
-    is low, with "delete temporary files that my apps aren't using"; it removes empty folders under
-    `%TEMP%`, and a git repository whose refs are all packed, or that has no commit yet, is not a
-    repository without its empty `refs` folders. It struck at 15:05 that day: the tests' shared
-    100,000-commit repository and a running test process's template. The test support code is being
-    made independent of it (a shared copy proven before use, a blank copy given its folders), but a
-    repository of a test in flight can still be hit, and a full disk fails a run in other ways. The
-    tests' own temporary root holds 62 MB, the whole temp folder about 1.2 GB, so the space is used
-    elsewhere. **Asked of the owner before the gate:** free some space on C: (some tens of GB would
-    take the disk out of the low state), or switch Storage Sense's temporary-file cleaning off for
-    the gate's days; the lead changes no Windows setting and deletes nothing outside the tests'
-    folders. **Answered on 2026-11-26: "I'll free space".** That morning C: has 58.5 GB free of 350
-    GB (16.7 %); D: has 5.8 GB free of 125 GB, where it had 17.2 GB, which the gate's runs fit in.
-    Storage Sense is still on. The cleaner struck three times while C: was low (2026-11-24 15:05;
-    2026-11-25 03:21 and 09:31).
-  - **To answer before the gate: the texts the app dims on purpose** (the review
-    before the gate, colours-1; design 13.1's ruling 99; the figures checked again on 2026-11-24).
-    Three older looks draw text under 4.5:1 on rows the user still acts on, in both themes, and
-    `ThemeTokensTests`' table does not hold them: a hidden branch's name and, in solo mode, every
-    branch left out (the disabled text colour: 2.16 to 2.96:1 in dark, 1.84 to 2.22:1 in light;
-    phase 5's look); a dropped row of the interactive rebase (the same colour, struck through: 2.23
-    to 3.17:1 in dark, 1.85 to 2.40:1 in light; phase 4's look); and the rows a search dims (drawn
-    at 35 % opacity: the message about 2.8:1 in dark and 2.2:1 in light, the date, SHA and author
-    about 2.0:1 and 1.7:1; phase 5's look). WCAG exempts disabled controls, and these rows are not
-    disabled: their menus, clicks and actions work. D410, the contrast round, was the owner's answer
-    and named three fixes; D418 says "4.5:1 on every pair a text lies on" and "no list of gaps". Two
-    ways. (1) Fix in 8a what a colour can fix: the dimmed names and the dropped row in the secondary
-    text colour (4.54:1 or more on every row state in both themes), a hidden branch still marked by
-    its eye and a dropped row by its strikethrough, solo's left-out branches then told from the
-    soloed one by that colour and the soloed branch's mark alone; one more fix package, and every
-    earlier picture with a hidden branch, a solo or a dropped row changes and is inspected against
-    the references. The search's dimming cannot be fixed that way: by opacity the message would need
-    about 65 % and the date, SHA and author about 90 % in light, which is no dimming, so it needs a
-    form of its own (the matches marked, the others left at full contrast), a design for the Backlog
-    and a recorded exception until then. (2) Keep all three looks and record them: a decision that
-    amends D418 and names the three texts as accepted exceptions, their ratios pinned in
-    `ThemeTokensTests` under it, a test that fails when the disabled colour is used for text on any
-    other active row, and a Backlog row for a de-emphasis that keeps 4.5:1. **The lead's
-    recommendation: (2) for 8a.** Each state is one the user sets and can undo; a hidden branch and
-    a dropped row carry a second mark (solo's left-out branches and the search's dimmed rows do
-    not); the looks were inspected and accepted at phase 4's gate (the dropped row) and phase 5's
-    (the other two); (1) changes the look of two finished features just before the gate and still
-    leaves the search as an exception. The lead asks at step 19's end, with the gate's start, which
-    needs the owner at the machine anyway (changed on 2026-11-24 from "when the review's fixes are
-    merged", the owner not being at the keyboard then; ruling 105): step 19's whole default run goes
-    ahead without the answer, because a change of these colours is a fix package of its own and the
-    gate's default run takes every picture again after it. An answer in the chat before that is
-    taken as it comes. **Answered on 2026-11-26: "Keep, as exceptions"** (the lead's recommendation,
-    (2)): D469. **For the owner to know:** the figures in the question were those of a dimmed row at
-    rest and of its four texts. Measuring for the pins found two lower sets in the same look, which
-    D469 names: a dimmed row that is selected (the message 2.62:1 in dark and 2.08:1 in light; the
-    date, SHA and author 1.83:1 and 1.56:1), and the row's labels, whose fill fades with their text
-    (a branch's name on its lane's colour 1.26 to 1.51:1 in dark and 1.18 to 1.32:1 in light; a
-    tag's 2.64 to 2.81:1 and 2.11 to 2.15:1). The lead took both as part of the look that was kept;
-    a word from the owner changes that, and the labels' pins stand in a fact of their own for it.
-  - **To ask before wave 4: the week's share, with the restore order in it** (D241, D457; the lead
-    asks when step 16 is ticked). Wave 4 was the guide (§11), the real-window part (§12) and the
-    review before the gate; D457 adds a small package, the restore order (ruling 76): with several
-    restored tabs the active one opens first. The lead's probes showed that with ten restored tabs
-    the shown tab's first rows come 2.5 to 5 s later than with one, with nine small tabs as with
-    nine large ones, and that the window answers late meanwhile; the package costs a design section,
-    a builder with a review, and about half an hour of the rested desktop for its proof. The owner
-    may also overrule the two backlog rows of D457 (the reload after a commit or a fetch, 2.5 to 4 s
-    in a 100,000-commit history; Pull's three settings reads made one, about 0.2 s of a Pull), each
-    ruled on a panel's advice, the second by two judges to one.
-    What to tell the owner with the question (2026-11-23): wave 3 with its close used about 27M
-    tokens where 15 to 18M were expected, because the close found three faults and each was fixed
-    with its tests and checked independently: a focused link's frame, a pixel rule that was wrong on
-    macOS, and the row list, where a first fix of a click lost on CI's Windows job made scrolled
-    lists jump and took five rounds to put right (Notes, "The merge's runs and the docs"). Wave 4 is
-    expected to need 15 to 25M: the guide, the real-window part, the restore order and the review
-    before the gate with the fixes it brings.
-    **Answered on 2026-11-23: "All of wave 4 now"** (the owner chose it over wave 4 without the
-    review, the restore order alone, and a stop until the reset). The Narrator listen, asked with
-    it: "Later, before the review".
-        - **The week's allowance: "all of wave 3 now"** (the owner, 2026-11-21; D241). The owner said
-    "Continue" and, told that wave 3 needs 15 to 18M tokens and could reach the week's limit before
-    Thursday's reset, chose all of it now over the picture check alone or the checks alone. The
-    owner is asked again before wave 4 (the guide, the review before the gate, the real-window
-    part). The day before: **70 to 85 % used** (2026-11-20, at wave 2's merge), on which the lead
-    ran only wave 2's closing runs and the picture comparison and stopped.
-    Wave 2's agents used about 17.6M tokens (its checks 6.44M, their settling 0.76M, the build
-    7.57M, the merge's notes and two rounds of fixes 2.82M); wave 3 is expected to need about as
-    much, and the inspection of the closing run's pictures about 1.5M.
-  - **Answered with it** (2026-11-20): the two earlier real-window checks of design 6.8 item 5 run
-    alone as soon as the closing runs end, without asking again (about two minutes, the mouse
-    taken, the desktop unlocked); wave 2's three worktrees are removed (done: `git worktree
-    remove` on the clean folders; the branches `wip/p8a-firstrun`, `wip/p8a-keyboard` and
-    `wip/p8a-icon` stay, merged).
-    - **A short listen with Windows Narrator, as soon as the owner can** (D455; design 13.4 items 13 and
-    14; about 5 minutes, in person). The spike showed that the graph's selected row speaks to a UI
-    Automation client only once that client has read below the graph. Whether Narrator does that by
-    itself decides if the route stays. The start file is
-    `D:\Projects\Personal\phase8-work\wave3\spike\narrator-listen.cmd` (outside the repository): it
-    starts the merged tree's Release build, as built on 2026-11-21 at 20:53 from `85e2884`, on a
-    throwaway repository with the isolating variables. The steps: Narrator on (Ctrl+Win+Enter),
-    start the file, click a commit in the graph, press Down three times, then Shift+F6, F6 and Down
-    twice more; is each commit's line spoken (its subject, author and date)? Then click a branch in
-    the left panel: is the commit's line spoken again? Narrator off with the same keys. Asked on
-    2026-11-21 after the spike; the owner answered "not now". Asked again at §9's merge that
-    evening, in the lead's message, without stopping the work for the answer: the listen can come at
-    any time before the review of step 19 and is best not taken beside a test run. If Narrator is
-    silent, a new decision names the route before that review (D455). **Asked a fourth time on 2026-11-23, at the start of step 19's review: the owner chose "Later, at the gate" (D460).** The listen is taken with the gate's walk-through; if Narrator is silent there, the route's new decision and its fix come after the gate's first round, and the passes run again.
-  - **To look over**: the lead's 75 rulings (design 13.1) and the design's decisions D416 to D452,
-    above all those that amend a ruling (D420, D424, D425, D434) and those the review made (D447 to
-    D452; design 13.5). None of them is the owner's own, so the owner can overturn any. (D453, on
-    winget, is the owner's answer of 2026-11-20.)
-  - **The three live tokens expire before 8a's gate can run**: GitHub's on 2026-11-29, Azure
-    DevOps' and GitLab's on 2026-12-04, and a gate runs the live command twice (D335). Before 8a's
-    gate the owner makes each again, with an expiry that also covers 8b's gate, as phase 7a's
-    design 14.6 and phase 7b's design 15.8 say, through the script that never shows a token. On
-    2026-11-26 the live command ran before the gate's pictures with the tokens as they are (step
-    20); the counted round's run needs them once more, by 2026-11-28 for GitHub's. So the tokens are
-    made again only if 8a's counted round slips past that day, and before 8b's gate in any case.
-  - **The icon** (D407, D447): settled on 2026-11-20. The owner chose A, Lens, and said yes to
-    round 2's masters with the outlined eye at the small sizes; the blue stays `#4C5BE0`. Nothing
-    more is asked unless the owner wants a change after seeing it in the app.
-  - **The desktop, told first each time** (design 13.3): the lead's try of the winget terminal
-    window before §5's merge (done on 2026-11-20: the window stays open); two earlier real-window
-    checks alone at §6's merge (about 2
-    minutes); §9's spike (a minute of keys and clicks) and a short listen with Narrator at §9's
-    merge (about 5 minutes); the performance series after wave 3 (12 to 18 minutes a run, rested);
-    §12's build (each of its 13 methods alone, about 15 minutes in all); D246's two runs and the
-    pass at the gate.
-  - **By hand, at the gate**: one walk-through with Windows Narrator, with the lead's 21 steps, the
-    first-run screen among them (D411, D450); phase 6's System step (switch Windows' app mode
-    while the app runs with System chosen, D224); a second start of the app from the lead's
-    isolating start file while another window is in front (design 4.6).
-  - **GitHub Pages** (D408, D451): the owner allowed it. Its source is set to "GitHub Actions" at
-    "Phase 8a accepted", before `master` is pushed, by the owner or by the lead with `gh` at the
-    owner's word; if the `github-pages` environment then admits more than `master`, the owner's
-    leave is asked to set its branch rule.
-  - **The icon's look-alike check**: settled on 2026-11-20. The owner wants no image search; the
-    lead compares by eye against Git's logo and the well-known clients' icons and records it in the
-    report.
-  - **Left to 8a's design, now ruled**: the points the readers left to the design (one instance
-    per data folder, the git program setting, the netrc note, the OpenSSH line, the guide's tested
-    sizes and its generator, risk 44 left alone, no writes to a user's repository for speed, the
-    fixed set of keys) are the lead's rulings 1 to 23 and the decisions D416 to D446, which the
-    owner has above to look over.
+  phase 8, before its design"): - **The C: drive is nearly full, and Windows cleans the temp folder
+  under the tests** (found on 2026-11-24 at step 19's whole default run; "Next step"). C: had 4.7 GB
+  free of 350 GB (1.3 %); D:, which holds the repository, 17.2 GB of 125 GB. Storage Sense is on,
+  set to run when the disk is low, with "delete temporary files that my apps aren't using"; it
+  removes empty folders under `%TEMP%`, and a git repository whose refs are all packed, or that has
+  no commit yet, is not a repository without its empty `refs` folders. It struck at 15:05 that day:
+  the tests' shared 100,000-commit repository and a running test process's template. The test
+  support code is being made independent of it (a shared copy proven before use, a blank copy given
+  its folders), but a repository of a test in flight can still be hit, and a full disk fails a run
+  in other ways. The tests' own temporary root holds 62 MB, the whole temp folder about 1.2 GB, so
+  the space is used elsewhere. **Asked of the owner before the gate:** free some space on C: (some
+  tens of GB would take the disk out of the low state), or switch Storage Sense's temporary-file
+  cleaning off for the gate's days; the lead changes no Windows setting and deletes nothing outside
+  the tests' folders. **Answered on 2026-11-26: "I'll free space".** That morning C: has 58.5 GB
+  free of 350 GB (16.7 %); D: has 5.8 GB free of 125 GB, where it had 17.2 GB, which the gate's runs
+  fit in. Storage Sense is still on. The cleaner struck three times while C: was low (2026-11-24
+  15:05; 2026-11-25 03:21 and 09:31). - **To answer before the gate: the texts the app dims on
+  purpose** (the review before the gate, colours-1; design 13.1's ruling 99; the figures checked
+  again on 2026-11-24). Three older looks draw text under 4.5:1 on rows the user still acts on, in
+  both themes, and `ThemeTokensTests`' table does not hold them: a hidden branch's name and, in solo
+  mode, every branch left out (the disabled text colour: 2.16 to 2.96:1 in dark, 1.84 to 2.22:1 in
+  light; phase 5's look); a dropped row of the interactive rebase (the same colour, struck through:
+  2.23 to 3.17:1 in dark, 1.85 to 2.40:1 in light; phase 4's look); and the rows a search dims
+  (drawn at 35 % opacity: the message about 2.8:1 in dark and 2.2:1 in light, the date, SHA and
+  author about 2.0:1 and 1.7:1; phase 5's look). WCAG exempts disabled controls, and these rows are
+  not disabled: their menus, clicks and actions work. D410, the contrast round, was the owner's
+  answer and named three fixes; D418 says "4.5:1 on every pair a text lies on" and "no list of
+  gaps". Two ways. (1) Fix in 8a what a colour can fix: the dimmed names and the dropped row in the
+  secondary text colour (4.54:1 or more on every row state in both themes), a hidden branch still
+  marked by its eye and a dropped row by its strikethrough, solo's left-out branches then told from
+  the soloed one by that colour and the soloed branch's mark alone; one more fix package, and every
+  earlier picture with a hidden branch, a solo or a dropped row changes and is inspected against the
+  references. The search's dimming cannot be fixed that way: by opacity the message would need about
+  65 % and the date, SHA and author about 90 % in light, which is no dimming, so it needs a form of
+  its own (the matches marked, the others left at full contrast), a design for the Backlog and a
+  recorded exception until then. (2) Keep all three looks and record them: a decision that amends
+  D418 and names the three texts as accepted exceptions, their ratios pinned in `ThemeTokensTests`
+  under it, a test that fails when the disabled colour is used for text on any other active row, and
+  a Backlog row for a de-emphasis that keeps 4.5:1. **The lead's recommendation: (2) for 8a.** Each
+  state is one the user sets and can undo; a hidden branch and a dropped row carry a second mark
+  (solo's left-out branches and the search's dimmed rows do not); the looks were inspected and
+  accepted at phase 4's gate (the dropped row) and phase 5's (the other two); (1) changes the look
+  of two finished features just before the gate and still leaves the search as an exception. The
+  lead asks at step 19's end, with the gate's start, which needs the owner at the machine anyway
+  (changed on 2026-11-24 from "when the review's fixes are merged", the owner not being at the
+  keyboard then; ruling 105): step 19's whole default run goes ahead without the answer, because a
+  change of these colours is a fix package of its own and the gate's default run takes every picture
+  again after it. An answer in the chat before that is taken as it comes. **Answered on 2026-11-26:
+  "Keep, as exceptions"** (the lead's recommendation, (2)): D469. **For the owner to know:** the
+  figures in the question were those of a dimmed row at rest and of its four texts. Measuring for
+  the pins found two lower sets in the same look, which D469 names: a dimmed row that is selected
+  (the message 2.62:1 in dark and 2.08:1 in light; the date, SHA and author 1.83:1 and 1.56:1), and
+  the row's labels, whose fill fades with their text (a branch's name on its lane's colour 1.26 to
+  1.51:1 in dark and 1.18 to 1.32:1 in light; a tag's 2.64 to 2.81:1 and 2.11 to 2.15:1). The lead
+  took both as part of the look that was kept; a word from the owner changes that, and the labels'
+  pins stand in a fact of their own for it. - **To ask before wave 4: the week's share, with the
+  restore order in it** (D241, D457; the lead asks when step 16 is ticked). Wave 4 was the guide
+  (§11), the real-window part (§12) and the review before the gate; D457 adds a small package, the
+  restore order (ruling 76): with several restored tabs the active one opens first. The lead's
+  probes showed that with ten restored tabs the shown tab's first rows come 2.5 to 5 s later than
+  with one, with nine small tabs as with nine large ones, and that the window answers late
+  meanwhile; the package costs a design section, a builder with a review, and about half an hour of
+  the rested desktop for its proof. The owner may also overrule the two backlog rows of D457 (the
+  reload after a commit or a fetch, 2.5 to 4 s in a 100,000-commit history; Pull's three settings
+  reads made one, about 0.2 s of a Pull), each ruled on a panel's advice, the second by two judges
+  to one. What to tell the owner with the question (2026-11-23): wave 3 with its close used about
+  27M tokens where 15 to 18M were expected, because the close found three faults and each was fixed
+  with its tests and checked independently: a focused link's frame, a pixel rule that was wrong on
+  macOS, and the row list, where a first fix of a click lost on CI's Windows job made scrolled lists
+  jump and took five rounds to put right (Notes, "The merge's runs and the docs"). Wave 4 is
+  expected to need 15 to 25M: the guide, the real-window part, the restore order and the review
+  before the gate with the fixes it brings. **Answered on 2026-11-23: "All of wave 4 now"** (the
+  owner chose it over wave 4 without the review, the restore order alone, and a stop until the
+  reset). The Narrator listen, asked with it: "Later, before the review". - **The week's allowance:
+  "all of wave 3 now"** (the owner, 2026-11-21; D241). The owner said "Continue" and, told that wave
+  3 needs 15 to 18M tokens and could reach the week's limit before Thursday's reset, chose all of it
+  now over the picture check alone or the checks alone. The owner is asked again before wave 4 (the
+  guide, the review before the gate, the real-window part). The day before: **70 to 85 % used**
+  (2026-11-20, at wave 2's merge), on which the lead ran only wave 2's closing runs and the picture
+  comparison and stopped. Wave 2's agents used about 17.6M tokens (its checks 6.44M, their settling
+  0.76M, the build 7.57M, the merge's notes and two rounds of fixes 2.82M); wave 3 is expected to
+  need about as much, and the inspection of the closing run's pictures about 1.5M. - **Answered with
+  it** (2026-11-20): the two earlier real-window checks of design 6.8 item 5 run alone as soon as
+  the closing runs end, without asking again (about two minutes, the mouse taken, the desktop
+  unlocked); wave 2's three worktrees are removed (done: `git worktree remove` on the clean folders;
+  the branches `wip/p8a-firstrun`, `wip/p8a-keyboard` and `wip/p8a-icon` stay, merged). - **A short
+  listen with Windows Narrator, as soon as the owner can** (D455; design 13.4 items 13 and 14; about
+  5 minutes, in person). The spike showed that the graph's selected row speaks to a UI Automation
+  client only once that client has read below the graph. Whether Narrator does that by itself
+  decides if the route stays. The start file is
+  `D:\Projects\Personal\phase8-work\wave3\spike\narrator-listen.cmd` (outside the repository): it
+  starts the merged tree's Release build, as built on 2026-11-21 at 20:53 from `85e2884`, on a
+  throwaway repository with the isolating variables. The steps: Narrator on (Ctrl+Win+Enter), start
+  the file, click a commit in the graph, press Down three times, then Shift+F6, F6 and Down twice
+  more; is each commit's line spoken (its subject, author and date)? Then click a branch in the left
+  panel: is the commit's line spoken again? Narrator off with the same keys. Asked on 2026-11-21
+  after the spike; the owner answered "not now". Asked again at §9's merge that evening, in the
+  lead's message, without stopping the work for the answer: the listen can come at any time before
+  the review of step 19 and is best not taken beside a test run. If Narrator is silent, a new
+  decision names the route before that review (D455). **Asked a fourth time on 2026-11-23, at the
+  start of step 19's review: the owner chose "Later, at the gate" (D460).** The listen is taken with
+  the gate's walk-through; if Narrator is silent there, the route's new decision and its fix come
+  after the gate's first round, and the passes run again. - **To look over**: the lead's 116 rulings
+  (design 13.1) and the decisions made without the owner: the design's D416 to D452, above all those
+  that amend a ruling (D420, D424, D425, D434) and those the review made (D447 to D452; design
+  13.5), and the build's and the gate's D454 to D459, D461 to D468 and D470 to D473. None of them is
+  the owner's own, so the owner can overturn any. (D453, on winget, D460, on the Narrator listen,
+  and D469, on the dimmed texts, are the owner's answers.) The handoff's "Waiting on the owner"
+  names each. - **The three live tokens** expire on 2026-11-29 (GitHub's) and 2026-12-04 (Azure
+  DevOps' and GitLab's). Phase 8a's three live runs all came before (2026-11-26 and 27; the counted
+  round's on `750eb33`), so 8a made none again. Before 8b's gate the owner makes all three again, as
+  phase 7a's design 14.6 and phase 7b's design 15.8 say, through the script that never shows a token
+  (D335). - **The icon** (D407, D447): settled on 2026-11-20. The owner chose A, Lens, and said yes
+  to round 2's masters with the outlined eye at the small sizes; the blue stays `#4C5BE0`. Nothing
+  more is asked unless the owner wants a change after seeing it in the app. - **The desktop, told
+  first each time** (design 13.3): the lead's try of the winget terminal window before §5's merge
+  (done on 2026-11-20: the window stays open); two earlier real-window checks alone at §6's merge
+  (about 2 minutes); §9's spike (a minute of keys and clicks) and a short listen with Narrator at
+  §9's merge (about 5 minutes); the performance series after wave 3 (12 to 18 minutes a run,
+  rested); §12's build (each of its 13 methods alone, about 15 minutes in all); D246's two runs and
+  the pass at the gate. - **By hand, at the gate**: one walk-through with Windows Narrator, with the
+  lead's 21 steps, the first-run screen among them (D411, D450); phase 6's System step (switch
+  Windows' app mode while the app runs with System chosen, D224); a second start of the app from the
+  lead's isolating start file while another window is in front (design 4.6). - **GitHub Pages**
+  (D408, D451): the owner allowed it. Its source is set to "GitHub Actions" at "Phase 8a accepted",
+  before `master` is pushed, by the owner or by the lead with `gh` at the owner's word; if the
+  `github-pages` environment then admits more than `master`, the owner's leave is asked to set its
+  branch rule. - **The icon's look-alike check**: settled on 2026-11-20. The owner wants no image
+  search; the lead compares by eye against Git's logo and the well-known clients' icons and records
+  it in the report. - **Left to 8a's design, now ruled**: the points the readers left to the design
+  (one instance per data folder, the git program setting, the netrc note, the OpenSSH line, the
+  guide's tested sizes and its generator, risk 44 left alone, no writes to a user's repository for
+  speed, the fixed set of keys) are the lead's rulings 1 to 23 and the decisions D416 to D446, which
+  the owner has above to look over.
 - **Phase 8b, to ask before its design**: plan.md's "Phase 8b" lists the questions, each with the
   research's recommendation: the installers per platform, the macOS token store (risk 34), the
   platforms and oldest systems, the version scheme, what proves "receive an update" and when the
